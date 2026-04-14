@@ -1,3 +1,10 @@
+import "./globals.css";
+
+export const metadata = {
+  title: "Unicron Systems",
+  description: "Unicron Systems",
+};
+
 export default function RootLayout({
   children,
 }: {
