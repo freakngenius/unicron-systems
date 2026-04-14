@@ -19,6 +19,8 @@
   align-items: flex-start;
   max-width: 540px;
   padding: 0 6vw;
+  margin-top: -20vh;
+  margin-right: 30vw;
 }
 
 .title {
@@ -232,6 +234,8 @@
     text-align: center;
     padding: 0 1.5rem;
     max-width: 100%;
+    margin-top: 0;
+    margin-right: 0;
   }
 
   .title {
