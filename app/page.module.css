@@ -1,7 +1,7 @@
 .background {
   width: 100vw;
   height: 100vh;
-  background-image: url("/unicron_background.png");
+  background-image: url("/unicron_background.webp");
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
@@ -223,7 +223,7 @@
 
 @media (max-width: 768px) {
   .background {
-    background-image: url("/unicron_background_mobile.png");
+    background-image: url("/unicron_background_mobile.webp");
     justify-content: center;
     align-items: center;
     padding-bottom: 0;
