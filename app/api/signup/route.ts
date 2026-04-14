@@ -1,10 +1,12 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+function getSupabase() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -18,6 +20,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Save to Supabase
+    const supabase = getSupabase();
     const { error: dbError } = await supabase
       .from("email_signups")
       .insert({ name, email });
