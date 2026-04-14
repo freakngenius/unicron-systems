@@ -223,8 +223,8 @@
   .background {
     background-image: url("/unicron_background_mobile.png");
     justify-content: center;
-    align-items: flex-end;
-    padding-bottom: 8vh;
+    align-items: flex-start;
+    padding-top: 6vh;
   }
 
   .content {
