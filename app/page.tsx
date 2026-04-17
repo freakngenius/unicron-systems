@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import styles from "./page.module.css";
 
 export default function Page() {
@@ -9,6 +9,60 @@ export default function Page() {
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [errorMsg, setErrorMsg] = useState("");
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  // Ping-pong playback: forward to end, then reverse to start, repeat.
+  // Implemented manually so the source video is served untouched (no
+  // generation loss from a re-encoded reverse concat).
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    let direction: 1 | -1 = 1;
+    let rafId = 0;
+    let lastT = performance.now();
+
+    const tick = (now: number) => {
+      const dt = (now - lastT) / 1000;
+      lastT = now;
+
+      if (direction === 1) {
+        // Forward: let the browser play normally. When we're near the end,
+        // flip direction.
+        if (video.duration && video.currentTime >= video.duration - 0.05) {
+          direction = -1;
+          video.pause();
+        }
+      } else {
+        // Reverse: step currentTime backwards manually (works in Safari too,
+        // unlike playbackRate = -1).
+        const next = video.currentTime - dt;
+        if (next <= 0) {
+          video.currentTime = 0;
+          direction = 1;
+          video.play().catch(() => {});
+        } else {
+          video.currentTime = next;
+        }
+      }
+
+      rafId = requestAnimationFrame(tick);
+    };
+
+    const onLoaded = () => {
+      video.play().catch(() => {});
+      lastT = performance.now();
+      rafId = requestAnimationFrame(tick);
+    };
+
+    if (video.readyState >= 2) onLoaded();
+    else video.addEventListener("loadeddata", onLoaded, { once: true });
+
+    return () => {
+      cancelAnimationFrame(rafId);
+      video.removeEventListener("loadeddata", onLoaded);
+    };
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -40,10 +94,9 @@ export default function Page() {
   return (
     <main className={styles.background}>
       <video
+        ref={videoRef}
         className={styles.video}
         src="/unicron_background.mp4"
-        autoPlay
-        loop
         muted
         playsInline
         preload="auto"
