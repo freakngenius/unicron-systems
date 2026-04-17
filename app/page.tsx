@@ -11,58 +11,73 @@ export default function Page() {
   const [errorMsg, setErrorMsg] = useState("");
   const videoRef = useRef<HTMLVideoElement>(null);
 
-  // Ping-pong playback: forward → reverse → forward, looping forever.
+  // Ping-pong playback: forward → reverse → forward, instantly looping.
   // Source video is served untouched (no re-encode generation loss).
-  // Native play() drives the forward half; rAF drives the reverse half
-  // by stepping currentTime backwards (works in Safari, unlike
-  // playbackRate = -1).
+  // Native play() handles forward (smooth); rAF scrubs the reverse half.
+  // Direction flips *before* the video's native end so there's no pause
+  // in the "ended" state.
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
 
     let rafId = 0;
     let lastT = 0;
+    let direction: 1 | -1 = 1;
     let cancelled = false;
+    const END_MARGIN = 0.08; // seconds — flip before native end
+    const START_MARGIN = 0.02;
 
-    const playForward = () => {
-      if (cancelled) return;
-      video.play().catch(() => {});
-    };
-
-    const reverseStep = (now: number) => {
+    const tick = (now: number) => {
       if (cancelled) return;
       const dt = (now - lastT) / 1000;
       lastT = now;
-      const next = video.currentTime - dt;
-      if (next <= 0) {
-        video.currentTime = 0;
-        playForward();
+
+      if (direction === 1) {
+        // Forward — native play is running. Flip just before the end.
+        if (video.duration && video.currentTime >= video.duration - END_MARGIN) {
+          video.pause();
+          direction = -1;
+        }
       } else {
-        video.currentTime = next;
-        rafId = requestAnimationFrame(reverseStep);
+        // Reverse — scrub backward.
+        const next = video.currentTime - dt;
+        if (next <= START_MARGIN) {
+          video.currentTime = 0;
+          direction = 1;
+          video.play().catch(() => {});
+        } else {
+          video.currentTime = next;
+        }
+      }
+      rafId = requestAnimationFrame(tick);
+    };
+
+    // Safety net: if the video ends before rAF catches it, kick into reverse.
+    const onEnded = () => {
+      if (direction === 1) {
+        direction = -1;
+        if (video.duration) {
+          video.currentTime = video.duration - 0.01;
+        }
       }
     };
 
-    const startReverse = () => {
+    const start = () => {
       if (cancelled) return;
-      // Nudge off the exact end so some browsers don't stay stuck.
-      if (video.duration) {
-        video.currentTime = Math.max(0, video.duration - 0.01);
-      }
+      video.play().catch(() => {});
       lastT = performance.now();
-      rafId = requestAnimationFrame(reverseStep);
+      rafId = requestAnimationFrame(tick);
     };
 
-    video.addEventListener("ended", startReverse);
-    // Kick off: video might already be ready, or we wait.
-    if (video.readyState >= 2) playForward();
-    else video.addEventListener("loadeddata", playForward, { once: true });
+    video.addEventListener("ended", onEnded);
+    if (video.readyState >= 2) start();
+    else video.addEventListener("loadeddata", start, { once: true });
 
     return () => {
       cancelled = true;
       cancelAnimationFrame(rafId);
-      video.removeEventListener("ended", startReverse);
-      video.removeEventListener("loadeddata", playForward);
+      video.removeEventListener("ended", onEnded);
+      video.removeEventListener("loadeddata", start);
     };
   }, []);
 
