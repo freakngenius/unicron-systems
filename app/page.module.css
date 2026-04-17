@@ -9,6 +9,19 @@
   overflow: hidden;
 }
 
+/* ── Video layer on top of the WebP background ── */
+
+.video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  z-index: 0;
+  pointer-events: none;
+}
+
 /* ── Content block: centered in 4th of 5 vertical strips (60%-80%) ── */
 
 .content {
@@ -16,6 +29,7 @@
   top: 40%;
   left: 70%;
   transform: translate(-50%, -50%);
+  z-index: 1;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -226,6 +240,10 @@
     display: flex;
     justify-content: center;
     align-items: center;
+  }
+
+  .video {
+    display: none;
   }
 
   .content {

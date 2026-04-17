@@ -39,6 +39,16 @@ export default function Page() {
 
   return (
     <main className={styles.background}>
+      <video
+        className={styles.video}
+        src="/unicron_background.mp4"
+        autoPlay
+        loop
+        muted
+        playsInline
+        preload="auto"
+        aria-hidden="true"
+      />
       <div className={styles.content}>
         <h1 className={styles.title}>UNICRON SYSTEMS</h1>
         <h2 className={styles.subtitle}>Under Construction</h2>
