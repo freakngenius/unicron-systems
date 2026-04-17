@@ -11,56 +11,58 @@ export default function Page() {
   const [errorMsg, setErrorMsg] = useState("");
   const videoRef = useRef<HTMLVideoElement>(null);
 
-  // Ping-pong playback: forward to end, then reverse to start, repeat.
-  // Implemented manually so the source video is served untouched (no
-  // generation loss from a re-encoded reverse concat).
+  // Ping-pong playback: forward → reverse → forward, looping forever.
+  // Source video is served untouched (no re-encode generation loss).
+  // Native play() drives the forward half; rAF drives the reverse half
+  // by stepping currentTime backwards (works in Safari, unlike
+  // playbackRate = -1).
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
 
-    let direction: 1 | -1 = 1;
     let rafId = 0;
-    let lastT = performance.now();
+    let lastT = 0;
+    let cancelled = false;
 
-    const tick = (now: number) => {
+    const playForward = () => {
+      if (cancelled) return;
+      video.play().catch(() => {});
+    };
+
+    const reverseStep = (now: number) => {
+      if (cancelled) return;
       const dt = (now - lastT) / 1000;
       lastT = now;
-
-      if (direction === 1) {
-        // Forward: let the browser play normally. When we're near the end,
-        // flip direction.
-        if (video.duration && video.currentTime >= video.duration - 0.05) {
-          direction = -1;
-          video.pause();
-        }
+      const next = video.currentTime - dt;
+      if (next <= 0) {
+        video.currentTime = 0;
+        playForward();
       } else {
-        // Reverse: step currentTime backwards manually (works in Safari too,
-        // unlike playbackRate = -1).
-        const next = video.currentTime - dt;
-        if (next <= 0) {
-          video.currentTime = 0;
-          direction = 1;
-          video.play().catch(() => {});
-        } else {
-          video.currentTime = next;
-        }
+        video.currentTime = next;
+        rafId = requestAnimationFrame(reverseStep);
       }
-
-      rafId = requestAnimationFrame(tick);
     };
 
-    const onLoaded = () => {
-      video.play().catch(() => {});
+    const startReverse = () => {
+      if (cancelled) return;
+      // Nudge off the exact end so some browsers don't stay stuck.
+      if (video.duration) {
+        video.currentTime = Math.max(0, video.duration - 0.01);
+      }
       lastT = performance.now();
-      rafId = requestAnimationFrame(tick);
+      rafId = requestAnimationFrame(reverseStep);
     };
 
-    if (video.readyState >= 2) onLoaded();
-    else video.addEventListener("loadeddata", onLoaded, { once: true });
+    video.addEventListener("ended", startReverse);
+    // Kick off: video might already be ready, or we wait.
+    if (video.readyState >= 2) playForward();
+    else video.addEventListener("loadeddata", playForward, { once: true });
 
     return () => {
+      cancelled = true;
       cancelAnimationFrame(rafId);
-      video.removeEventListener("loadeddata", onLoaded);
+      video.removeEventListener("ended", startReverse);
+      video.removeEventListener("loadeddata", playForward);
     };
   }, []);
 
