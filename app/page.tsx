@@ -11,11 +11,10 @@ export default function Page() {
   const [errorMsg, setErrorMsg] = useState("");
   const videoRef = useRef<HTMLVideoElement>(null);
 
-  // Ping-pong playback: forward → reverse → forward, instantly looping.
-  // Source video is served untouched (no re-encode generation loss).
-  // Native play() handles forward (smooth); rAF scrubs the reverse half.
-  // Direction flips *before* the video's native end so there's no pause
-  // in the "ended" state.
+  // Ping-pong playback: fully manual scrubbing in both directions.
+  // The video is kept paused; we drive currentTime ourselves via rAF so
+  // forward and reverse behave identically and direction flips are
+  // instant. Source video is served untouched (no re-encode loss).
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
@@ -24,60 +23,46 @@ export default function Page() {
     let lastT = 0;
     let direction: 1 | -1 = 1;
     let cancelled = false;
-    const END_MARGIN = 0.08; // seconds — flip before native end
-    const START_MARGIN = 0.02;
 
     const tick = (now: number) => {
       if (cancelled) return;
       const dt = (now - lastT) / 1000;
       lastT = now;
 
-      if (direction === 1) {
-        // Forward — native play is running. Flip just before the end.
-        if (video.duration && video.currentTime >= video.duration - END_MARGIN) {
-          video.pause();
-          direction = -1;
-        }
-      } else {
-        // Reverse — scrub backward.
-        const next = video.currentTime - dt;
-        if (next <= START_MARGIN) {
-          video.currentTime = 0;
-          direction = 1;
-          video.play().catch(() => {});
-        } else {
-          video.currentTime = next;
-        }
+      const duration = video.duration;
+      if (!duration || Number.isNaN(duration)) {
+        rafId = requestAnimationFrame(tick);
+        return;
       }
-      rafId = requestAnimationFrame(tick);
-    };
 
-    // Safety net: if the video ends before rAF catches it, kick into reverse.
-    const onEnded = () => {
-      if (direction === 1) {
+      let next = video.currentTime + dt * direction;
+      if (next >= duration) {
+        next = duration;
         direction = -1;
-        if (video.duration) {
-          video.currentTime = video.duration - 0.01;
-        }
+      } else if (next <= 0) {
+        next = 0;
+        direction = 1;
       }
+      video.currentTime = next;
+
+      rafId = requestAnimationFrame(tick);
     };
 
     const start = () => {
       if (cancelled) return;
-      video.play().catch(() => {});
+      video.pause();
+      video.currentTime = 0;
       lastT = performance.now();
       rafId = requestAnimationFrame(tick);
     };
 
-    video.addEventListener("ended", onEnded);
-    if (video.readyState >= 2) start();
-    else video.addEventListener("loadeddata", start, { once: true });
+    if (video.readyState >= 1 && video.duration) start();
+    else video.addEventListener("loadedmetadata", start, { once: true });
 
     return () => {
       cancelled = true;
       cancelAnimationFrame(rafId);
-      video.removeEventListener("ended", onEnded);
-      video.removeEventListener("loadeddata", start);
+      video.removeEventListener("loadedmetadata", start);
     };
   }, []);
 
