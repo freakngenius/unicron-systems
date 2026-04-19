@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Anatomy of a Living Operation — Paradigm Map III</title>
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --bg-2: #12121a;
+    --bg-3: #171720;
+    --ink: #e8e6de;
+    --ink-2: #9a9689;
+    --ink-3: #5c5a52;
+    --line: #2a2a32;
+    --accent: #9fd4a1;
+    --accent-2: #d4c87a;
+    --accent-3: #b5d4e8;
+    --accent-4: #e0b5a4;
+    --accent-5: #c4a5d4;
+    --serif: "Iowan Old Style", "Palatino", "Palatino Linotype", Georgia, serif;
+    --sans: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+    --mono: "JetBrains Mono", "SF Mono", Menlo, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { background: var(--bg); color: var(--ink); font-family: var(--sans); -webkit-font-smoothing: antialiased; }
+
+  /* ---- Top Nav (shared across all three posters) ---- */
+  .topnav { position: sticky; top: 0; z-index: 50; background: rgba(10,10,15,0.92); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border-bottom: 1px solid var(--line); padding: 14px 40px; display: flex; align-items: center; justify-content: space-between; }
+  .topnav-brand { font-family: var(--mono); font-size: 11px; letter-spacing: 0.25em; color: var(--ink-2); text-transform: uppercase; text-decoration: none; }
+  .topnav-brand em { font-style: normal; color: var(--ink-3); }
+  .topnav-brand:hover { color: var(--ink); }
+  .topnav-links { display: flex; gap: 28px; }
+  .topnav-links a { font-family: var(--mono); font-size: 11px; letter-spacing: 0.15em; text-transform: uppercase; text-decoration: none; color: var(--ink-3); padding: 4px 0; border-bottom: 1px solid transparent; transition: color 0.15s, border-color 0.15s; }
+  .topnav-links a:hover { color: var(--ink); }
+  .topnav-links a.active { color: var(--accent); border-bottom-color: var(--accent); }
+  @media (max-width: 900px) { .topnav { flex-direction: column; gap: 10px; padding: 14px 20px; } .topnav-links { gap: 16px; flex-wrap: wrap; justify-content: center; } }
+
+  body { padding: 80px 40px 120px; }
+  .frame { max-width: 1400px; margin: 0 auto; }
+
+  .title-block { margin-bottom: 56px; max-width: 900px; }
+  .eyebrow { font-family: var(--mono); font-size: 11px; letter-spacing: 0.2em; color: var(--ink-3); text-transform: uppercase; margin-bottom: 16px; }
+  h1 { font-family: var(--serif); font-size: 56px; font-weight: 400; letter-spacing: -0.02em; line-height: 1.05; margin-bottom: 24px; }
+  h1 em { font-style: italic; color: var(--accent); }
+  .subtitle { font-family: var(--serif); font-size: 20px; font-style: italic; color: var(--ink-2); line-height: 1.5; }
+
+  .section-label { font-family: var(--mono); font-size: 11px; letter-spacing: 0.25em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+
+  /* ---- Anatomy layout: diagram left, legend right ---- */
+  .anatomy { display: grid; grid-template-columns: 1fr 360px; gap: 40px; background: var(--bg-2); border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+  .anatomy-diagram { padding: 40px; display: flex; align-items: center; justify-content: center; min-height: 920px; position: relative; }
+  .anatomy-diagram svg { width: 100%; height: 100%; max-height: 880px; }
+  .anatomy-legend { padding: 40px 32px; border-left: 1px solid var(--line); background: var(--bg-3); display: flex; flex-direction: column; }
+  .legend-header { margin-bottom: 24px; }
+  .legend-title { font-family: var(--serif); font-size: 22px; font-weight: 400; letter-spacing: -0.01em; margin-bottom: 8px; }
+  .legend-sub { font-family: var(--serif); font-size: 14px; font-style: italic; color: var(--ink-2); line-height: 1.5; }
+
+  .organ { padding: 18px 0; border-top: 1px solid var(--line); }
+  .organ:last-child { border-bottom: 1px solid var(--line); }
+  .organ-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+  .organ-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .organ-name { font-family: var(--mono); font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase; }
+  .organ-ref { font-family: var(--mono); font-size: 9px; letter-spacing: 0.15em; color: var(--ink-3); margin-left: auto; }
+  .organ-text { font-family: var(--serif); font-size: 14px; line-height: 1.5; color: var(--ink); padding-left: 20px; }
+
+  /* below the fold: cycle story + specs */
+  .below { margin-top: 64px; display: grid; grid-template-columns: 1fr 1fr; gap: 40px; }
+  .panel { padding: 36px 32px; background: var(--bg-2); border: 1px solid var(--line); border-radius: 4px; }
+  .panel h3 { font-family: var(--serif); font-size: 26px; font-weight: 400; letter-spacing: -0.01em; margin-bottom: 20px; }
+  .panel h3 em { font-style: italic; color: var(--accent); }
+
+  .cycle-step { display: grid; grid-template-columns: 28px 1fr; gap: 16px; padding: 14px 0; border-top: 1px solid var(--line); }
+  .cycle-step:first-of-type { border-top: none; padding-top: 4px; }
+  .cycle-num { font-family: var(--mono); font-size: 10px; letter-spacing: 0.15em; color: var(--ink-3); padding-top: 3px; }
+  .cycle-body { font-family: var(--serif); font-size: 15px; line-height: 1.5; color: var(--ink); }
+  .cycle-body strong { color: var(--accent); font-weight: 500; }
+
+  .spec-row { display: grid; grid-template-columns: 150px 1fr; gap: 20px; padding: 12px 0; border-top: 1px solid var(--line); }
+  .spec-row:first-of-type { border-top: none; padding-top: 4px; }
+  .spec-key { font-family: var(--mono); font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink-3); padding-top: 3px; }
+  .spec-val { font-family: var(--serif); font-size: 15px; line-height: 1.5; color: var(--ink); }
+  .spec-val strong { color: var(--accent); font-weight: 500; }
+
+  .closing-block { margin-top: 64px; padding: 48px; background: var(--bg-2); border: 1px solid var(--line); border-radius: 4px; }
+  .closing-block h2 { font-family: var(--serif); font-size: 38px; font-weight: 400; letter-spacing: -0.01em; margin-bottom: 20px; max-width: 900px; line-height: 1.15; }
+  .closing-block h2 em { font-style: italic; color: var(--accent); }
+  .closing-block p { font-family: var(--serif); font-size: 18px; line-height: 1.55; color: var(--ink-2); max-width: 900px; margin-bottom: 16px; }
+  .closing-block p strong { color: var(--ink); font-weight: 500; }
+  .closing-block .coda { font-style: italic; color: var(--ink-3); font-size: 16px; margin-top: 24px; padding-top: 24px; border-top: 1px solid var(--line); }
+
+  .footer { margin-top: 80px; padding-top: 32px; border-top: 1px solid var(--line); font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em; color: var(--ink-3); display: flex; justify-content: space-between; text-transform: uppercase; }
+
+  @media (max-width: 1100px) {
+    .anatomy { grid-template-columns: 1fr; }
+    .anatomy-legend { border-left: none; border-top: 1px solid var(--line); }
+    .anatomy-diagram { min-height: 640px; padding: 20px; }
+    .below { grid-template-columns: 1fr; }
+    body { padding: 40px 20px; }
+    h1 { font-size: 40px; }
+  }
+</style>
+</head>
+<body>
+
+  <nav class="topnav">
+    <a href="/" class="topnav-brand">Unicron Systems <em>·</em> Paradigm Map</a>
+    <div class="topnav-links">
+      <a href="the-three-factories.html">I. Three Factories</a>
+      <a href="living-systems-as-orchestration.html">II. Living Systems</a>
+      <a href="anatomy-of-an-operation.html" class="active">III. Anatomy of an Operation</a>
+      <a href="autonomy-x-ownership.html">IV. Autonomy × Ownership</a>
+      <a href="patterns-in-practice.html">V. Patterns in Practice</a>
+    </div>
+  </nav>
+
+  <div class="frame">
+
+    <div class="title-block">
+      <h1>Anatomy of a <em>Living Operation</em>.<br>One organism, five primitives, one invocation.</h1>
+      <p class="subtitle">The factory got redesigned. This is what's inside. Cut open a Unicron operation and you find five biomimetic primitives braided into a single nervous system — each doing the job evolution already perfected.</p>
+    </div>
+
+    <div class="section-label">The Cross-Section</div>
+
+    <div class="anatomy">
+      <div class="anatomy-diagram">
+        <svg viewBox="0 0 800 880" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">
+          <defs>
+            <radialGradient id="operatorGlow" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stop-color="#e8e6de" stop-opacity="0.9"/>
+              <stop offset="60%" stop-color="#9fd4a1" stop-opacity="0.4"/>
+              <stop offset="100%" stop-color="#9fd4a1" stop-opacity="0"/>
+            </radialGradient>
+            <radialGradient id="ambientGlow" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stop-color="#9fd4a1" stop-opacity="0.15"/>
+              <stop offset="100%" stop-color="#9fd4a1" stop-opacity="0"/>
+            </radialGradient>
+          </defs>
+
+          <!-- === Region boundaries (very subtle) === -->
+          <g stroke="#2a2a32" stroke-width="0.5" stroke-dasharray="2 4" opacity="0.5" fill="none">
+            <line x1="60" y1="130" x2="740" y2="130"/>
+            <line x1="60" y1="260" x2="740" y2="260"/>
+            <line x1="60" y1="520" x2="740" y2="520"/>
+            <line x1="60" y1="680" x2="740" y2="680"/>
+          </g>
+
+          <!-- Region labels on left edge -->
+          <g font-family="JetBrains Mono" font-size="9" letter-spacing="2" fill="#5c5a52">
+            <text x="60" y="60" text-anchor="start">I · DIRECTION</text>
+            <text x="60" y="155" text-anchor="start">II · INVOCATION</text>
+            <text x="60" y="285" text-anchor="start">III · ORCHESTRATION</text>
+            <text x="60" y="545" text-anchor="start">IV · ARTIFACTS</text>
+            <text x="60" y="705" text-anchor="start">V · AMBIENT LABOR</text>
+          </g>
+
+          <!-- ========== I. SOVEREIGN OPERATOR ========== -->
+          <g>
+            <circle cx="400" cy="75" r="60" fill="url(#operatorGlow)"/>
+            <circle cx="400" cy="75" r="22" fill="none" stroke="#e8e6de" stroke-width="1.2"/>
+            <circle cx="400" cy="75" r="8" fill="#e8e6de"/>
+            <!-- pulse rings -->
+            <circle cx="400" cy="75" r="38" fill="none" stroke="#9fd4a1" stroke-width="0.6" opacity="0.5"/>
+            <circle cx="400" cy="75" r="52" fill="none" stroke="#9fd4a1" stroke-width="0.4" opacity="0.3"/>
+            <text x="400" y="120" text-anchor="middle" fill="#e8e6de" font-family="Iowan Old Style, Palatino, serif" font-size="14" font-style="italic">the sovereign operator</text>
+          </g>
+
+          <!-- ========== II. INVOCATION BEAM ========== -->
+          <g>
+            <!-- intent beam down -->
+            <line x1="400" y1="135" x2="400" y2="240" stroke="#9fd4a1" stroke-width="1.5" opacity="0.8"/>
+            <polygon points="400,240 395,232 405,232" fill="#9fd4a1"/>
+            <!-- intent label -->
+            <rect x="240" y="175" width="320" height="36" fill="#12121a" stroke="#9fd4a1" stroke-width="0.6" rx="2"/>
+            <text x="400" y="198" text-anchor="middle" fill="#e8e6de" font-family="JetBrains Mono" font-size="11" letter-spacing="0.5">"handle this claim end-to-end"</text>
+          </g>
+
+          <!-- ========== III. ORCHESTRATION LAYER ========== -->
+          <!-- Mycelium substrate: shared memory across the width -->
+          <g opacity="0.9">
+            <!-- mycelium mesh -->
+            <g stroke="#c4a5d4" stroke-width="0.6" fill="none" opacity="0.55">
+              <path d="M 110 300 Q 180 295, 250 305 Q 340 315, 420 300 Q 510 290, 590 310 Q 660 320, 710 300"/>
+              <path d="M 110 320 Q 200 330, 280 320 Q 360 310, 440 325 Q 540 335, 620 320 Q 680 315, 710 325"/>
+              <path d="M 150 315 Q 170 310, 190 318"/>
+              <path d="M 280 320 Q 290 330, 310 322"/>
+              <path d="M 440 325 Q 460 335, 480 328"/>
+              <path d="M 590 310 Q 610 320, 630 315"/>
+            </g>
+            <!-- hub nodes -->
+            <g fill="#c4a5d4">
+              <circle cx="170" cy="308" r="2.5"/>
+              <circle cx="300" cy="320" r="3"/>
+              <circle cx="440" cy="315" r="3.5"/>
+              <circle cx="570" cy="305" r="3"/>
+              <circle cx="670" cy="315" r="2.5"/>
+            </g>
+            <text x="710" y="296" text-anchor="end" fill="#c4a5d4" font-family="JetBrains Mono" font-size="9" letter-spacing="1.5">MYCELIUM · shared substrate</text>
+          </g>
+
+          <!-- Specialist agents (hive): role nodes -->
+          <g>
+            <!-- CEO node -->
+            <g transform="translate(180, 380)">
+              <polygon points="0,-16 14,-8 14,8 0,16 -14,8 -14,-8" fill="#12121a" stroke="#9fd4a1" stroke-width="1"/>
+              <text x="0" y="3" text-anchor="middle" fill="#9fd4a1" font-family="JetBrains Mono" font-size="9">CEO</text>
+            </g>
+            <g transform="translate(290, 380)">
+              <polygon points="0,-16 14,-8 14,8 0,16 -14,8 -14,-8" fill="#12121a" stroke="#9fd4a1" stroke-width="1"/>
+              <text x="0" y="3" text-anchor="middle" fill="#9fd4a1" font-family="JetBrains Mono" font-size="9">RSRCH</text>
+            </g>
+            <g transform="translate(400, 380)">
+              <polygon points="0,-16 14,-8 14,8 0,16 -14,8 -14,-8" fill="#12121a" stroke="#9fd4a1" stroke-width="1"/>
+              <text x="0" y="3" text-anchor="middle" fill="#9fd4a1" font-family="JetBrains Mono" font-size="9">OPS</text>
+            </g>
+            <g transform="translate(510, 380)">
+              <polygon points="0,-16 14,-8 14,8 0,16 -14,8 -14,-8" fill="#12121a" stroke="#9fd4a1" stroke-width="1"/>
+              <text x="0" y="3" text-anchor="middle" fill="#9fd4a1" font-family="JetBrains Mono" font-size="9">CMO</text>
+            </g>
+            <g transform="translate(620, 380)">
+              <polygon points="0,-16 14,-8 14,8 0,16 -14,8 -14,-8" fill="#12121a" stroke="#9fd4a1" stroke-width="1"/>
+              <text x="0" y="3" text-anchor="middle" fill="#9fd4a1" font-family="JetBrains Mono" font-size="9">CTO</text>
+            </g>
+
+            <!-- vertical tether from substrate to each specialist -->
+            <g stroke="#c4a5d4" stroke-width="0.4" opacity="0.4">
+              <line x1="180" y1="328" x2="180" y2="364"/>
+              <line x1="290" y1="330" x2="290" y2="364"/>
+              <line x1="400" y1="328" x2="400" y2="364"/>
+              <line x1="510" y1="320" x2="510" y2="364"/>
+              <line x1="620" y1="320" x2="620" y2="364"/>
+            </g>
+
+            <!-- Bounded peer attention (starling) - each agent watches ~2 neighbors, not all -->
+            <g stroke="#b5d4e8" stroke-width="0.8" fill="none" opacity="0.7">
+              <path d="M 194 380 Q 240 362, 276 380"/>
+              <path d="M 304 380 Q 345 362, 386 380"/>
+              <path d="M 414 380 Q 455 362, 496 380"/>
+              <path d="M 524 380 Q 570 362, 606 380"/>
+              <!-- extra peer hop -->
+              <path d="M 194 380 Q 240 404, 290 394" opacity="0.4"/>
+              <path d="M 510 380 Q 565 404, 620 394" opacity="0.4"/>
+            </g>
+            <text x="710" y="376" text-anchor="end" fill="#9fd4a1" font-family="JetBrains Mono" font-size="9" letter-spacing="1.5">HIVE · specialists</text>
+            <text x="710" y="410" text-anchor="end" fill="#b5d4e8" font-family="JetBrains Mono" font-size="9" letter-spacing="1.5">STARLING · bounded peer attention</text>
+          </g>
+
+          <!-- Parallel exploration paths (slime mold) - forking -->
+          <g>
+            <text x="710" y="450" text-anchor="end" fill="#e0b5a4" font-family="JetBrains Mono" font-size="9" letter-spacing="1.5">SLIME MOLD · parallel paths</text>
+            <!-- fork from OPS agent into 3 paths -->
+            <g stroke="#e0b5a4" fill="none">
+              <!-- path A - thin, exploratory -->
+              <path d="M 400 396 Q 330 440, 270 490" stroke-width="0.6" opacity="0.3" stroke-dasharray="2 2"/>
+              <!-- path B - medium -->
+              <path d="M 400 396 Q 400 440, 400 490" stroke-width="1.2" opacity="0.55"/>
+              <!-- path C - thick, reinforced -->
+              <path d="M 400 396 Q 460 440, 530 490" stroke-width="2.5" opacity="0.9"/>
+            </g>
+            <!-- path outcome nodes at terminus -->
+            <g fill="#e0b5a4">
+              <circle cx="270" cy="490" r="3" opacity="0.4"/>
+              <circle cx="400" cy="490" r="3.5" opacity="0.65"/>
+              <circle cx="530" cy="490" r="4.5"/>
+            </g>
+            <text x="270" y="505" text-anchor="middle" fill="#5c5a52" font-family="JetBrains Mono" font-size="7">v1 · dissolved</text>
+            <text x="400" y="505" text-anchor="middle" fill="#5c5a52" font-family="JetBrains Mono" font-size="7">v2 · residual</text>
+            <text x="530" y="505" text-anchor="middle" fill="#5c5a52" font-family="JetBrains Mono" font-size="7">v47 · reinforced</text>
+          </g>
+
+          <!-- ========== IV. ARTIFACTS (ants/stigmergy) ========== -->
+          <g>
+            <text x="710" y="550" text-anchor="end" fill="#d4c87a" font-family="JetBrains Mono" font-size="9" letter-spacing="1.5">ANTS · stigmergic state on artifacts</text>
+            <!-- artifacts as document glyphs at different pheromone intensities -->
+            <!-- artifact 1 (low) -->
+            <g transform="translate(160, 590)">
+              <rect x="-18" y="-24" width="36" height="48" fill="none" stroke="#d4c87a" stroke-width="0.8" opacity="0.4"/>
+              <line x1="-10" y1="-12" x2="10" y2="-12" stroke="#d4c87a" stroke-width="0.5" opacity="0.4"/>
+              <line x1="-10" y1="-4" x2="10" y2="-4" stroke="#d4c87a" stroke-width="0.5" opacity="0.4"/>
+              <line x1="-10" y1="4" x2="10" y2="4" stroke="#d4c87a" stroke-width="0.5" opacity="0.4"/>
+              <line x1="-10" y1="12" x2="10" y2="12" stroke="#d4c87a" stroke-width="0.5" opacity="0.4"/>
+              <text x="0" y="42" text-anchor="middle" fill="#5c5a52" font-family="JetBrains Mono" font-size="7">intake form</text>
+            </g>
+            <!-- artifact 2 (medium) -->
+            <g transform="translate(285, 590)">
+              <rect x="-18" y="-24" width="36" height="48" fill="none" stroke="#d4c87a" stroke-width="1" opacity="0.65"/>
+              <line x1="-10" y1="-12" x2="10" y2="-12" stroke="#d4c87a" stroke-width="0.6" opacity="0.65"/>
+              <line x1="-10" y1="-4" x2="10" y2="-4" stroke="#d4c87a" stroke-width="0.6" opacity="0.65"/>
+              <line x1="-10" y1="4" x2="10" y2="4" stroke="#d4c87a" stroke-width="0.6" opacity="0.65"/>
+              <line x1="-10" y1="12" x2="10" y2="12" stroke="#d4c87a" stroke-width="0.6" opacity="0.65"/>
+              <text x="0" y="42" text-anchor="middle" fill="#5c5a52" font-family="JetBrains Mono" font-size="7">evidence bundle</text>
+            </g>
+            <!-- artifact 3 (high - most reinforced) -->
+            <g transform="translate(410, 590)">
+              <rect x="-18" y="-24" width="36" height="48" fill="none" stroke="#d4c87a" stroke-width="1.6" opacity="1"/>
+              <line x1="-10" y1="-12" x2="10" y2="-12" stroke="#d4c87a" stroke-width="0.8"/>
+              <line x1="-10" y1="-4" x2="10" y2="-4" stroke="#d4c87a" stroke-width="0.8"/>
+              <line x1="-10" y1="4" x2="10" y2="4" stroke="#d4c87a" stroke-width="0.8"/>
+              <line x1="-10" y1="12" x2="10" y2="12" stroke="#d4c87a" stroke-width="0.8"/>
+              <!-- pheromone glow -->
+              <circle cx="0" cy="0" r="28" fill="none" stroke="#d4c87a" stroke-width="0.3" opacity="0.3"/>
+              <text x="0" y="42" text-anchor="middle" fill="#5c5a52" font-family="JetBrains Mono" font-size="7">dispute letter v47</text>
+            </g>
+            <!-- artifact 4 (medium) -->
+            <g transform="translate(535, 590)">
+              <rect x="-18" y="-24" width="36" height="48" fill="none" stroke="#d4c87a" stroke-width="1" opacity="0.65"/>
+              <line x1="-10" y1="-12" x2="10" y2="-12" stroke="#d4c87a" stroke-width="0.6" opacity="0.65"/>
+              <line x1="-10" y1="-4" x2="10" y2="-4" stroke="#d4c87a" stroke-width="0.6" opacity="0.65"/>
+              <line x1="-10" y1="4" x2="10" y2="4" stroke="#d4c87a" stroke-width="0.6" opacity="0.65"/>
+              <line x1="-10" y1="12" x2="10" y2="12" stroke="#d4c87a" stroke-width="0.6" opacity="0.65"/>
+              <text x="0" y="42" text-anchor="middle" fill="#5c5a52" font-family="JetBrains Mono" font-size="7">negotiation log</text>
+            </g>
+            <!-- artifact 5 (low) -->
+            <g transform="translate(660, 590)">
+              <rect x="-18" y="-24" width="36" height="48" fill="none" stroke="#d4c87a" stroke-width="0.8" opacity="0.4"/>
+              <line x1="-10" y1="-12" x2="10" y2="-12" stroke="#d4c87a" stroke-width="0.5" opacity="0.4"/>
+              <line x1="-10" y1="-4" x2="10" y2="-4" stroke="#d4c87a" stroke-width="0.5" opacity="0.4"/>
+              <line x1="-10" y1="4" x2="10" y2="4" stroke="#d4c87a" stroke-width="0.5" opacity="0.4"/>
+              <line x1="-10" y1="12" x2="10" y2="12" stroke="#d4c87a" stroke-width="0.5" opacity="0.4"/>
+              <text x="0" y="42" text-anchor="middle" fill="#5c5a52" font-family="JetBrains Mono" font-size="7">exception file</text>
+            </g>
+          </g>
+
+          <!-- ========== V. AMBIENT LABOR FIELD ========== -->
+          <g>
+            <ellipse cx="400" cy="760" rx="340" ry="80" fill="url(#ambientGlow)"/>
+            <!-- stippled agents -->
+            <g fill="#9fd4a1">
+              <circle cx="120" cy="745" r="1.5" opacity="0.6"/>
+              <circle cx="155" cy="770" r="1.2" opacity="0.5"/>
+              <circle cx="190" cy="755" r="1.8" opacity="0.7"/>
+              <circle cx="225" cy="780" r="1.3" opacity="0.5"/>
+              <circle cx="260" cy="750" r="1.6" opacity="0.6"/>
+              <circle cx="295" cy="775" r="1.4" opacity="0.55"/>
+              <circle cx="330" cy="760" r="1.8" opacity="0.7"/>
+              <circle cx="365" cy="785" r="1.2" opacity="0.5"/>
+              <circle cx="400" cy="755" r="2" opacity="0.8"/>
+              <circle cx="435" cy="780" r="1.4" opacity="0.55"/>
+              <circle cx="470" cy="760" r="1.6" opacity="0.6"/>
+              <circle cx="505" cy="785" r="1.3" opacity="0.5"/>
+              <circle cx="540" cy="750" r="1.8" opacity="0.7"/>
+              <circle cx="575" cy="775" r="1.2" opacity="0.5"/>
+              <circle cx="610" cy="755" r="1.6" opacity="0.6"/>
+              <circle cx="645" cy="780" r="1.4" opacity="0.55"/>
+              <circle cx="680" cy="760" r="1.3" opacity="0.5"/>
+              <!-- second row -->
+              <circle cx="140" cy="795" r="1.1" opacity="0.4"/>
+              <circle cx="210" cy="800" r="1.3" opacity="0.5"/>
+              <circle cx="280" cy="805" r="1" opacity="0.4"/>
+              <circle cx="350" cy="800" r="1.4" opacity="0.55"/>
+              <circle cx="420" cy="810" r="1.2" opacity="0.45"/>
+              <circle cx="490" cy="800" r="1.3" opacity="0.5"/>
+              <circle cx="560" cy="805" r="1" opacity="0.4"/>
+              <circle cx="630" cy="800" r="1.2" opacity="0.45"/>
+            </g>
+            <text x="400" y="720" text-anchor="middle" fill="#5c5a52" font-family="JetBrains Mono" font-size="9" letter-spacing="2">AGENTS · MODELS · APIS · TOOLS (COMMODITY)</text>
+          </g>
+
+          <!-- ========== FEEDBACK LOOP — outcome returning up the right side ========== -->
+          <g>
+            <!-- curved return path from ambient labor back up to operator -->
+            <path d="M 680 740 C 770 700, 770 500, 770 350 C 770 200, 720 120, 440 95"
+                  stroke="#9fd4a1" stroke-width="1" fill="none" opacity="0.5" stroke-dasharray="4 3"/>
+            <!-- arrowhead returning to operator -->
+            <polygon points="440,95 448,91 448,99" fill="#9fd4a1" opacity="0.7"/>
+            <text x="762" y="430" text-anchor="end" fill="#9fd4a1" font-family="JetBrains Mono" font-size="9" letter-spacing="1.5" transform="rotate(-90 762 430)">OUTCOME · FEEDBACK · LEARNING</text>
+          </g>
+
+        </svg>
+      </div>
+
+      <aside class="anatomy-legend">
+        <div class="legend-header">
+          <div class="legend-title">Reading the body</div>
+          <div class="legend-sub">Five organs. One organism. Each primitive is doing a job that evolution already got right — you're just hosting it in a new substrate.</div>
+        </div>
+
+        <div class="organ">
+          <div class="organ-head">
+            <div class="organ-dot" style="background: #e8e6de;"></div>
+            <div class="organ-name" style="color:#e8e6de;">Direction</div>
+            <div class="organ-ref">I</div>
+          </div>
+          <div class="organ-text">The one human. Taste, judgment, intent. Not scalable. Not replaceable. The scarcest resource in the system.</div>
+        </div>
+
+        <div class="organ">
+          <div class="organ-head">
+            <div class="organ-dot" style="background: #c4a5d4;"></div>
+            <div class="organ-name" style="color:#c4a5d4;">Mycelium</div>
+            <div class="organ-ref">III</div>
+          </div>
+          <div class="organ-text">The shared substrate. All agents read and write to the same memory (Notion, vector store, state graph). Coordination comes from the substrate — not from messages.</div>
+        </div>
+
+        <div class="organ">
+          <div class="organ-head">
+            <div class="organ-dot" style="background: #9fd4a1;"></div>
+            <div class="organ-name" style="color:#9fd4a1;">Hive</div>
+            <div class="organ-ref">III</div>
+          </div>
+          <div class="organ-text">Role-specialized agents (CEO, Research, Ops, CMO, CTO). Each does one thing well. Each can veto or amplify the others.</div>
+        </div>
+
+        <div class="organ">
+          <div class="organ-head">
+            <div class="organ-dot" style="background: #b5d4e8;"></div>
+            <div class="organ-name" style="color:#b5d4e8;">Starling</div>
+            <div class="organ-ref">III</div>
+          </div>
+          <div class="organ-text">Bounded peer attention. Agents watch a small fixed set of neighbors — not a global bus. State propagates faster than any orchestrator could route it.</div>
+        </div>
+
+        <div class="organ">
+          <div class="organ-head">
+            <div class="organ-dot" style="background: #e0b5a4;"></div>
+            <div class="organ-name" style="color:#e0b5a4;">Slime Mold</div>
+            <div class="organ-ref">III</div>
+          </div>
+          <div class="organ-text">Many approaches launched in parallel. Results reinforce the winners; losers dissolve. You don't guess the right workflow — the system finds it.</div>
+        </div>
+
+        <div class="organ">
+          <div class="organ-head">
+            <div class="organ-dot" style="background: #d4c87a;"></div>
+            <div class="organ-name" style="color:#d4c87a;">Ants</div>
+            <div class="organ-ref">IV</div>
+          </div>
+          <div class="organ-text">State lives on the artifact, not the agent. Workers are amnesiac; the work product remembers. Every claim file, letter, and log carries the pheromone.</div>
+        </div>
+
+        <div class="organ">
+          <div class="organ-head">
+            <div class="organ-dot" style="background: #9fd4a1; opacity: 0.5;"></div>
+            <div class="organ-name" style="color:#9fd4a1;">Ambient Labor</div>
+            <div class="organ-ref">V</div>
+          </div>
+          <div class="organ-text">The execution layer. Agents, models, APIs, tools. Commodity. Interchangeable. Near-zero marginal cost. Whatever's cheapest and best at the moment of invocation.</div>
+        </div>
+      </aside>
+    </div>
+
+    <div class="below">
+      <div class="panel">
+        <h3>One <em>invocation</em>, walked.</h3>
+        <div class="cycle-step">
+          <div class="cycle-num">01</div>
+          <div class="cycle-body">The operator writes one sentence of intent. <strong>"Handle this claim end-to-end."</strong></div>
+        </div>
+        <div class="cycle-step">
+          <div class="cycle-num">02</div>
+          <div class="cycle-body">The intent drops onto the <strong>mycelial substrate</strong>. No one is notified. The specialists read the substrate when they wake.</div>
+        </div>
+        <div class="cycle-step">
+          <div class="cycle-num">03</div>
+          <div class="cycle-body">Role agents pick up the thread. Each does what its role does; they pass <strong>compressed structured signals</strong>, not prose.</div>
+        </div>
+        <div class="cycle-step">
+          <div class="cycle-num">04</div>
+          <div class="cycle-body">The Ops agent forks <strong>three parallel approaches</strong>. They run in parallel on ambient labor. Cheap. Fast. Disposable.</div>
+        </div>
+        <div class="cycle-step">
+          <div class="cycle-num">05</div>
+          <div class="cycle-body">Results deposit onto <strong>artifacts</strong>. Evidence bundle. Dispute letter. Negotiation log. Each carries a confidence pheromone.</div>
+        </div>
+        <div class="cycle-step">
+          <div class="cycle-num">06</div>
+          <div class="cycle-body">Peer agents watching each other (starling) amplify or flag. The strongest path reinforces; the others dissolve.</div>
+        </div>
+        <div class="cycle-step">
+          <div class="cycle-num">07</div>
+          <div class="cycle-body">The outcome returns to the operator. One decision point for a human. Approve, veto, redirect.</div>
+        </div>
+        <div class="cycle-step">
+          <div class="cycle-num">08</div>
+          <div class="cycle-body">Every artifact, pheromone, and verdict stays on the substrate. <strong>The organism is now smarter than it was this morning.</strong></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h3>Production <em>specs</em>.</h3>
+        <div class="spec-row">
+          <div class="spec-key">Substrate</div>
+          <div class="spec-val">Notion (today) → vector-indexed state graph (Phase 2). All agents read on session start, write net-new facts on session end.</div>
+        </div>
+        <div class="spec-row">
+          <div class="spec-key">Specialists</div>
+          <div class="spec-val">CEO, Research, Ops, CMO, CTO. Each a Perplexity Space with a scoped memory page. No agent operates outside its role.</div>
+        </div>
+        <div class="spec-row">
+          <div class="spec-key">Signal format</div>
+          <div class="spec-val">Structured schemas — <strong>claim-shape, lead-shape, anomaly-shape</strong>. No free-text walls between agents.</div>
+        </div>
+        <div class="spec-row">
+          <div class="spec-key">Peer attention</div>
+          <div class="spec-val">Each agent subscribes to 2–3 peers' latest artifacts. No global broadcast. Slack is the event surface.</div>
+        </div>
+        <div class="spec-row">
+          <div class="spec-key">Parallelism</div>
+          <div class="spec-val">Default: 3 forks per non-trivial task. Generator-Verifier gate prunes to the strongest within 2–3 loops.</div>
+        </div>
+        <div class="spec-row">
+          <div class="spec-key">Artifact state</div>
+          <div class="spec-val">Every work product is tagged with source, confidence, and prior-version pointer. The artifact is the memory.</div>
+        </div>
+        <div class="spec-row">
+          <div class="spec-key">Learning loop</div>
+          <div class="spec-val">Weekly rollup: which primitives fired most, which paths reinforced, which exceptions broke them. Feeds next week's memory.</div>
+        </div>
+        <div class="spec-row">
+          <div class="spec-key">Failure modes</div>
+          <div class="spec-val">Ant mill (stale pheromones), starling panic (cascading bad signal), mycelial poison (bad substrate writes), premature prune (exploration starved).</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="closing-block">
+      <h2>You don't run a company. You <em>run an organism</em>.</h2>
+      <p>This is the thing that couldn't exist 18 months ago. Not a SaaS. Not a BPO. Not consulting. An operation that <strong>invokes its own labor</strong>, remembers on the artifact instead of in the employee, and gets measurably smarter between Monday and Friday.</p>
+      <p>Two humans direct it. Perplexity Computer and friends execute it. Everything in the middle — the substrate, the specialists, the peer attention, the parallel forks, the pheromone trails — <strong>is Unicron's actual IP</strong>. That's what the competition judges need to see, and what the market will eventually buy.</p>
+      <p>Every operation we run deposits attention-capital onto the substrate. Every artifact carries pheromone. Every week the organism knows more exceptions, more edge cases, more shortcuts than it did the week before. Code is ambient. Data is ambient. <strong>Orchestration intelligence is not.</strong></p>
+      <p class="coda">"What would I point at this if execution were free?" — Labor Became Ambient, I.</p>
+    </div>
+
+    <div class="footer">
+      <div>Unicron Systems · 2026</div>
+      <div>Anatomy of a Living Operation</div>
+    </div>
+
+  </div>
+</body>
+</html>

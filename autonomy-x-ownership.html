@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Autonomy Ladder × Outcome Ownership — Paradigm Map IV</title>
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --bg-2: #12121a;
+    --bg-3: #171720;
+    --bg-4: #1e1e28;
+    --ink: #e8e6de;
+    --ink-2: #9a9689;
+    --ink-3: #5c5a52;
+    --ink-4: #3a3a42;
+    --line: #2a2a32;
+    --line-2: #383842;
+    --accent: #9fd4a1;       /* frontier / agent-native */
+    --accent-2: #d4c87a;     /* amber — contested */
+    --accent-3: #b5d4e8;     /* slate-blue — tools */
+    --accent-4: #e0b5a4;     /* sienna — commodity */
+    --accent-5: #c4a5d4;     /* violet — precious IP */
+    --serif: "Iowan Old Style", "Palatino", "Palatino Linotype", Georgia, serif;
+    --sans: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+    --mono: "JetBrains Mono", "SF Mono", Menlo, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { background: var(--bg); color: var(--ink); font-family: var(--sans); -webkit-font-smoothing: antialiased; }
+
+  /* ---- Top Nav (shared across all four posters) ---- */
+  .topnav { position: sticky; top: 0; z-index: 50; background: rgba(10,10,15,0.92); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border-bottom: 1px solid var(--line); padding: 14px 40px; display: flex; align-items: center; justify-content: space-between; }
+  .topnav-brand { font-family: var(--mono); font-size: 11px; letter-spacing: 0.25em; color: var(--ink-2); text-transform: uppercase; text-decoration: none; }
+  .topnav-brand em { font-style: normal; color: var(--ink-3); }
+  .topnav-brand:hover { color: var(--ink); }
+  .topnav-links { display: flex; gap: 24px; }
+  .topnav-links a { font-family: var(--mono); font-size: 11px; letter-spacing: 0.15em; text-transform: uppercase; text-decoration: none; color: var(--ink-3); padding: 4px 0; border-bottom: 1px solid transparent; transition: color 0.15s, border-color 0.15s; }
+  .topnav-links a:hover { color: var(--ink); }
+  .topnav-links a.active { color: var(--accent); border-bottom-color: var(--accent); }
+  @media (max-width: 1000px) { .topnav { flex-direction: column; gap: 10px; padding: 14px 20px; } .topnav-links { gap: 14px; flex-wrap: wrap; justify-content: center; } }
+
+  body { padding: 80px 40px 120px; }
+  .frame { max-width: 1500px; margin: 0 auto; }
+
+  .title-block { margin-bottom: 56px; max-width: 980px; }
+  .eyebrow { font-family: var(--mono); font-size: 11px; letter-spacing: 0.2em; color: var(--ink-3); text-transform: uppercase; margin-bottom: 16px; }
+  h1 { font-family: var(--serif); font-size: 56px; font-weight: 400; letter-spacing: -0.02em; line-height: 1.05; margin-bottom: 24px; }
+  h1 em { font-style: italic; color: var(--accent); }
+  .subtitle { font-family: var(--serif); font-size: 20px; font-style: italic; color: var(--ink-2); line-height: 1.5; }
+
+  .section-label { font-family: var(--mono); font-size: 11px; letter-spacing: 0.25em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+
+  /* ---- Two pulls (Schmidt + Amjad) ---- */
+  .pulls { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 56px; }
+  .pull { padding: 28px 32px; background: var(--bg-2); border: 1px solid var(--line); border-radius: 4px; }
+  .pull-source { font-family: var(--mono); font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 10px; }
+  .pull-quote { font-family: var(--serif); font-size: 18px; font-style: italic; line-height: 1.5; color: var(--ink); margin-bottom: 14px; }
+  .pull-take { font-family: var(--serif); font-size: 14px; line-height: 1.55; color: var(--ink-2); }
+  .pull-take strong { color: var(--ink); font-weight: 500; font-style: normal; }
+  .pull-1 .pull-quote::before, .pull-1 .pull-quote::after { content: '"'; color: var(--accent-3); }
+  .pull-2 .pull-quote::before, .pull-2 .pull-quote::after { content: '"'; color: var(--accent); }
+
+  /* ---- Hero matrix ---- */
+  .matrix-card { background: var(--bg-2); border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+  .matrix-head { padding: 28px 36px 20px; border-bottom: 1px solid var(--line); }
+  .matrix-title { font-family: var(--serif); font-size: 28px; font-weight: 400; letter-spacing: -0.01em; margin-bottom: 8px; }
+  .matrix-title em { font-style: italic; color: var(--accent); }
+  .matrix-sub { font-family: var(--serif); font-size: 15px; font-style: italic; color: var(--ink-2); }
+
+  .matrix-body { display: grid; grid-template-columns: 1fr 320px; gap: 0; }
+  .matrix-svg-wrap { padding: 32px; min-height: 760px; display: flex; align-items: center; justify-content: center; }
+  .matrix-svg-wrap svg { width: 100%; height: 100%; max-height: 760px; }
+  .matrix-legend { padding: 32px 28px; border-left: 1px solid var(--line); background: var(--bg-3); display: flex; flex-direction: column; }
+  .legend-section { margin-bottom: 28px; }
+  .legend-section:last-child { margin-bottom: 0; }
+  .legend-head { font-family: var(--mono); font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+  .legend-row { display: flex; align-items: flex-start; gap: 10px; padding: 7px 0; font-family: var(--serif); font-size: 13px; line-height: 1.45; color: var(--ink-2); }
+  .legend-row strong { color: var(--ink); font-weight: 500; }
+  .legend-swatch { width: 14px; height: 14px; border-radius: 2px; flex-shrink: 0; margin-top: 3px; }
+  .legend-marker { width: 14px; height: 14px; flex-shrink: 0; margin-top: 3px; display: flex; align-items: center; justify-content: center; }
+  .legend-marker svg { overflow: visible; }
+
+  /* ---- Below the fold panels ---- */
+  .below { margin-top: 56px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 24px; }
+  .panel { padding: 32px 28px; background: var(--bg-2); border: 1px solid var(--line); border-radius: 4px; }
+  .panel h3 { font-family: var(--serif); font-size: 22px; font-weight: 400; letter-spacing: -0.01em; margin-bottom: 16px; }
+  .panel h3 em { font-style: italic; color: var(--accent); }
+  .panel p { font-family: var(--serif); font-size: 14.5px; line-height: 1.55; color: var(--ink-2); margin-bottom: 12px; }
+  .panel p strong { color: var(--ink); font-weight: 500; }
+
+  .zone-row { display: grid; grid-template-columns: 16px 1fr; gap: 12px; padding: 12px 0; border-top: 1px solid var(--line); }
+  .zone-row:first-of-type { border-top: none; padding-top: 4px; }
+  .zone-dot { width: 12px; height: 12px; border-radius: 2px; margin-top: 4px; }
+  .zone-name { font-family: var(--mono); font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink); margin-bottom: 4px; }
+  .zone-text { font-family: var(--serif); font-size: 13px; line-height: 1.5; color: var(--ink-2); }
+
+  .path-row { padding: 14px 0; border-top: 1px solid var(--line); }
+  .path-row:first-of-type { border-top: none; padding-top: 4px; }
+  .path-name { font-family: var(--mono); font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink); margin-bottom: 6px; }
+  .path-arrow { font-family: var(--mono); font-size: 11px; color: var(--ink-3); margin-bottom: 8px; }
+  .path-arrow strong { color: var(--ink-2); font-weight: 400; }
+  .path-text { font-family: var(--serif); font-size: 13px; line-height: 1.5; color: var(--ink-2); }
+  .path-text em { color: var(--ink); font-style: italic; }
+
+  .test-step { display: grid; grid-template-columns: 24px 1fr; gap: 14px; padding: 12px 0; border-top: 1px solid var(--line); }
+  .test-step:first-of-type { border-top: none; padding-top: 4px; }
+  .test-num { font-family: var(--mono); font-size: 10px; letter-spacing: 0.15em; color: var(--ink-3); padding-top: 3px; }
+  .test-body { font-family: var(--serif); font-size: 14px; line-height: 1.5; color: var(--ink); }
+  .test-body strong { color: var(--accent); font-weight: 500; }
+
+  .closing-block { margin-top: 56px; padding: 48px; background: var(--bg-2); border: 1px solid var(--line); border-radius: 4px; }
+  .closing-block h2 { font-family: var(--serif); font-size: 36px; font-weight: 400; letter-spacing: -0.01em; margin-bottom: 20px; max-width: 900px; line-height: 1.15; }
+  .closing-block h2 em { font-style: italic; color: var(--accent); }
+  .closing-block p { font-family: var(--serif); font-size: 17px; line-height: 1.55; color: var(--ink-2); max-width: 900px; margin-bottom: 16px; }
+  .closing-block p strong { color: var(--ink); font-weight: 500; }
+  .closing-block .coda { font-style: italic; color: var(--ink-3); font-size: 15px; margin-top: 24px; padding-top: 24px; border-top: 1px solid var(--line); }
+
+  .footer { margin-top: 80px; padding-top: 32px; border-top: 1px solid var(--line); font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em; color: var(--ink-3); display: flex; justify-content: space-between; text-transform: uppercase; }
+
+  @media (max-width: 1200px) {
+    .matrix-body { grid-template-columns: 1fr; }
+    .matrix-legend { border-left: none; border-top: 1px solid var(--line); }
+    .below { grid-template-columns: 1fr; }
+    .pulls { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 720px) {
+    body { padding: 40px 20px; }
+    h1 { font-size: 38px; }
+  }
+</style>
+</head>
+<body>
+
+  <nav class="topnav">
+    <a href="/" class="topnav-brand">Unicron Systems <em>·</em> Paradigm Map</a>
+    <div class="topnav-links">
+      <a href="the-three-factories.html">I. Three Factories</a>
+      <a href="living-systems-as-orchestration.html">II. Living Systems</a>
+      <a href="anatomy-of-an-operation.html">III. Anatomy of an Operation</a>
+      <a href="autonomy-x-ownership.html" class="active">IV. Autonomy × Ownership</a>
+      <a href="patterns-in-practice.html">V. Patterns in Practice</a>
+    </div>
+  </nav>
+
+  <div class="frame">
+
+    <div class="title-block">
+      <h1>The Autonomy Ladder × <em>Outcome Ownership</em>.<br>Where the next companies actually live.</h1>
+      <p class="subtitle">Two questions decide whether you're building the future or selling shovels into a dying margin: how autonomously does the work run, and who owns the outcome it produces?</p>
+    </div>
+
+    <!-- The two pulls -->
+    <div class="section-label">SOURCE QUOTES</div>
+    <div class="pulls">
+      <div class="pull pull-1">
+        <div class="pull-source">Amjad Masad · Replit · YC Startup School</div>
+        <div class="pull-quote">My prediction is that all application software will go to zero. If anyone with one prompt can generate any kind of software, the value of applications will go down to almost zero.</div>
+        <div class="pull-take"><strong>The handle:</strong> autonomy is a ladder, not a flag. L1 lane-assist → L5 "software goes to zero." Use it as a demo legend so judges know exactly which rung you're standing on.</div>
+      </div>
+      <div class="pull pull-2">
+        <div class="pull-source">Eric Schmidt · panel · April 2026</div>
+        <div class="pull-quote">If you really want to make money, found an agentic AI company. And I don't mean one designing agents. I mean build an agent to do something. The product isn't the software. The product is the business.</div>
+        <div class="pull-take"><strong>The handle:</strong> stop asking "what software should we sell?" Ask "what business should we BE?" Energy co that prices in real time. Record label of synthetic artists. The agent IS the firm.</div>
+      </div>
+    </div>
+
+    <!-- The matrix -->
+    <div class="section-label">THE 5 × 5</div>
+    <div class="matrix-card">
+      <div class="matrix-head">
+        <div class="matrix-title">Autonomy × Outcome Ownership <em>— a placement map</em></div>
+        <div class="matrix-sub">Bottom-left is where everyone sells today. Top-right is where the next $1B firms get built. The diagonal between is contested ground for the next 24 months.</div>
+      </div>
+      <div class="matrix-body">
+        <div class="matrix-svg-wrap">
+          <svg viewBox="0 0 900 740" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">
+            <defs>
+              <pattern id="diag" patternUnits="userSpaceOnUse" width="6" height="6" patternTransform="rotate(45)">
+                <line x1="0" y1="0" x2="0" y2="6" stroke="#c4a5d4" stroke-width="1" opacity="0.35"/>
+              </pattern>
+              <marker id="arrowhead" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+                <path d="M0,0 L8,3 L0,6 z" fill="currentColor"/>
+              </marker>
+              <marker id="arrowhead-amber" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+                <path d="M0,0 L8,3 L0,6 z" fill="#d4c87a"/>
+              </marker>
+              <marker id="arrowhead-green" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+                <path d="M0,0 L8,3 L0,6 z" fill="#9fd4a1"/>
+              </marker>
+              <marker id="arrowhead-blue" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+                <path d="M0,0 L8,3 L0,6 z" fill="#b5d4e8"/>
+              </marker>
+            </defs>
+
+            <!-- Y axis label -->
+            <text x="-380" y="18" transform="rotate(-90)" font-family="JetBrains Mono, monospace" font-size="10" fill="#9a9689" letter-spacing="3" text-anchor="middle">OUTCOME OWNERSHIP →</text>
+
+            <!-- X axis label -->
+            <text x="490" y="730" font-family="JetBrains Mono, monospace" font-size="10" fill="#9a9689" letter-spacing="3" text-anchor="middle">AUTONOMY →</text>
+
+            <!-- Y axis tick labels -->
+            <g font-family="JetBrains Mono, monospace" font-size="9" fill="#5c5a52" letter-spacing="1.5" text-anchor="end">
+              <text x="155" y="84">O5  AGENT-NATIVE FIRM</text>
+              <text x="155" y="194">O4  OUTCOME-BASED</text>
+              <text x="155" y="304">O3  MANAGED SERVICE</text>
+              <text x="155" y="414">O2  ASSISTED SOFTWARE</text>
+              <text x="155" y="524">O1  PURE TOOL / SAAS</text>
+            </g>
+
+            <!-- X axis tick labels -->
+            <g font-family="JetBrains Mono, monospace" font-size="9" fill="#5c5a52" letter-spacing="1.5" text-anchor="middle">
+              <text x="240" y="618">A1</text>
+              <text x="240" y="632">AUTOCOMPLETE</text>
+              <text x="380" y="618">A2</text>
+              <text x="380" y="632">COPILOT</text>
+              <text x="520" y="618">A3</text>
+              <text x="520" y="632">~15 MIN AUTO</text>
+              <text x="660" y="618">A4</text>
+              <text x="660" y="632">MOSTLY AUTO</text>
+              <text x="800" y="618">A5</text>
+              <text x="800" y="632">SOFTWARE → 0</text>
+            </g>
+
+            <!-- Grid background — 5x5, origin at (170, 30), each cell 140x110 -->
+            <!-- Zone fills first (so dots and arrows draw on top) -->
+
+            <!-- COMMODITY zone — bottom-left 2x2 (O1-O2 × A1-A2) -->
+            <rect x="170" y="360" width="280" height="220" fill="#e0b5a4" opacity="0.06"/>
+
+            <!-- VANISHING TOOLS zone — bottom-right 2x3 (O1-O2 × A3-A5) -->
+            <rect x="450" y="360" width="420" height="220" fill="#b5d4e8" opacity="0.06"/>
+
+            <!-- LABOR-SHOPS zone — top-left 3x2 (O3-O5 × A1-A2) -->
+            <rect x="170" y="30" width="280" height="330" fill="#d4c87a" opacity="0.06"/>
+
+            <!-- AGENT-NATIVE FRONTIER — top-right 3x3 (O3-O5 × A3-A5) -->
+            <rect x="450" y="30" width="420" height="330" fill="#9fd4a1" opacity="0.07"/>
+
+            <!-- Precious IP zone — top-right corner 2x2 (O4-O5 × A4-A5) — diagonal hatch overlay -->
+            <rect x="590" y="30" width="280" height="220" fill="url(#diag)"/>
+            <rect x="590" y="30" width="280" height="220" fill="none" stroke="#c4a5d4" stroke-width="1" stroke-dasharray="3 3" opacity="0.5"/>
+            <text x="730" y="22" font-family="JetBrains Mono, monospace" font-size="9" fill="#c4a5d4" letter-spacing="2" text-anchor="middle">PRECIOUS-IP ZONE</text>
+
+            <!-- Contest demo zone — middle-right 2x2 (O3-O4 × A3-A4) — bold outline -->
+            <rect x="450" y="140" width="280" height="220" fill="none" stroke="#9fd4a1" stroke-width="1.5" stroke-dasharray="6 4" opacity="0.85"/>
+            <text x="590" y="132" font-family="JetBrains Mono, monospace" font-size="9" fill="#9fd4a1" letter-spacing="2" text-anchor="middle">CONTEST-DEMO ZONE  ·  ACHIEVABLE BY JUNE 2</text>
+
+            <!-- Grid lines -->
+            <g stroke="#2a2a32" stroke-width="0.8">
+              <!-- Vertical -->
+              <line x1="170" y1="30" x2="170" y2="580"/>
+              <line x1="310" y1="30" x2="310" y2="580"/>
+              <line x1="450" y1="30" x2="450" y2="580"/>
+              <line x1="590" y1="30" x2="590" y2="580"/>
+              <line x1="730" y1="30" x2="730" y2="580"/>
+              <line x1="870" y1="30" x2="870" y2="580"/>
+              <!-- Horizontal -->
+              <line x1="170" y1="30" x2="870" y2="30"/>
+              <line x1="170" y1="140" x2="870" y2="140"/>
+              <line x1="170" y1="250" x2="870" y2="250"/>
+              <line x1="170" y1="360" x2="870" y2="360"/>
+              <line x1="170" y1="470" x2="870" y2="470"/>
+              <line x1="170" y1="580" x2="870" y2="580"/>
+            </g>
+
+            <!-- Zone labels (subtle) -->
+            <g font-family="Iowan Old Style, Palatino, serif" font-size="13" font-style="italic">
+              <text x="310" y="475" fill="#e0b5a4" opacity="0.55" text-anchor="middle">commodity</text>
+              <text x="660" y="475" fill="#b5d4e8" opacity="0.55" text-anchor="middle">vanishing tools</text>
+              <text x="310" y="200" fill="#d4c87a" opacity="0.55" text-anchor="middle">labor shops</text>
+              <text x="800" y="80" fill="#9fd4a1" opacity="0.7" text-anchor="middle">agent-native frontier</text>
+            </g>
+
+            <!-- Existing business archetypes (gray dots with labels) -->
+            <g font-family="JetBrains Mono, monospace" font-size="9" fill="#9a9689">
+              <!-- Salesforce — O1, A1 -->
+              <circle cx="240" cy="525" r="4" fill="#5c5a52" stroke="#9a9689" stroke-width="1"/>
+              <text x="248" y="528">Salesforce</text>
+
+              <!-- GitHub Copilot — O1, A2 -->
+              <circle cx="380" cy="525" r="4" fill="#5c5a52" stroke="#9a9689" stroke-width="1"/>
+              <text x="388" y="528">GitHub Copilot</text>
+
+              <!-- Cursor — O2, A3 -->
+              <circle cx="520" cy="415" r="4" fill="#5c5a52" stroke="#9a9689" stroke-width="1"/>
+              <text x="528" y="418">Cursor</text>
+
+              <!-- Replit Agent v3 — O2, A4 -->
+              <circle cx="660" cy="415" r="4" fill="#5c5a52" stroke="#9a9689" stroke-width="1"/>
+              <text x="668" y="418">Replit Agent v3</text>
+
+              <!-- Pilot/Bench — O3, A2 -->
+              <circle cx="380" cy="305" r="4" fill="#5c5a52" stroke="#9a9689" stroke-width="1"/>
+              <text x="388" y="308">Pilot · Bench</text>
+
+              <!-- BPO/Accenture — O5, A1 -->
+              <circle cx="240" cy="85" r="4" fill="#5c5a52" stroke="#9a9689" stroke-width="1"/>
+              <text x="248" y="88">BPO firms</text>
+
+              <!-- Klarna AI agent ops — O4, A4 -->
+              <circle cx="660" cy="195" r="4" fill="#5c5a52" stroke="#9a9689" stroke-width="1"/>
+              <text x="668" y="198">Klarna AI ops</text>
+
+              <!-- 11x / Crew — O5, A4 — agent SDR firm -->
+              <circle cx="660" cy="85" r="4" fill="#5c5a52" stroke="#9a9689" stroke-width="1"/>
+              <text x="668" y="88">11x · agent SDR firms</text>
+
+              <!-- Schmidt's roofing co — O5, A5 -->
+              <circle cx="800" cy="85" r="4" fill="#9fd4a1" stroke="#9fd4a1" stroke-width="1"/>
+              <text x="730" y="60" fill="#9fd4a1">Schmidt's "roofing co"</text>
+
+              <!-- Synthetic record label — O5, A5 -->
+              <circle cx="800" cy="195" r="4" fill="#9fd4a1" stroke="#9fd4a1" stroke-width="1"/>
+              <text x="725" y="218" fill="#9fd4a1">synthetic record label</text>
+            </g>
+
+            <!-- Unicron candidate migration arrows -->
+            <!-- Public Adjuster: from (O1, A2) software → (O5, A4) agent-run firm -->
+            <g>
+              <circle cx="380" cy="540" r="5" fill="none" stroke="#d4c87a" stroke-width="1.5"/>
+              <path d="M 388 535 Q 540 320 656 100" fill="none" stroke="#d4c87a" stroke-width="1.5" opacity="0.85" marker-end="url(#arrowhead-amber)"/>
+              <text x="395" y="555" font-family="JetBrains Mono, monospace" font-size="9" fill="#d4c87a" letter-spacing="1">PUBLIC ADJUSTER</text>
+              <text x="395" y="567" font-family="JetBrains Mono, monospace" font-size="8" fill="#d4c87a" opacity="0.7" letter-spacing="1">software → agent-run firm</text>
+            </g>
+
+            <!-- Property Intelligence: from (O3, A3) data product → (O5, A4) agent broker firm -->
+            <g>
+              <circle cx="520" cy="320" r="5" fill="none" stroke="#9fd4a1" stroke-width="1.5"/>
+              <path d="M 525 315 Q 595 200 656 100" fill="none" stroke="#9fd4a1" stroke-width="1.5" opacity="0.85" marker-end="url(#arrowhead-green)"/>
+              <text x="378" y="338" font-family="JetBrains Mono, monospace" font-size="9" fill="#9fd4a1" letter-spacing="1" text-anchor="end">PROPERTY INTEL</text>
+              <text x="378" y="350" font-family="JetBrains Mono, monospace" font-size="8" fill="#9fd4a1" opacity="0.7" letter-spacing="1" text-anchor="end">data → agent broker</text>
+            </g>
+
+            <!-- Mold Remediation: from (O1, A2) software → (O4, A3) managed ops; capped -->
+            <g>
+              <circle cx="380" cy="555" r="5" fill="none" stroke="#b5d4e8" stroke-width="1.5"/>
+              <path d="M 388 552 Q 460 420 514 215" fill="none" stroke="#b5d4e8" stroke-width="1.5" opacity="0.7" stroke-dasharray="4 3" marker-end="url(#arrowhead-blue)"/>
+              <text x="200" y="430" font-family="JetBrains Mono, monospace" font-size="9" fill="#b5d4e8" letter-spacing="1">MOLD REMEDIATION</text>
+              <text x="200" y="442" font-family="JetBrains Mono, monospace" font-size="8" fill="#b5d4e8" opacity="0.7" letter-spacing="1">capped — physical world</text>
+            </g>
+
+            <!-- Origin marker -->
+            <text x="166" y="592" font-family="JetBrains Mono, monospace" font-size="9" fill="#5c5a52" text-anchor="end">0</text>
+
+          </svg>
+        </div>
+
+        <div class="matrix-legend">
+          <div class="legend-section">
+            <div class="legend-head">Zones</div>
+            <div class="legend-row">
+              <div class="legend-swatch" style="background: rgba(224,181,164,0.45);"></div>
+              <div><strong>Commodity.</strong> Race-to-bottom SaaS and agencies. Margin compression is structural.</div>
+            </div>
+            <div class="legend-row">
+              <div class="legend-swatch" style="background: rgba(181,212,232,0.45);"></div>
+              <div><strong>Vanishing tools.</strong> Software with high autonomy but no outcome stake. Amjad's prediction lands here.</div>
+            </div>
+            <div class="legend-row">
+              <div class="legend-swatch" style="background: rgba(212,200,122,0.45);"></div>
+              <div><strong>Labor shops.</strong> Own outcomes, but humans are the engine. Headcount-bound.</div>
+            </div>
+            <div class="legend-row">
+              <div class="legend-swatch" style="background: rgba(159,212,161,0.5);"></div>
+              <div><strong>Agent-native frontier.</strong> Schmidt's play. Wild economics. Where Unicron lives.</div>
+            </div>
+          </div>
+
+          <div class="legend-section">
+            <div class="legend-head">Overlays</div>
+            <div class="legend-row">
+              <div class="legend-marker"><svg width="14" height="14"><rect x="0" y="0" width="14" height="14" fill="none" stroke="#9fd4a1" stroke-width="1.5" stroke-dasharray="3 2"/></svg></div>
+              <div><strong>Contest-demo zone.</strong> Demonstrable autonomy with outcome stake by June 2 without firm-build risk.</div>
+            </div>
+            <div class="legend-row">
+              <div class="legend-marker"><svg width="14" height="14"><rect x="0" y="0" width="14" height="14" fill="url(#diag)" stroke="#c4a5d4" stroke-width="1" stroke-dasharray="2 2"/></svg></div>
+              <div><strong>Precious-IP zone.</strong> If you land here, "submit vs. keep" becomes a real decision.</div>
+            </div>
+          </div>
+
+          <div class="legend-section">
+            <div class="legend-head">Markers</div>
+            <div class="legend-row">
+              <div class="legend-marker"><svg width="14" height="14"><circle cx="7" cy="7" r="3.5" fill="#5c5a52" stroke="#9a9689" stroke-width="1"/></svg></div>
+              <div>Existing companies / archetypes — placed where they actually operate today.</div>
+            </div>
+            <div class="legend-row">
+              <div class="legend-marker"><svg width="14" height="14"><circle cx="3" cy="11" r="2.5" fill="none" stroke="#d4c87a" stroke-width="1.5"/><path d="M5 9 L12 3" stroke="#d4c87a" stroke-width="1.5"/></svg></div>
+              <div>Unicron candidate vertical, with migration arrow showing target position.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Below the fold -->
+    <div class="below">
+      <div class="panel">
+        <h3>The four <em>zones</em>, defined</h3>
+        <div class="zone-row">
+          <div class="zone-dot" style="background: rgba(224,181,164,0.7);"></div>
+          <div>
+            <div class="zone-name">Commodity</div>
+            <div class="zone-text">Sell licenses to humans who do the work. Buyers are price-shopping. Compression is the thesis. AI accelerates it.</div>
+          </div>
+        </div>
+        <div class="zone-row">
+          <div class="zone-dot" style="background: rgba(181,212,232,0.7);"></div>
+          <div>
+            <div class="zone-name">Vanishing Tools</div>
+            <div class="zone-text">High autonomy, low ownership. Cursor, Replit Agent, Copilot. The product gets dramatically better; pricing power gets dramatically worse.</div>
+          </div>
+        </div>
+        <div class="zone-row">
+          <div class="zone-dot" style="background: rgba(212,200,122,0.7);"></div>
+          <div>
+            <div class="zone-name">Labor Shops</div>
+            <div class="zone-text">Outcome-owning, but human-powered. BPOs, agencies, managed services. AI compresses costs but the operating shape stays human.</div>
+          </div>
+        </div>
+        <div class="zone-row">
+          <div class="zone-dot" style="background: rgba(159,212,161,0.85);"></div>
+          <div>
+            <div class="zone-name">Agent-Native Frontier</div>
+            <div class="zone-text">Outcome-owning AND agent-powered. The agent IS the operator. Schmidt's "roofing co." Unicron's destination.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h3>Three <em>migration paths</em> for our top candidates</h3>
+        <div class="path-row">
+          <div class="path-name" style="color: #d4c87a;">Public Adjuster</div>
+          <div class="path-arrow"><strong>O1 / A2</strong> &nbsp;→&nbsp; <strong>O5 / A4</strong></div>
+          <div class="path-text">From "claims software for adjusters" to <em>an agent-run virtual adjusting firm that takes 30% of recovered claims</em>. Massive upside. Hard licensing wall (state-by-state PA licensure). Worth 2 hours of regulatory research before committing.</div>
+        </div>
+        <div class="path-row">
+          <div class="path-name" style="color: #9fd4a1;">Property Intelligence</div>
+          <div class="path-arrow"><strong>O3 / A3</strong> &nbsp;→&nbsp; <strong>O5 / A4</strong></div>
+          <div class="path-text">From "property data feed" to <em>an agent-broker firm that continuously reconnoiters parcels and brokers signals</em>. Few licensing walls. Data + distribution loop is the moat. Cleanest fit for agent-native shape.</div>
+        </div>
+        <div class="path-row">
+          <div class="path-name" style="color: #b5d4e8;">Mold Remediation</div>
+          <div class="path-arrow"><strong>O1 / A2</strong> &nbsp;→&nbsp; <strong>O4 / A3</strong> <span style="color:#5c5a52;">(capped)</span></div>
+          <div class="path-text">Capped at managed-ops because <em>the work itself is physical</em>. You can compress everything around the work — quoting, scheduling, comms, billing — but the trucks and crews stay human. Best treated as a <em>tools play</em>, not an agent-native firm.</div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h3>The <em>one-line test</em></h3>
+        <p>For each candidate vertical, complete this sentence in one line. If you can't, it's not demo-able by June 2.</p>
+        <div class="test-step">
+          <div class="test-num">01</div>
+          <div class="test-body">"At submission, this demo shows an <strong>L___ agent</strong>…"</div>
+        </div>
+        <div class="test-step">
+          <div class="test-num">02</div>
+          <div class="test-body">"…doing <strong>[specific workflow]</strong> end-to-end…"</div>
+        </div>
+        <div class="test-step">
+          <div class="test-num">03</div>
+          <div class="test-body">"…with humans only doing <strong>[specific intervention]</strong>…"</div>
+        </div>
+        <div class="test-step">
+          <div class="test-num">04</div>
+          <div class="test-body">"…and we capture <strong>[outcome / revenue share]</strong> per unit."</div>
+        </div>
+        <p style="margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--line); font-size: 13px; color: var(--ink-3); font-style: italic;">If steps 1–3 are clear but step 4 is "we sell software for $X/seat," you're in the vanishing-tools zone. Reposition or drop.</p>
+      </div>
+    </div>
+
+    <!-- Closing -->
+    <div class="closing-block">
+      <h2>The two questions that <em>narrow the field</em>.</h2>
+      <p><strong>How autonomous?</strong> Pick a rung you can credibly demo by June 2. Anything above L4 is currently marketing, not engineering. Anything below L3 is a tool, not an agent.</p>
+      <p><strong>Who owns the outcome?</strong> Selling seats puts you in the vanishing-tools zone where Amjad is right and the floor falls out. Owning outcomes — even partially — moves you into the frontier where Schmidt's economics live.</p>
+      <p>Together they form a single decision: <strong>pick a quadrant before you pick a vertical.</strong> Most teams pick a vertical first and end up in commodity by accident. We can do this in the other order.</p>
+      <div class="coda">The contest reward isn't $1M for the prettiest demo. It's $1M for the company shape that didn't exist 18 months ago.</div>
+    </div>
+
+    <div class="footer">
+      <span>UNICRON SYSTEMS · PARADIGM MAP IV</span>
+      <span>2026</span>
+    </div>
+
+  </div>
+</body>
+</html>
