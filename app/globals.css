@@ -1,11 +1,29 @@
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #0a0a0f;
+  --bg-2: #12121a;
+  --bg-3: #171720;
+  --ink: #e8e6de;
+  --ink-2: #9a9689;
+  --ink-3: #5c5a52;
+  --line: #2a2a32;
+  --accent: #9fd4a1;
+  --accent-2: #d4c87a;
+  --accent-3: #b5d4e8;
+  --accent-4: #c4a5d4;
+  --accent-5: #d4a592;
 }
 
-html, body {
+html,
+body {
   width: 100%;
   height: 100%;
-  overflow: hidden;
+  background-color: var(--bg);
+  color: var(--ink);
 }
+
+/* Landing page (/) locks body scroll via its own full-viewport background.
+   /app/* routes scroll inside their own containers. */
