@@ -1,0 +1,37 @@
+{
+  "publicadjustersflorida.com": {
+    "company_name": "Public Adjusters of Florida",
+    "one_line_desc": "South Florida PA firm representing homeowners in property damage claims",
+    "recent_signal": "added 2 senior adjusters in Q1 per LinkedIn; expanded to Tampa",
+    "industry": "public adjusting",
+    "size_est": "15-40 people"
+  },
+  "acmemold.com": {
+    "company_name": "Acme Mold Remediation",
+    "one_line_desc": "Full-service mold remediation company in the Southeast US",
+    "recent_signal": "renewed ServiceTitan contract in March 2026, signaling workflow pain",
+    "industry": "mold remediation",
+    "size_est": "30-80 people"
+  },
+  "propdata.io": {
+    "company_name": "PropData",
+    "one_line_desc": "Modern property data API for small title + insurance shops",
+    "recent_signal": "open-sourced their county-records ingest layer last week",
+    "industry": "property data",
+    "size_est": "10-25 people"
+  },
+  "restoragroup.com": {
+    "company_name": "Restora Franchise Group",
+    "one_line_desc": "Multi-brand restoration franchise covering water/fire/mold damage",
+    "recent_signal": "CEO tweeted about 40% admin overhead on insurance disputes",
+    "industry": "restoration",
+    "size_est": "120+ people"
+  },
+  "midsizesaas.com": {
+    "company_name": "MidSize SaaS",
+    "one_line_desc": "B2B SaaS for vertical workflow automation in trade industries",
+    "recent_signal": "raised Series A in Feb 2026 and tripled sales hiring",
+    "industry": "vertical SaaS",
+    "size_est": "60-100 people"
+  }
+}
