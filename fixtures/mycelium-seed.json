@@ -1,0 +1,37 @@
+[
+  { "topic": "public-adjusters", "type": "FACT", "source_agent": "Research", "body": "PA settlement delays average $5-10k/claim when deadlines are missed", "strength": 8.7, "days_ago": 5, "ttl_days": 14 },
+  { "topic": "public-adjusters", "type": "PATTERN", "source_agent": "CEO", "body": "Top 3 PA firms all complain about documentation handoff between field and office", "strength": 6.2, "days_ago": 3, "ttl_days": 14 },
+  { "topic": "public-adjusters", "type": "RISK", "source_agent": "Research", "body": "Florida regulatory change Q3 could cap contingency fees to 20%", "strength": 4.1, "days_ago": 7, "ttl_days": 21 },
+  { "topic": "public-adjusters", "type": "QUESTION", "source_agent": "Keenan", "body": "Do PAs need a CRM or a workflow engine first?", "strength": 2.5, "days_ago": 2, "ttl_days": 14 },
+  { "topic": "public-adjusters", "type": "FACT", "source_agent": "Kyle", "body": "14 PAs would pay $500/mo for automated claim-status tracking", "strength": 5.8, "days_ago": 4, "ttl_days": 14 },
+  { "topic": "public-adjusters", "type": "PATTERN", "source_agent": "Research", "body": "Insurance dispute burnout is #1 reason PAs leave the field by year 3", "strength": 3.2, "days_ago": 9, "ttl_days": 14 },
+
+  { "topic": "mold-remediation", "type": "FACT", "source_agent": "Research", "body": "US mold remediation market ~$210B; fragmented across 30k operators", "strength": 7.9, "days_ago": 2, "ttl_days": 21 },
+  { "topic": "mold-remediation", "type": "PATTERN", "source_agent": "CEO", "body": "Remediators spend 40% of time on insurance dispute paperwork, not work", "strength": 5.5, "days_ago": 3, "ttl_days": 14 },
+  { "topic": "mold-remediation", "type": "QUESTION", "source_agent": "Kyle", "body": "Is remediation buyer the owner or the GM/COO?", "strength": 2.1, "days_ago": 1, "ttl_days": 14 },
+  { "topic": "mold-remediation", "type": "RISK", "source_agent": "Research", "body": "ServiceTitan is adding remediation vertical in FY26 — compressing window", "strength": 6.8, "days_ago": 6, "ttl_days": 21 },
+  { "topic": "mold-remediation", "type": "FACT", "source_agent": "Keenan", "body": "Two remediators said photo-to-report generation would save them 4h/job", "strength": 4.4, "days_ago": 2, "ttl_days": 14 },
+
+  { "topic": "property-data", "type": "FACT", "source_agent": "Research", "body": "US property data + intelligence TAM estimated $3-5T across insurance, title, lending", "strength": 7.0, "days_ago": 4, "ttl_days": 28 },
+  { "topic": "property-data", "type": "RISK", "source_agent": "Research", "body": "CoreLogic + ATTOM have 80% of the institutional market locked in 3-5yr contracts", "strength": 5.9, "days_ago": 5, "ttl_days": 28 },
+  { "topic": "property-data", "type": "PATTERN", "source_agent": "CEO", "body": "SMB title agents willing to pay $300-500/mo for a workflow around CoreLogic data", "strength": 3.6, "days_ago": 6, "ttl_days": 21 },
+  { "topic": "property-data", "type": "QUESTION", "source_agent": "Kyle", "body": "Can we productize on top of free county records without being sued?", "strength": 1.8, "days_ago": 8, "ttl_days": 14 },
+
+  { "topic": "trade-payments", "type": "FACT", "source_agent": "Research", "body": "Construction subs wait 60-90 days for payment on 70% of invoices", "strength": 4.9, "days_ago": 3, "ttl_days": 14 },
+  { "topic": "trade-payments", "type": "RISK", "source_agent": "Research", "body": "Billd and Siteline already raised Series B — moat getting hard", "strength": 3.2, "days_ago": 10, "ttl_days": 21 },
+  { "topic": "trade-payments", "type": "PATTERN", "source_agent": "Keenan", "body": "Trade contractors will give referrals if tool cuts admin time 30%+", "strength": 2.3, "days_ago": 4, "ttl_days": 14 },
+
+  { "topic": "competitors", "type": "FACT", "source_agent": "Research", "body": "Adjustify has ~400 PA customers at $99-299/mo; no AI layer", "strength": 6.1, "days_ago": 3, "ttl_days": 21 },
+  { "topic": "competitors", "type": "PATTERN", "source_agent": "CMO", "body": "Incumbents in all 5 verticals still sell on 'save time' — nobody claims AI-native", "strength": 4.5, "days_ago": 4, "ttl_days": 21 },
+  { "topic": "competitors", "type": "RISK", "source_agent": "Research", "body": "Replit Agent + Lovable can now ship vertical SaaS in a weekend. Moat must be data not code.", "strength": 7.4, "days_ago": 2, "ttl_days": 28 },
+  { "topic": "competitors", "type": "QUESTION", "source_agent": "Kyle", "body": "What's Wrike doing in workflow? Are they vulnerable to vertical disaggregation?", "strength": 1.5, "days_ago": 11, "ttl_days": 14 },
+  { "topic": "competitors", "type": "FACT", "source_agent": "CMO", "body": "Siteline raised $85M from a16z in Mar 2026", "strength": 2.7, "days_ago": 7, "ttl_days": 21 },
+
+  { "topic": "icp", "type": "PATTERN", "source_agent": "CEO", "body": "Strongest 'buy now' signal comes from 30-100 person firms with a clear ops owner", "strength": 5.0, "days_ago": 4, "ttl_days": 21 },
+  { "topic": "icp", "type": "FACT", "source_agent": "Keenan", "body": "Out of 12 discovery calls, 4 were ready to co-build; all 4 had founder >40yo", "strength": 3.4, "days_ago": 3, "ttl_days": 14 },
+  { "topic": "icp", "type": "QUESTION", "source_agent": "Kyle", "body": "Do we target sole-prop or 10+ headcount? Different GTM entirely.", "strength": 2.0, "days_ago": 2, "ttl_days": 14 },
+  { "topic": "icp", "type": "RISK", "source_agent": "Research", "body": "Targeting both SMB and enterprise dilutes positioning — must pick before submission", "strength": 3.8, "days_ago": 6, "ttl_days": 14 },
+  { "topic": "icp", "type": "FACT", "source_agent": "CMO", "body": "Warm network (Curtis + Jack) converts 3x higher than cold — prioritize for beta", "strength": 4.2, "days_ago": 5, "ttl_days": 14 },
+  { "topic": "icp", "type": "PATTERN", "source_agent": "Keenan", "body": "Buyers want Computer to do the work, not produce recommendations they must execute", "strength": 6.5, "days_ago": 1, "ttl_days": 21 },
+  { "topic": "icp", "type": "QUESTION", "source_agent": "CEO", "body": "Is the buyer pitch 'AI-native OS' or 'agent fleet' or 'autonomous back office'?", "strength": 1.2, "days_ago": 8, "ttl_days": 14 }
+]
