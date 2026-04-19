@@ -116,6 +116,12 @@ export default function BeehivePage() {
     }
     const json = await res.json();
     setRunId(json.run_id);
+    // Kick off phase 2 in parallel; don't await.
+    fetch("/api/beehive/run/execute", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ run_id: json.run_id, input_url: inputUrl }),
+    }).catch(() => void 0);
   };
 
   const latestStageForSelected =
