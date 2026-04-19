@@ -1,5 +1,6 @@
-import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
+import { assertServer } from "./server-guard";
+assertServer("lib/anthropic");
 import { z, type ZodTypeAny } from "zod";
 import { requireServerEnv } from "./env";
 import { logger } from "./logger";

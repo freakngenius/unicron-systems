@@ -1,5 +1,6 @@
-import "server-only";
 import { Client } from "@notionhq/client";
+import { assertServer } from "./server-guard";
+assertServer("lib/notion");
 import { requireServerEnv } from "./env";
 
 let _client: Client | null = null;

@@ -13,15 +13,18 @@ export const config = {
   ],
 };
 
-const CRON_HEADER = "x-cron-secret";
-
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
-  // Cron endpoints: require CRON_SECRET header, skip cookie gate.
+  // Cron endpoints: accept either `Authorization: Bearer <CRON_SECRET>`
+  // (Vercel Cron's default header) or `x-cron-secret: <CRON_SECRET>`
+  // for easy curl testing. Skip cookie gate.
   if (pathname.startsWith("/api/cron/")) {
-    const sent = req.headers.get(CRON_HEADER);
-    if (!sent || sent !== process.env.CRON_SECRET) {
+    const secret = process.env.CRON_SECRET;
+    const auth = req.headers.get("authorization") ?? "";
+    const xs = req.headers.get("x-cron-secret") ?? "";
+    const fromAuth = auth.startsWith("Bearer ") ? auth.slice(7) : "";
+    if (!secret || (fromAuth !== secret && xs !== secret)) {
       return NextResponse.json({ error: "unauthorized" }, { status: 401 });
     }
     return NextResponse.next();
