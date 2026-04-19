@@ -1,0 +1,108 @@
+{
+  "criteria": {
+    "tam": 0.25,
+    "fit": 0.25,
+    "risk": 0.2,
+    "speed": 0.15,
+    "demoable": 0.15
+  },
+  "criteria_notes": {
+    "tam": "Total addressable market in USD (higher is better)",
+    "fit": "Contest fit: is this a story that wins judges? (higher better)",
+    "risk": "Competitive risk — inverse scored (lower competition is better)",
+    "speed": "Time-to-traction in 8 weeks (higher = faster)",
+    "demoable": "Can Computer + 2 humans ship a visible prototype by June 2?"
+  },
+  "hypotheses": [
+    {
+      "hypothesis": "Public Adjuster Intelligence OS",
+      "context": {
+        "tam_usd": "14.6B",
+        "competition_notes": "Adjustify (~400 customers, no AI), IAdjust (legacy). No AI-native player.",
+        "traction_notes": "Warm network has 5+ PAs. Discovery calls revealed $5-10k/claim loss from deadline misses.",
+        "why_it_wins": "Clear $/claim pain. 30k fragmented operators. Fast demo: claim-deadline tracker + letter generator."
+      }
+    },
+    {
+      "hypothesis": "Property Data Unifier",
+      "context": {
+        "tam_usd": "3-5T",
+        "competition_notes": "CoreLogic + ATTOM + Black Knight dominate. 3-5yr contract lock-in.",
+        "traction_notes": "SMB title agents pay $300-500/mo for workflow on top of CoreLogic. Can we disrupt?",
+        "why_it_wins": "Massive TAM. But moat is ingest pipelines — hard to ship in 8 weeks."
+      }
+    },
+    {
+      "hypothesis": "Mold Remediation OS",
+      "context": {
+        "tam_usd": "210B",
+        "competition_notes": "ServiceTitan adding remediation vertical FY26. Encircle exists but weak.",
+        "traction_notes": "Remediators spend 40% of time on insurance paperwork. Photo-to-report would save 4h/job.",
+        "why_it_wins": "Fragmented ~30k operators. Photo intake → S520-compliant report demo is demoable."
+      }
+    },
+    {
+      "hypothesis": "Trade Payments Automation",
+      "context": {
+        "tam_usd": "850B",
+        "competition_notes": "Billd + Siteline raised Series B. Moat getting hard.",
+        "traction_notes": "Subs wait 60-90 days. Lien-waiver-to-invoice automation is universal pain.",
+        "why_it_wins": "Clear pain. But funded incumbents + banking complexity make demo-by-June hard."
+      }
+    },
+    {
+      "hypothesis": "PE Portfolio Back Office",
+      "context": {
+        "tam_usd": "400B",
+        "competition_notes": "iLevel/Dynamo/Addepar own enterprise. Smaller funds DIY in Excel.",
+        "traction_notes": "Mid-market GPs manually reconcile LP capital calls monthly.",
+        "why_it_wins": "High revenue per customer. Long sales cycles kill 8-week traction."
+      }
+    },
+    {
+      "hypothesis": "Restoration Ops Platform",
+      "context": {
+        "tam_usd": "210B",
+        "competition_notes": "DASH (ServiceMaster captive), Encircle, Jobber. Fragmented.",
+        "traction_notes": "Franchise ops juggle Xactimate + DASH + QuickBooks. Overlapping with mold.",
+        "why_it_wins": "Similar dynamics to mold. Wider but more crowded."
+      }
+    },
+    {
+      "hypothesis": "Estate Settlement Workflow",
+      "context": {
+        "tam_usd": "35B",
+        "competition_notes": "EstateExec, Trust & Will. None AI-native.",
+        "traction_notes": "Probate attorneys do 80% repeatable paperwork. High individual touch.",
+        "why_it_wins": "Clean repeatable workflow. Demo-able. But slow B2B motion — buyer is attorneys."
+      }
+    },
+    {
+      "hypothesis": "Veterinary Practice Ops",
+      "context": {
+        "tam_usd": "60B",
+        "competition_notes": "ezyVet, Covetrus, IDEXX. Crowded.",
+        "traction_notes": "No warm-network discovery here yet.",
+        "why_it_wins": "Plausible but no unique moat thesis. Distractor."
+      }
+    },
+    {
+      "hypothesis": "Funeral Home Software",
+      "context": {
+        "tam_usd": "20B",
+        "competition_notes": "FuneralOne, Parting Pro. Sleepy market, old tech.",
+        "traction_notes": "Stable industry, low churn. Good for cash but bad for contest story.",
+        "why_it_wins": "Demo-able but zero judge-excitement factor. Distractor."
+      }
+    },
+    {
+      "hypothesis": "Commercial HVAC Intelligence",
+      "context": {
+        "tam_usd": "120B",
+        "competition_notes": "ServiceTitan dominates. Specialty players crowded.",
+        "traction_notes": "Warm network doesn't touch HVAC.",
+        "why_it_wins": "No network edge; no clear moat. Distractor."
+      }
+    }
+  ]
+}
