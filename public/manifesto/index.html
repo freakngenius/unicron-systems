@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<link rel="icon" type="image/svg+xml" href="/manifesto/favicon.svg">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Unicron Systems — Access</title>
+<meta name="description" content="Private reference. Access by invitation only.">
+<meta name="robots" content="noindex, nofollow">
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --bg-2: #12121a;
+    --bg-3: #171720;
+    --ink: #e8e6de;
+    --ink-2: #9a9689;
+    --ink-3: #5c5a52;
+    --line: #2a2a32;
+    --accent: #9fd4a1;
+    --accent-5: #d4a592;
+    --accent-7: #c4a476;
+    --err: #e0a4a4;
+    --serif: "Iowan Old Style", "Palatino", "Palatino Linotype", Georgia, serif;
+    --sans: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+    --mono: "JetBrains Mono", "SF Mono", Menlo, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { background: var(--bg); color: var(--ink); font-family: var(--sans); -webkit-font-smoothing: antialiased; min-height: 100vh; }
+  body { display: flex; align-items: center; justify-content: center; padding: 40px 24px; position: relative; overflow: hidden; }
+
+  /* faint ambient field */
+  .field { position: fixed; inset: 0; pointer-events: none; z-index: 0; opacity: 0.25; }
+  .field svg { width: 100%; height: 100%; }
+
+  .gate { position: relative; z-index: 1; width: 100%; max-width: 480px; background: var(--bg-2); border: 1px solid var(--line); border-radius: 6px; padding: 56px 48px 44px; }
+
+  .mark { font-family: var(--mono); font-size: 10px; letter-spacing: 0.3em; color: var(--ink-3); text-transform: uppercase; margin-bottom: 36px; display: flex; align-items: center; gap: 10px; }
+  .mark::before { content: ""; display: inline-block; width: 8px; height: 8px; background: var(--accent-7); border-radius: 50%; box-shadow: 0 0 0 3px rgba(196,164,118,0.15); }
+  .variant-tag { font-family: var(--mono); font-size: 9px; letter-spacing: 0.22em; color: var(--accent-7); text-transform: uppercase; padding: 2px 7px; border: 1px dashed var(--accent-7); border-radius: 2px; margin-left: auto; }
+
+  h1 { font-family: var(--serif); font-size: 34px; font-weight: 400; letter-spacing: -0.015em; line-height: 1.1; margin-bottom: 14px; }
+  h1 em { font-style: italic; color: var(--accent-7); }
+  .lede { font-family: var(--serif); font-size: 15px; font-style: italic; line-height: 1.55; color: var(--ink-2); margin-bottom: 36px; max-width: 380px; }
+
+  form { display: grid; gap: 18px; }
+  .field-label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.2em; color: var(--ink-3); text-transform: uppercase; margin-bottom: 8px; }
+  .input { width: 100%; background: var(--bg); border: 1px solid var(--line); border-radius: 3px; padding: 13px 14px; color: var(--ink); font-family: var(--mono); font-size: 13px; letter-spacing: 0.02em; transition: border-color 0.15s, background 0.15s; }
+  .input:focus { outline: none; border-color: var(--accent-7); background: var(--bg-3); }
+  .input::placeholder { color: var(--ink-3); }
+
+  button { width: 100%; margin-top: 8px; background: transparent; color: var(--ink); border: 1px solid var(--ink); border-radius: 3px; padding: 14px 18px; font-family: var(--mono); font-size: 11px; letter-spacing: 0.22em; text-transform: uppercase; cursor: pointer; transition: all 0.18s; }
+  button:hover { background: var(--ink); color: var(--bg); }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .msg { font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; min-height: 18px; margin-top: 4px; color: var(--err); }
+
+  .foot { margin-top: 40px; padding-top: 24px; border-top: 1px solid var(--line); font-family: var(--mono); font-size: 10px; letter-spacing: 0.15em; color: var(--ink-3); text-transform: uppercase; display: flex; justify-content: space-between; }
+
+  @media (max-width: 540px) {
+    .gate { padding: 40px 28px 32px; }
+    h1 { font-size: 26px; }
+  }
+</style>
+<!-- __lock_copy__ -->
+<style>html,body,*{-webkit-user-select:none!important;-moz-user-select:none!important;-ms-user-select:none!important;user-select:none!important;-webkit-touch-callout:none!important;}</style>
+<script>document.addEventListener('contextmenu',function(e){e.preventDefault();});document.addEventListener('copy',function(e){e.preventDefault();});document.addEventListener('cut',function(e){e.preventDefault();});document.addEventListener('dragstart',function(e){e.preventDefault();});document.addEventListener('selectstart',function(e){e.preventDefault();});document.addEventListener('keydown',function(e){if((e.ctrlKey||e.metaKey)&&['c','C','x','X','a','A','s','S','p','P','u','U'].indexOf(e.key)!==-1){e.preventDefault();}});</script>
+</head>
+<body>
+
+  <div class="field" aria-hidden="true">
+    <svg viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+      <g stroke="#c4a476" stroke-width="0.6" fill="none" stroke-opacity="0.35">
+        <path d="M120,240 Q320,180 500,260 T900,280 T1300,240"/>
+        <path d="M80,420 Q280,360 460,440 T860,460 T1260,420"/>
+        <path d="M160,600 Q360,540 540,620 T940,640 T1340,600"/>
+        <path d="M100,780 Q300,720 480,800 T880,820 T1280,780"/>
+      </g>
+      <g fill="#c4a476" fill-opacity="0.55">
+        <circle cx="220" cy="230" r="2"/>
+        <circle cx="540" cy="260" r="2.5"/>
+        <circle cx="860" cy="280" r="2"/>
+        <circle cx="1180" cy="250" r="2.5"/>
+        <circle cx="300" cy="410" r="2"/>
+        <circle cx="620" cy="440" r="2.5"/>
+        <circle cx="940" cy="460" r="2"/>
+        <circle cx="1260" cy="420" r="2"/>
+        <circle cx="360" cy="600" r="2.5"/>
+        <circle cx="680" cy="620" r="2"/>
+        <circle cx="1020" cy="640" r="2.5"/>
+        <circle cx="1340" cy="600" r="2"/>
+      </g>
+    </svg>
+  </div>
+
+  <main class="gate">
+    <div class="mark">Unicron Systems · Paradigm Map</div>
+
+    <h1>Private <em>reference.</em></h1>
+    <p class="lede">Working material. Not a public post, not shareable yet. If you have the invite, enter it below.</p>
+
+    <form id="gate-form" autocomplete="off" novalidate>
+      <div>
+        <div class="field-label">Email</div>
+        <input id="email" class="input" type="email" autocomplete="off" spellcheck="false" placeholder="you@domain">
+      </div>
+      <div>
+        <div class="field-label">Passphrase</div>
+        <input id="pass" class="input" type="password" autocomplete="off" placeholder="••••••">
+      </div>
+      <button id="submit" type="submit">Enter</button>
+      <div id="msg" class="msg" role="status" aria-live="polite"></div>
+    </form>
+
+    <div class="foot">
+      <span>Unicron · 2026</span>
+      <span>By invitation</span>
+    </div>
+  </main>
+
+<script>
+(function(){
+  var SALT = 'unicron-biomimetic-2026-k9x3';
+  var PASS_HASH = '8c973a4a158f95dafae1906467f968e060df6d28989ac304de4d0ab3c914d03e';
+  var EMAILS = [
+    '1b42b2e7eae5ca5916f66c4634304c7e0515f54531bd6cd77b837310ad42d59a',
+    'b3c891ef99aca2a0af36c536ecce1a50869830cf7f93f693f04a417975fa11ef',
+    'cb8901654335ec5f00d956f42a071da94f9c18c31928a7f719d3f96fca5438d1',
+    '120f6c6a480b4cada88871f4fff3e3ba1b2c9c121fa4624a06830a2e85fcad9d',
+    'c38d4029b714b72ec4905b3b41a65f692d13c916c775545daf78fe17c1d1608d',
+    'a8d98d39827f7ade6b04d390ed20cf50032cbb5e8e96397439808d8ddcae6a5a'
+  ];
+  var TOKEN_KEY = '__uxb_tk';
+  var DEST = '/manifesto/v/n0.html';
+
+  // If already authed this session, skip the gate.
+  try {
+    if (sessionStorage.getItem(TOKEN_KEY) === PASS_HASH) {
+      window.location.replace(DEST);
+      return;
+    }
+  } catch(e){}
+
+  async function sha256(text){
+    var buf = new TextEncoder().encode(text);
+    var hashBuf = await crypto.subtle.digest('SHA-256', buf);
+    return Array.from(new Uint8Array(hashBuf))
+      .map(function(b){ return b.toString(16).padStart(2,'0'); })
+      .join('');
+  }
+
+  var form = document.getElementById('gate-form');
+  var emailEl = document.getElementById('email');
+  var passEl = document.getElementById('pass');
+  var btn = document.getElementById('submit');
+  var msg = document.getElementById('msg');
+
+  var attempts = 0;
+  var cooling = false;
+
+  form.addEventListener('submit', async function(ev){
+    ev.preventDefault();
+    if (cooling) return;
+    msg.textContent = '';
+    btn.disabled = true;
+    btn.textContent = 'Checking…';
+
+    var email = (emailEl.value || '').trim().toLowerCase();
+    var pass = passEl.value || '';
+
+    if (!email || !pass) {
+      msg.textContent = 'Both fields required.';
+      btn.disabled = false;
+      btn.textContent = 'Enter';
+      return;
+    }
+
+    try {
+      var emailHash = await sha256(SALT + ':' + email);
+      var passHash = await sha256(SALT + ':' + pass);
+
+      var emailOk = EMAILS.indexOf(emailHash) !== -1;
+      var passOk = passHash === PASS_HASH;
+
+      if (emailOk && passOk) {
+        sessionStorage.setItem(TOKEN_KEY, PASS_HASH);
+        msg.style.color = 'var(--accent)';
+        msg.textContent = 'Granted.';
+        setTimeout(function(){ window.location.replace(DEST); }, 320);
+        return;
+      }
+
+      attempts++;
+      msg.textContent = 'Not recognized.';
+      btn.disabled = false;
+      btn.textContent = 'Enter';
+
+      if (attempts >= 4) {
+        cooling = true;
+        btn.disabled = true;
+        msg.textContent = 'Too many attempts. Wait 15 seconds.';
+        setTimeout(function(){
+          cooling = false;
+          attempts = 0;
+          btn.disabled = false;
+          msg.textContent = '';
+        }, 15000);
+      }
+    } catch(err){
+      msg.textContent = 'Browser unsupported.';
+      btn.disabled = false;
+      btn.textContent = 'Enter';
+    }
+  });
+
+  // Focus email on load
+  setTimeout(function(){ try { emailEl.focus(); } catch(e){} }, 30);
+})();
+</script>
+
+</body>
+</html>
