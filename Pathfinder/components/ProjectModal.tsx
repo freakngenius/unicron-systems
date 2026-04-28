@@ -88,11 +88,17 @@ export function ProjectModal({ project, branch, onClose }: ProjectModalProps) {
       <div
         onClick={onClose}
         style={{
+          // Full-viewport dim + blur. Previously stopped `railH` short of
+          // the bottom so the activity rail stayed un-dimmed; that left
+          // a visible band of dashboard chrome (BranchDock, Zoom control,
+          // Agent Log pill) below the backdrop. Modal still sits between
+          // top chrome and the rail (its maxHeight reserves rail space),
+          // but the backdrop now covers everything.
           position: 'absolute',
           left: 0,
           right: 0,
           top: 0,
-          bottom: railH,
+          bottom: 0,
           background: 'rgba(10,10,10,0.45)',
           backdropFilter: 'blur(4px)',
           zIndex: 50,
