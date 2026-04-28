@@ -34,7 +34,7 @@ export function SourcesSection() {
           style={{
             padding: '10px 18px',
             font: `400 11px ${PF_TINTS.mono}`,
-            color: PF_TINTS.mapInkDim,
+            color: PF_TINTS.inkDim,
             letterSpacing: '0.04em',
           }}
         >

@@ -135,7 +135,7 @@ export function DisplaySection() {
       >
         <span
           className="pf-mono"
-          style={{ fontSize: 11, color: PF_TINTS.mapInkDim }}
+          style={{ fontSize: 11, color: PF_TINTS.inkDim }}
         >
           all branches
         </span>
@@ -147,7 +147,7 @@ export function DisplaySection() {
       >
         <span
           className="pf-mono"
-          style={{ fontSize: 11, color: PF_TINTS.mapInkDim }}
+          style={{ fontSize: 11, color: PF_TINTS.inkDim }}
         >
           {Intl.DateTimeFormat().resolvedOptions().timeZone}
         </span>
@@ -160,7 +160,7 @@ export function DisplaySection() {
         >
           <span
             className="pf-mono"
-            style={{ fontSize: 11, color: PF_TINTS.mapInkDim }}
+            style={{ fontSize: 11, color: PF_TINTS.inkDim }}
           >
             customer view
           </span>
@@ -172,7 +172,7 @@ export function DisplaySection() {
         <div
           style={{
             padding: '10px 18px',
-            borderTop: `1px solid ${hexAlpha('#ffffff', 0.04)}`,
+            borderTop: `1px solid ${PF_TINTS.ruleHair}`,
             font: `500 10px ${PF_TINTS.mono}`,
             letterSpacing: '0.06em',
             textTransform: 'uppercase',
@@ -190,7 +190,7 @@ export function DisplaySection() {
           style={{
             padding: '8px 18px 12px',
             font: `400 10px ${PF_TINTS.mono}`,
-            color: PF_TINTS.mapInkDim,
+            color: PF_TINTS.inkDim,
             letterSpacing: '0.04em',
           }}
         >

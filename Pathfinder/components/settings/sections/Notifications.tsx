@@ -11,17 +11,17 @@ export function NotificationsSection() {
         description="Who receives the org-level Friday brief, per-branch briefs, and critical alerts. Recipients ship hard-coded to the Briefing agent for the pilot; this UI surfaces them so you can see what's wired."
       >
         <Row label="Org-level Friday brief" hint="Kyle Doenz + Zedcor exec team">
-          <span className="pf-mono" style={{ fontSize: 11, color: PF_TINTS.mapInkDim }}>
+          <span className="pf-mono" style={{ fontSize: 11, color: PF_TINTS.inkDim }}>
             kyle@demystified.ai
           </span>
         </Row>
         <Row label="Per-branch Friday brief" hint="Branch managers — one digest per branch they own.">
-          <span className="pf-mono" style={{ fontSize: 11, color: PF_TINTS.mapInkDim }}>
+          <span className="pf-mono" style={{ fontSize: 11, color: PF_TINTS.inkDim }}>
             branch_managers
           </span>
         </Row>
         <Row label="Critical alerts" hint="Operations leads — score ≥ 90 + tight RFP window.">
-          <span className="pf-mono" style={{ fontSize: 11, color: PF_TINTS.mapInkDim }}>
+          <span className="pf-mono" style={{ fontSize: 11, color: PF_TINTS.inkDim }}>
             ops_lead
           </span>
         </Row>
@@ -52,9 +52,9 @@ export function NotificationsSection() {
             className="pf-mono"
             style={{
               fontSize: 11,
-              color: PF_TINTS.mapInk,
+              color: PF_TINTS.ink,
               padding: '4px 8px',
-              background: hexAlpha('#000000', 0.30),
+              background: PF_TINTS.bgAlt,
               borderRadius: 3,
             }}
           >

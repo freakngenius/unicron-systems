@@ -92,7 +92,7 @@ function StatusBadge({ status }: { status: ProbeResult['status'] }) {
     ok: { color: PF_TINTS.runningGreen, label: 'OK' },
     degraded: { color: '#FFB454', label: 'DEGRADED' },
     failed: { color: '#f87171', label: 'FAILED' },
-    unknown: { color: PF_TINTS.mapInkDim, label: 'UNKNOWN' },
+    unknown: { color: PF_TINTS.inkDim, label: 'UNKNOWN' },
   };
   const p = palette[status];
   return (

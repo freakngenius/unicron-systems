@@ -77,7 +77,7 @@ function Table({ headers, rows }: { headers: string[]; rows: string[][] | null }
           width: '100%',
           borderCollapse: 'collapse',
           font: `400 12px ${PF_TINTS.mono}`,
-          color: PF_TINTS.mapInk,
+          color: PF_TINTS.ink,
         }}
       >
         <thead>
@@ -91,8 +91,8 @@ function Table({ headers, rows }: { headers: string[]; rows: string[][] | null }
                   font: `500 9px ${PF_TINTS.mono}`,
                   letterSpacing: '0.10em',
                   textTransform: 'uppercase',
-                  color: PF_TINTS.mapInkDim,
-                  borderBottom: `1px solid ${hexAlpha('#ffffff', 0.06)}`,
+                  color: PF_TINTS.inkDim,
+                  borderBottom: `1px solid ${PF_TINTS.ruleSoft}`,
                 }}
               >
                 {h}
@@ -105,7 +105,7 @@ function Table({ headers, rows }: { headers: string[]; rows: string[][] | null }
             <tr>
               <td
                 colSpan={headers.length}
-                style={{ padding: '16px 18px', color: PF_TINTS.mapInkDim }}
+                style={{ padding: '16px 18px', color: PF_TINTS.inkDim }}
               >
                 loading…
               </td>
@@ -114,7 +114,7 @@ function Table({ headers, rows }: { headers: string[]; rows: string[][] | null }
             <tr>
               <td
                 colSpan={headers.length}
-                style={{ padding: '16px 18px', color: PF_TINTS.mapInkDim }}
+                style={{ padding: '16px 18px', color: PF_TINTS.inkDim }}
               >
                 no rows
               </td>
@@ -127,7 +127,7 @@ function Table({ headers, rows }: { headers: string[]; rows: string[][] | null }
                     key={j}
                     style={{
                       padding: '10px 18px',
-                      borderTop: `1px solid ${hexAlpha('#ffffff', 0.04)}`,
+                      borderTop: `1px solid ${PF_TINTS.ruleHair}`,
                     }}
                   >
                     {cell}

@@ -1,7 +1,8 @@
 'use client';
 
-// Field — shared layout primitives for settings rows. Label + description
-// + control on the right, hairline divider between rows.
+// Field — shared layout primitives for settings rows. Light-mode chrome:
+// white card surface, ink-black labels, hairline `ruleSoft` dividers,
+// soft shadow.
 
 import * as React from 'react';
 
@@ -21,23 +22,24 @@ export function Card({
   return (
     <section
       style={{
-        background: hexAlpha('#000000', 0.20),
-        border: `1px solid ${hexAlpha('#ffffff', 0.08)}`,
+        background: PF_TINTS.bg,
+        border: `1px solid ${PF_TINTS.ruleSoft}`,
         borderRadius: PF_TINTS.r.md,
+        boxShadow: PF_TINTS.shadow.sm,
         marginBottom: 16,
       }}
     >
       <header
         style={{
           padding: '14px 18px',
-          borderBottom: `1px solid ${hexAlpha('#ffffff', 0.06)}`,
+          borderBottom: `1px solid ${PF_TINTS.ruleSoft}`,
         }}
       >
         <h3
           style={{
             margin: 0,
             font: `600 14px ${PF_TINTS.sans}`,
-            color: PF_TINTS.mapInk,
+            color: PF_TINTS.ink,
             letterSpacing: '-0.005em',
           }}
         >
@@ -48,7 +50,7 @@ export function Card({
             style={{
               margin: '4px 0 0',
               font: `400 12px/1.4 ${PF_TINTS.sans}`,
-              color: PF_TINTS.mapInkDim,
+              color: PF_TINTS.inkSub,
             }}
           >
             {description}
@@ -60,10 +62,13 @@ export function Card({
         <footer
           style={{
             padding: '12px 18px',
-            borderTop: `1px solid ${hexAlpha('#ffffff', 0.06)}`,
+            borderTop: `1px solid ${PF_TINTS.ruleSoft}`,
             display: 'flex',
             justifyContent: 'flex-end',
             gap: 8,
+            background: PF_TINTS.bgAlt,
+            borderBottomLeftRadius: PF_TINTS.r.md,
+            borderBottomRightRadius: PF_TINTS.r.md,
           }}
         >
           {footer}
@@ -90,14 +95,14 @@ export function Row({
         gridTemplateColumns: '1fr auto',
         columnGap: 24,
         alignItems: 'center',
-        borderTop: `1px solid ${hexAlpha('#ffffff', 0.04)}`,
+        borderTop: `1px solid ${PF_TINTS.ruleHair}`,
       }}
     >
       <div>
         <div
           style={{
             font: `500 13px ${PF_TINTS.sans}`,
-            color: PF_TINTS.mapInk,
+            color: PF_TINTS.ink,
             marginBottom: hint ? 2 : 0,
           }}
         >
@@ -107,7 +112,7 @@ export function Row({
           <div
             style={{
               font: `400 11px/1.4 ${PF_TINTS.sans}`,
-              color: PF_TINTS.mapInkDim,
+              color: PF_TINTS.inkDim,
             }}
           >
             {hint}
@@ -139,24 +144,26 @@ export function Toggle({
         width: 36,
         height: 20,
         borderRadius: 10,
-        border: 'none',
-        background: checked ? '#9d35ff' : hexAlpha('#ffffff', 0.16),
+        border: checked ? '1px solid #9d35ff' : `1px solid ${PF_TINTS.ruleSoft}`,
+        background: checked ? '#9d35ff' : PF_TINTS.bgAlt,
         position: 'relative',
         cursor: 'pointer',
-        transition: 'background 120ms ease',
+        padding: 0,
+        transition: 'background 120ms ease, border-color 120ms ease',
       }}
     >
       <span
         aria-hidden="true"
         style={{
           position: 'absolute',
-          top: 2,
-          left: checked ? 18 : 2,
+          top: 1,
+          left: checked ? 17 : 1,
           width: 16,
           height: 16,
           borderRadius: '50%',
-          background: '#fff',
-          transition: 'left 120ms ease',
+          background: checked ? '#fff' : PF_TINTS.ink,
+          boxShadow: '0 1px 2px rgba(10,10,10,0.18)',
+          transition: 'left 120ms ease, background 120ms ease',
         }}
       />
     </button>
@@ -177,9 +184,9 @@ export function Select<T extends string>({
       value={value}
       onChange={(e) => onChange(e.target.value as T)}
       style={{
-        background: hexAlpha('#000000', 0.30),
-        color: PF_TINTS.mapInk,
-        border: `1px solid ${hexAlpha('#ffffff', 0.12)}`,
+        background: PF_TINTS.bg,
+        color: PF_TINTS.ink,
+        border: `1px solid ${PF_TINTS.ruleSoft}`,
         borderRadius: 3,
         padding: '6px 10px',
         font: `500 12px ${PF_TINTS.sans}`,
@@ -215,14 +222,14 @@ export function Button({
       border: '1px solid #9d35ff',
     },
     ghost: {
-      background: 'transparent',
-      color: PF_TINTS.mapInk,
-      border: `1px solid ${hexAlpha('#ffffff', 0.16)}`,
+      background: PF_TINTS.bg,
+      color: PF_TINTS.ink,
+      border: `1px solid ${PF_TINTS.ruleSoft}`,
     },
     danger: {
-      background: 'transparent',
-      color: '#f87171',
-      border: `1px solid ${hexAlpha('#f87171', 0.4)}`,
+      background: PF_TINTS.bg,
+      color: '#dc2626',
+      border: `1px solid ${hexAlpha('#dc2626', 0.4)}`,
     },
   }[variant];
   return (
@@ -250,8 +257,8 @@ export function Phase2Banner({ note }: { note?: string }) {
     <div
       style={{
         padding: '14px 18px',
-        background: hexAlpha('#9d35ff', 0.08),
-        border: `1px dashed ${hexAlpha('#9d35ff', 0.35)}`,
+        background: hexAlpha('#9d35ff', 0.06),
+        border: `1px dashed ${hexAlpha('#9d35ff', 0.30)}`,
         borderRadius: PF_TINTS.r.sm,
         margin: '12px 18px 18px',
         display: 'flex',
@@ -274,7 +281,7 @@ export function Phase2Banner({ note }: { note?: string }) {
       >
         Phase 2
       </span>
-      <span style={{ font: `400 12px/1.5 ${PF_TINTS.sans}`, color: PF_TINTS.mapInkDim }}>
+      <span style={{ font: `400 12px/1.5 ${PF_TINTS.sans}`, color: PF_TINTS.inkSub }}>
         {note ?? 'Coming in Phase 2 — ships with the Zedcor production rollout.'}
       </span>
     </div>

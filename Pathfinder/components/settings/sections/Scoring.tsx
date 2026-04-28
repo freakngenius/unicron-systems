@@ -51,10 +51,10 @@ function ConstChip({ value }: { value: string }) {
       className="pf-mono"
       style={{
         fontSize: 11,
-        color: PF_TINTS.mapInk,
+        color: PF_TINTS.ink,
         padding: '4px 10px',
-        background: 'rgba(0,0,0,0.30)',
-        border: '1px solid rgba(255,255,255,0.10)',
+        background: PF_TINTS.bgAlt,
+        border: `1px solid ${PF_TINTS.ruleSoft}`,
         borderRadius: 3,
       }}
     >

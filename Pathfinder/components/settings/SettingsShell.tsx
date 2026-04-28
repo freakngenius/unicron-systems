@@ -2,10 +2,10 @@
 
 // SettingsShell — left-rail nav + main pane for /settings.
 //
-// Operator-grade aesthetic matching the dashboard: dark slate map-bg
-// chrome, mono nav labels, hairline borders, no marketing fluff. Sections
-// have per-section save buttons (no global save) and the active section
-// is reflected in the URL hash so deep-linking works.
+// Light-mode chrome matching the dashboard's TopBar / BranchDock / Modal
+// surfaces: white background, ink-black labels, hairline borders, soft
+// shadows. The dark map-bg variant lived briefly in v1; the dashboard's
+// "everything outside the map is light" rule wins.
 
 import * as React from 'react';
 
@@ -46,7 +46,6 @@ export function SettingsShell() {
   const [activeId, setActiveId] = React.useState<string>(SECTIONS[0].id);
   const [email, setEmailState] = React.useState<string>('');
 
-  // Sync active section ↔ URL hash so deep-linking works.
   React.useEffect(() => {
     const fromHash = () => {
       const h = window.location.hash.replace('#', '').trim();
@@ -68,8 +67,8 @@ export function SettingsShell() {
     <div
       style={{
         minHeight: '100vh',
-        background: PF_TINTS.mapBg,
-        color: PF_TINTS.mapInk,
+        background: PF_TINTS.bgAlt,
+        color: PF_TINTS.ink,
         font: `400 13px/1.5 ${PF_TINTS.sans}`,
       }}
     >
@@ -96,7 +95,7 @@ export function SettingsShell() {
             style={{
               font: `600 18px/1.2 ${PF_TINTS.sans}`,
               letterSpacing: '-0.005em',
-              color: PF_TINTS.mapInk,
+              color: PF_TINTS.ink,
               margin: '0 0 4px',
             }}
           >
@@ -106,7 +105,7 @@ export function SettingsShell() {
             className="pf-mono"
             style={{
               fontSize: 9,
-              color: PF_TINTS.mapInkDim,
+              color: PF_TINTS.inkDim,
               letterSpacing: '0.10em',
               textTransform: 'uppercase',
               marginBottom: 24,
@@ -133,7 +132,8 @@ function Header({
     <div
       style={{
         height: 56,
-        borderBottom: `1px solid ${hexAlpha('#ffffff', 0.08)}`,
+        background: PF_TINTS.bg,
+        borderBottom: `1px solid ${PF_TINTS.ruleSoft}`,
         display: 'flex',
         alignItems: 'center',
         padding: '0 24px',
@@ -144,7 +144,7 @@ function Header({
         href="/pathfinder"
         style={{
           font: `600 14px ${PF_TINTS.sans}`,
-          color: PF_TINTS.mapInk,
+          color: PF_TINTS.ink,
           textDecoration: 'none',
           letterSpacing: '-0.005em',
         }}
@@ -155,7 +155,7 @@ function Header({
         className="pf-mono"
         style={{
           fontSize: 9,
-          color: PF_TINTS.mapInkDim,
+          color: PF_TINTS.inkDim,
           letterSpacing: '0.10em',
           textTransform: 'uppercase',
         }}
@@ -168,14 +168,15 @@ function Header({
         className="pf-mono"
         style={{
           fontSize: 9,
-          color: isOperator ? '#9d35ff' : PF_TINTS.mapInkDim,
+          color: isOperator ? '#9d35ff' : PF_TINTS.inkDim,
           letterSpacing: '0.10em',
           textTransform: 'uppercase',
           padding: '3px 8px',
           border: `1px solid ${
-            isOperator ? hexAlpha('#9d35ff', 0.45) : hexAlpha('#ffffff', 0.10)
+            isOperator ? hexAlpha('#9d35ff', 0.45) : PF_TINTS.ruleSoft
           }`,
           borderRadius: 3,
+          background: isOperator ? hexAlpha('#9d35ff', 0.06) : 'transparent',
         }}
         title={
           isOperator
@@ -201,7 +202,6 @@ function EmailPrompt({
   const onSave = () => {
     setUserEmail(draft);
     setEmailState(draft);
-    // Force re-evaluation of useIsOperator (component remounts on hash change).
     window.dispatchEvent(new Event('storage'));
   };
   return (
@@ -210,7 +210,7 @@ function EmailPrompt({
         className="pf-mono"
         style={{
           fontSize: 9,
-          color: PF_TINTS.mapInkDim,
+          color: PF_TINTS.inkDim,
           letterSpacing: '0.10em',
           textTransform: 'uppercase',
         }}
@@ -227,11 +227,11 @@ function EmailPrompt({
           if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
         }}
         style={{
-          background: hexAlpha('#000000', 0.30),
-          border: `1px solid ${hexAlpha('#ffffff', 0.12)}`,
+          background: PF_TINTS.bgAlt,
+          border: `1px solid ${PF_TINTS.ruleSoft}`,
           borderRadius: 3,
           padding: '4px 8px',
-          color: PF_TINTS.mapInk,
+          color: PF_TINTS.ink,
           font: `400 11px ${PF_TINTS.mono}`,
           width: 220,
           outline: 'none',
@@ -253,7 +253,8 @@ function LeftRail({
   return (
     <nav
       style={{
-        borderRight: `1px solid ${hexAlpha('#ffffff', 0.08)}`,
+        background: PF_TINTS.bg,
+        borderRight: `1px solid ${PF_TINTS.ruleSoft}`,
         padding: '24px 8px',
         display: 'flex',
         flexDirection: 'column',
@@ -272,8 +273,8 @@ function LeftRail({
               padding: '8px 12px',
               border: 'none',
               borderRadius: 3,
-              background: active ? hexAlpha('#ffffff', 0.06) : 'transparent',
-              color: active ? PF_TINTS.mapInk : PF_TINTS.mapInkDim,
+              background: active ? PF_TINTS.bgAlt : 'transparent',
+              color: active ? PF_TINTS.ink : PF_TINTS.inkSub,
               cursor: 'pointer',
               font: `${active ? 600 : 500} 12px ${PF_TINTS.sans}`,
               letterSpacing: '-0.005em',

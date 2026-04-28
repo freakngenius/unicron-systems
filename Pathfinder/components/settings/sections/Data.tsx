@@ -28,9 +28,9 @@ export function DataSection() {
           style={{
             padding: '10px 18px',
             font: `400 11px ${PF_TINTS.mono}`,
-            color: PF_TINTS.mapInkDim,
+            color: PF_TINTS.inkDim,
             letterSpacing: '0.04em',
-            borderTop: `1px solid ${hexAlpha('#ffffff', 0.04)}`,
+            borderTop: `1px solid ${PF_TINTS.ruleHair}`,
           }}
         >
           exports run client-side from the dashboard&apos;s read endpoints

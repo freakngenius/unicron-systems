@@ -28,7 +28,7 @@ export function AdvancedSection() {
           style={{
             padding: '14px 18px',
             font: `400 12px ${PF_TINTS.sans}`,
-            color: PF_TINTS.mapInkDim,
+            color: PF_TINTS.inkDim,
           }}
         >
           customer view — advanced toggles are hidden
@@ -87,7 +87,7 @@ export function AdvancedSection() {
           <div
             style={{
               padding: '10px 18px',
-              borderTop: `1px solid ${hexAlpha('#ffffff', 0.04)}`,
+              borderTop: `1px solid ${PF_TINTS.ruleHair}`,
               font: `500 10px ${PF_TINTS.mono}`,
               letterSpacing: '0.06em',
               textTransform: 'uppercase',

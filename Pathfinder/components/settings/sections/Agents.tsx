@@ -42,7 +42,7 @@ export function AgentsSection() {
               width: '100%',
               borderCollapse: 'collapse',
               font: `400 12px ${PF_TINTS.mono}`,
-              color: PF_TINTS.mapInk,
+              color: PF_TINTS.ink,
             }}
           >
             <thead>
@@ -56,8 +56,8 @@ export function AgentsSection() {
                       font: `500 9px ${PF_TINTS.mono}`,
                       letterSpacing: '0.10em',
                       textTransform: 'uppercase',
-                      color: PF_TINTS.mapInkDim,
-                      borderBottom: `1px solid ${hexAlpha('#ffffff', 0.06)}`,
+                      color: PF_TINTS.inkDim,
+                      borderBottom: `1px solid ${PF_TINTS.ruleSoft}`,
                     }}
                   >
                     {h}
@@ -116,14 +116,14 @@ export function AgentsSection() {
 function cell({ dim = false }: { dim?: boolean } = {}): React.CSSProperties {
   return {
     padding: '10px 18px',
-    borderTop: `1px solid ${hexAlpha('#ffffff', 0.04)}`,
-    color: dim ? PF_TINTS.mapInkDim : PF_TINTS.mapInk,
+    borderTop: `1px solid ${PF_TINTS.ruleHair}`,
+    color: dim ? PF_TINTS.inkDim : PF_TINTS.ink,
   };
 }
 
 function StatusChip({ status }: { status: string }) {
   const isRunning = status === 'running';
-  const color = isRunning ? PF_TINTS.runningGreen : PF_TINTS.mapInkDim;
+  const color = isRunning ? PF_TINTS.runningGreen : PF_TINTS.inkDim;
   const label = status === 'running' ? 'RUNNING' : status === 'failed' ? 'FAILED' : 'SCHEDULED';
   return (
     <span
