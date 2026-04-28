@@ -4,7 +4,7 @@
 // Router only allows specific named exports from route files. The cron
 // handler + the test endpoint both import from here.
 
-import { supabase } from '@/lib/supabase';
+import { supabase, supabaseAdmin } from '@/lib/supabase';
 import {
   briefingToEmail,
   briefingToSlackBlocks,
@@ -20,6 +20,16 @@ import { fetchActiveScoringConfig } from '@/lib/scoring-config-server';
 const DASHBOARD_URL = 'https://pathfinder-ashy.vercel.app/pathfinder';
 export const ORG_RECIPIENT = process.env.BRIEFING_ORG_EMAIL ?? 'kyle@demystified.ai';
 
+// Service-role client lazily resolved at first write so build-time
+// imports don't blow up when SUPABASE_SERVICE_ROLE_KEY is absent (tests
+// + local dev). RLS blocks anon writes — agent_log + briefings inserts
+// must go through the admin client to land.
+let _admin: ReturnType<typeof supabaseAdmin> | null = null;
+function admin() {
+  if (!_admin) _admin = supabaseAdmin();
+  return _admin;
+}
+
 // ────────────────────────────────────────────────────────────────────────
 // agent_log helper
 // ────────────────────────────────────────────────────────────────────────
@@ -30,9 +40,9 @@ export async function writeBriefingLog(
   eventType: string,
   data: LogPayload,
 ): Promise<void> {
-  // agent_log accepts our schema-prefix; supabase-js typings don't know
-  // about the pathfinder enum'd `agent_name`. Loosely typed insert.
-  const sb = supabase as unknown as {
+  // Service-role client + loose-typed cast (supabase-js generated types
+  // don't know about pathfinder enum widening).
+  const sb = admin() as unknown as {
     from: (t: string) => {
       insert: (row: Record<string, unknown>) => Promise<{ error: unknown }>;
     };
@@ -62,7 +72,7 @@ async function persistBriefing(args: {
   payload: BriefingPayload;
   recipients: string[];
 }): Promise<{ id: number | null; error?: string }> {
-  const sb = supabase as unknown as {
+  const sb = admin() as unknown as {
     from: (t: string) => {
       insert: (row: Record<string, unknown>) => {
         select: (cols: string) => Promise<{ data: BriefingRow[] | null; error: { message: string } | null }>;
@@ -97,7 +107,7 @@ async function markBriefingDelivered(
   briefingId: number,
   recipients: string[],
 ): Promise<void> {
-  const sb = supabase as unknown as {
+  const sb = admin() as unknown as {
     from: (t: string) => {
       update: (row: Record<string, unknown>) => {
         eq: (col: string, val: number) => Promise<{ error: { message: string } | null }>;
