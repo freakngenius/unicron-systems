@@ -35,21 +35,34 @@ export function lonLatToSvg(lon: number, lat: number): { x: number; y: number } 
   return { x, y };
 }
 
-// Convert SVG-space coords to absolute container pixels.
-// Mirrors the prototype's `toPx` helper: it uses preserveAspectRatio="xMidYMid slice"
-// so the SVG covers the container, with overflow cropped on the larger axis.
+// Convert SVG-space coords to absolute container pixels, honoring the same viewBox
+// math the Map component uses. zoom = 1 reproduces the original full-extent behavior;
+// higher zoom + a (centerX, centerY) reproduces the shrunk, centered viewBox so the
+// anchored card stays glued to the pin as the map zooms.
+//
+// preserveAspectRatio="xMidYMid slice" means the SVG covers the container with
+// overflow cropped on the larger axis.
 export function svgToPx(
   sx: number,
   sy: number,
   containerW: number,
   containerH: number,
+  opts: { zoom?: number; centerX?: number; centerY?: number } = {},
 ): { x: number; y: number } {
-  const vbW = SVG_VIEWBOX.width;
-  const vbH = SVG_VIEWBOX.height;
-  const scale = Math.max(containerW / vbW, containerH / vbH);
-  const sw = vbW * scale;
-  const sh = vbH * scale;
+  const vbFullW = SVG_VIEWBOX.width;
+  const vbFullH = SVG_VIEWBOX.height;
+  const z = Math.max(1, opts.zoom ?? 1);
+  const cx = opts.centerX ?? vbFullW / 2;
+  const cy = opts.centerY ?? vbFullH / 2;
+  const w = vbFullW / z;
+  const h = vbFullH / z;
+  // Same clamp as Map.tsx so the viewBox never pans past the edges.
+  const x = Math.max(0, Math.min(vbFullW - w, cx - w / 2));
+  const y = Math.max(0, Math.min(vbFullH - h, cy - h / 2));
+  const scale = Math.max(containerW / w, containerH / h);
+  const sw = w * scale;
+  const sh = h * scale;
   const offsetX = (containerW - sw) / 2;
   const offsetY = (containerH - sh) / 2;
-  return { x: offsetX + sx * scale, y: offsetY + sy * scale };
+  return { x: offsetX + (sx - x) * scale, y: offsetY + (sy - y) * scale };
 }

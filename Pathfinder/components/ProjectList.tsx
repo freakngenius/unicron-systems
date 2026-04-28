@@ -45,7 +45,8 @@ export function ProjectList({
   setMinimized,
 }: ProjectListProps) {
   const headerH = useHeaderHeight();
-  const branchName = branch?.name ?? 'Branch';
+  // null branch === "See All" mode — show every project, top-scored first.
+  const branchName = branch?.name ?? 'All branches';
 
   if (minimized) {
     const title = crossPoll ? 'Warm-intros' : `${branchName} · Ranked`;

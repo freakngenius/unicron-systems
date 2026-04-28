@@ -29,14 +29,54 @@ export const SOURCE_LABELS: Record<SourceKey, string> = {
 
 export const SOURCE_KEYS: readonly SourceKey[] = ['all', 'usa', 'sam', 'news', 'harris'] as const;
 
+function RefreshIcon({ spinning }: { spinning: boolean }) {
+  return (
+    <svg
+      width={11}
+      height={11}
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.6}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      style={{
+        display: 'inline-block',
+        animation: spinning ? 'pf-spin 800ms linear infinite' : 'none',
+      }}
+      aria-hidden="true"
+    >
+      <path d="M14 8a6 6 0 1 1-1.76-4.24" />
+      <path d="M14 2v4h-4" />
+    </svg>
+  );
+}
+
+if (typeof document !== 'undefined' && !document.getElementById('pf-spin-kf')) {
+  const s = document.createElement('style');
+  s.id = 'pf-spin-kf';
+  s.textContent = `@keyframes pf-spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`;
+  document.head.appendChild(s);
+}
+
 export interface TopBarProps {
   source: SourceKey;
   setSource: (s: SourceKey) => void;
   crossPoll: boolean;
   setCrossPoll: (v: boolean) => void;
+  /** Manually triggers an Ingestor → Ranker cycle via /api/refresh. */
+  onRefresh: () => void;
+  refreshing: boolean;
 }
 
-export function TopBar({ source, setSource, crossPoll, setCrossPoll }: TopBarProps) {
+export function TopBar({
+  source,
+  setSource,
+  crossPoll,
+  setCrossPoll,
+  onRefresh,
+  refreshing,
+}: TopBarProps) {
   return (
     <div
       style={{
@@ -132,6 +172,22 @@ export function TopBar({ source, setSource, crossPoll, setCrossPoll }: TopBarPro
           }}
         />
         {crossPoll ? 'Cross-pollination · ON' : 'Cross-pollination'}
+      </button>
+
+      <button
+        type="button"
+        className="pf-pill"
+        onClick={onRefresh}
+        disabled={refreshing}
+        title="Manually run Ingestor → Ranker"
+        aria-label="Refresh — run Ingestor and Ranker"
+        style={{
+          opacity: refreshing ? 0.55 : 1,
+          cursor: refreshing ? 'progress' : 'pointer',
+        }}
+      >
+        <RefreshIcon spinning={refreshing} />
+        {refreshing ? 'Refreshing…' : 'Refresh'}
       </button>
 
       <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 20 }}>

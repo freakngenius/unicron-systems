@@ -25,7 +25,13 @@ import { AnchoredBranchCard } from './AnchoredBranchCard';
 import { MapLegend } from './MapLegend';
 import { CoordsHUD } from './CoordsHUD';
 import { CrossPollBanner } from './CrossPollBanner';
-import { ActivityRail, AgentStatusRow, SonarPing, useNewPins } from './live';
+import {
+  ActivityRail,
+  AgentStatusRow,
+  SonarPing,
+  useHeaderHeight,
+  useNewPins,
+} from './live';
 import { ZoomControl, ZOOM_MIN, ZOOM_MAX, ZOOM_STEP } from './ZoomControl';
 import { lonLatToSvg, svgToPx } from './map-projection';
 
@@ -95,8 +101,9 @@ export function Dashboard({ initialBranches, initialCustomers, initialProjects }
   );
 
   // ── State ──────────────────────────────────────────────────────────────────
-  const defaultBranch = branches[0]?.id ?? '';
-  const [selectedBranchId, setSelectedBranchId] = React.useState<string>(defaultBranch);
+  // null = "See All" (zoom-out, no specific branch focus). Default to See All on load
+  // so the viewer first sees the full footprint before drilling into a branch.
+  const [selectedBranchId, setSelectedBranchId] = React.useState<string | null>(null);
   const [source, setSource] = React.useState<SourceKey>('all');
   const [crossPoll, setCrossPoll] = React.useState(false);
   const [openProjectId, setOpenProjectId] = React.useState<string | null>(null);
@@ -104,6 +111,26 @@ export function Dashboard({ initialBranches, initialCustomers, initialProjects }
   const [listMin, setListMin] = React.useState(false);
   const [activityOpen, setActivityOpen] = React.useState(false);
   const [zoom, setZoom] = React.useState(1);
+  const [refreshing, setRefreshing] = React.useState(false);
+
+  const handleRefresh = React.useCallback(async () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    try {
+      const res = await fetch('/pathfinder/api/refresh', { method: 'POST' });
+      if (!res.ok) {
+        // eslint-disable-next-line no-console
+        console.error('refresh failed', res.status, await res.text());
+      }
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('refresh error', err);
+    } finally {
+      // small floor so the button can't be hammered; the realtime cascade
+      // takes ~3s to fully play out.
+      setTimeout(() => setRefreshing(false), 1500);
+    }
+  }, [refreshing]);
 
   const clampZoom = React.useCallback(
     (next: number) => Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Math.round(next * 10) / 10)),
@@ -111,6 +138,19 @@ export function Dashboard({ initialBranches, initialCustomers, initialProjects }
   );
   const zoomIn = React.useCallback(() => setZoom((z) => clampZoom(z + ZOOM_STEP)), [clampZoom]);
   const zoomOut = React.useCallback(() => setZoom((z) => clampZoom(z - ZOOM_STEP)), [clampZoom]);
+
+  // Branch select with auto-zoom. Null → See All (z=1). Id → tight focus on that branch.
+  // The auto-zoom level (3.0) is calibrated so the 300mi coverage circle (75 SVG units
+  // radius / 150 diameter) fills roughly half the viewport — emphasizes the focus
+  // without losing context. Manual +/- still works after to override.
+  const BRANCH_FOCUS_ZOOM = 3.0;
+  const handleSelectBranch = React.useCallback(
+    (id: string | null) => {
+      setSelectedBranchId(id);
+      setZoom(id === null ? 1 : BRANCH_FOCUS_ZOOM);
+    },
+    [],
+  );
 
   // ── Container size measurement (drives px-space conversions) ───────────────
   const containerRef = React.useRef<HTMLDivElement | null>(null);
@@ -166,7 +206,10 @@ export function Dashboard({ initialBranches, initialCustomers, initialProjects }
         .filter((p) => !!p.warm_for_customer_id)
         .sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
     }
-    let r = projects.filter((p) => p.nearest_branch_id === selectedBranchId);
+    // selectedBranchId === null is "See All" — show every ranked project, top-scored first.
+    let r = selectedBranchId
+      ? projects.filter((p) => p.nearest_branch_id === selectedBranchId)
+      : projects.slice();
     if (source !== 'all') {
       const db = SOURCE_FILTER_TO_DB[source];
       r = r.filter((p) => p.source === db);
@@ -174,7 +217,9 @@ export function Dashboard({ initialBranches, initialCustomers, initialProjects }
     return r.sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
   }, [projects, selectedBranchId, source, crossPoll]);
 
-  const totalForBranch = projects.filter((p) => p.nearest_branch_id === selectedBranchId).length;
+  const totalForBranch = selectedBranchId
+    ? projects.filter((p) => p.nearest_branch_id === selectedBranchId).length
+    : projects.length;
 
   // ── Derived: warm-intro lines (customer → project) when cross-poll on ──────
   const warmLines = React.useMemo(() => {
@@ -190,7 +235,16 @@ export function Dashboard({ initialBranches, initialCustomers, initialProjects }
   }, [customers, projects]);
 
   const newPins = useNewPins();
-  const selectedBranch = branches.find((b) => b.id === selectedBranchId) ?? null;
+  const headerH = useHeaderHeight();
+  const selectedBranch = selectedBranchId
+    ? branches.find((b) => b.id === selectedBranchId) ?? null
+    : null;
+
+  // Free-zone bounds for the anchored card. BranchDock at left:16 with width 240 (or 44
+  // when minimized); ProjectList at right:16 with width 380 (44 when minimized). Account
+  // for the minimized states so the card claims the freed space.
+  const branchDockRight = 16 + (branchMin ? 44 : 240) + 8;
+  const projectListLeft = mapDims.w - 16 - (listMin ? 44 : 380) - 8;
   const openProject = openProjectId
     ? projects.find((p) => p.id === openProjectId) ?? null
     : null;
@@ -198,9 +252,14 @@ export function Dashboard({ initialBranches, initialCustomers, initialProjects }
     ? branches.find((b) => b.id === openProject.nearest_branch_id) ?? null
     : null;
 
-  // Anchored card pixel position
+  // Anchored card pixel position — zoom-aware so the card stays glued to the pin
+  // as the user zooms.
   const anchoredPx = selectedBranch
-    ? svgToPx(selectedBranch.svgX, selectedBranch.svgY, mapDims.w, mapDims.h)
+    ? svgToPx(selectedBranch.svgX, selectedBranch.svgY, mapDims.w, mapDims.h, {
+        zoom,
+        centerX: selectedBranch.svgX,
+        centerY: selectedBranch.svgY,
+      })
     : null;
 
   const customersForBranch = selectedBranch
@@ -243,7 +302,7 @@ export function Dashboard({ initialBranches, initialCustomers, initialProjects }
               y={b.svgY}
               code={b.code}
               selected={!crossPoll && b.id === selectedBranchId}
-              onClick={() => setSelectedBranchId(b.id)}
+              onClick={() => handleSelectBranch(b.id)}
             />
           ))}
           {/* Sonar pings on freshly-ingested pins (Stream 4 stub returns null) */}
@@ -303,7 +362,7 @@ export function Dashboard({ initialBranches, initialCustomers, initialProjects }
                   x={b.svgX}
                   y={b.svgY}
                   code={b.code}
-                  onClick={() => setSelectedBranchId(b.id)}
+                  onClick={() => handleSelectBranch(b.id)}
                 />
               </g>
             ))}
@@ -316,12 +375,14 @@ export function Dashboard({ initialBranches, initialCustomers, initialProjects }
         setSource={setSource}
         crossPoll={crossPoll}
         setCrossPoll={setCrossPoll}
+        onRefresh={handleRefresh}
+        refreshing={refreshing}
       />
       <AgentStatusRow />
       <BranchDock
         branches={branches}
         selectedId={selectedBranchId}
-        setSelected={setSelectedBranchId}
+        setSelected={handleSelectBranch}
         minimized={branchMin}
         setMinimized={setBranchMin}
         stats={branchStats}
@@ -340,6 +401,11 @@ export function Dashboard({ initialBranches, initialCustomers, initialProjects }
         <AnchoredBranchCard
           branch={selectedBranch}
           anchorPx={anchoredPx}
+          containerW={mapDims.w}
+          containerH={mapDims.h}
+          headerH={headerH}
+          freeLeft={branchDockRight}
+          freeRight={projectListLeft}
           inRangeCount={branchStats[selectedBranch.id]?.count ?? 0}
           hiCount={branchStats[selectedBranch.id]?.hi ?? 0}
           customerCount={customersForBranch}

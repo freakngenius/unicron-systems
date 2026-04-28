@@ -29,9 +29,10 @@ export interface BranchStats {
 }
 
 export interface BranchDockProps {
+  /** Selected branch id; `null` means "See All" (zoom to full extent). */
   branches: Branch[];
-  selectedId: string;
-  setSelected: (id: string) => void;
+  selectedId: string | null;
+  setSelected: (id: string | null) => void;
   minimized: boolean;
   setMinimized: (v: boolean) => void;
   /** Optional per-branch derived stats. Keyed by branch id. */
@@ -134,6 +135,13 @@ export function BranchDock({ branches, selectedId, setSelected, minimized, setMi
         </span>
       </div>
       <div style={{ overflowY: 'auto', flex: 1 }} className="pf-scrollbar">
+        {/* "See All" — zooms the map out to the full extent and surfaces every project. */}
+        <SeeAllRow
+          active={selectedId === null}
+          totalProjects={Object.values(stats ?? {}).reduce((s, b) => s + b.count, 0)}
+          totalHi={Object.values(stats ?? {}).reduce((s, b) => s + b.hi, 0)}
+          onClick={() => setSelected(null)}
+        />
         {branches.map((b) => {
           const active = selectedId === b.id;
           const s = stats?.[b.id] ?? { count: 0, hi: 0 };
@@ -215,5 +223,83 @@ export function BranchDock({ branches, selectedId, setSelected, minimized, setMi
         <LastIngestCounter small />
       </div>
     </div>
+  );
+}
+
+function SeeAllRow({
+  active,
+  totalProjects,
+  totalHi,
+  onClick,
+}: {
+  active: boolean;
+  totalProjects: number;
+  totalHi: number;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        display: 'block',
+        width: '100%',
+        textAlign: 'left',
+        padding: '12px 16px',
+        border: 'none',
+        background: active ? PF.ink : 'transparent',
+        color: active ? 'white' : PF.ink,
+        borderBottom: `1px solid ${PF.ruleSoft}`,
+        cursor: 'pointer',
+      }}
+    >
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+        <span style={{ font: `600 13px ${PF.sans}` }}>See all</span>
+        <span
+          className="pf-mono"
+          style={{ fontSize: 13, fontWeight: 600, color: active ? 'white' : PF.ink }}
+        >
+          {totalProjects}
+        </span>
+      </div>
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginTop: 4,
+        }}
+      >
+        <span
+          className="pf-mono"
+          style={{
+            fontSize: 10,
+            letterSpacing: '0.06em',
+            textTransform: 'uppercase',
+            color: active ? 'rgba(255,255,255,0.55)' : PF.inkDim,
+          }}
+        >
+          full extent · all branches
+        </span>
+        {totalHi > 0 && (
+          <span
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 4,
+              font: `600 9.5px ${PF.mono}`,
+              letterSpacing: '0.06em',
+              textTransform: 'uppercase',
+              color: active ? PF.hi : PF.ink,
+              padding: '2px 6px',
+              borderRadius: 2,
+              background: active ? 'rgba(34,211,238,0.18)' : PF.hiSoft,
+            }}
+          >
+            {totalHi} hi-pri
+          </span>
+        )}
+      </div>
+    </button>
   );
 }
