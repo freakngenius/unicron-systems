@@ -147,14 +147,32 @@ function Header({
     >
       <a
         href="/pathfinder"
+        title="Back to dashboard"
         style={{
-          font: `600 14px ${PF_TINTS.sans}`,
           color: PF_TINTS.ink,
           textDecoration: 'none',
-          letterSpacing: '-0.005em',
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 8,
         }}
       >
-        ← Pathfinder
+        <span
+          aria-hidden="true"
+          style={{ font: `500 16px ${PF_TINTS.sans}`, color: PF_TINTS.inkDim, lineHeight: 1 }}
+        >
+          ←
+        </span>
+        {/* Same SVG wordmark as the dashboard TopBar — integer pixel
+            dimensions matching the SVG's 8.75:1 native aspect so it
+            renders crisp at any DPI. */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/pathfinder/pathfinder_zedcor.svg"
+          alt="Pathfinder · Zedcor"
+          width={158}
+          height={18}
+          style={{ display: 'block', width: 158, height: 18 }}
+        />
       </a>
       <span
         className="pf-mono"
