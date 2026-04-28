@@ -6,8 +6,9 @@
 
 import * as React from 'react';
 import type { Branch, Project } from '@/lib/types';
-import { ScoreChip } from './ProjectList';
+import { ScoreChip, StarIcon } from './ProjectList';
 import { isFirstOpen, markSeen, Typewriter, useRailHeight } from './live';
+import { useStarred, toggleStar } from '@/lib/user-prefs';
 
 const PF = {
   bg: '#ffffff',
@@ -41,6 +42,8 @@ export function ProjectModal({ project, branch, onClose }: ProjectModalProps) {
 
   const railH = useRailHeight();
   const hi = (project.score ?? 0) >= HI_THRESHOLD;
+  const starredSet = useStarred();
+  const isStarred = starredSet.has(project.id);
 
   const rationale =
     project.rationale ??
@@ -125,22 +128,47 @@ export function ProjectModal({ project, branch, onClose }: ProjectModalProps) {
                 {project.source_id} · {project.source} · posted {project.posted_date ?? '—'}
               </div>
             </div>
-            <button
-              type="button"
-              onClick={onClose}
-              style={{
-                background: PF.bgAlt,
-                border: 'none',
-                borderRadius: 4,
-                width: 28,
-                height: 28,
-                cursor: 'pointer',
-                color: PF.inkDim,
-                font: `400 14px ${PF.sans}`,
-              }}
-            >
-              ✕
-            </button>
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0 }}>
+              <button
+                type="button"
+                onClick={() => toggleStar(project.id)}
+                title={isStarred ? 'Unstar opportunity' : 'Star this opportunity to track it'}
+                aria-label={isStarred ? 'Unstar' : 'Star'}
+                style={{
+                  background: isStarred ? 'rgba(255,180,84,0.16)' : PF.bgAlt,
+                  border: isStarred ? '1px solid #FFB454' : '1px solid transparent',
+                  borderRadius: 4,
+                  height: 28,
+                  padding: '0 10px',
+                  cursor: 'pointer',
+                  color: isStarred ? '#0a0a0a' : PF.inkDim,
+                  font: `500 12px ${PF.sans}`,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 5,
+                }}
+              >
+                <StarIcon filled={isStarred} size={13} />
+                {isStarred ? 'Starred' : 'Star'}
+              </button>
+              <button
+                type="button"
+                onClick={onClose}
+                aria-label="Close"
+                style={{
+                  background: PF.bgAlt,
+                  border: 'none',
+                  borderRadius: 4,
+                  width: 28,
+                  height: 28,
+                  cursor: 'pointer',
+                  color: PF.inkDim,
+                  font: `400 14px ${PF.sans}`,
+                }}
+              >
+                ✕
+              </button>
+            </div>
           </div>
         </div>
 

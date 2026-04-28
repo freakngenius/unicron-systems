@@ -43,8 +43,10 @@ const HI_THRESHOLD = 80;
 // Match the canonical Pathfinder dark style's base geometry color so the
 // loading state doesn't flash darker than the tiles when they paint in.
 const MAP_BG = '#212121';
+// Centroid of CONUS at zoom 4.5 fits the lower 48 + most of southern Canada in
+// a 1280-1600px viewport with side panels accounting for the 240+380 chrome.
 const DEFAULT_CENTER = { lat: 39.5, lng: -98.5 };
-const DEFAULT_ZOOM = 4;
+const DEFAULT_ZOOM = 4.5;
 const BRANCH_FOCUS_ZOOM = 7;
 
 const SOURCE_FILTER_TO_DB: Record<Exclude<SourceKey, 'all'>, string> = {
@@ -200,11 +202,19 @@ export function Dashboard({ initialBranches, initialCustomers, initialProjects }
     return initialProjects.length;
   }, [initialProjects, crossPoll]);
 
+  // ── User prefs (starred + hidden) — hoisted so every memo below can read it. ──
+  const hidden = useHidden();
+
   // ── Cross-poll: warm-intro lines (customer → project) ──────────────────────
+  // Honors hidden + source filter so the cross-poll overlay matches the
+  // right-rail list.
   const warmLines = React.useMemo(() => {
     const byId = new Map(initialCustomers.map((c) => [c.id, c]));
+    const sourceDb = source !== 'all' ? SOURCE_FILTER_TO_DB[source] : null;
     return initialProjects
       .filter((p) => !!p.warm_for_customer_id && p.lat != null && p.lon != null)
+      .filter((p) => !hidden.has(p.id))
+      .filter((p) => (sourceDb ? p.source === sourceDb : true))
       .map((p) => {
         const c = byId.get(p.warm_for_customer_id as string);
         if (!c) return null;
@@ -214,7 +224,7 @@ export function Dashboard({ initialBranches, initialCustomers, initialProjects }
         };
       })
       .filter(Boolean) as { customer: Customer; project: Project & { lat: number; lon: number } }[];
-  }, [initialCustomers, initialProjects]);
+  }, [initialCustomers, initialProjects, hidden, source]);
 
   const headerH = useHeaderHeight();
   const selectedBranch = selectedBranchId
@@ -235,14 +245,16 @@ export function Dashboard({ initialBranches, initialCustomers, initialProjects }
   const branchDockRight = 16 + (branchMin ? 44 : 240) + 8;
   const projectListLeft = mapDims.w - 16 - (listMin ? 44 : 380) - 8;
 
-  // Project markers fed to the clusterer. Hidden projects are dropped from
-  // the map AND the cluster math so the count badges match what's visible
-  // in the right-rail list.
-  const hidden = useHidden();
+  // Project markers fed to the clusterer. Hidden + source-filtered projects
+  // are dropped from the map AND the cluster math so the count badges match
+  // exactly what's visible in the right-rail list.
   const projectClusterMarkers = React.useMemo<ClusterMarker[]>(() => {
     if (crossPoll) return [];
+    const sourceDb = source !== 'all' ? SOURCE_FILTER_TO_DB[source] : null;
     return initialProjects
-      .filter((p) => p.lat != null && p.lon != null && !hidden.has(p.id))
+      .filter((p) => p.lat != null && p.lon != null)
+      .filter((p) => !hidden.has(p.id))
+      .filter((p) => (sourceDb ? p.source === sourceDb : true))
       .map((p) => {
         const tier = projectTier({
           score: p.score,
@@ -258,7 +270,7 @@ export function Dashboard({ initialBranches, initialCustomers, initialProjects }
           onClick: () => setOpenProjectId(p.id),
         };
       });
-  }, [initialProjects, crossPoll, hidden]);
+  }, [initialProjects, crossPoll, hidden, source]);
 
   // ── Render ─────────────────────────────────────────────────────────────────
   if (!apiKey) {
@@ -310,6 +322,8 @@ export function Dashboard({ initialBranches, initialCustomers, initialProjects }
               selectedBranchId={selectedBranchId}
               focusKey={focusKey}
               onMapReady={setMapInstance}
+              defaultCenter={DEFAULT_CENTER}
+              defaultZoom={DEFAULT_ZOOM}
             />
 
             {/* Branch markers always visible; selected one floats above. */}

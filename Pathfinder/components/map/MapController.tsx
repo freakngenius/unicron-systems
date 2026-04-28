@@ -16,19 +16,23 @@ import type { Branch, Project } from '@/lib/types';
 //   left   — BranchDock (240) + 16 + 24 buffer
 const FIT_PADDING = { top: 220, right: 420, bottom: 80, left: 280 };
 
-// Edge buffer in degrees so the focus area doesn't sit flush with the panel edges.
-const SEE_ALL_BUFFER_DEG = 3;
+// Edge buffer in degrees on the branch fit-bounds so pins don't kiss the panel edges.
 const BRANCH_FIT_BUFFER_DEG = 0.5;
 
 export interface MapControllerProps {
   branches: Branch[];
   projects: Project[];
-  /** Currently focused branch id; null = "See All" (fit-bounds across every branch). */
+  /** Currently focused branch id; null = "See All" (recenters on the default
+   * US center at the default zoom). */
   selectedBranchId: string | null;
   /** Bumps when the user clicks "See All" or selects a branch to force a re-fit. */
   focusKey: number;
   /** Receives the live map instance so the dashboard can wire ZoomControl + map-click handlers. */
   onMapReady?: (map: google.maps.Map | null) => void;
+  /** Used in See All mode — pan to this center and use this zoom instead of
+   * fit-bounds (gives a stable, predictable initial / reset view). */
+  defaultCenter: { lat: number; lng: number };
+  defaultZoom: number;
 }
 
 export function MapController({
@@ -37,6 +41,8 @@ export function MapController({
   selectedBranchId,
   focusKey,
   onMapReady,
+  defaultCenter,
+  defaultZoom,
 }: MapControllerProps) {
   const map = useMap();
 
@@ -48,15 +54,12 @@ export function MapController({
     if (!map || typeof google === 'undefined') return;
 
     if (selectedBranchId === null) {
-      // ── See All — fit every branch into view with side-panel padding ──
-      if (branches.length === 0) return;
-      const bounds = new google.maps.LatLngBounds();
-      branches.forEach((b) => bounds.extend({ lat: b.lat, lng: b.lon }));
-      const ne = bounds.getNorthEast();
-      const sw = bounds.getSouthWest();
-      bounds.extend({ lat: ne.lat() + SEE_ALL_BUFFER_DEG, lng: ne.lng() + SEE_ALL_BUFFER_DEG });
-      bounds.extend({ lat: sw.lat() - SEE_ALL_BUFFER_DEG, lng: sw.lng() - SEE_ALL_BUFFER_DEG });
-      map.fitBounds(bounds, FIT_PADDING);
+      // ── See All — fixed center/zoom at the configured CONUS view. We used
+      // fit-bounds previously, but the result jittered with viewport size and
+      // could overshoot when branches were tightly clustered. A fixed view is
+      // more predictable for the initial state + every "See All" reset.
+      map.panTo(defaultCenter);
+      map.setZoom(defaultZoom);
       return;
     }
 
