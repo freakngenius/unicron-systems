@@ -194,12 +194,19 @@ export function TopBar({
           style={{ display: 'block', flexShrink: 0 }}
         />
         <div style={{ display: 'flex', flexDirection: 'column', gap: 1, whiteSpace: 'nowrap' }}>
-          <div className="pf-h2" style={{ letterSpacing: '-0.01em', lineHeight: 1.1 }}>
-            Pathfinder: Zedcore
-          </div>
+          {/* Wordmark image (287×30 native). Height 18px matches the
+              previous `pf-h2 14px/1.2` rendered text height; width auto
+              preserves aspect ratio (≈ 172px). */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/pathfinder/pathfinder_zedcor.png"
+            alt="Pathfinder · Zedcor"
+            height={18}
+            style={{ display: 'block', height: 18, width: 'auto' }}
+          />
           <div
             className="pf-mono"
-            style={{ fontSize: 9.5, color: PF.inkDim, letterSpacing: '0.04em', lineHeight: 1 }}
+            style={{ fontSize: 9.5, color: PF.inkDim, letterSpacing: '0.04em', lineHeight: 1, marginTop: 2 }}
           >
             Powered by Unicron
           </div>
