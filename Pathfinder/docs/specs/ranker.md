@@ -62,8 +62,8 @@ Round the composite to the nearest integer. Cap at 100.
 UPDATE the row with:
 
 - `score` — integer 0–100.
-- `rationale` — Claude Sonnet output, ~120 words plain prose. No bullets, no markdown headings. (Demoted rows write the literal string `Filtered as non-opportunity by classifier`.)
-- `outreach_hook` — Claude Sonnet output, single sentence ≤ 200 chars. Null on demoted rows.
+- `rationale` — Claude Sonnet output, ~120 words plain prose. No bullets, no markdown headings. **No em-dashes (—) or en-dashes (–)** — the inner prompt forbids them and the Ranker post-processes the output to strip any that slip through (em/en dash with surrounding whitespace becomes `. `). Use periods, commas, semicolons, or hyphens for ranges. (Demoted rows write the literal string `Filtered as non-opportunity by classifier`.)
+- `outreach_hook` — Claude Sonnet output, single sentence ≤ 200 chars. Same em/en-dash prohibition. Null on demoted rows.
 - `nearest_branch_id` — UUID of the closest branch within coverage. Null if no branch covers the project or the project has no coordinates.
 - `distance_miles` — float, distance to `nearest_branch_id`. Null if the project has no coordinates or no covering branch.
 - `warm_for_customer_id` — UUID of the cross-poll customer. Null if no warm-intro condition met.

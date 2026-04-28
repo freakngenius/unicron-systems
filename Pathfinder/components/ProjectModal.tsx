@@ -153,6 +153,26 @@ export function ProjectModal({ project, branch, onClose }: ProjectModalProps) {
             <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0 }}>
               <button
                 type="button"
+                onClick={onClose}
+                title="Dismiss this opportunity for now"
+                aria-label="Mark not relevant"
+                style={{
+                  background: PF.bgAlt,
+                  border: '1px solid transparent',
+                  borderRadius: 4,
+                  height: 28,
+                  padding: '0 10px',
+                  cursor: 'pointer',
+                  color: PF.inkDim,
+                  font: `500 12px ${PF.sans}`,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                }}
+              >
+                Mark not relevant
+              </button>
+              <button
+                type="button"
                 onClick={() => toggleStar(project.id)}
                 title={isStarred ? 'Unstar opportunity' : 'Star this opportunity to track it'}
                 aria-label={isStarred ? 'Unstar' : 'Star'}
@@ -289,14 +309,9 @@ export function ProjectModal({ project, branch, onClose }: ProjectModalProps) {
               <button type="button" className="pf-btn" onClick={onCopyDraft}>
                 Copy as draft
               </button>
-              <button
-                type="button"
-                className="pf-btn-ghost"
-                onClick={onClose}
-                title="Dismiss this opportunity for now"
-              >
-                Mark not relevant
-              </button>
+              {/* "Mark not relevant" lives in the header next to Star.
+                  Removed from this section so the outreach actions stay
+                  focused on the positive copy/send action. */}
             </div>
           </Section>
 
