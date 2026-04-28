@@ -102,5 +102,7 @@ export const config = {
   // the lookahead pattern covers everything else.
   // `/api/cron/*` is excluded because Vercel cron jobs send `Authorization: Bearer ${CRON_SECRET}`
   // and the cron handler does its own auth — Basic auth would block the cron POST.
-  matcher: ['/', '/((?!_next/|favicon\\.ico|api/cron/).*)'],
+  // `/api/notifications/*` is excluded for the same reason — the test endpoint
+  // verifies CRON_SECRET itself so we can curl from anywhere.
+  matcher: ['/', '/((?!_next/|favicon\\.ico|api/cron/|api/notifications/).*)'],
 };

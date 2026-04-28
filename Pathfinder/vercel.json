@@ -1,6 +1,7 @@
 {
   "crons": [
     { "path": "/api/cron/verifier", "schedule": "0,30 * * * *" },
-    { "path": "/api/cron/ranker", "schedule": "0,30 * * * *" }
+    { "path": "/api/cron/ranker", "schedule": "0,30 * * * *" },
+    { "path": "/api/cron/briefing", "schedule": "0 6 * * 5" }
   ]
 }
