@@ -1,22 +1,19 @@
 'use client';
 
-// Dashboard — top-level client component. Mirrors the App component at the bottom of
-// `pathfinder-prototype/project/Pathfinder Hi-Fi.html` (Mono / default theme only).
+// Dashboard — top-level client component. The map layer is now Google Maps
+// (@vis.gl/react-google-maps) instead of the prior synthetic SVG; all other
+// chrome (TopBar, BranchDock, ProjectList, ProjectModal, ActivityRail, etc.)
+// is unchanged.
 //
 // Responsibilities:
-//   - holds top-level UI state (selected branch, source filter, cross-poll toggle, open project,
-//     panel-minimized flags, activity-rail open flag).
-//   - projects branch / customer / project lat-lon to SVG-space via lonLatToSvg.
-//   - renders the Map, all chrome panels, and Stream 4's liveness widgets.
+//   - holds top-level UI state (selected branch, source filter, cross-poll toggle,
+//     open project, panel-minimized flags, activity-rail open flag, refresh state).
+//   - composes the map (markers, clusterer, coverage circle, warm-intro polylines,
+//     anchored card) inside <APIProvider> so child components can call useMap().
 
 import * as React from 'react';
+import { APIProvider, Map as GoogleMap, useMap } from '@vis.gl/react-google-maps';
 import type { Branch, Customer, Project } from '@/lib/types';
-import { Map as MapSurface } from './Map';
-import { BranchMarker } from './markers/BranchMarker';
-import { ProjectPin } from './markers/ProjectPin';
-import { CustomerMarker } from './markers/CustomerMarker';
-import { CoverageRadius } from './markers/CoverageRadius';
-import { WarmPin } from './markers/WarmPin';
 import { TopBar, type SourceKey } from './TopBar';
 import { BranchDock, type BranchStats } from './BranchDock';
 import { ProjectList } from './ProjectList';
@@ -25,21 +22,27 @@ import { AnchoredBranchCard } from './AnchoredBranchCard';
 import { MapLegend } from './MapLegend';
 import { CoordsHUD } from './CoordsHUD';
 import { CrossPollBanner } from './CrossPollBanner';
-import {
-  ActivityRail,
-  AgentStatusRow,
-  SonarPing,
-  useHeaderHeight,
-  useNewPins,
-} from './live';
+import { ActivityRail, AgentStatusRow, useHeaderHeight } from './live';
 import { ZoomControl, ZOOM_MIN, ZOOM_MAX, ZOOM_STEP } from './ZoomControl';
-import { lonLatToSvg, svgToPx, SVG_VIEWBOX } from './map-projection';
+import { PATHFINDER_DARK_STYLE } from '@/lib/map-style';
+import { TIER_COLORS, projectTier } from '@/lib/types-map';
+import {
+  BranchMarkerGM,
+  CustomerMarkerGM,
+  WarmPinGM,
+} from './map/MapMarkers';
+import { CoverageCircle } from './map/CoverageCircle';
+import { MapController } from './map/MapController';
+import { ProjectClusterLayer, type ClusterMarker } from './map/ProjectClusterLayer';
+import { WarmIntroLines } from './map/WarmIntroLines';
+import { useLatLngToPixel } from './map/useLatLngToPixel';
 
 const HI_THRESHOLD = 80;
-const HI = '#22d3ee';
-const MAP_INK = '#e6e9ef';
-const WARM = '#a3e635';
-const WARM_DASH = 0.25;
+const MAP_BG = '#0e1116';
+const DEFAULT_CENTER = { lat: 39.5, lng: -98.5 };
+const DEFAULT_ZOOM = 4;
+const MAP_ID = 'pathfinder-dark-v1';
+const BRANCH_FOCUS_ZOOM = 7;
 
 const SOURCE_FILTER_TO_DB: Record<Exclude<SourceKey, 'all'>, string> = {
   usa: 'usaspending',
@@ -54,55 +57,10 @@ export interface DashboardProps {
   initialProjects: Project[];
 }
 
-interface ProjectWithSvg extends Project {
-  /** SVG-space coordinates derived from lat/lon. Undefined if either is null. */
-  svgX?: number;
-  svgY?: number;
-}
-
-interface BranchWithSvg extends Branch {
-  svgX: number;
-  svgY: number;
-}
-
-interface CustomerWithSvg extends Customer {
-  svgX: number;
-  svgY: number;
-}
-
 export function Dashboard({ initialBranches, initialCustomers, initialProjects }: DashboardProps) {
-  // ── Derived: project lat/lon → SVG-space (memoized) ─────────────────────────
-  const branches = React.useMemo<BranchWithSvg[]>(
-    () =>
-      initialBranches.map((b) => {
-        const { x, y } = lonLatToSvg(b.lon, b.lat);
-        return { ...b, svgX: x, svgY: y };
-      }),
-    [initialBranches],
-  );
-
-  const customers = React.useMemo<CustomerWithSvg[]>(
-    () =>
-      initialCustomers.map((c) => {
-        const { x, y } = lonLatToSvg(c.lon, c.lat);
-        return { ...c, svgX: x, svgY: y };
-      }),
-    [initialCustomers],
-  );
-
-  const projects = React.useMemo<ProjectWithSvg[]>(
-    () =>
-      initialProjects.map((p) => {
-        if (p.lat == null || p.lon == null) return { ...p };
-        const { x, y } = lonLatToSvg(p.lon, p.lat);
-        return { ...p, svgX: x, svgY: y };
-      }),
-    [initialProjects],
-  );
+  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
 
   // ── State ──────────────────────────────────────────────────────────────────
-  // null = "See All" (zoom-out, no specific branch focus). Default to See All on load
-  // so the viewer first sees the full footprint before drilling into a branch.
   const [selectedBranchId, setSelectedBranchId] = React.useState<string | null>(null);
   const [source, setSource] = React.useState<SourceKey>('all');
   const [crossPoll, setCrossPoll] = React.useState(false);
@@ -110,21 +68,15 @@ export function Dashboard({ initialBranches, initialCustomers, initialProjects }
   const [branchMin, setBranchMin] = React.useState(false);
   const [listMin, setListMin] = React.useState(false);
   const [activityOpen, setActivityOpen] = React.useState(false);
-  const [zoom, setZoom] = React.useState(1);
   const [refreshing, setRefreshing] = React.useState(false);
+  const [focusKey, setFocusKey] = React.useState(0);
+  const [mapInstance, setMapInstance] = React.useState<google.maps.Map | null>(null);
+  const [mapZoom, setMapZoom] = React.useState(DEFAULT_ZOOM);
 
-  // Pan state — offset in SVG units relative to the auto-center (selected branch
-  // or viewBox midpoint). Reset whenever the user picks a new branch or "See All".
-  const [panX, setPanX] = React.useState(0);
-  const [panY, setPanY] = React.useState(0);
-  const [spaceHeld, setSpaceHeld] = React.useState(false);
-  const [panning, setPanning] = React.useState(false);
-  const panDragRef = React.useRef<null | {
-    startClient: { x: number; y: number };
-    startPan: { x: number; y: number };
-    /** SVG-units-per-pixel at drag start (frozen so the gesture feels stable). */
-    invScale: number;
-  }>(null);
+  const handleSelectBranch = React.useCallback((id: string | null) => {
+    setSelectedBranchId(id);
+    setFocusKey((k) => k + 1);
+  }, []);
 
   const handleRefresh = React.useCallback(async () => {
     if (refreshing) return;
@@ -139,36 +91,52 @@ export function Dashboard({ initialBranches, initialCustomers, initialProjects }
       // eslint-disable-next-line no-console
       console.error('refresh error', err);
     } finally {
-      // small floor so the button can't be hammered; the realtime cascade
-      // takes ~3s to fully play out.
       setTimeout(() => setRefreshing(false), 1500);
     }
   }, [refreshing]);
 
-  const clampZoom = React.useCallback(
-    (next: number) => Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Math.round(next * 10) / 10)),
-    [],
-  );
-  const zoomIn = React.useCallback(() => setZoom((z) => clampZoom(z + ZOOM_STEP)), [clampZoom]);
-  const zoomOut = React.useCallback(() => setZoom((z) => clampZoom(z - ZOOM_STEP)), [clampZoom]);
+  // ── Track live map zoom for the ZoomControl readout ────────────────────────
+  React.useEffect(() => {
+    if (!mapInstance) return;
+    const update = () => setMapZoom(mapInstance.getZoom() ?? DEFAULT_ZOOM);
+    update();
+    const lis = mapInstance.addListener('zoom_changed', update);
+    return () => lis.remove();
+  }, [mapInstance]);
 
-  // Branch select with auto-zoom. Null → See All (z=1). Id → tight focus on that branch.
-  // The auto-zoom level (3.0) is calibrated so the 300mi coverage circle (75 SVG units
-  // radius / 150 diameter) fills roughly half the viewport — emphasizes the focus
-  // without losing context. Manual +/- still works after to override.
-  // Selecting a branch also resets any space-held pan so the new focus is centered.
-  const BRANCH_FOCUS_ZOOM = 3.0;
-  const handleSelectBranch = React.useCallback((id: string | null) => {
-    setSelectedBranchId(id);
-    setZoom(id === null ? 1 : BRANCH_FOCUS_ZOOM);
-    setPanX(0);
-    setPanY(0);
-  }, []);
+  const zoomIn = React.useCallback(() => {
+    if (!mapInstance) return;
+    const z = mapInstance.getZoom() ?? DEFAULT_ZOOM;
+    mapInstance.setZoom(Math.min(16, z + 1));
+  }, [mapInstance]);
+  const zoomOut = React.useCallback(() => {
+    if (!mapInstance) return;
+    const z = mapInstance.getZoom() ?? DEFAULT_ZOOM;
+    mapInstance.setZoom(Math.max(3, z - 1));
+  }, [mapInstance]);
 
-  // ── Container size measurement (drives px-space conversions) ───────────────
+  // ── Keyboard: + / − zoom shortcuts (spacebar + drag is now native to GM) ──
+  React.useEffect(() => {
+    const isTextField = (t: EventTarget | null) =>
+      t instanceof HTMLElement &&
+      (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey || isTextField(e.target)) return;
+      if (e.key === '+' || e.key === '=') {
+        e.preventDefault();
+        zoomIn();
+      } else if (e.key === '-' || e.key === '_') {
+        e.preventDefault();
+        zoomOut();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [zoomIn, zoomOut]);
+
+  // ── Container size measurement (used by AnchoredBranchCard clamping) ──────
   const containerRef = React.useRef<HTMLDivElement | null>(null);
   const [mapDims, setMapDims] = React.useState({ w: 1200, h: 800 });
-
   React.useEffect(() => {
     const update = () => {
       if (!containerRef.current) return;
@@ -180,329 +148,280 @@ export function Dashboard({ initialBranches, initialCustomers, initialProjects }
     return () => window.removeEventListener('resize', update);
   }, []);
 
-  // ── Keyboard: + / − zoom the map only · Space toggles pan-mode ─────────────
-  React.useEffect(() => {
-    const isTextField = (t: EventTarget | null) =>
-      t instanceof HTMLElement &&
-      (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable);
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.metaKey || e.ctrlKey || e.altKey || isTextField(e.target)) return;
-      if (e.key === '+' || e.key === '=') {
-        e.preventDefault();
-        zoomIn();
-      } else if (e.key === '-' || e.key === '_') {
-        e.preventDefault();
-        zoomOut();
-      } else if (e.code === 'Space' && !e.repeat) {
-        e.preventDefault();
-        setSpaceHeld(true);
-      }
-    };
-    const onKeyUp = (e: KeyboardEvent) => {
-      if (e.code === 'Space') {
-        setSpaceHeld(false);
-        setPanning(false);
-        panDragRef.current = null;
-      }
-    };
-    window.addEventListener('keydown', onKeyDown);
-    window.addEventListener('keyup', onKeyUp);
-    return () => {
-      window.removeEventListener('keydown', onKeyDown);
-      window.removeEventListener('keyup', onKeyUp);
-    };
-  }, [zoomIn, zoomOut]);
-
-  // ── Mouse drag: while spaceHeld, drag the map; cursor flips to grab/grabbing ──
-  React.useEffect(() => {
-    const onMove = (e: MouseEvent) => {
-      const drag = panDragRef.current;
-      if (!drag) return;
-      const dx = e.clientX - drag.startClient.x;
-      const dy = e.clientY - drag.startClient.y;
-      // Drag right (dx > 0) → map content moves right → viewBox shifts left → panX decreases
-      setPanX(drag.startPan.x - dx * drag.invScale);
-      setPanY(drag.startPan.y - dy * drag.invScale);
-    };
-    const onUp = () => {
-      panDragRef.current = null;
-      setPanning(false);
-    };
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseup', onUp);
-    return () => {
-      window.removeEventListener('mousemove', onMove);
-      window.removeEventListener('mouseup', onUp);
-    };
-  }, []);
-
-  const handleMapMouseDown = React.useCallback(
-    (e: React.MouseEvent<HTMLDivElement>) => {
-      if (!spaceHeld) return;
-      // Only respond to primary (left) button.
-      if (e.button !== 0) return;
-      e.preventDefault();
-      const w = SVG_VIEWBOX.width / Math.max(1, zoom);
-      const h = SVG_VIEWBOX.height / Math.max(1, zoom);
-      // Pixel-to-SVG conversion at the current zoom level. preserveAspectRatio="slice"
-      // uses the larger of the two scales so the SVG covers the container.
-      const scale = Math.max(mapDims.w / w, mapDims.h / h);
-      panDragRef.current = {
-        startClient: { x: e.clientX, y: e.clientY },
-        startPan: { x: panX, y: panY },
-        invScale: 1 / scale,
-      };
-      setPanning(true);
-    },
-    [spaceHeld, zoom, mapDims.w, mapDims.h, panX, panY],
-  );
-
   // ── Derived: per-branch stats for the BranchDock ───────────────────────────
   const branchStats = React.useMemo<Record<string, BranchStats>>(() => {
     const m: Record<string, BranchStats> = {};
-    for (const b of branches) m[b.id] = { count: 0, hi: 0 };
-    for (const p of projects) {
+    for (const b of initialBranches) m[b.id] = { count: 0, hi: 0 };
+    for (const p of initialProjects) {
       const bid = p.nearest_branch_id;
       if (!bid || !m[bid]) continue;
       m[bid].count += 1;
       if ((p.score ?? 0) >= HI_THRESHOLD) m[bid].hi += 1;
     }
     return m;
-  }, [branches, projects]);
+  }, [initialBranches, initialProjects]);
 
   // ── Derived: filtered project list for the right rail ──────────────────────
-  const filteredProjects = React.useMemo<ProjectWithSvg[]>(() => {
+  const filteredProjects = React.useMemo<Project[]>(() => {
     if (crossPoll) {
-      return projects
+      return initialProjects
         .filter((p) => !!p.warm_for_customer_id)
         .sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
     }
-    // selectedBranchId === null is "See All" — show every ranked project, top-scored first.
     let r = selectedBranchId
-      ? projects.filter((p) => p.nearest_branch_id === selectedBranchId)
-      : projects.slice();
+      ? initialProjects.filter((p) => p.nearest_branch_id === selectedBranchId)
+      : initialProjects.slice();
     if (source !== 'all') {
       const db = SOURCE_FILTER_TO_DB[source];
       r = r.filter((p) => p.source === db);
     }
     return r.sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
-  }, [projects, selectedBranchId, source, crossPoll]);
+  }, [initialProjects, selectedBranchId, source, crossPoll]);
 
   const totalForBranch = selectedBranchId
-    ? projects.filter((p) => p.nearest_branch_id === selectedBranchId).length
-    : projects.length;
+    ? initialProjects.filter((p) => p.nearest_branch_id === selectedBranchId).length
+    : initialProjects.length;
 
-  // ── Derived: warm-intro lines (customer → project) when cross-poll on ──────
+  // ── Cross-poll: warm-intro lines (customer → project) ──────────────────────
   const warmLines = React.useMemo(() => {
-    const byId = new Map(customers.map((c) => [c.id, c]));
-    return projects
-      .filter((p) => !!p.warm_for_customer_id && p.svgX != null && p.svgY != null)
+    const byId = new Map(initialCustomers.map((c) => [c.id, c]));
+    return initialProjects
+      .filter((p) => !!p.warm_for_customer_id && p.lat != null && p.lon != null)
       .map((p) => {
         const c = byId.get(p.warm_for_customer_id as string);
         if (!c) return null;
-        return { customer: c, project: p as ProjectWithSvg & { svgX: number; svgY: number } };
+        return {
+          customer: c,
+          project: p as Project & { lat: number; lon: number },
+        };
       })
-      .filter(Boolean) as { customer: CustomerWithSvg; project: ProjectWithSvg & { svgX: number; svgY: number } }[];
-  }, [customers, projects]);
+      .filter(Boolean) as { customer: Customer; project: Project & { lat: number; lon: number } }[];
+  }, [initialCustomers, initialProjects]);
 
-  const newPins = useNewPins();
   const headerH = useHeaderHeight();
   const selectedBranch = selectedBranchId
-    ? branches.find((b) => b.id === selectedBranchId) ?? null
+    ? initialBranches.find((b) => b.id === selectedBranchId) ?? null
     : null;
-
-  // Free-zone bounds for the anchored card. BranchDock at left:16 with width 240 (or 44
-  // when minimized); ProjectList at right:16 with width 380 (44 when minimized). Account
-  // for the minimized states so the card claims the freed space.
-  const branchDockRight = 16 + (branchMin ? 44 : 240) + 8;
-  const projectListLeft = mapDims.w - 16 - (listMin ? 44 : 380) - 8;
   const openProject = openProjectId
-    ? projects.find((p) => p.id === openProjectId) ?? null
+    ? initialProjects.find((p) => p.id === openProjectId) ?? null
     : null;
   const openProjectBranch = openProject
-    ? branches.find((b) => b.id === openProject.nearest_branch_id) ?? null
-    : null;
-
-  // Anchored card pixel position — zoom-aware AND pan-aware so the card stays
-  // glued to the pin while the user zooms or space-drags.
-  const anchoredPx = selectedBranch
-    ? svgToPx(selectedBranch.svgX, selectedBranch.svgY, mapDims.w, mapDims.h, {
-        zoom,
-        centerX: selectedBranch.svgX + panX,
-        centerY: selectedBranch.svgY + panY,
-      })
+    ? initialBranches.find((b) => b.id === openProject.nearest_branch_id) ?? null
     : null;
 
   const customersForBranch = selectedBranch
-    ? customers.filter((c) => c.served_by_branch_id === selectedBranch.id).length
+    ? initialCustomers.filter((c) => c.served_by_branch_id === selectedBranch.id).length
     : 0;
+
+  // Free-zone bounds for the anchored card.
+  const branchDockRight = 16 + (branchMin ? 44 : 240) + 8;
+  const projectListLeft = mapDims.w - 16 - (listMin ? 44 : 380) - 8;
+
+  // Project markers fed to the clusterer.
+  const projectClusterMarkers = React.useMemo<ClusterMarker[]>(() => {
+    if (crossPoll) return [];
+    return initialProjects
+      .filter((p) => p.lat != null && p.lon != null)
+      .map((p) => {
+        const tier = projectTier({
+          score: p.score,
+          ingested_at: p.ingested_at,
+          warm_for_customer_id: p.warm_for_customer_id,
+        });
+        return {
+          id: p.id,
+          lat: p.lat as number,
+          lng: p.lon as number,
+          color: tier.color,
+          hi: tier.isHi,
+          onClick: () => setOpenProjectId(p.id),
+        };
+      });
+  }, [initialProjects, crossPoll]);
+
+  // ── Render ─────────────────────────────────────────────────────────────────
+  if (!apiKey) {
+    return (
+      <div
+        style={{
+          position: 'fixed',
+          inset: 0,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: MAP_BG,
+          color: '#e6e9ef',
+          font: '500 14px var(--font-jetbrains-mono), ui-monospace, monospace',
+        }}
+      >
+        NEXT_PUBLIC_GOOGLE_MAPS_API_KEY is missing — set it in .env.local
+      </div>
+    );
+  }
 
   return (
     <div
       ref={containerRef}
-      style={{ position: 'fixed', inset: 0, background: '#0e1116' }}
+      style={{ position: 'fixed', inset: 0, background: MAP_BG }}
       className="pf-root"
     >
-      <MapSurface
-        width={mapDims.w}
-        height={mapDims.h}
-        zoom={zoom}
-        centerX={(selectedBranch?.svgX ?? SVG_VIEWBOX.width / 2) + panX}
-        centerY={(selectedBranch?.svgY ?? SVG_VIEWBOX.height / 2) + panY}
-        cursor={spaceHeld ? (panning ? 'grabbing' : 'grab') : 'auto'}
-        onMouseDown={handleMapMouseDown}
-      >
-        {/* ─── Default (non-cross-poll) layer ─── */}
-        <g opacity={crossPoll ? WARM_DASH : 1}>
-          {!crossPoll && selectedBranch && (
-            <CoverageRadius x={selectedBranch.svgX} y={selectedBranch.svgY} />
-          )}
-          {projects.map((p) =>
-            p.svgX != null && p.svgY != null ? (
-              <ProjectPin
-                key={p.id}
-                x={p.svgX}
-                y={p.svgY}
-                hi={(p.score ?? 0) >= HI_THRESHOLD}
-                onClick={() => setOpenProjectId(p.id)}
-              />
-            ) : null,
-          )}
-          {branches.map((b) => (
-            <BranchMarker
-              key={b.id}
-              x={b.svgX}
-              y={b.svgY}
-              code={b.code}
-              selected={!crossPoll && b.id === selectedBranchId}
-              onClick={() => handleSelectBranch(b.id)}
+      <APIProvider apiKey={apiKey} libraries={['marker', 'maps']}>
+        {/* Map fills the whole container; chrome panels float over it. */}
+        <div style={{ position: 'absolute', inset: 0 }}>
+          <GoogleMap
+            mapId={MAP_ID}
+            defaultCenter={DEFAULT_CENTER}
+            defaultZoom={DEFAULT_ZOOM}
+            minZoom={3}
+            maxZoom={16}
+            gestureHandling="greedy"
+            disableDefaultUI={true}
+            clickableIcons={false}
+            styles={PATHFINDER_DARK_STYLE as unknown as google.maps.MapTypeStyle[]}
+            style={{ width: '100%', height: '100%' }}
+          >
+            <MapController
+              branches={initialBranches}
+              selectedBranchId={selectedBranchId}
+              focusKey={focusKey}
+              onMapReady={setMapInstance}
             />
-          ))}
-          {/* Sonar pings on freshly-ingested pins (Stream 4 stub returns null) */}
-          {[...newPins].map((id) => {
-            const p = projects.find((pp) => pp.id === id);
-            if (!p || p.svgX == null || p.svgY == null) return null;
-            const isHi = (p.score ?? 0) >= HI_THRESHOLD;
-            return (
-              <SonarPing key={`sp-${id}`} x={p.svgX} y={p.svgY} color={isHi ? HI : MAP_INK} />
-            );
-          })}
-        </g>
 
-        {/* ─── Cross-poll overlay layer ─── */}
-        {crossPoll && (
-          <g>
-            {customers.map((c) => (
-              <circle
-                key={`halo-${c.id}`}
-                cx={c.svgX}
-                cy={c.svgY}
-                r="14"
-                fill="none"
-                stroke={WARM}
-                strokeWidth="0.5"
-                strokeDasharray="1,2"
-                opacity="0.6"
+            {/* Branch markers always visible; selected one floats above. */}
+            {initialBranches.map((b) => (
+              <BranchMarkerGM
+                key={`b-${b.id}`}
+                lat={b.lat}
+                lng={b.lon}
+                code={b.code}
+                selected={b.id === selectedBranchId}
+                onClick={() => handleSelectBranch(b.id)}
               />
             ))}
-            {warmLines.map((l, i) => (
-              <line
-                key={`line-${i}`}
-                x1={l.customer.svgX}
-                y1={l.customer.svgY}
-                x2={l.project.svgX}
-                y2={l.project.svgY}
-                stroke={WARM}
-                strokeWidth="0.8"
-                strokeDasharray="3,3"
+
+            {/* Coverage radius around the selected branch. */}
+            {!crossPoll && selectedBranch && (
+              <CoverageCircle
+                lat={selectedBranch.lat}
+                lng={selectedBranch.lon}
+                miles={selectedBranch.coverage_radius_miles}
               />
-            ))}
-            {customers.map((c) => (
-              <CustomerMarker key={`cm-${c.id}`} x={c.svgX} y={c.svgY} warm />
-            ))}
-            {warmLines.map((l, i) => (
-              <WarmPin
-                key={`wp-${i}`}
-                x={l.project.svgX}
-                y={l.project.svgY}
-                label={`WI-${i + 1}`}
-                onClick={() => setOpenProjectId(l.project.id)}
-              />
-            ))}
-            {branches.map((b) => (
-              <g key={`bm-${b.id}`} opacity="0.6">
-                <BranchMarker
-                  x={b.svgX}
-                  y={b.svgY}
-                  code={b.code}
-                  onClick={() => handleSelectBranch(b.id)}
+            )}
+
+            {/* Default project layer (clustered, color-tiered). */}
+            <ProjectClusterLayer markers={projectClusterMarkers} />
+
+            {/* Cross-pollination overlay: customer markers + warm-intro lines + warm pins. */}
+            {crossPoll && (
+              <>
+                {initialCustomers
+                  .filter((c) => c.lat != null && c.lon != null)
+                  .map((c) => (
+                    <CustomerMarkerGM key={`c-${c.id}`} lat={c.lat} lng={c.lon} warm />
+                  ))}
+                <WarmIntroLines
+                  lines={warmLines.map((l) => ({
+                    from: { lat: l.customer.lat, lng: l.customer.lon },
+                    to: { lat: l.project.lat, lng: l.project.lon },
+                  }))}
                 />
-              </g>
-            ))}
-          </g>
+                {warmLines.map((l, i) => (
+                  <WarmPinGM
+                    key={`w-${i}`}
+                    lat={l.project.lat}
+                    lng={l.project.lon}
+                    label={`WI-${i + 1}`}
+                    onClick={() => setOpenProjectId(l.project.id)}
+                  />
+                ))}
+              </>
+            )}
+          </GoogleMap>
+        </div>
+
+        {/* Anchored branch card — floats over the map, glued to the branch lat/lng. */}
+        {!crossPoll && selectedBranch && (
+          <AnchoredBranchCardOverlay
+            branch={selectedBranch}
+            containerW={mapDims.w}
+            containerH={mapDims.h}
+            headerH={headerH}
+            freeLeft={branchDockRight}
+            freeRight={projectListLeft}
+            inRangeCount={branchStats[selectedBranch.id]?.count ?? 0}
+            hiCount={branchStats[selectedBranch.id]?.hi ?? 0}
+            customerCount={customersForBranch}
+          />
         )}
-      </MapSurface>
 
-      <TopBar
-        source={source}
-        setSource={setSource}
-        crossPoll={crossPoll}
-        setCrossPoll={setCrossPoll}
-        onRefresh={handleRefresh}
-        refreshing={refreshing}
-      />
-      <AgentStatusRow />
-      <BranchDock
-        branches={branches}
-        selectedId={selectedBranchId}
-        setSelected={handleSelectBranch}
-        minimized={branchMin}
-        setMinimized={setBranchMin}
-        stats={branchStats}
-      />
-      <ProjectList
-        branch={selectedBranch}
-        projects={filteredProjects}
-        totalCount={crossPoll ? warmLines.length : totalForBranch}
-        onOpen={(p) => setOpenProjectId(p.id)}
-        crossPoll={crossPoll}
-        minimized={listMin}
-        setMinimized={setListMin}
-      />
-
-      {!crossPoll && selectedBranch && anchoredPx && (
-        <AnchoredBranchCard
+        {/* Chrome panels — sit above the map div via z-index. */}
+        <TopBar
+          source={source}
+          setSource={setSource}
+          crossPoll={crossPoll}
+          setCrossPoll={setCrossPoll}
+          onRefresh={handleRefresh}
+          refreshing={refreshing}
+        />
+        <AgentStatusRow />
+        <BranchDock
+          branches={initialBranches}
+          selectedId={selectedBranchId}
+          setSelected={handleSelectBranch}
+          minimized={branchMin}
+          setMinimized={setBranchMin}
+          stats={branchStats}
+        />
+        <ProjectList
           branch={selectedBranch}
-          anchorPx={anchoredPx}
-          containerW={mapDims.w}
-          containerH={mapDims.h}
-          headerH={headerH}
-          freeLeft={branchDockRight}
-          freeRight={projectListLeft}
-          inRangeCount={branchStats[selectedBranch.id]?.count ?? 0}
-          hiCount={branchStats[selectedBranch.id]?.hi ?? 0}
-          customerCount={customersForBranch}
+          projects={filteredProjects}
+          totalCount={crossPoll ? warmLines.length : totalForBranch}
+          onOpen={(p) => setOpenProjectId(p.id)}
+          crossPoll={crossPoll}
+          minimized={listMin}
+          setMinimized={setListMin}
         />
-      )}
-      {crossPoll && <CrossPollBanner count={warmLines.length} />}
-      <MapLegend crossPoll={crossPoll} />
-      <ZoomControl
-        zoom={zoom}
-        onZoomIn={zoomIn}
-        onZoomOut={zoomOut}
-        left={crossPoll ? 720 : 580}
-      />
-      <CoordsHUD branch={selectedBranch} />
 
-      {openProject && (
-        <ProjectModal
-          project={openProject}
-          branch={openProjectBranch}
-          onClose={() => setOpenProjectId(null)}
+        {crossPoll && <CrossPollBanner count={warmLines.length} />}
+        <MapLegend crossPoll={crossPoll} />
+        <ZoomControl
+          zoom={mapZoom}
+          onZoomIn={zoomIn}
+          onZoomOut={zoomOut}
+          left={crossPoll ? 720 : 580}
         />
-      )}
+        <CoordsHUD branch={selectedBranch} />
 
-      <ActivityRail open={activityOpen} setOpen={setActivityOpen} />
+        {openProject && (
+          <ProjectModal
+            project={openProject}
+            branch={openProjectBranch}
+            onClose={() => setOpenProjectId(null)}
+          />
+        )}
+
+        <ActivityRail open={activityOpen} setOpen={setActivityOpen} />
+      </APIProvider>
     </div>
   );
+}
+
+// AnchoredBranchCardOverlay — wraps AnchoredBranchCard with the
+// useLatLngToPixel hook so the card stays glued to the branch's lat/lng
+// through pan + zoom. Renders nothing when the branch is off-screen.
+function AnchoredBranchCardOverlay(props: {
+  branch: Branch;
+  containerW: number;
+  containerH: number;
+  headerH: number;
+  freeLeft: number;
+  freeRight: number;
+  inRangeCount: number;
+  hiCount: number;
+  customerCount: number;
+}) {
+  const { branch, ...rest } = props;
+  const px = useLatLngToPixel(branch.lat, branch.lon);
+  if (!px) return null;
+  return <AnchoredBranchCard branch={branch} anchorPx={px} {...rest} />;
 }

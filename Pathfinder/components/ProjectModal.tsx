@@ -216,7 +216,12 @@ export function ProjectModal({ project, branch, onClose }: ProjectModalProps) {
               <button type="button" className="pf-btn" onClick={onCopyDraft}>
                 Copy as draft
               </button>
-              <button type="button" className="pf-btn-ghost">
+              <button
+                type="button"
+                className="pf-btn-ghost"
+                onClick={onClose}
+                title="Dismiss this opportunity for now"
+              >
                 Mark not relevant
               </button>
             </div>

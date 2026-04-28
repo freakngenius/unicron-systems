@@ -47,6 +47,22 @@ export function ProjectList({
   const headerH = useHeaderHeight();
   // null branch === "See All" mode — show every project, top-scored first.
   const branchName = branch?.name ?? 'All branches';
+  const [sortMode, setSortMode] = React.useState<'score' | 'distance' | 'posted'>('score');
+  const sorted = React.useMemo(() => {
+    const arr = projects.slice();
+    if (sortMode === 'score') {
+      arr.sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+    } else if (sortMode === 'distance') {
+      arr.sort((a, b) => (a.distance_miles ?? Infinity) - (b.distance_miles ?? Infinity));
+    } else {
+      arr.sort((a, b) => {
+        const ta = a.posted_date ? Date.parse(a.posted_date) : 0;
+        const tb = b.posted_date ? Date.parse(b.posted_date) : 0;
+        return tb - ta;
+      });
+    }
+    return arr;
+  }, [projects, sortMode]);
 
   if (minimized) {
     const title = crossPoll ? 'Warm-intros' : `${branchName} · Ranked`;
@@ -138,22 +154,23 @@ export function ProjectList({
           </span>
         </div>
         <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
-          <button type="button" className="pf-pill pf-pill-active">
-            Score
-          </button>
-          <button type="button" className="pf-pill">
-            Distance
-          </button>
-          <button type="button" className="pf-pill">
-            Posted
-          </button>
+          {(['score', 'distance', 'posted'] as const).map((m) => (
+            <button
+              key={m}
+              type="button"
+              className={`pf-pill ${sortMode === m ? 'pf-pill-active' : ''}`}
+              onClick={() => setSortMode(m)}
+            >
+              {m[0].toUpperCase() + m.slice(1)}
+            </button>
+          ))}
         </div>
       </div>
       <div style={{ overflowY: 'auto', flex: 1 }} className="pf-scrollbar">
-        {projects.length === 0 ? (
+        {sorted.length === 0 ? (
           <EmptyState />
         ) : (
-          projects.map((p) => (
+          sorted.map((p) => (
             <ProjectRow key={p.id} project={p} onOpen={() => onOpen(p)} crossPoll={crossPoll} />
           ))
         )}
