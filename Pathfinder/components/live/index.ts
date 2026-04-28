@@ -8,7 +8,7 @@ export { AgentStatusRow } from './AgentStatusRow';
 export type { AgentStatusRowProps } from './AgentStatusRow';
 
 export { AgentCell, deriveCellData } from './AgentCell';
-export type { AgentCellData, AgentCellProps } from './AgentCell';
+export type { AgentCellData, AgentCellProps, DeriveCellExtras } from './AgentCell';
 
 export { StatusPill } from './StatusPill';
 export type { StatusPillProps, AgentStatus } from './StatusPill';
@@ -48,6 +48,7 @@ export {
   useProjectScored,
   useStats,
   useModels,
+  useEscalations,
   useHeaderHeight,
   setHeaderHeight,
   useRailHeight,

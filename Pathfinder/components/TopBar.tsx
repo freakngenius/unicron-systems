@@ -6,6 +6,7 @@
 
 import * as React from 'react';
 import { LiveStat, PulsingDot } from './live';
+import { EscalationPill } from './EscalationPill';
 import { useHidden, unhideAll } from '@/lib/user-prefs';
 
 const PF = {
@@ -141,6 +142,12 @@ export interface TopBarProps {
   refreshing: boolean;
   /** Click handler for one of the live stats — opens the StatPopover. */
   onStatClick?: (bucket: 'new' | 'total' | 'ranked') => void;
+  /** Number of Verifier-escalated projects (pass_count >= 2). */
+  escalationCount?: number;
+  /** Whether the EscalationPopover is currently open. */
+  escalationOpen?: boolean;
+  /** Click handler for the EscalationPill. */
+  onEscalationClick?: () => void;
 }
 
 export function TopBar({
@@ -151,6 +158,9 @@ export function TopBar({
   onRefresh,
   refreshing,
   onStatClick,
+  escalationCount = 0,
+  escalationOpen = false,
+  onEscalationClick,
 }: TopBarProps) {
   return (
     <div
@@ -248,6 +258,14 @@ export function TopBar({
       </button>
 
       <UnhideButton />
+
+      {onEscalationClick && escalationCount > 0 && (
+        <EscalationPill
+          count={escalationCount}
+          open={escalationOpen}
+          onClick={onEscalationClick}
+        />
+      )}
 
       <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 20 }}>
         <LiveStat

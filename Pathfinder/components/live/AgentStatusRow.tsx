@@ -1,17 +1,21 @@
 'use client';
 
-// AgentStatusRow — three-cell agent fleet strip + multi-model routing.
+// AgentStatusRow — four-cell agent fleet strip + multi-model routing.
 // Lives at top: 76, left: 16, right: 16 with the dark slate background
 // (`#0e1116`) so it visually pairs with the map. Publishes its computed
 // height through `setHeaderHeight()` so BranchDock + ProjectList know
 // where to start.
+//
+// Layer-1 surfaces Ingestor / Ranker / Verifier / Adjacent. The Verifier
+// sits next to Ranker because they're a Generator-Verifier pair. The
+// 8-cell 2-row grid is Layer 2 Liveness's job — single row works here.
 //
 // Visual structure stays 1:1 with hifi-live.jsx AgentStatusRow.
 
 import React, { useEffect, useState } from 'react';
 
 import { hexAlpha, PF_TINTS } from '@/lib/agent-tints';
-import { setHeaderHeight, useAgentRuns } from '@/lib/realtime';
+import { setHeaderHeight, useAgentRuns, useEscalations } from '@/lib/realtime';
 import type { AgentName } from '@/lib/types';
 import { AgentCell, deriveCellData } from './AgentCell';
 import { ModelRoutingStrip } from './ModelRoutingStrip';
@@ -23,6 +27,7 @@ export interface AgentStatusRowProps {
 
 export function AgentStatusRow({ initialCollapsed = true }: AgentStatusRowProps) {
   const runs = useAgentRuns();
+  const escalations = useEscalations();
   const [collapsed, setCollapsed] = useState(initialCollapsed);
 
   const AGENTS_H = 64;
@@ -34,7 +39,7 @@ export function AgentStatusRow({ initialCollapsed = true }: AgentStatusRowProps)
     setHeaderHeight(76 + TOTAL + 16);
   }, [TOTAL]);
 
-  const cellOrder: AgentName[] = ['ingestor', 'ranker', 'adjacent'];
+  const cellOrder: AgentName[] = ['ingestor', 'ranker', 'verifier', 'adjacent'];
 
   return (
     <div
@@ -60,7 +65,9 @@ export function AgentStatusRow({ initialCollapsed = true }: AgentStatusRowProps)
           <AgentCell
             key={id}
             id={id}
-            data={deriveCellData(id, runs[id])}
+            data={deriveCellData(id, runs[id], {
+              escalatedCount: id === 'verifier' ? escalations.length : undefined,
+            })}
             showDivider={i > 0}
           />
         ))}

@@ -295,6 +295,9 @@ const lastIngestStore = new Store<number>(Date.now());
 
 const NEW_PIN_TTL_MS = 700;
 const JUST_RANKED_TTL_MS = 800;
+// Verifier hands a project off to a human once it has failed re-verification
+// twice. See docs/PLAN-AGENTS.md §4.1 (Verifier) for the threshold rationale.
+const ESCALATION_THRESHOLD = 2;
 
 function markPinNew(id: string) {
   newPinsStore.patch((prev) => {
@@ -382,6 +385,25 @@ function ensureProjectsChannel(): void {
             bumped: { ...bumped, ranked: Date.now() },
           }));
         }
+        // Verifier transitions: any change to `verifier_pass_count` may
+        // cross the escalation threshold (2). Refetch the escalations
+        // list — debounced so a Verifier burst is one fetch.
+        if (next.verifier_pass_count !== prev.verifier_pass_count) {
+          scheduleEscalationsRefetch();
+        }
+      },
+    )
+    .on(
+      'postgres_changes',
+      { event: 'INSERT', schema: 'pathfinder', table: 'projects' },
+      (payload) => {
+        // Insert with verified=null is the common case (Ingestor). Edge
+        // case: a row inserted directly with verifier_pass_count >= 2 still
+        // needs to land in the escalations list.
+        const row = payload.new as Project;
+        if ((row.verifier_pass_count ?? 0) >= ESCALATION_THRESHOLD) {
+          scheduleEscalationsRefetch();
+        }
       },
     )
     .subscribe();
@@ -459,6 +481,65 @@ export function useProjectScored(onId: (id: string) => void): void {
     });
     return unsub;
   }, [onId]);
+}
+
+// ────────────────────────────────────────────────────────────────────────
+// 3b. Verifier escalations — projects where `verifier_pass_count >= 2`.
+//
+// These are projects the Verifier has handed off to a human (after two
+// failed re-checks). The TopBar pill + popover read from this store; the
+// AgentStatusRow reads its `length` for the Verifier cell's "escalated"
+// metric.
+//
+// Backfill via /api/agents/escalations on mount; refetch when any project
+// row is inserted/updated (cheap — escalations are rare).
+// ────────────────────────────────────────────────────────────────────────
+
+const escalationsStore = new Store<Project[]>([]);
+
+let escalationsBackfillStarted = false;
+
+async function fetchEscalations(): Promise<void> {
+  try {
+    const res = await fetch(`${API_BASE}/api/agents/escalations`, { cache: 'no-store' });
+    if (!res.ok) return;
+    const data = (await res.json()) as Project[] | { projects?: Project[] };
+    const rows = Array.isArray(data) ? data : data.projects ?? [];
+    escalationsStore.set(rows);
+  } catch {
+    // ignore — keep last value
+  }
+}
+
+function ensureEscalationsRefetch(): void {
+  if (escalationsBackfillStarted) return;
+  escalationsBackfillStarted = true;
+  void fetchEscalations();
+}
+
+// Re-uses `pf-projects` channel but with a separate refetch debounce so we
+// don't thrash the API if a Ranker pass updates many rows in a burst.
+let escalationsRefetchTimer: ReturnType<typeof setTimeout> | null = null;
+function scheduleEscalationsRefetch() {
+  if (escalationsRefetchTimer) return;
+  escalationsRefetchTimer = setTimeout(() => {
+    escalationsRefetchTimer = null;
+    void fetchEscalations();
+  }, 250);
+}
+
+/**
+ * Returns the current set of escalated projects (verifier_pass_count >= 2),
+ * newest-ranked first. The `pf-projects` realtime channel calls
+ * `scheduleEscalationsRefetch()` whenever a Verifier UPDATE crosses the
+ * threshold; this hook just wires the channel up + does the initial backfill.
+ */
+export function useEscalations(): Project[] {
+  useProjectsChannel();
+  useEffect(() => {
+    ensureEscalationsRefetch();
+  }, []);
+  return useStoreValue(escalationsStore);
 }
 
 // ────────────────────────────────────────────────────────────────────────

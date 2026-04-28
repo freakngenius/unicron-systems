@@ -118,8 +118,90 @@ All 10 agents in the fleet. Schedules, MCP scopes, output tables, and pinned mod
 - **MCPs:**
   - **Supabase** · scope `pathfinder.projects, pathfinder.branches, pathfinder.customers, pathfinder.agent_log, pathfinder.agent_runs`
   - **Anthropic API** · for Claude Sonnet verification pass
+  - **HTTP fetch** (built-in) · for the Scoring HTTP endpoints below — Verifier cannot import `lib/scoring.ts` directly because it runs outside the Next.js bundle
 - **Output tables:** updates `pathfinder.projects` (`verified`, `verifier_notes`, `verifier_pass_count` columns added in Layer 1 migration `0005`); writes `pathfinder.agent_log`, `pathfinder.agent_runs`
 - **Model:** `claude-sonnet`
+
+#### Scoring HTTP endpoints (used by Verifier)
+
+The Verifier's 4-check pass needs to recompute branch attribution and the composite score from scratch and compare against what the Ranker wrote. The pure-function kernel in `lib/scoring.ts` lives outside the Perplexity Space, so the Next.js app exposes it over HTTP. Both endpoints are deterministic (no DB writes, no model calls) and inherit the same Basic-auth gate as the rest of the Pathfinder surface.
+
+**Auth:** every call must send `Authorization: Basic <base64("zedcor:unicron")>` — the same creds the dashboard uses (the `BASIC_AUTH_USER` / `BASIC_AUTH_PASS` env vars on Vercel). Without it the middleware returns 401; after 3 wrong attempts within 60s, 429.
+
+**Endpoint 1 — `POST https://pathfinder-ashy.vercel.app/pathfinder/api/scoring/branch`**
+
+Wraps `nearestBranch()`. Use this when the Verifier wants to recompute branch attribution alone (Check 2: "did the Ranker pick the closest branch?").
+
+Request body:
+
+```json
+{
+  "project": { "lat": 29.76, "lon": -95.40 },
+  "branches": [
+    { "id": "hou-002", "lat": 29.7604, "lon": -95.3698, "coverage_radius_miles": 300 },
+    { "id": "phx-001", "lat": 33.4484, "lon": -112.074, "coverage_radius_miles": 300 }
+  ]
+}
+```
+
+Response (200):
+
+```json
+{ "nearest_branch_id": "hou-002", "distance_miles": 4.31, "in_coverage": true }
+```
+
+`coverage_radius_miles` is optional per branch; the endpoint defaults to 300 if omitted. `in_coverage` is computed against the chosen branch's radius.
+
+**Endpoint 2 — `POST https://pathfinder-ashy.vercel.app/pathfinder/api/scoring/score`**
+
+Wraps `scoreProject()`. Use this when the Verifier wants the full composite (Check 4: "does the recomputed score equal the stored score?"). Returns the same `ScoringOutput` shape the Ranker writes to `pathfinder.projects`.
+
+Request body:
+
+```json
+{
+  "project": {
+    "lat": 29.92,
+    "lon": -95.40,
+    "project_value": 4200000,
+    "project_stage": "RFP"
+  },
+  "branches": [
+    { "id": "hou-002", "lat": 29.7604, "lon": -95.3698, "coverage_radius_miles": 300 }
+  ],
+  "customers": [
+    { "id": "c-mh", "lat": 29.92, "lon": -95.42, "served_by_branch_id": "hou-002" }
+  ]
+}
+```
+
+Response (200) — full `ScoringOutput`:
+
+```json
+{
+  "nearest_branch_id": "hou-002",
+  "distance_miles": 11.17,
+  "in_coverage": true,
+  "warm_for_customer_id": null,
+  "geo_score": 100,
+  "stage_score": 90,
+  "customer_score": 100,
+  "composite_score": 95
+}
+```
+
+**Error responses (both endpoints):**
+
+- `400` — invalid JSON, `project.lat`/`project.lon` missing or non-numeric, `branches` empty, malformed branch/customer entry. Body: `{ "error": "<reason>" }`.
+- `401` / `429` — auth failure / rate-limited (middleware, not the route).
+- `405` — anything other than `POST`. Body: `{ "error": "method not allowed" }`.
+- `500` — only on truly unexpected failure inside `scoreProject()`. Body: `{ "error": "<message>" }`.
+
+**Verifier prompt notes:**
+
+- For branch-attribution checks: `SELECT id, lat, lon, coverage_radius_miles FROM pathfinder.branches` first via Supabase MCP, then `POST /api/scoring/branch` with `project.{lat, lon}` and the full branches list. Compare `nearest_branch_id` against `pathfinder.projects.nearest_branch_id`.
+- For composite-score checks: read `pathfinder.branches` and `pathfinder.customers` first, then `POST /api/scoring/score` with `project + branches + customers`. Compare `composite_score` against `pathfinder.projects.score`. Tolerate ±1 (rounding); flag anything beyond as a verification failure.
+- Both endpoints are pure — feel free to retry on transport errors. Do NOT cache responses across runs (the underlying `branches`/`customers` tables can change).
 
 ### 5. Outreach (LAYER 2 — NEW)
 

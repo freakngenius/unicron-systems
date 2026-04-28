@@ -71,6 +71,15 @@ const NEAR_GEO_MILES = 50;     // full marks within this radius
 const NEAR_CUSTOMER_MILES = 10; // full marks for customer adjacency
 const FAR_CUSTOMER_MILES = 50;  // zero customer score beyond this
 
+/**
+ * Tolerance window the Verifier uses when comparing the Ranker's stored
+ * score to a deterministic recomputation. |delta| <= SCORE_TOLERANCE passes
+ * the score-sensibility check; anything outside fails. Lives here so the
+ * Verifier and the Ranker reference one source of truth (referenced by
+ * `prompts/computer-verifier.md` Check 3).
+ */
+export const SCORE_TOLERANCE = 15;
+
 // ---------- Distance ----------
 
 /** Great-circle distance between two lat/lon pairs, in statute miles. */

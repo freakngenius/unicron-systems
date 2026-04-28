@@ -29,6 +29,10 @@ export interface AgentCellData {
   rankedToday?: number;
   /** ingestor: records today (rolling). */
   recordsToday?: number;
+  /** verifier: projects verified in the latest run. */
+  verifiedToday?: number;
+  /** verifier: projects with verifier_pass_count >= 2 (escalated to human). */
+  escalatedCount?: number;
   /** adjacent: humanized next-run label, e.g. 'fri 09:00 utc'. */
   nextRunLabel?: string;
   /** adjacent: targets surfaced last week. */
@@ -184,6 +188,13 @@ function metricsFor(id: AgentName, d: AgentCellData): { label: string; value: st
       { label: 'avg lat', value: ((d.latMs ?? 0) / 1000).toFixed(1) + 's' },
     ];
   }
+  if (id === 'verifier') {
+    return [
+      { label: 'last verify', value: fmtAgo(d.lastCycleSec) },
+      { label: 'verified today', value: d.verifiedToday ?? 0 },
+      { label: 'escalated', value: d.escalatedCount ?? 0 },
+    ];
+  }
   // adjacent
   return [
     { label: 'next run', value: d.nextRunLabel ?? '—' },
@@ -203,7 +214,22 @@ function fmtAgo(sec: number): string {
 // `AgentCellData` shape this component expects. Keeps the call site clean.
 // ────────────────────────────────────────────────────────────────────────
 
-export function deriveCellData(id: AgentName, run: AgentRun | null): AgentCellData {
+/**
+ * Optional extras passed in by the row container — fields that don't live
+ * on `agent_runs` but the cell still needs to render. Kept as a separate
+ * arg so the simple ingestor/ranker call sites stay clean while the
+ * Verifier branch can pull in its escalation count.
+ */
+export interface DeriveCellExtras {
+  /** Verifier-only: count of projects with `verifier_pass_count >= 2`. */
+  escalatedCount?: number;
+}
+
+export function deriveCellData(
+  id: AgentName,
+  run: AgentRun | null,
+  extras?: DeriveCellExtras,
+): AgentCellData {
   if (id === 'adjacent') {
     // Adjacent is always a scheduled cadence; the next-run label is fixed
     // weekly per the prototype. Run state can override to 'running' / 'failed'
@@ -229,6 +255,8 @@ export function deriveCellData(id: AgentName, run: AgentRun | null): AgentCellDa
       recordsThisCycle: 0,
       rankedToday: 0,
       recordsToday: 0,
+      verifiedToday: 0,
+      escalatedCount: extras?.escalatedCount ?? 0,
       latMs: 0,
     };
   }
@@ -253,6 +281,17 @@ export function deriveCellData(id: AgentName, run: AgentRun | null): AgentCellDa
       recordsThisCycle: run.records_new ?? 0,
       recordsToday: run.records_processed ?? 0,
       latMs,
+    };
+  }
+  if (id === 'verifier') {
+    // Verifier processes one project per pass; `records_processed` on the
+    // latest run is "verified in this cycle". Escalations come from the
+    // projects table via the `extras` arg (no `agent_runs` column for it).
+    return {
+      status,
+      lastCycleSec,
+      verifiedToday: run.records_processed ?? 0,
+      escalatedCount: extras?.escalatedCount ?? 0,
     };
   }
   // ranker

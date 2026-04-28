@@ -180,6 +180,32 @@ export function ActivityRail({ open, setOpen }: ActivityRailProps) {
             // Mono-ink agents (Adjacent) get a subtle dim treatment so they
             // still read as a tagged agent, just without a hue claim.
             const prefixColor = ag && ag.tintKey ? tint : PF_TINTS.inkSub;
+            // ringOnly modifier (Verifier): outline ring around mono text —
+            // distinguishes the Generator-Verifier pair from Ranker's solid
+            // lime fill while keeping the same hue family. Drawer is the
+            // light `PF_TINTS.bg` panel, so we use `PF_TINTS.ink` for the
+            // mono text and `PF_TINTS.warm` for the ring.
+            const isRingOnly = ag?.modifier === 'ringOnly';
+            const prefixStyle: React.CSSProperties = isRingOnly
+              ? {
+                  color: PF_TINTS.ink,
+                  fontWeight: 500,
+                  letterSpacing: '0.01em',
+                  border: `1px solid ${PF_TINTS.warm}`,
+                  borderRadius: 3,
+                  padding: '0 4px',
+                  // The bare-color path uses opacity 0.85 to soften prefixes.
+                  // The ring carries the visual weight here, so keep the text
+                  // at full opacity for legibility against the inset border.
+                  display: 'inline-block',
+                  lineHeight: 1.2,
+                }
+              : {
+                  color: prefixColor,
+                  fontWeight: 500,
+                  opacity: 0.85,
+                  letterSpacing: '0.01em',
+                };
             return (
               <div
                 key={e.id}
@@ -192,16 +218,7 @@ export function ActivityRail({ open, setOpen }: ActivityRailProps) {
                 }}
               >
                 <span style={{ color: PF_TINTS.inkDim }}>{fmtClock(e.ts)}</span>
-                <span
-                  style={{
-                    color: prefixColor,
-                    fontWeight: 500,
-                    opacity: 0.85,
-                    letterSpacing: '0.01em',
-                  }}
-                >
-                  computer/{e.agent_name} →
-                </span>
+                <span style={prefixStyle}>computer/{e.agent_name} →</span>
                 <span style={{ color: PF_TINTS.ink }}>{logLineText(e)}</span>
               </div>
             );

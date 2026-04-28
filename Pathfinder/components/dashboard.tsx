@@ -22,8 +22,9 @@ import { AnchoredBranchCard } from './AnchoredBranchCard';
 import { MapLegend } from './MapLegend';
 import { CoordsHUD } from './CoordsHUD';
 import { CrossPollBanner } from './CrossPollBanner';
-import { ActivityRail, AgentStatusRow, useHeaderHeight } from './live';
+import { ActivityRail, AgentStatusRow, useEscalations, useHeaderHeight } from './live';
 import { StatPopover, type StatBucket } from './StatPopover';
+import { EscalationPopover } from './EscalationPopover';
 import { ZoomControl, ZOOM_MIN, ZOOM_MAX, ZOOM_STEP } from './ZoomControl';
 import { PATHFINDER_DARK_STYLE } from '@/lib/map-style';
 import { projectTier } from '@/lib/types-map';
@@ -79,6 +80,8 @@ export function Dashboard({ initialBranches, initialCustomers, initialProjects }
   const [mapZoom, setMapZoom] = React.useState(DEFAULT_ZOOM);
   const [cardHidden, setCardHidden] = React.useState(false);
   const [statBucket, setStatBucket] = React.useState<StatBucket | null>(null);
+  const [escalationOpen, setEscalationOpen] = React.useState(false);
+  const escalations = useEscalations();
 
   const handleSelectBranch = React.useCallback((id: string | null) => {
     setSelectedBranchId(id);
@@ -404,6 +407,9 @@ export function Dashboard({ initialBranches, initialCustomers, initialProjects }
           onRefresh={handleRefresh}
           refreshing={refreshing}
           onStatClick={(bucket) => setStatBucket((prev) => (prev === bucket ? null : bucket))}
+          escalationCount={escalations.length}
+          escalationOpen={escalationOpen}
+          onEscalationClick={() => setEscalationOpen((v) => !v)}
         />
         <AgentStatusRow />
         <BranchDock
@@ -449,6 +455,20 @@ export function Dashboard({ initialBranches, initialCustomers, initialProjects }
             rightOffset={statBucket === 'new' ? 240 : statBucket === 'total' ? 160 : 90}
             topOffset={84}
             onClose={() => setStatBucket(null)}
+            onOpenProject={(p) => setOpenProjectId(p.id)}
+          />
+        )}
+
+        {escalationOpen && (
+          <EscalationPopover
+            branches={initialBranches}
+            // Anchor under the EscalationPill — pill sits left of the four
+            // LiveStat slots (each ~80-100px wide) and the LIVE indicator
+            // (~80px). Right-offset of 380 lands the popover roughly under
+            // the pill cluster without colliding with the LiveStats.
+            rightOffset={380}
+            topOffset={84}
+            onClose={() => setEscalationOpen(false)}
             onOpenProject={(p) => setOpenProjectId(p.id)}
           />
         )}

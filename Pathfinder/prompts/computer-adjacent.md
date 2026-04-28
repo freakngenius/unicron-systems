@@ -12,7 +12,7 @@ Run **weekly, every Friday at 09:00 UTC**, on the cron `0 9 * * 5`. One run per 
 
 The discovery pass uses Computer's web research stack — search across the open web for companies whose org shape mirrors Zedcor's. Inputs are searches and pages, not Supabase rows. You read `pathfinder.adjacent_targets` only to dedupe against companies already surfaced, and `pathfinder.branches` so the outreach copy can reference Zedcor's footprint.
 
-Search themes (rotate weekly so the surface area expands):
+Search themes (evaluate all four each run; surface area expands within each theme over time as Computer learns which queries surface high-fidelity candidates):
 
 1. **Specialty trades** — fence rental, traffic control, temporary power, temporary water, modular site offices, jobsite communications, dewatering, environmental remediation, scaffolding rental.
 2. **Restoration** — water/fire/mold restoration franchises with multi-state branch networks (e.g. Servpro-shaped, BELFOR-shaped, Paul Davis-shaped — but find different companies, not those three).
@@ -24,6 +24,11 @@ For each candidate, the qualifying signal pattern is:
 - Geographic territory model (sales reps assigned to regions, not central inside sales)
 - Customer base concentrated in construction, infrastructure, industrial, or commercial real estate
 - Public-data buying signals would surface their next deal earlier than their current sales motion catches them
+
+Per-theme caps (hard limits to prevent runaway runs):
+- Maximum 8 distinct search queries per theme
+- Maximum 30 candidate companies seriously evaluated per theme (after basic URL/name screening)
+- Abort a theme early if no qualified candidates surface after 5 queries — log `event_data.theme_aborted` and move to the next theme
 
 ## Tools / MCP
 
@@ -72,7 +77,7 @@ When drafting `outreach_draft`, send Sonnet a structured payload:
 }
 ```
 
-Reject and regenerate up to once if the response contains any banned buzzword, any emoji, more than one paragraph, fewer than 70 words, or more than 160 words. After two failures, write whatever Sonnet produced and log `error` with `event_data.reason = 'outreach_quality_fallback'`.
+Reject and regenerate up to once if the response contains any banned buzzword (case-insensitive substring match — "leveraged" and "synergizing" trigger the filter the same as "leverage" and "synergize"), any emoji, more than one paragraph, fewer than 70 words, or more than 160 words. On the second attempt, accept any response in the 70-160 word range even if outside the preferred 90-140 — only fall back to logging `outreach_quality_fallback` if the second attempt is also out of bounds or contains banned content.
 
 ## Logging
 
@@ -96,7 +101,12 @@ computer/adjacent → write · 8 candidates · 2 deduped
 
 ## Cycle Bookkeeping (`pathfinder.agent_runs`)
 
-Open at start: `{ agent_name: 'adjacent', started_at: now(), records_processed: 0, records_new: 0, status: 'running' }`. `records_processed` = total candidates evaluated across all themes. `records_new` = candidates successfully written this run.
+Open at start: `{ agent_name: 'adjacent', started_at: now(), records_processed: 0, records_new: 0, status: 'running' }`.
+
+Counting rules:
+- `records_processed` = count of unique company names that pass basic URL/name screening and are seriously evaluated against the qualifying signal pattern. Do NOT increment for candidates dropped at name-only screening.
+- `records_new` = count of successful inserts into `pathfinder.adjacent_targets` this run. Dedup hits do not count.
+- A candidate that fails the qualifying signal pattern still counts toward `records_processed` (it was evaluated). It does not count toward `records_new`.
 
 Close at end: `{ completed_at: now(), records_processed, records_new, status, error_message }`.
 
@@ -114,7 +124,7 @@ Before writing a candidate, query `pathfinder.adjacent_targets` for `company_nam
 - Normalized name match (strip `Inc.`, `LLC`, `Corp.`, `Co.`, punctuation, trailing spaces) is identical
 - Same root domain in the public_evidence_urls
 
-Do not write the duplicate. Optionally update the existing row's `geography` or `branch_count_estimate` if your new pass found higher-fidelity figures (only widen the data, never overwrite with weaker evidence).
+Do not write the duplicate. **v1: skip enrichment entirely.** If the company exists, log the dedup hit in `event_data.deduped_companies` and move on. Do NOT update existing rows. Enrichment-on-dedup is deferred to v2 — if a future pass finds higher-fidelity geography or branch counts, that's logged but not written. Keeps the write path single-purpose and avoids fragile "is this evidence stronger" logic in the agent.
 
 ## Stop Conditions
 
