@@ -695,20 +695,110 @@ export function useStats(): StatsBundle {
 }
 
 // ────────────────────────────────────────────────────────────────────────
+// 4b. Cost summary — cumulative model-call totals across the lifetime of
+//     the fleet. Read from `/api/cost-summary` once on mount and refreshed
+//     every 60s. Used by ModelRoutingStrip to compute persistent TOTAL
+//     and per-lead cost — the last-hour-only buffer in `useModels()` is
+//     too narrow to give a real total.
+// ────────────────────────────────────────────────────────────────────────
+
+export interface CostSummaryBundle {
+  modelCalls: Record<string, number>;
+  totalCalls: number;
+  totalRanked: number;
+}
+
+const initialCostSummary: CostSummaryBundle = { modelCalls: {}, totalCalls: 0, totalRanked: 0 };
+const costSummaryStore = new Store<CostSummaryBundle>(initialCostSummary);
+let costSummaryPollHandle: ReturnType<typeof setInterval> | null = null;
+let costSummaryRefcount = 0;
+const COST_SUMMARY_POLL_MS = 60_000;
+
+async function fetchCostSummaryOnce(): Promise<void> {
+  try {
+    const res = await fetch(`${API_BASE}/api/cost-summary`, { cache: 'no-store' });
+    if (!res.ok) return;
+    const data = (await res.json()) as Partial<{
+      model_calls: Record<string, number>;
+      total_calls: number;
+      total_ranked: number;
+    }>;
+    costSummaryStore.set({
+      modelCalls: data.model_calls ?? {},
+      totalCalls: data.total_calls ?? 0,
+      totalRanked: data.total_ranked ?? 0,
+    });
+  } catch {
+    // silent — strip falls back to in-memory log buffer
+  }
+}
+
+/** Cumulative model-call counts + total ranked projects. Polls every 60s. */
+export function useCostSummary(): CostSummaryBundle {
+  useEffect(() => {
+    costSummaryRefcount++;
+    if (!costSummaryPollHandle) {
+      void fetchCostSummaryOnce();
+      costSummaryPollHandle = setInterval(fetchCostSummaryOnce, COST_SUMMARY_POLL_MS);
+    }
+    return () => {
+      costSummaryRefcount--;
+      if (costSummaryRefcount === 0 && costSummaryPollHandle) {
+        clearInterval(costSummaryPollHandle);
+        costSummaryPollHandle = null;
+      }
+    };
+  }, []);
+  return useStoreValue(costSummaryStore);
+}
+
+// ────────────────────────────────────────────────────────────────────────
 // 5. Multi-model routing — derived from `agent_log` rows where
 //    event_type='model_route' and model_used is set.
 // ────────────────────────────────────────────────────────────────────────
 
 export interface ModelMeta {
   purpose: string;
+  /** USD cost per call. Conservative averages from observed token usage:
+   *  Haiku ~500 input + 50 output → ~$0.001/call.
+   *  Sonnet ~3K input + 800 output → ~$0.015/call (Ranker rationale +
+   *  Verifier anchor classification share this slot).
+   *  Opus reserved for Briefing → ~$0.05/call (rare).
+   *  Local + legacy gpt-oss kept for historical agent_log rows. */
   costPerCall: number;
 }
 export const MODEL_META: Record<string, ModelMeta> = {
-  'local-geocoder': { purpose: 'branch matching', costPerCall: 0.0 },
+  // Current canonical models (Ranker + Verifier write these).
+  'claude-haiku-4-5': { purpose: 'cheap classify', costPerCall: 0.001 },
+  'claude-sonnet-4-5': { purpose: 'rationale + anchor verify', costPerCall: 0.015 },
+  'claude-opus-4-7': { purpose: 'weekly synthesis', costPerCall: 0.05 },
+  // Legacy aliases — historical agent_log rows wrote these names.
+  'claude-haiku': { purpose: 'cheap classify', costPerCall: 0.001 },
+  'claude-sonnet': { purpose: 'rationale gen', costPerCall: 0.015 },
+  'haiku-3.5': { purpose: 'cheap classify', costPerCall: 0.001 },
+  'sonnet-4.5': { purpose: 'rationale gen', costPerCall: 0.015 },
   'gpt-oss-20b': { purpose: 'stage classify', costPerCall: 0.00056 },
-  'claude-haiku': { purpose: 'entity dedup', costPerCall: 0.0019 },
-  'claude-sonnet': { purpose: 'rationale gen', costPerCall: 0.0054 },
+  'local-geocoder': { purpose: 'branch matching', costPerCall: 0.0 },
 };
+
+/**
+ * Sum a `model_calls` map into a (totalCalls, totalCost) pair using
+ * MODEL_META. Unknown model names contribute 0 cost (so adding a new model
+ * to MODEL_META retroactively prices its historical calls). Exported so
+ * the strip + any other surface compute totals the same way.
+ */
+export function tallyModelCost(
+  modelCalls: Record<string, number>,
+): { totalCalls: number; totalCost: number } {
+  let totalCalls = 0;
+  let totalCost = 0;
+  for (const [name, calls] of Object.entries(modelCalls)) {
+    totalCalls += calls;
+    const meta = MODEL_META[name];
+    if (meta) totalCost += calls * meta.costPerCall;
+  }
+  return { totalCalls, totalCost };
+}
 
 export interface ModelsBundle {
   models: Record<string, number>;

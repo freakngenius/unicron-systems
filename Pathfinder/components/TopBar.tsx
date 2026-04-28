@@ -195,14 +195,18 @@ export function TopBar({
         />
         <div style={{ display: 'flex', flexDirection: 'column', gap: 1, whiteSpace: 'nowrap' }}>
           {/* SVG wordmark (viewBox 138.78×15.86, aspect ~8.75:1). Height
-              18px matches the previous `pf-h2 14px/1.2` rendered text
-              height; width auto preserves aspect ratio (≈ 158px). */}
+              18 / width 158 are integer pixel dimensions matching the
+              SVG's natural aspect (138.78 / 15.86 = 8.75). Pinning both
+              dimensions stops the browser from rendering at fractional
+              pixel sizes — that fractional rounding is what made the
+              wordmark look jaggy at small sizes. */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src="/pathfinder/pathfinder_zedcor.svg"
             alt="Pathfinder · Zedcor"
+            width={158}
             height={18}
-            style={{ display: 'block', height: 18, width: 'auto' }}
+            style={{ display: 'block', width: 158, height: 18 }}
           />
           <div
             className="pf-mono"

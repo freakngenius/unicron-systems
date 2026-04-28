@@ -1,19 +1,22 @@
 'use client';
 
-// ModelRoutingStrip — multi-model routing rollup for the last hour.
-// Reads call counts from `pathfinder.agent_log` rows where
-// `event_type='model_route'` and `model_used` is set.
+// ModelRoutingStrip — multi-model routing rollup.
+//
+// Pulls cumulative model-call counts from `/api/cost-summary` (which
+// aggregates `pathfinder.agent_log` rows with model_used set across the
+// fleet's full history). The TOTAL spent + per-lead cost are persistent —
+// they survive page refreshes, new visitors, and quiet windows where no
+// agent has fired in the last hour. `useModels()` is still used for the
+// last-hour avg-routing-latency chip.
 //
 // Two layouts:
 //   - collapsed: single line  → `model 124 · model 71 · ... · TOTAL · $/lead [expand]`
 //   - expanded:  per-model grid breakdown with footer total + cost per ranked lead.
-//
-// Visual structure stays 1:1 with hifi-live.jsx ModelRoutingStrip.
 
 import React from 'react';
 
 import { hexAlpha, PF_TINTS } from '@/lib/agent-tints';
-import { MODEL_META, useModels } from '@/lib/realtime';
+import { MODEL_META, tallyModelCost, useCostSummary, useModels } from '@/lib/realtime';
 
 export interface ModelRoutingStripProps {
   collapsed: boolean;
@@ -21,19 +24,30 @@ export interface ModelRoutingStripProps {
 }
 
 export function ModelRoutingStrip({ collapsed, onToggle }: ModelRoutingStripProps) {
-  const { models, avgMs, ranked } = useModels();
-  // Rows from MODEL_META, skip zero calls, sort cheapest → most expensive.
-  const rows = Object.entries(MODEL_META)
-    .map(([name, meta]) => {
-      const calls = models[name] || 0;
-      return { name, ...meta, calls, cost: calls * meta.costPerCall };
+  // avgMs is still last-hour (it's a live latency reading, not a total).
+  const { avgMs } = useModels();
+  // Cumulative — counts + total_ranked from /api/cost-summary.
+  const summary = useCostSummary();
+
+  // Build rows from the cumulative model_calls map. Each call is priced
+  // via MODEL_META; rows without a price entry render at $0 but still
+  // contribute to the call count so the user sees what fired.
+  const rows = Object.entries(summary.modelCalls)
+    .map(([name, calls]) => {
+      const meta = MODEL_META[name];
+      return {
+        name,
+        purpose: meta?.purpose ?? 'unmapped model',
+        costPerCall: meta?.costPerCall ?? 0,
+        calls,
+        cost: calls * (meta?.costPerCall ?? 0),
+      };
     })
     .filter((r) => r.calls > 0)
-    .sort((a, b) => a.costPerCall - b.costPerCall);
+    .sort((a, b) => a.costPerCall - b.costPerCall || a.name.localeCompare(b.name));
 
-  const totalCalls = rows.reduce((s, r) => s + r.calls, 0);
-  const totalCost = rows.reduce((s, r) => s + r.cost, 0);
-  const cpl = ranked > 0 ? totalCost / ranked : 0;
+  const { totalCalls, totalCost } = tallyModelCost(summary.modelCalls);
+  const cpl = summary.totalRanked > 0 ? totalCost / summary.totalRanked : 0;
   const fmtCost = (n: number): string => (n === 0 ? '$0.00' : `$${n.toFixed(n < 0.01 ? 4 : 2)}`);
 
   const Chev = (
@@ -88,7 +102,7 @@ export function ModelRoutingStrip({ collapsed, onToggle }: ModelRoutingStripProp
               lineHeight: 1,
             }}
           >
-            perplexity agents · awaiting routing telemetry
+            perplexity agents · awaiting first model_route event
           </span>
         ) : (
           rows.map((r) => (
@@ -161,7 +175,7 @@ export function ModelRoutingStrip({ collapsed, onToggle }: ModelRoutingStripProp
             flexShrink: 0,
           }}
         >
-          perplexity agents · last hour
+          perplexity agents · cumulative
         </span>
         <span style={{ flex: 1 }} />
         <span
@@ -191,7 +205,7 @@ export function ModelRoutingStrip({ collapsed, onToggle }: ModelRoutingStripProp
             padding: '6px 0',
           }}
         >
-          no model_route events in the last hour
+          awaiting first model_route event
         </div>
       ) : (
         rows.map((r) => (
