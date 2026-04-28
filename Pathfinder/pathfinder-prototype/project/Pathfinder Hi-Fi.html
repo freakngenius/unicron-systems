@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Pathfinder · Field Intel</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  html, body { margin: 0; padding: 0; height: 100%; background: #ffffff; overflow: hidden; }
+  #root { height: 100%; }
+  * { box-sizing: border-box; }
+</style>
+</head>
+<body>
+<div id="root" class="pf-root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script type="text/babel" src="tweaks-panel.jsx"></script>
+<script type="text/babel" src="hifi-tokens.jsx"></script>
+<script type="text/babel" src="hifi-map.jsx"></script>
+<script type="text/babel" src="hifi-live.jsx"></script>
+<script type="text/babel" src="hifi-shell.jsx"></script>
+
+<script type="text/babel">
+const { BRANCHES, CUSTOMERS, PROJECTS } = window.PFData;
+const { TopBar, BranchDock, ProjectList, AnchoredBranchCard,
+        MapLegend, CoordsHUD, ProjectModal, CrossPollBanner } = window.PFShell;
+
+// ─── Theme presets — swap palette wholesale ────────────────────────
+const THEMES = {
+  'Mono (default)': {
+    bg: '#ffffff', bgAlt: '#f6f7f9', ink: '#0a0a0a', inkSub: '#3a3f46',
+    inkDim: '#6b7280', inkFaint: '#9ca3af',
+    mapBg: '#0e1116', mapLand: '#1a1f26', mapStroke: 'rgba(255,255,255,0.10)',
+    mapGrid: 'rgba(255,255,255,0.04)', mapInk: '#e6e9ef', mapInkDim: '#9aa3b2',
+    hi: '#22d3ee', warm: '#a3e635',
+  },
+  'Inverse (dark chrome)': {
+    bg: '#0e1116', bgAlt: '#15191f', ink: '#f5f6f8', inkSub: '#c1c6cf',
+    inkDim: '#8b919c', inkFaint: '#5e6470',
+    mapBg: '#040608', mapLand: '#0f141a', mapStroke: 'rgba(255,255,255,0.08)',
+    mapGrid: 'rgba(255,255,255,0.03)', mapInk: '#e6e9ef', mapInkDim: '#7c8696',
+    hi: '#22d3ee', warm: '#a3e635',
+  },
+  'Plotter (paper)': {
+    bg: '#fafaf7', bgAlt: '#f0efea', ink: '#1a1816', inkSub: '#3f3a35',
+    inkDim: '#6b6258', inkFaint: '#a39988',
+    mapBg: '#ebe7dc', mapLand: '#dcd6c5', mapStroke: 'rgba(26,24,22,0.18)',
+    mapGrid: 'rgba(26,24,22,0.06)', mapInk: '#1a1816', mapInkDim: '#6b6258',
+    hi: '#0066cc', warm: '#cc4400',
+  },
+  'NORAD (radar)': {
+    bg: '#050a07', bgAlt: '#0a120d', ink: '#c9f5d6', inkSub: '#7fc996',
+    inkDim: '#5a8a6c', inkFaint: '#3d5e49',
+    mapBg: '#020604', mapLand: '#081208', mapStroke: 'rgba(127,201,150,0.18)',
+    mapGrid: 'rgba(127,201,150,0.07)', mapInk: '#c9f5d6', mapInkDim: '#5a8a6c',
+    hi: '#fbbf24', warm: '#ec4899',
+  },
+  'Newsprint': {
+    bg: '#f4f1ea', bgAlt: '#e8e4d8', ink: '#1c1a16', inkSub: '#3f3a30',
+    inkDim: '#6e665a', inkFaint: '#a89e8d',
+    mapBg: '#1c1a16', mapLand: '#2b2820', mapStroke: 'rgba(244,241,234,0.10)',
+    mapGrid: 'rgba(244,241,234,0.04)', mapInk: '#f4f1ea', mapInkDim: '#a89e8d',
+    hi: '#d4a017', warm: '#7a9b3e',
+  },
+  'Cobalt': {
+    bg: '#ffffff', bgAlt: '#eef3fb', ink: '#0a0e1a', inkSub: '#2c3548',
+    inkDim: '#5a6478', inkFaint: '#9ba5bb',
+    mapBg: '#0a1330', mapLand: '#152045', mapStroke: 'rgba(255,255,255,0.10)',
+    mapGrid: 'rgba(255,255,255,0.04)', mapInk: '#e6ecf8', mapInkDim: '#8b9bbf',
+    hi: '#fb923c', warm: '#f472b6',
+  },
+};
+
+const TYPE_PRESETS = {
+  'Inter + JetBrains': {
+    sans: '"Inter", system-ui, sans-serif',
+    mono: '"JetBrains Mono", ui-monospace, monospace',
+  },
+  'Space Grotesk + IBM Plex': {
+    sans: '"Space Grotesk", system-ui, sans-serif',
+    mono: '"IBM Plex Mono", ui-monospace, monospace',
+  },
+  'IBM Plex Sans + Mono': {
+    sans: '"IBM Plex Sans", system-ui, sans-serif',
+    mono: '"IBM Plex Mono", ui-monospace, monospace',
+  },
+  'System (native)': {
+    sans: 'system-ui, -apple-system, sans-serif',
+    mono: 'ui-monospace, "SF Mono", monospace',
+  },
+};
+
+const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+  "theme": "Mono (default)",
+  "type": "Inter + JetBrains",
+  "showGrid": true,
+  "gridDensity": "normal",
+  "branchMarker": "circle",
+  "projectMarker": "plus",
+  "radiusStyle": "glow",
+  "radiusSize": 90,
+  "panelStyle": "solid",
+  "panelRadius": 5,
+  "shadow": "soft",
+  "leftPanelWidth": 250,
+  "rightPanelWidth": 380,
+  "density": "regular",
+  "topBarHeight": 52,
+  "showLegend": true,
+  "showCoordsHud": true,
+  "showAnchoredCard": true,
+  "anchorTail": "line",
+  "modalSize": "medium",
+  "modalScrim": "blur",
+  "crossPollDim": 0.25,
+  "crossPollLineStyle": "solid",
+  "showCustomerHalos": true,
+  "scoreChipStyle": "outlined",
+  "stageBadgeStyle": "outlined",
+  "showLiveIndicator": true,
+  "showFooter": true
+}/*EDITMODE-END*/;
+
+function applyTheme(t) {
+  const theme = THEMES[t.theme] || THEMES['Mono (default)'];
+  const type = TYPE_PRESETS[t.type] || TYPE_PRESETS['Inter + JetBrains'];
+  Object.assign(window.PF, theme, type, {
+    hiSoft: hexAlpha(theme.hi, 0.14),
+    hiRing: hexAlpha(theme.hi, 0.45),
+    warmSoft: hexAlpha(theme.warm, 0.16),
+    warmRing: hexAlpha(theme.warm, 0.45),
+    ruleSoft: hexAlpha(theme.ink, 0.12),
+    ruleHair: hexAlpha(theme.ink, 0.06),
+    rule: theme.ink,
+    shadow: shadowSet(t.shadow, theme.ink),
+    r: { sm: t.panelRadius < 4 ? 2 : 3, md: t.panelRadius, lg: t.panelRadius + 3 },
+  });
+  // Re-inject base styles
+  const old = document.getElementById('pf-base'); if (old) old.remove();
+  const s = document.createElement('style'); s.id = 'pf-base';
+  s.textContent = `
+    .pf-root { font-family: ${PF.sans}; color: ${PF.ink}; -webkit-font-smoothing: antialiased; background: ${PF.bg}; }
+    body { background: ${PF.bg}; }
+    .pf-mono { font-family: ${PF.mono}; font-variant-numeric: tabular-nums; }
+    .pf-label { font: 500 10px/1.2 ${PF.mono}; letter-spacing: 0.08em; text-transform: uppercase; color: ${PF.inkDim}; }
+    .pf-h1 { font: 600 22px/1.15 ${PF.sans}; letter-spacing: -0.01em; color: ${PF.ink}; }
+    .pf-h2 { font: 600 14px/1.2 ${PF.sans}; letter-spacing: -0.005em; color: ${PF.ink}; }
+    .pf-body { font: 400 13px/1.45 ${PF.sans}; color: ${PF.ink}; }
+    .pf-meta { font: 500 11px/1.3 ${PF.mono}; color: ${PF.inkDim}; }
+    .pf-num { font: 600 14px/1 ${PF.mono}; color: ${PF.ink}; font-variant-numeric: tabular-nums; }
+    .pf-btn { background: ${PF.ink}; color: ${PF.bg}; border: none; padding: 8px 14px; font: 500 12px/1 ${PF.sans}; cursor: pointer; border-radius: ${PF.r.sm}px; }
+    .pf-btn-ghost { background: transparent; color: ${PF.ink}; border: 1px solid ${PF.ruleSoft}; padding: 7px 13px; font: 500 12px/1 ${PF.sans}; cursor: pointer; border-radius: ${PF.r.sm}px; }
+    .pf-pill { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; border: 1px solid ${PF.ruleSoft}; background: ${PF.bg}; color: ${PF.ink}; font: 500 10.5px/1 ${PF.mono}; letter-spacing: 0.05em; text-transform: uppercase; border-radius: ${PF.r.sm}px; cursor: pointer; }
+    .pf-pill-active { background: ${PF.ink}; color: ${PF.bg}; border-color: ${PF.ink}; }
+    .pf-pill-hi { background: ${PF.hiSoft}; border-color: ${PF.hi}; color: ${PF.ink}; }
+    .pf-pill-warm { background: ${PF.warmSoft}; border-color: ${PF.warm}; color: ${PF.ink}; }
+    .pf-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+    .pf-scrollbar::-webkit-scrollbar-thumb { background: ${PF.ruleSoft}; border-radius: 3px; }
+  `;
+  document.head.appendChild(s);
+}
+
+function hexAlpha(hex, a) {
+  const m = hex.match(/^#([0-9a-f]{6})$/i);
+  if (!m) return hex;
+  const n = parseInt(m[1], 16);
+  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${a})`;
+}
+
+function shadowSet(kind, ink) {
+  const a = (x) => hexAlpha(ink, x);
+  if (kind === 'none') return { sm: 'none', md: 'none', lg: 'none' };
+  if (kind === 'hard') return {
+    sm: `2px 2px 0 ${a(0.18)}`,
+    md: `4px 4px 0 ${a(0.18)}`,
+    lg: `8px 8px 0 ${a(0.22)}`,
+  };
+  if (kind === 'crisp') return {
+    sm: `0 0 0 1px ${a(0.18)}`,
+    md: `0 1px 0 ${a(0.10)}, 0 0 0 1px ${a(0.16)}`,
+    lg: `0 4px 0 ${a(0.08)}, 0 0 0 1px ${a(0.20)}`,
+  };
+  return { // soft
+    sm: `0 1px 2px ${a(0.06)}, 0 0 0 1px ${a(0.06)}`,
+    md: `0 4px 12px ${a(0.08)}, 0 0 0 1px ${a(0.06)}`,
+    lg: `0 12px 32px ${a(0.16)}, 0 0 0 1px ${a(0.08)}`,
+  };
+}
+
+function App() {
+  const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
+  const [selectedBranch, setSelectedBranch] = React.useState('hou-002');
+  const [source, setSource] = React.useState('all');
+  const [crossPoll, setCrossPoll] = React.useState(false);
+  const [openProject, setOpenProject] = React.useState(null);
+  const [branchMin, setBranchMin] = React.useState(false);
+  const [listMin, setListMin] = React.useState(false);
+  const [activityOpen, setActivityOpen] = React.useState(false);
+
+  React.useEffect(() => { window.PFLive.startSim(); }, []);
+  const newPins = window.PFLive.useNewPins();
+
+  // Re-apply theme on tweak change. Force a re-render via a counter.
+  const [themeRev, setThemeRev] = React.useState(0);
+  React.useEffect(() => {
+    applyTheme(t);
+    setThemeRev(r => r + 1);
+  }, [t.theme, t.type, t.shadow, t.panelRadius]);
+
+  const branch = BRANCHES.find(b => b.id === selectedBranch);
+
+  const filtered = React.useMemo(() => {
+    if (crossPoll) return PROJECTS.filter(p => p.warmFor);
+    let r = PROJECTS.filter(p => p.branch === selectedBranch);
+    if (source !== 'all') {
+      const map = { usa: 'usaspending', sam: 'sam.gov', news: 'news', harris: 'harris' };
+      r = r.filter(p => p.source === map[source]);
+    }
+    return r;
+  }, [selectedBranch, source, crossPoll]);
+
+  const containerRef = React.useRef(null);
+  const [mapDims, setMapDims] = React.useState({ w: 1200, h: 800 });
+  React.useEffect(() => {
+    const update = () => {
+      if (!containerRef.current) return;
+      const r = containerRef.current.getBoundingClientRect();
+      setMapDims({ w: r.width, h: r.height });
+    };
+    update();
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
+  }, []);
+
+  const toPx = (sx, sy) => {
+    const vbW = 900, vbH = 540;
+    const scale = Math.max(mapDims.w / vbW, mapDims.h / vbH);
+    const sw = vbW * scale, sh = vbH * scale;
+    const offsetX = (mapDims.w - sw) / 2;
+    const offsetY = (mapDims.h - sh) / 2;
+    return { x: offsetX + sx * scale, y: offsetY + sy * scale };
+  };
+
+  const stats = { new: '247', total: '3,402', ranked: '71', err: '0' };
+
+  const warmLines = React.useMemo(() => {
+    return PROJECTS.filter(p => p.warmFor).map(p => {
+      const c = CUSTOMERS.find(c => c.id === p.warmFor);
+      return c ? { from: c, to: p } : null;
+    }).filter(Boolean);
+  }, []);
+
+  // Derived render styles based on tweaks
+  const customMarker = (b, selected, onClick) => {
+    const sz = t.branchMarker === 'large' ? 14 : (t.branchMarker === 'pin' ? 12 : 10);
+    if (t.branchMarker === 'pin') {
+      return (
+        <g key={b.id} style={{ cursor: 'pointer' }} onClick={onClick}>
+          <path d={`M ${b.x} ${b.y - 12} C ${b.x - 7} ${b.y - 12}, ${b.x - 7} ${b.y - 2}, ${b.x} ${b.y + 2} C ${b.x + 7} ${b.y - 2}, ${b.x + 7} ${b.y - 12}, ${b.x} ${b.y - 12} Z`}
+                fill={PF.mapInk} stroke={PF.mapBg} strokeWidth="1" />
+          <circle cx={b.x} cy={b.y - 7} r="2.5" fill={PF.mapBg} />
+          <text x={b.x + 10} y={b.y + 3} fill={PF.mapInk} fontSize="9" fontWeight="600" fontFamily={PF.mono}>{b.code}</text>
+        </g>
+      );
+    }
+    if (t.branchMarker === 'circle') {
+      return (
+        <g key={b.id} style={{ cursor: 'pointer' }} onClick={onClick}>
+          {selected && <circle cx={b.x} cy={b.y} r={sz} fill="none" stroke={PF.mapInk} strokeWidth="0.5" opacity="0.5" />}
+          <circle cx={b.x} cy={b.y} r="5" fill={PF.mapInk} stroke={PF.mapBg} strokeWidth="2" />
+          <circle cx={b.x} cy={b.y} r="6" fill="none" stroke={PF.mapInk} strokeWidth="0.5" />
+          <text x={b.x + 10} y={b.y + 3} fill={PF.mapInk} fontSize="9" fontWeight="600" fontFamily={PF.mono}>{b.code}</text>
+        </g>
+      );
+    }
+    if (t.branchMarker === 'cross') {
+      return (
+        <g key={b.id} style={{ cursor: 'pointer' }} onClick={onClick}>
+          <line x1={b.x - 6} y1={b.y} x2={b.x + 6} y2={b.y} stroke={PF.mapInk} strokeWidth="1.5" />
+          <line x1={b.x} y1={b.y - 6} x2={b.x} y2={b.y + 6} stroke={PF.mapInk} strokeWidth="1.5" />
+          <circle cx={b.x} cy={b.y} r="2" fill={PF.mapInk} />
+          <text x={b.x + 10} y={b.y + 3} fill={PF.mapInk} fontSize="9" fontWeight="600" fontFamily={PF.mono}>{b.code}</text>
+        </g>
+      );
+    }
+    // square (default / large)
+    return (
+      <g key={b.id} style={{ cursor: 'pointer' }} onClick={onClick}>
+        {selected && <circle cx={b.x} cy={b.y} r={sz + 4} fill="none" stroke={PF.mapInk} strokeWidth="0.5" opacity="0.5" />}
+        <rect x={b.x - sz/2} y={b.y - sz/2} width={sz} height={sz} fill={PF.mapInk}
+              stroke={PF.mapBg} strokeWidth="2" />
+        <rect x={b.x - sz/2 - 1} y={b.y - sz/2 - 1} width={sz + 2} height={sz + 2}
+              fill="none" stroke={PF.mapInk} strokeWidth="0.5" />
+        <text x={b.x + sz/2 + 5} y={b.y + 3} fill={PF.mapInk} fontSize="9"
+              fontWeight="600" fontFamily={PF.mono}>{b.code}</text>
+      </g>
+    );
+  };
+
+  const customProject = (p, onClick) => {
+    const r = p.hi ? 4.5 : 3.2;
+    if (t.projectMarker === 'ring') {
+      return (
+        <g key={p.id} style={{ cursor: 'pointer' }} onClick={onClick}>
+          {p.hi && <circle cx={p.x} cy={p.y} r={r + 4} fill="none" stroke={PF.hi} strokeWidth="0.5" opacity="0.5" />}
+          <circle cx={p.x} cy={p.y} r={r + 1} fill="none" stroke={p.hi ? PF.hi : PF.mapInkDim} strokeWidth="1.2" />
+          <circle cx={p.x} cy={p.y} r="1" fill={p.hi ? PF.hi : PF.mapInkDim} />
+        </g>
+      );
+    }
+    if (t.projectMarker === 'plus') {
+      const c = p.hi ? PF.hi : PF.mapInkDim;
+      return (
+        <g key={p.id} style={{ cursor: 'pointer' }} onClick={onClick}>
+          <line x1={p.x - 4} y1={p.y} x2={p.x + 4} y2={p.y} stroke={c} strokeWidth="1.2" />
+          <line x1={p.x} y1={p.y - 4} x2={p.x} y2={p.y + 4} stroke={c} strokeWidth="1.2" />
+        </g>
+      );
+    }
+    if (t.projectMarker === 'square') {
+      return (
+        <g key={p.id} style={{ cursor: 'pointer' }} onClick={onClick}>
+          <rect x={p.x - r} y={p.y - r} width={r*2} height={r*2}
+                fill={p.hi ? PF.hi : PF.mapInkDim} />
+        </g>
+      );
+    }
+    // dot (default)
+    return (
+      <g key={p.id} style={{ cursor: 'pointer' }} onClick={onClick}>
+        {p.hi && <circle cx={p.x} cy={p.y} r={r + 4} fill="none" stroke={PF.hi} strokeWidth="0.5" opacity="0.5" />}
+        <circle cx={p.x} cy={p.y} r={r} fill={p.hi ? PF.hi : PF.mapInkDim} />
+      </g>
+    );
+  };
+
+  const customRadius = (b) => {
+    const r = t.radiusSize;
+    if (t.radiusStyle === 'solid') {
+      return (<>
+        <circle cx={b.x} cy={b.y} r={r} fill={PF.hi} opacity="0.10" />
+        <circle cx={b.x} cy={b.y} r={r} fill="none" stroke={PF.hi} strokeWidth="1" opacity="0.7" />
+      </>);
+    }
+    if (t.radiusStyle === 'glow') {
+      return (<>
+        <defs>
+          <radialGradient id="rad-glow" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor={PF.hi} stopOpacity="0.18" />
+            <stop offset="100%" stopColor={PF.hi} stopOpacity="0" />
+          </radialGradient>
+        </defs>
+        <circle cx={b.x} cy={b.y} r={r} fill="url(#rad-glow)" />
+        <circle cx={b.x} cy={b.y} r={r} fill="none" stroke={PF.hi} strokeWidth="0.5" opacity="0.5" />
+      </>);
+    }
+    if (t.radiusStyle === 'rings') {
+      return (<>
+        <circle cx={b.x} cy={b.y} r={r * 0.4} fill="none" stroke={PF.hi} strokeWidth="0.5" opacity="0.5" />
+        <circle cx={b.x} cy={b.y} r={r * 0.7} fill="none" stroke={PF.hi} strokeWidth="0.5" opacity="0.4" />
+        <circle cx={b.x} cy={b.y} r={r}        fill="none" stroke={PF.hi} strokeWidth="0.6" opacity="0.7" />
+      </>);
+    }
+    if (t.radiusStyle === 'none') return null;
+    // dashed (default)
+    return (<>
+      <circle cx={b.x} cy={b.y} r={r} fill={PF.hi} opacity="0.06" />
+      <circle cx={b.x} cy={b.y} r={r} fill="none" stroke={PF.hi} strokeWidth="0.6" strokeDasharray="2,3" opacity="0.7" />
+    </>);
+  };
+
+  // Panel chrome style override (CSS in JS)
+  const panelStyle = (() => {
+    if (t.panelStyle === 'glass') return {
+      background: hexAlpha(PF.bg, 0.78),
+      backdropFilter: 'blur(20px) saturate(160%)',
+      WebkitBackdropFilter: 'blur(20px) saturate(160%)',
+      border: `1px solid ${hexAlpha(PF.ink, 0.10)}`,
+    };
+    if (t.panelStyle === 'outlined') return {
+      background: PF.bg, border: `1.5px solid ${PF.ink}`,
+    };
+    if (t.panelStyle === 'flat') return {
+      background: PF.bgAlt, border: `1px solid ${PF.ruleSoft}`,
+    };
+    return { background: PF.bg, border: `1px solid ${PF.ruleSoft}` }; // solid
+  })();
+
+  // Override panel CSS via inline styles by passing through
+  // (our Shell components use PF.bg directly; we mutate PF for the rest)
+  const _origBg = PF.bg;
+
+  return (
+    <div ref={containerRef} key={themeRev} style={{
+      position: 'fixed', inset: 0, background: PF.mapBg,
+    }}>
+      <HiFiMap width={mapDims.w} height={mapDims.h} showGrid={t.showGrid}>
+        <g opacity={crossPoll ? t.crossPollDim : 1}>
+          {!crossPoll && customRadius(branch)}
+          {PROJECTS.map(p => customProject(p, () => setOpenProject(p)))}
+          {BRANCHES.map(b => customMarker(b, !crossPoll && b.id === selectedBranch, () => setSelectedBranch(b.id)))}
+          {[...newPins].map(id => {
+            const p = PROJECTS.find(p => p.id === id); if (!p) return null;
+            return <window.PFLive.SonarPing key={'sp-'+id} x={p.x} y={p.y} color={p.hi ? PF.hi : PF.mapInk} />;
+          })}
+        </g>
+        {crossPoll && (
+          <g>
+            {t.showCustomerHalos && CUSTOMERS.map(c => (
+              <circle key={'h'+c.id} cx={c.x} cy={c.y} r="14" fill="none"
+                      stroke={PF.warm} strokeWidth="0.5" strokeDasharray="1,2" opacity="0.6" />
+            ))}
+            {warmLines.map((l, i) => (
+              <line key={i} x1={l.from.x} y1={l.from.y} x2={l.to.x} y2={l.to.y}
+                    stroke={PF.warm}
+                    strokeWidth={t.crossPollLineStyle === 'thick' ? '1.5' : '0.8'}
+                    strokeDasharray={t.crossPollLineStyle === 'solid' ? null : '3,3'} />
+            ))}
+            {CUSTOMERS.map(c => <CustomerMarker key={c.id} c={c} warm />)}
+            {warmLines.map((l, i) => (
+              <WarmPin key={i} x={l.to.x} y={l.to.y} label={`WI-${i+1}`}
+                       onClick={() => setOpenProject(l.to)} />
+            ))}
+            {BRANCHES.map(b => (
+              <g key={b.id} opacity="0.6">
+                {customMarker(b, false, () => {})}
+              </g>
+            ))}
+          </g>
+        )}
+      </HiFiMap>
+
+      <TopBar source={source} setSource={setSource}
+              crossPoll={crossPoll} setCrossPoll={setCrossPoll}
+              stats={stats} />
+      <window.PFLive.AgentStatusRow />
+      <BranchDock selected={selectedBranch} setSelected={setSelectedBranch}
+                  minimized={branchMin} setMinimized={setBranchMin} />
+      <ProjectList branchId={selectedBranch} projects={filtered}
+                   onOpen={setOpenProject} crossPoll={crossPoll}
+                   minimized={listMin} setMinimized={setListMin} />
+
+      {!crossPoll && t.showAnchoredCard && (
+        <AnchoredBranchCard branch={branch}
+          anchorPx={toPx(branch.x, branch.y)} mapDims={mapDims} />
+      )}
+      {crossPoll && <CrossPollBanner count={warmLines.length} />}
+      {t.showLegend && <MapLegend crossPoll={crossPoll} />}
+      {t.showCoordsHud && <CoordsHUD branch={branch} crossPoll={crossPoll} />}
+
+      {openProject && (
+        <ProjectModal p={openProject} onClose={() => setOpenProject(null)} />
+      )}
+
+      <window.PFLive.ActivityRail open={activityOpen} setOpen={setActivityOpen} />
+
+      <TweaksPanel>
+        <TweakSection label="Theme" />
+        <TweakSelect label="Color theme" value={t.theme}
+                     options={Object.keys(THEMES)}
+                     onChange={(v) => setTweak('theme', v)} />
+        <TweakSelect label="Type pairing" value={t.type}
+                     options={Object.keys(TYPE_PRESETS)}
+                     onChange={(v) => setTweak('type', v)} />
+
+        <TweakSection label="Map" />
+        <TweakToggle label="Show grid" value={t.showGrid}
+                     onChange={(v) => setTweak('showGrid', v)} />
+        <TweakRadio label="Branch marker" value={t.branchMarker}
+                    options={['square','circle','pin','cross','large']}
+                    onChange={(v) => setTweak('branchMarker', v)} />
+        <TweakRadio label="Project marker" value={t.projectMarker}
+                    options={['dot','ring','plus','square']}
+                    onChange={(v) => setTweak('projectMarker', v)} />
+        <TweakRadio label="Coverage radius" value={t.radiusStyle}
+                    options={['dashed','solid','glow','rings','none']}
+                    onChange={(v) => setTweak('radiusStyle', v)} />
+        <TweakSlider label="Radius size" value={t.radiusSize} min={40} max={150} step={5} unit="u"
+                     onChange={(v) => setTweak('radiusSize', v)} />
+
+        <TweakSection label="Panels" />
+        <TweakRadio label="Panel style" value={t.panelStyle}
+                    options={['solid','glass','outlined','flat']}
+                    onChange={(v) => setTweak('panelStyle', v)} />
+        <TweakSlider label="Panel radius" value={t.panelRadius} min={0} max={16} step={1} unit="px"
+                     onChange={(v) => setTweak('panelRadius', v)} />
+        <TweakRadio label="Shadow" value={t.shadow}
+                    options={['soft','crisp','hard','none']}
+                    onChange={(v) => setTweak('shadow', v)} />
+        <TweakSlider label="Left panel width" value={t.leftPanelWidth} min={180} max={320} step={10} unit="px"
+                     onChange={(v) => setTweak('leftPanelWidth', v)} />
+        <TweakSlider label="Right panel width" value={t.rightPanelWidth} min={300} max={500} step={10} unit="px"
+                     onChange={(v) => setTweak('rightPanelWidth', v)} />
+
+        <TweakSection label="Chrome" />
+        <TweakToggle label="Anchored branch card" value={t.showAnchoredCard}
+                     onChange={(v) => setTweak('showAnchoredCard', v)} />
+        <TweakToggle label="Map legend" value={t.showLegend}
+                     onChange={(v) => setTweak('showLegend', v)} />
+        <TweakToggle label="Coords HUD" value={t.showCoordsHud}
+                     onChange={(v) => setTweak('showCoordsHud', v)} />
+
+        <TweakSection label="Cross-pollination" />
+        <TweakSlider label="Background dim" value={t.crossPollDim} min={0.05} max={0.6} step={0.05}
+                     onChange={(v) => setTweak('crossPollDim', v)} />
+        <TweakRadio label="Link line" value={t.crossPollLineStyle}
+                    options={['dashed','solid','thick']}
+                    onChange={(v) => setTweak('crossPollLineStyle', v)} />
+        <TweakToggle label="Customer halos" value={t.showCustomerHalos}
+                     onChange={(v) => setTweak('showCustomerHalos', v)} />
+
+        <TweakSection label="Demo · Click through" />
+        <TweakButton label="◉ Open project modal"
+                     onClick={() => setOpenProject(PROJECTS[0])} />
+        <TweakButton label={crossPoll ? "× Disable cross-poll" : "◇ Enable cross-poll"}
+                     onClick={() => setCrossPoll(c => !c)} />
+        <TweakSelect label="Selected branch" value={selectedBranch}
+                     options={BRANCHES.map(b => ({ value: b.id, label: b.name }))}
+                     onChange={(v) => setSelectedBranch(v)} />
+        <TweakSelect label="Source filter" value={source}
+                     options={[
+                       { value: 'all', label: 'All sources' },
+                       { value: 'usa', label: 'USAspending' },
+                       { value: 'sam', label: 'SAM.gov' },
+                       { value: 'news', label: 'Google News' },
+                       { value: 'harris', label: 'Harris Co.' },
+                     ]}
+                     onChange={(v) => setSource(v)} />
+        <TweakToggle label="Minimize branches" value={branchMin}
+                     onChange={(v) => setBranchMin(v)} />
+        <TweakToggle label="Minimize project list" value={listMin}
+                     onChange={(v) => setListMin(v)} />
+      </TweaksPanel>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>

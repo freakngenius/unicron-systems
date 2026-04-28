@@ -1,0 +1,53 @@
+{
+  "extends": "next/core-web-vitals",
+  "ignorePatterns": ["pathfinder-prototype/**", "node_modules/**", ".next/**"],
+  "overrides": [
+    {
+      "files": ["lib/scoring.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "@supabase/*",
+                  "@supabase/**",
+                  "@anthropic-ai/*",
+                  "@anthropic-ai/**",
+                  "next",
+                  "next/*",
+                  "next/**",
+                  "node:*",
+                  "fs",
+                  "fs/*",
+                  "http",
+                  "https",
+                  "stream",
+                  "crypto",
+                  "@/lib/supabase",
+                  "@/lib/supabase/*",
+                  "@/lib/claude",
+                  "@/lib/claude/*",
+                  "@/lib/anthropic",
+                  "@/lib/anthropic/*",
+                  "@/lib/realtime",
+                  "@/lib/realtime/*",
+                  "../lib/supabase",
+                  "../lib/claude",
+                  "../lib/anthropic",
+                  "../lib/realtime",
+                  "./supabase",
+                  "./claude",
+                  "./anthropic",
+                  "./realtime"
+                ],
+                "message": "lib/scoring.ts must stay pure — no cloud, no Node-only APIs. Phase-2 transplants this onto Zedcor's L4 GPUs."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

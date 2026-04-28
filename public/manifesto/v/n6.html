@@ -1,0 +1,768 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script>(function(){var t=sessionStorage.getItem(String.fromCharCode(95,95,117,120,98,95,116,107));if(t!=="8c973a4a158f95dafae1906467f968e060df6d28989ac304de4d0ab3c914d03e"){window.location.replace("/manifesto")}})();</script>
+
+<meta charset="UTF-8">
+<link rel="icon" type="image/svg+xml" href="/manifesto/favicon.svg">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Unicron Systems — Patterns in Practice</title>
+<meta name="description" content="The five living-systems coordination primitives, rebuilt as real, buildable prototypes. Data, tools, process, build time.">
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --bg-2: #12121a;
+    --bg-3: #171720;
+    --ink: #e8e6de;
+    --ink-2: #9a9689;
+    --ink-3: #5c5a52;
+    --line: #2a2a32;
+    --accent: #9fd4a1;       /* frontier green */
+    --accent-2: #d4c87a;     /* amber */
+    --accent-3: #b5d4e8;     /* slate-blue */
+    --accent-4: #c4a5d4;     /* violet */
+    --accent-5: #d4a592;     /* coral */
+    --serif: "Iowan Old Style", "Palatino", "Palatino Linotype", Georgia, serif;
+    --sans: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+    --mono: "JetBrains Mono", "SF Mono", Menlo, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { background: var(--bg); color: var(--ink); font-family: var(--sans); -webkit-font-smoothing: antialiased; }
+
+  /* ---- Top Nav ---- */
+  .topnav { position: sticky; top: 0; z-index: 50; background: rgba(10,10,15,0.92); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border-bottom: 1px solid var(--line); padding: 14px 40px; display: flex; align-items: center; justify-content: space-between; }
+  .topnav-brand { font-family: var(--mono); font-size: 11px; letter-spacing: 0.25em; color: var(--ink-2); text-transform: uppercase; text-decoration: none; }
+  .topnav-brand em { font-style: normal; color: var(--ink-3); }
+  .topnav-brand:hover { color: var(--ink); }
+  .topnav-links { display: flex; gap: 22px; }
+  .topnav-links a { font-family: var(--mono); font-size: 11px; letter-spacing: 0.15em; text-transform: uppercase; text-decoration: none; color: var(--ink-3); padding: 4px 0; border-bottom: 1px solid transparent; transition: color 0.15s, border-color 0.15s; }
+  .topnav-links a:hover { color: var(--ink); }
+  .topnav-links a.active { color: var(--accent-5); border-bottom-color: var(--accent-5); }
+  @media (max-width: 1200px) { .topnav { flex-direction: column; gap: 10px; padding: 14px 20px; } .topnav-links { gap: 14px; flex-wrap: wrap; justify-content: center; } }
+
+  body { padding: 80px 40px 120px; }
+  .frame { max-width: 1240px; margin: 0 auto; }
+
+  /* ---- Hero ---- */
+  .hero { padding: 40px 0 64px; border-bottom: 1px solid var(--line); max-width: 920px; }
+  .hero-eyebrow { font-family: var(--mono); font-size: 11px; letter-spacing: 0.25em; color: var(--ink-3); text-transform: uppercase; margin-bottom: 24px; }
+  .hero h1 { font-family: var(--serif); font-size: 72px; font-weight: 400; letter-spacing: -0.025em; line-height: 1.02; margin-bottom: 32px; }
+  .hero h1 em { font-style: italic; color: var(--accent-5); }
+  .hero-lede { font-family: var(--serif); font-size: 22px; line-height: 1.55; color: var(--ink-2); font-style: italic; margin-bottom: 20px; max-width: 800px; }
+  .hero-body { font-family: var(--serif); font-size: 17px; line-height: 1.6; color: var(--ink-2); max-width: 760px; }
+  .hero-body strong { color: var(--ink); font-weight: 500; }
+
+  /* ---- Section label ---- */
+  .section-label { font-family: var(--mono); font-size: 11px; letter-spacing: 0.25em; text-transform: uppercase; color: var(--ink-3); margin: 72px 0 28px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+
+  /* ---- At a Glance ---- */
+  .glance { display: grid; grid-template-columns: repeat(5, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+  .glance-item { background: var(--bg-2); padding: 28px 22px; display: flex; flex-direction: column; min-height: 260px; }
+  .glance-num { font-family: var(--mono); font-size: 10px; letter-spacing: 0.2em; color: var(--ink-3); text-transform: uppercase; margin-bottom: 16px; display: flex; align-items: center; gap: 10px; }
+  .glance-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  .g-1 .glance-dot { background: var(--accent-3); }
+  .g-2 .glance-dot { background: var(--accent-2); }
+  .g-3 .glance-dot { background: var(--accent); }
+  .g-4 .glance-dot { background: var(--accent-4); }
+  .g-5 .glance-dot { background: var(--accent-5); }
+  .glance-title { font-family: var(--serif); font-size: 22px; font-weight: 400; letter-spacing: -0.01em; line-height: 1.1; margin-bottom: 10px; }
+  .glance-principle { font-family: var(--mono); font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase; margin-bottom: 16px; }
+  .g-1 .glance-principle { color: var(--accent-3); }
+  .g-2 .glance-principle { color: var(--accent-2); }
+  .g-3 .glance-principle { color: var(--accent); }
+  .g-4 .glance-principle { color: var(--accent-4); }
+  .g-5 .glance-principle { color: var(--accent-5); }
+  .glance-desc { font-family: var(--serif); font-size: 14px; line-height: 1.5; color: var(--ink-2); margin-bottom: 16px; }
+  .glance-time { margin-top: auto; font-family: var(--mono); font-size: 10px; letter-spacing: 0.15em; color: var(--ink-3); text-transform: uppercase; padding-top: 14px; border-top: 1px solid var(--line); }
+
+  /* ---- Pattern block ---- */
+  .pattern { padding: 80px 0; border-bottom: 1px solid var(--line); display: grid; grid-template-columns: 1fr 1fr; gap: 56px; align-items: start; }
+  .pattern.reverse .pattern-visual { order: 2; }
+  .pattern-visual { background: var(--bg-2); border: 1px solid var(--line); border-radius: 4px; padding: 36px; }
+  .pattern-visual svg { width: 100%; height: auto; display: block; }
+  .pattern-caption { font-family: var(--mono); font-size: 10px; color: var(--ink-3); text-align: center; margin-top: 18px; letter-spacing: 0.15em; text-transform: uppercase; }
+
+  .pattern-eyebrow { font-family: var(--mono); font-size: 11px; letter-spacing: 0.2em; color: var(--ink-3); text-transform: uppercase; margin-bottom: 20px; }
+  .pattern-title { font-family: var(--serif); font-size: 42px; line-height: 1.08; margin-bottom: 20px; font-weight: 400; letter-spacing: -0.015em; }
+  .pattern-title em { font-style: italic; }
+  .pattern-principle { font-family: var(--serif); font-size: 17px; font-style: italic; color: var(--ink-2); line-height: 1.55; margin-bottom: 32px; padding-left: 16px; border-left: 2px solid; }
+
+  .spec-list { display: grid; gap: 18px; margin-bottom: 28px; }
+  .spec-row { display: grid; grid-template-columns: 110px 1fr; gap: 20px; align-items: baseline; }
+  .spec-label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.18em; color: var(--ink-3); text-transform: uppercase; padding-top: 3px; }
+  .spec-value { font-family: var(--serif); font-size: 15px; line-height: 1.55; color: var(--ink); }
+  .spec-value code { font-family: var(--mono); font-size: 12px; background: var(--bg); padding: 1px 6px; border-radius: 3px; color: var(--ink-2); border: 1px solid var(--line); }
+
+  .pattern-why { border-top: 1px solid var(--line); padding-top: 24px; margin-top: 8px; }
+  .pattern-why-label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.2em; color: var(--ink-3); text-transform: uppercase; margin-bottom: 10px; }
+  .pattern-why-body { font-family: var(--serif); font-size: 15px; line-height: 1.55; color: var(--ink-2); }
+  .pattern-why-body strong { color: var(--ink); font-weight: 500; }
+
+  .pattern-refusal { margin-top: 20px; padding: 18px 20px; border-left: 2px dashed var(--ink-3); background: rgba(224, 181, 164, 0.035); }
+  .pattern-refusal-label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.2em; color: var(--accent-5); text-transform: uppercase; margin-bottom: 8px; }
+  .pattern-refusal-body { font-family: var(--serif); font-size: 14px; line-height: 1.55; color: var(--ink-2); }
+  .pattern-refusal-body strong { color: var(--ink); font-weight: 500; }
+  .pattern-refusal-body code { font-family: var(--mono); font-size: 11.5px; background: var(--bg); padding: 1px 6px; border-radius: 3px; color: var(--ink-2); border: 1px solid var(--line); }
+
+  .pattern-1 .pattern-title em { color: var(--accent-3); }
+  .pattern-1 .pattern-principle { border-color: var(--accent-3); }
+  .pattern-2 .pattern-title em { color: var(--accent-2); }
+  .pattern-2 .pattern-principle { border-color: var(--accent-2); }
+  .pattern-3 .pattern-title em { color: var(--accent); }
+  .pattern-3 .pattern-principle { border-color: var(--accent); }
+  .pattern-4 .pattern-title em { color: var(--accent-4); }
+  .pattern-4 .pattern-principle { border-color: var(--accent-4); }
+  .pattern-5 .pattern-title em { color: var(--accent-5); }
+  .pattern-5 .pattern-principle { border-color: var(--accent-5); }
+
+  /* ---- Build order ---- */
+  .order { margin: 80px 0 60px; }
+  .order-title { font-family: var(--serif); font-size: 40px; line-height: 1.1; margin-bottom: 16px; font-weight: 400; letter-spacing: -0.015em; }
+  .order-title em { font-style: italic; color: var(--accent-5); }
+  .order-lede { font-family: var(--serif); font-size: 17px; line-height: 1.6; color: var(--ink-2); max-width: 760px; margin-bottom: 48px; }
+  .order-list { display: grid; gap: 2px; background: var(--line); border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+  .order-step { background: var(--bg-2); padding: 32px 40px; display: grid; grid-template-columns: 70px 1fr 170px; gap: 32px; align-items: center; }
+  .order-rank { font-family: var(--serif); font-size: 48px; color: var(--ink-3); line-height: 1; font-weight: 400; }
+  .order-step.first .order-rank { color: var(--accent); }
+  .order-step.last .order-rank { color: var(--accent-4); }
+  .order-name { font-family: var(--mono); font-size: 11px; letter-spacing: 0.2em; color: var(--ink); text-transform: uppercase; margin-bottom: 10px; }
+  .order-reason { font-family: var(--serif); font-size: 15px; color: var(--ink-2); line-height: 1.55; }
+  .order-reason strong { color: var(--ink); font-weight: 500; }
+  .order-when { font-family: var(--mono); font-size: 10px; letter-spacing: 0.15em; color: var(--ink-3); text-transform: uppercase; text-align: right; }
+
+  /* ---- Closing ---- */
+  .closing { margin-top: 80px; padding: 56px 48px; background: var(--bg-2); border: 1px solid var(--line); border-radius: 4px; max-width: 960px; }
+  .closing h2 { font-family: var(--serif); font-size: 34px; font-weight: 400; letter-spacing: -0.01em; line-height: 1.15; margin-bottom: 20px; }
+  .closing h2 em { font-style: italic; color: var(--accent-5); }
+  .closing p { font-family: var(--serif); font-size: 17px; line-height: 1.6; color: var(--ink-2); margin-bottom: 14px; }
+  .closing p strong { color: var(--ink); font-weight: 500; }
+
+  .footer { margin-top: 80px; padding-top: 32px; border-top: 1px solid var(--line); font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em; color: var(--ink-3); display: flex; justify-content: space-between; text-transform: uppercase; }
+
+  @media (max-width: 1100px) {
+    .glance { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media (max-width: 900px) {
+    body { padding: 0 20px 60px; }
+    .hero { padding: 60px 0 44px; }
+    .hero h1 { font-size: 42px; }
+    .hero-lede { font-size: 18px; }
+    .glance { grid-template-columns: 1fr; }
+    .glance-item { min-height: auto; }
+    .pattern { grid-template-columns: 1fr; gap: 36px; padding: 56px 0; }
+    .pattern.reverse .pattern-visual { order: 0; }
+    .pattern-title { font-size: 30px; }
+    .spec-row { grid-template-columns: 1fr; gap: 6px; }
+    .order-step { grid-template-columns: 1fr; gap: 14px; padding: 28px 22px; }
+    .order-when { text-align: left; }
+    .order-rank { font-size: 32px; }
+    .closing { padding: 36px 28px; }
+    .closing h2 { font-size: 26px; }
+  }
+</style>
+<!-- __lock_copy__ -->
+<style>html,body,*{-webkit-user-select:none!important;-moz-user-select:none!important;-ms-user-select:none!important;user-select:none!important;-webkit-touch-callout:none!important;}</style>
+<script>document.addEventListener('contextmenu',function(e){e.preventDefault();});document.addEventListener('copy',function(e){e.preventDefault();});document.addEventListener('cut',function(e){e.preventDefault();});document.addEventListener('dragstart',function(e){e.preventDefault();});document.addEventListener('selectstart',function(e){e.preventDefault();});document.addEventListener('keydown',function(e){if((e.ctrlKey||e.metaKey)&&['c','C','x','X','a','A','s','S','p','P','u','U'].indexOf(e.key)!==-1){e.preventDefault();}});</script>
+</head>
+<body>
+
+  <nav class="topnav">
+    <a href="/manifesto/v/n0.html" class="topnav-brand">Unicron Systems</a>
+    <div class="topnav-links">
+      <a href="/manifesto/v/n1.html">I. Three Factories</a>
+      <a href="/manifesto/v/n2.html">II. Living Systems</a>
+      <a href="/manifesto/v/n3.html">III. Anatomy of an Operation</a>
+      <a href="/manifesto/v/n4.html">IV. Autonomy × Ownership</a>
+      <a href="/manifesto/v/n5.html">V. Seven Generations</a>
+      <a href="/manifesto/v/n6.html" class="active">VI. Patterns in Practice</a>
+    </div>
+  </nav>
+
+  <div class="frame">
+
+    <section class="hero">
+      <h1>From organism to <em>architecture.</em></h1>
+      <p class="hero-lede">The five coordination primitives from View II, rebuilt as real systems. Data, tools, process, build time — what it actually takes to prototype each.</p>
+      <p class="hero-body">View II named the shapes. This view turns them into specs. Each pattern is a small, buildable prototype — most under a week. Together they're not five separate systems; they're the five organs of a working agent-native operation. <strong>Build them in order and they compound.</strong></p>
+    </section>
+
+    <div class="section-label">At a Glance</div>
+
+    <div class="glance">
+      <div class="glance-item g-1">
+        <div class="glance-num"><span class="glance-dot"></span>Pattern 01</div>
+        <div class="glance-title">Mycelium</div>
+        <div class="glance-principle">Signals</div>
+        <div class="glance-desc">Shared substrate where signals reinforce or decay. Self-prioritizing memory.</div>
+        <div class="glance-time">3 days · Memory upgrade</div>
+      </div>
+      <div class="glance-item g-2">
+        <div class="glance-num"><span class="glance-dot"></span>Pattern 02</div>
+        <div class="glance-title">Beehive</div>
+        <div class="glance-principle">Specialists</div>
+        <div class="glance-desc">Differentiated roles coordinated by typed handoff contracts. The factory line.</div>
+        <div class="glance-time">5–7 days · Throughput</div>
+      </div>
+      <div class="glance-item g-3">
+        <div class="glance-num"><span class="glance-dot"></span>Pattern 03</div>
+        <div class="glance-title">Ant Colony</div>
+        <div class="glance-principle">Scale</div>
+        <div class="glance-desc">Many cheap parallel agents, no hierarchy. Emergence from aggregation.</div>
+        <div class="glance-time">2–3 days · Breadth</div>
+      </div>
+      <div class="glance-item g-4">
+        <div class="glance-num"><span class="glance-dot"></span>Pattern 04</div>
+        <div class="glance-title">Murmuration</div>
+        <div class="glance-principle">Peer Attention</div>
+        <div class="glance-desc">Each agent watches only its nearest neighbors. Coherence from local rules.</div>
+        <div class="glance-time">4–5 days · Variance</div>
+      </div>
+      <div class="glance-item g-5">
+        <div class="glance-num"><span class="glance-dot"></span>Pattern 05</div>
+        <div class="glance-title">Slime Mold</div>
+        <div class="glance-principle">Pruning</div>
+        <div class="glance-desc">Explore many paths, kill the weak, reroute to the strong. Adaptive selection.</div>
+        <div class="glance-time">3–4 days · Selection</div>
+      </div>
+    </div>
+
+    <div class="section-label">The Five, Spec'd</div>
+
+    <!-- ===== PATTERN 01 · MYCELIUM ===== -->
+    <section class="pattern pattern-1">
+      <div class="pattern-visual">
+        <svg viewBox="0 0 420 280" xmlns="http://www.w3.org/2000/svg">
+          <!-- decay / weak edges -->
+          <g stroke="#b5d4e8" stroke-opacity="0.15" stroke-width="1" stroke-dasharray="3,3" fill="none">
+            <path d="M60,80 Q110,60 165,95"/>
+            <path d="M310,55 Q340,80 370,130"/>
+            <path d="M90,220 Q140,240 200,225"/>
+            <path d="M255,205 Q290,230 340,215"/>
+            <path d="M165,95 Q145,165 90,220"/>
+          </g>
+          <!-- medium edges -->
+          <g stroke="#b5d4e8" stroke-opacity="0.45" stroke-width="1.5" fill="none">
+            <path d="M165,95 Q200,130 245,115"/>
+            <path d="M245,115 Q270,165 255,205"/>
+            <path d="M200,130 Q190,180 200,225"/>
+            <path d="M310,55 Q280,90 245,115"/>
+          </g>
+          <!-- strong edges -->
+          <g stroke="#b5d4e8" stroke-opacity="0.95" stroke-width="2.8" fill="none">
+            <path d="M165,95 Q210,85 245,115"/>
+            <path d="M245,115 Q280,155 340,160"/>
+            <path d="M200,225 Q230,210 255,205"/>
+          </g>
+          <!-- nodes -->
+          <g fill="#b5d4e8">
+            <circle cx="60" cy="80" r="3" opacity="0.35"/>
+            <circle cx="165" cy="95" r="5.5"/>
+            <circle cx="245" cy="115" r="6.5"/>
+            <circle cx="310" cy="55" r="4" opacity="0.55"/>
+            <circle cx="340" cy="160" r="5"/>
+            <circle cx="370" cy="130" r="3" opacity="0.35"/>
+            <circle cx="200" cy="130" r="4" opacity="0.7"/>
+            <circle cx="90" cy="220" r="3.5" opacity="0.4"/>
+            <circle cx="200" cy="225" r="5"/>
+            <circle cx="255" cy="205" r="5.5"/>
+            <circle cx="340" cy="215" r="3" opacity="0.35"/>
+          </g>
+          <!-- labels -->
+          <g font-family="JetBrains Mono, monospace" font-size="8" fill="#5c5a52" letter-spacing="1">
+            <text x="20" y="265">STRONG TRAIL — REINFORCED</text>
+            <text x="230" y="265">WEAK — DECAYING</text>
+            <line x1="150" y1="261" x2="170" y2="261" stroke="#b5d4e8" stroke-width="2.5"/>
+            <line x1="355" y1="261" x2="380" y2="261" stroke="#b5d4e8" stroke-width="1" stroke-dasharray="3,3" opacity="0.4"/>
+          </g>
+        </svg>
+        <div class="pattern-caption">Signal strength as pathway width</div>
+      </div>
+      <div class="pattern-meta">
+        <div class="pattern-eyebrow">Pattern 01 · Mycelium</div>
+        <h2 class="pattern-title">Signals that <em>persist.</em></h2>
+        <p class="pattern-principle">Agents drop typed signals into a shared substrate. Strong signals reinforce. Weak signals decay. Memory becomes self-prioritizing — no one curates it.</p>
+        <div class="spec-list">
+          <div class="spec-row">
+            <div class="spec-label">Data</div>
+            <div class="spec-value">One signal table. Columns: <code>topic, type, source_agent, strength, last_touched, ttl_days</code>. Types: FACT · QUESTION · PATTERN · RISK.</div>
+          </div>
+          <div class="spec-row">
+            <div class="spec-label">Tools</div>
+            <div class="spec-value">Supabase table or Notion DB. Nightly n8n job decrements <code>strength</code> and archives below threshold. Any agent reads/writes via MCP.</div>
+          </div>
+          <div class="spec-row">
+            <div class="spec-label">Process</div>
+            <div class="spec-value">Every session ends with "drop 1–3 signals." Every session starts with "read top-10 strongest on my topic." Decay tick runs nightly.</div>
+          </div>
+          <div class="spec-row">
+            <div class="spec-label">Build Time</div>
+            <div class="spec-value">3 days.</div>
+          </div>
+          <div class="spec-row">
+            <div class="spec-label">When to Reach</div>
+            <div class="spec-value">Multiple agents whose work should inform each other without a central planner. Memory that stays fresh without manual curation.</div>
+          </div>
+        </div>
+        <div class="pattern-why">
+          <div class="pattern-why-label">Why it matters</div>
+          <div class="pattern-why-body">Fixes <strong>"agents don't remember"</strong> without turning memory into a swamp. Auto-prunes stale facts. A direct upgrade to the Notion Agent Memory already running — same shape, but load-bearing.</div>
+        </div>
+        <div class="pattern-refusal">
+          <div class="pattern-refusal-label">Refusal · Decay</div>
+          <div class="pattern-refusal-body">Every signal carries a mandatory <code>ttl_days</code>. <strong>The substrate forgets by default.</strong> Signals that aren't re-touched by a real session decay to archive — no override, no pinning by the author. The forest eats its own dead; this memory does too.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== PATTERN 02 · BEEHIVE ===== -->
+    <section class="pattern pattern-2 reverse">
+      <div class="pattern-visual">
+        <svg viewBox="0 0 420 280" xmlns="http://www.w3.org/2000/svg">
+          <!-- hexagons -->
+          <g fill="none" stroke="#d4c87a" stroke-width="1.5">
+            <polygon points="50,95 80,78 110,95 110,130 80,147 50,130" fill="#d4c87a" fill-opacity="0.1"/>
+            <polygon points="150,95 180,78 210,95 210,130 180,147 150,130" fill="#d4c87a" fill-opacity="0.1"/>
+            <polygon points="250,95 280,78 310,95 310,130 280,147 250,130" fill="#d4c87a" fill-opacity="0.1"/>
+            <polygon points="350,95 380,78 410,95 410,130 380,147 350,130" fill="#d4c87a" fill-opacity="0.1"/>
+          </g>
+          <!-- worker dots -->
+          <g fill="#d4c87a">
+            <circle cx="80" cy="112" r="5"/>
+            <circle cx="180" cy="112" r="5"/>
+            <circle cx="280" cy="112" r="5"/>
+            <circle cx="380" cy="112" r="5"/>
+          </g>
+          <!-- arrows between -->
+          <g stroke="#d4c87a" stroke-width="1.2" fill="#d4c87a" opacity="0.75">
+            <line x1="112" y1="112" x2="146" y2="112"/>
+            <polygon points="146,112 140,109 140,115"/>
+            <line x1="212" y1="112" x2="246" y2="112"/>
+            <polygon points="246,112 240,109 240,115"/>
+            <line x1="312" y1="112" x2="346" y2="112"/>
+            <polygon points="346,112 340,109 340,115"/>
+          </g>
+          <!-- role labels -->
+          <g font-family="JetBrains Mono, monospace" font-size="9" fill="#e8e6de" letter-spacing="1" text-anchor="middle">
+            <text x="80" y="172">RESEARCH</text>
+            <text x="180" y="172">STRATEGY</text>
+            <text x="280" y="172">COPY</text>
+            <text x="380" y="172">SEND</text>
+          </g>
+          <!-- schema labels -->
+          <g font-family="JetBrains Mono, monospace" font-size="8" fill="#5c5a52" text-anchor="middle" letter-spacing="0.5">
+            <text x="129" y="100">{lead}</text>
+            <text x="229" y="100">{angle}</text>
+            <text x="329" y="100">{draft}</text>
+          </g>
+          <!-- validator bounce -->
+          <g stroke="#5c5a52" stroke-width="1" stroke-dasharray="2,3" fill="none">
+            <path d="M280,147 Q260,200 180,147"/>
+          </g>
+          <g font-family="JetBrains Mono, monospace" font-size="8" fill="#5c5a52" text-anchor="middle">
+            <text x="230" y="210">SCHEMA FAIL → BOUNCE</text>
+          </g>
+          <!-- title bar -->
+          <g font-family="JetBrains Mono, monospace" font-size="8" fill="#5c5a52" letter-spacing="1">
+            <text x="50" y="55">TYPED HANDOFFS · MAX 2 RETRIES</text>
+          </g>
+        </svg>
+        <div class="pattern-caption">Assembly line with validated contracts</div>
+      </div>
+      <div class="pattern-meta">
+        <div class="pattern-eyebrow">Pattern 02 · Beehive</div>
+        <h2 class="pattern-title">Specialists with <em>strict handoffs.</em></h2>
+        <p class="pattern-principle">Highly differentiated roles, each one doing its job perfectly, coordinated by typed contracts. The dance is the schema — if it doesn't validate, it bounces back.</p>
+        <div class="spec-list">
+          <div class="spec-row">
+            <div class="spec-label">Data</div>
+            <div class="spec-value">Per-role memory page. Input/output JSON schema for every handoff. Schema is the contract.</div>
+          </div>
+          <div class="spec-row">
+            <div class="spec-label">Tools</div>
+            <div class="spec-value">Perplexity Spaces (already live). Notion for memory. Slack as the coordination surface. Schemas enforced by a thin validator — Zod or a Claude verifier step.</div>
+          </div>
+          <div class="spec-row">
+            <div class="spec-label">Process</div>
+            <div class="spec-value">Pick one end-to-end task. Build the line: Research → Strategy → Copy → Send. Each handoff validates or bounces. Max 2 retries before human escalation.</div>
+          </div>
+          <div class="spec-row">
+            <div class="spec-label">Build Time</div>
+            <div class="spec-value">5–7 days.</div>
+          </div>
+          <div class="spec-row">
+            <div class="spec-label">When to Reach</div>
+            <div class="spec-value">A repeating end-to-end workflow with clear stages. You need reliability more than exploration.</div>
+          </div>
+        </div>
+        <div class="pattern-why">
+          <div class="pattern-why-label">Why it matters</div>
+          <div class="pattern-why-body">Closest to what's already live. <strong>Formalizing the handoff schemas</strong> is what turns "4 agents in Slack" into a factory. Quality stays high at throughput because the contract catches drift before it escapes the stage.</div>
+        </div>
+        <div class="pattern-refusal">
+          <div class="pattern-refusal-label">Refusal · Dissent</div>
+          <div class="pattern-refusal-body">Every downstream role is a <strong>validator, not a receiver</strong>. Strategy can reject a lead as out-of-ICP. Copy can reject an angle as off-brand. Send can refuse a draft. Two bounces at any stage escalates to the Elder — the line does not grind on through a bad handoff. The scout's dance can be ignored.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== PATTERN 03 · ANT COLONY ===== -->
+    <section class="pattern pattern-3">
+      <div class="pattern-visual">
+        <svg viewBox="0 0 420 280" xmlns="http://www.w3.org/2000/svg">
+          <!-- central source -->
+          <circle cx="80" cy="140" r="10" fill="#9fd4a1"/>
+          <!-- aggregator -->
+          <rect x="350" y="125" width="40" height="30" fill="none" stroke="#9fd4a1" stroke-width="1.5" rx="2"/>
+          <!-- fan-out lines -->
+          <g stroke="#9fd4a1" stroke-width="0.7" stroke-opacity="0.4" fill="none">
+            <line x1="90" y1="140" x2="220" y2="40"/>
+            <line x1="90" y1="140" x2="230" y2="55"/>
+            <line x1="90" y1="140" x2="240" y2="70"/>
+            <line x1="90" y1="140" x2="245" y2="88"/>
+            <line x1="90" y1="140" x2="250" y2="105"/>
+            <line x1="90" y1="140" x2="255" y2="120"/>
+            <line x1="90" y1="140" x2="258" y2="135"/>
+            <line x1="90" y1="140" x2="258" y2="150"/>
+            <line x1="90" y1="140" x2="255" y2="165"/>
+            <line x1="90" y1="140" x2="250" y2="180"/>
+            <line x1="90" y1="140" x2="245" y2="195"/>
+            <line x1="90" y1="140" x2="238" y2="210"/>
+            <line x1="90" y1="140" x2="228" y2="225"/>
+            <line x1="90" y1="140" x2="215" y2="240"/>
+          </g>
+          <!-- worker dots -->
+          <g fill="#9fd4a1">
+            <circle cx="220" cy="40" r="3"/>
+            <circle cx="230" cy="55" r="3"/>
+            <circle cx="240" cy="70" r="3"/>
+            <circle cx="245" cy="88" r="3"/>
+            <circle cx="250" cy="105" r="3"/>
+            <circle cx="255" cy="120" r="3"/>
+            <circle cx="258" cy="135" r="3"/>
+            <circle cx="258" cy="150" r="3"/>
+            <circle cx="255" cy="165" r="3"/>
+            <circle cx="250" cy="180" r="3"/>
+            <circle cx="245" cy="195" r="3"/>
+            <circle cx="238" cy="210" r="3"/>
+            <circle cx="228" cy="225" r="3"/>
+            <circle cx="215" cy="240" r="3"/>
+          </g>
+          <!-- return converging lines -->
+          <g stroke="#9fd4a1" stroke-width="0.8" stroke-opacity="0.55" fill="none">
+            <path d="M220,40 Q310,80 350,140"/>
+            <path d="M245,88 Q305,110 350,140"/>
+            <path d="M258,135 L350,140"/>
+            <path d="M255,165 Q305,155 350,140"/>
+            <path d="M238,210 Q310,175 350,140"/>
+            <path d="M215,240 Q310,195 350,140"/>
+          </g>
+          <!-- labels -->
+          <g font-family="JetBrains Mono, monospace" font-size="9" fill="#e8e6de" letter-spacing="1">
+            <text x="55" y="125" text-anchor="middle">TARGETS</text>
+            <text x="370" y="170" text-anchor="middle">AGG</text>
+          </g>
+          <g font-family="JetBrains Mono, monospace" font-size="8" fill="#5c5a52" letter-spacing="0.5">
+            <text x="30" y="265">N PARALLEL · NO COORDINATION · ONE SCHEMA · ONE AGGREGATOR</text>
+          </g>
+        </svg>
+        <div class="pattern-caption">Fan-out, independent work, aggregate</div>
+      </div>
+      <div class="pattern-meta">
+        <div class="pattern-eyebrow">Pattern 03 · Ant Colony</div>
+        <h2 class="pattern-title">Many parallel, <em>no hierarchy.</em></h2>
+        <p class="pattern-principle">N cheap workers, no coordination, no plan. Each does one micro-task. Emergence comes from aggregating many independent attempts into one cluster map.</p>
+        <div class="spec-list">
+          <div class="spec-row">
+            <div class="spec-label">Data</div>
+            <div class="spec-value">A target list (the "food" — URLs, names, docs). A standard output JSON schema. An aggregator/dedupe function.</div>
+          </div>
+          <div class="spec-row">
+            <div class="spec-label">Tools</div>
+            <div class="spec-value">Claude Agent SDK batch dispatch, or Manus / Jules for fan-out, or a queue feeding 50 Computer tabs. Output to a single Supabase table. A summarizer pass at the end.</div>
+          </div>
+          <div class="spec-row">
+            <div class="spec-label">Process</div>
+            <div class="spec-value">Define the micro-task (≤ 90 seconds of work each). Define the output JSON. Fire 50–500 in parallel. Aggregate. Cluster. Surface emergent patterns.</div>
+          </div>
+          <div class="spec-row">
+            <div class="spec-label">Build Time</div>
+            <div class="spec-value">2–3 days.</div>
+          </div>
+          <div class="spec-row">
+            <div class="spec-label">When to Reach</div>
+            <div class="spec-value">You need breadth fast. Scraping, enrichment, mass evaluation, pattern discovery across a large candidate set.</div>
+          </div>
+        </div>
+        <div class="pattern-why">
+          <div class="pattern-why-label">Why it matters</div>
+          <div class="pattern-why-body">Highest immediate leverage for <strong>discovery itself</strong>. Point it at 200 contractor websites, 500 PA subreddit posts, 100 estate-attorney Yelp reviews — real pain language, named tools, named prices, in an afternoon. The unfair advantage for vertical hunting.</div>
+        </div>
+        <div class="pattern-refusal">
+          <div class="pattern-refusal-label">Refusal · Rest & Evaporation</div>
+          <div class="pattern-refusal-body"><code>NO_SIGNAL</code> is a first-class output. A worker that finds nothing says so, loudly, and <strong>the aggregator must respect low-confidence nulls</strong> — it cannot reach past them to invent a pattern. Pheromones in the candidate pool decay on a scheduled tick; runs that stop producing signal are retired without ceremony. The brood rests.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== PATTERN 04 · MURMURATION ===== -->
+    <section class="pattern pattern-4 reverse">
+      <div class="pattern-visual">
+        <svg viewBox="0 0 420 280" xmlns="http://www.w3.org/2000/svg">
+          <!-- connection lines (local neighbors only) -->
+          <g stroke="#c4a5d4" stroke-width="0.8" stroke-opacity="0.35" stroke-dasharray="3,3" fill="none">
+            <line x1="90" y1="90" x2="140" y2="75"/>
+            <line x1="90" y1="90" x2="145" y2="125"/>
+            <line x1="90" y1="90" x2="115" y2="160"/>
+            <line x1="140" y1="75" x2="200" y2="65"/>
+            <line x1="140" y1="75" x2="190" y2="115"/>
+            <line x1="145" y1="125" x2="190" y2="115"/>
+            <line x1="145" y1="125" x2="200" y2="170"/>
+            <line x1="115" y1="160" x2="165" y2="190"/>
+            <line x1="165" y1="190" x2="200" y2="170"/>
+            <line x1="200" y1="65" x2="260" y2="70"/>
+            <line x1="200" y1="65" x2="250" y2="115"/>
+            <line x1="190" y1="115" x2="250" y2="115"/>
+            <line x1="190" y1="115" x2="245" y2="160"/>
+            <line x1="200" y1="170" x2="245" y2="160"/>
+            <line x1="200" y1="170" x2="250" y2="210"/>
+            <line x1="260" y1="70" x2="315" y2="85"/>
+            <line x1="250" y1="115" x2="315" y2="85"/>
+            <line x1="250" y1="115" x2="320" y2="135"/>
+            <line x1="245" y1="160" x2="320" y2="135"/>
+            <line x1="245" y1="160" x2="310" y2="190"/>
+            <line x1="250" y1="210" x2="310" y2="190"/>
+          </g>
+          <!-- highlighted agent with its 3 neighbors -->
+          <g stroke="#c4a5d4" stroke-width="1.8" fill="none">
+            <line x1="190" y1="115" x2="145" y2="125"/>
+            <line x1="190" y1="115" x2="200" y2="65"/>
+            <line x1="190" y1="115" x2="200" y2="170"/>
+          </g>
+          <!-- dots -->
+          <g fill="#c4a5d4">
+            <circle cx="90" cy="90" r="4"/>
+            <circle cx="140" cy="75" r="4"/>
+            <circle cx="145" cy="125" r="4"/>
+            <circle cx="115" cy="160" r="4"/>
+            <circle cx="165" cy="190" r="4"/>
+            <circle cx="200" cy="65" r="4"/>
+            <circle cx="190" cy="115" r="7" stroke="#c4a5d4" stroke-width="1.5" fill="#0a0a0f"/>
+            <circle cx="190" cy="115" r="3"/>
+            <circle cx="200" cy="170" r="4"/>
+            <circle cx="260" cy="70" r="4"/>
+            <circle cx="250" cy="115" r="4"/>
+            <circle cx="245" cy="160" r="4"/>
+            <circle cx="250" cy="210" r="4"/>
+            <circle cx="315" cy="85" r="4"/>
+            <circle cx="320" cy="135" r="4"/>
+            <circle cx="310" cy="190" r="4"/>
+          </g>
+          <!-- direction arrow -->
+          <g stroke="#c4a5d4" stroke-opacity="0.5" stroke-width="1" fill="#c4a5d4" fill-opacity="0.5">
+            <line x1="70" y1="240" x2="130" y2="240" marker-end="url(#arr-v)"/>
+            <polygon points="130,240 123,236 123,244" />
+          </g>
+          <g font-family="JetBrains Mono, monospace" font-size="8" fill="#5c5a52" letter-spacing="0.5">
+            <text x="140" y="244">DIRECTION OF ITERATION</text>
+            <text x="30" y="265">EACH AGENT WATCHES N NEAREST · NO LEADER · LOCAL RULES ONLY</text>
+          </g>
+          <g font-family="JetBrains Mono, monospace" font-size="8" fill="#c4a5d4" letter-spacing="0.5">
+            <text x="200" y="100">watches 3</text>
+          </g>
+        </svg>
+        <div class="pattern-caption">Local attention only, coherence emerges</div>
+      </div>
+      <div class="pattern-meta">
+        <div class="pattern-eyebrow">Pattern 04 · Murmuration</div>
+        <h2 class="pattern-title">Each watches <em>seven.</em></h2>
+        <p class="pattern-principle">Every agent watches only its nearest N neighbors. No leader, no global plan. Coherent group motion emerges from local rules alone.</p>
+        <div class="spec-list">
+          <div class="spec-row">
+            <div class="spec-label">Data</div>
+            <div class="spec-value">A time-ordered recent-activity feed of peer outputs. A simple local update rule per agent ("be inspired by the last 3, differentiate").</div>
+          </div>
+          <div class="spec-row">
+            <div class="spec-label">Tools</div>
+            <div class="spec-value">Supabase realtime channel or Notion DB sorted by last-modified. Agents poll top N peers before each output.</div>
+          </div>
+          <div class="spec-row">
+            <div class="spec-label">Process</div>
+            <div class="spec-value">Best for evolving outputs. 7 agents iterate. Each sees only the most recent 3 peer attempts. Run 20 cycles. Watch convergence (consensus) or divergence (need tighter rule).</div>
+          </div>
+          <div class="spec-row">
+            <div class="spec-label">Build Time</div>
+            <div class="spec-value">4–5 days.</div>
+          </div>
+          <div class="spec-row">
+            <div class="spec-label">When to Reach</div>
+            <div class="spec-value">Evolving variants — landing page copy, cold email tests, pricing experiments. When you want many attempts that influence each other without a central editor.</div>
+          </div>
+        </div>
+        <div class="pattern-why">
+          <div class="pattern-why-label">Why it matters</div>
+          <div class="pattern-why-body">How you get <strong>multi-variant copy, pricing, messaging</strong> without a central plan. The output space explores itself. Looks magical in a demo because you can show the swarm converging on a direction nobody specified.</div>
+        </div>
+        <div class="pattern-refusal">
+          <div class="pattern-refusal-label">Refusal · Break-off</div>
+          <div class="pattern-refusal-body">An agent whose local rule is violated — the neighbors are drifting toward taboo copy, a banned claim, a compliance line — <strong>peels off from the swarm</strong> and posts a dissent signal instead of another variant. Consent is structural: staying in the murmuration is a choice re-made every cycle, not a default.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== PATTERN 05 · SLIME MOLD ===== -->
+    <section class="pattern pattern-5">
+      <div class="pattern-visual">
+        <svg viewBox="0 0 420 280" xmlns="http://www.w3.org/2000/svg">
+          <!-- start points -->
+          <g fill="#d4a592">
+            <circle cx="45" cy="40" r="3.5" opacity="0.7"/>
+            <circle cx="45" cy="75" r="3.5" opacity="0.7"/>
+            <circle cx="45" cy="110" r="3.5" opacity="0.7"/>
+            <circle cx="45" cy="145" r="3.5" opacity="0.7"/>
+            <circle cx="45" cy="180" r="3.5" opacity="0.7"/>
+            <circle cx="45" cy="215" r="3.5" opacity="0.7"/>
+            <circle cx="45" cy="250" r="3.5" opacity="0.7"/>
+          </g>
+          <!-- pruned paths (X'd) -->
+          <g stroke="#d4a592" stroke-width="0.8" stroke-opacity="0.22" stroke-dasharray="2,3" fill="none">
+            <path d="M50,40 Q120,50 180,60"/>
+            <path d="M50,75 Q130,100 195,135"/>
+            <path d="M50,180 Q130,175 190,155"/>
+            <path d="M50,215 Q120,210 170,195"/>
+            <path d="M50,250 Q120,245 185,235"/>
+          </g>
+          <g stroke="#5c5a52" stroke-width="1.2" fill="none">
+            <line x1="175" y1="55" x2="185" y2="65"/>
+            <line x1="185" y1="55" x2="175" y2="65"/>
+            <line x1="190" y1="130" x2="200" y2="140"/>
+            <line x1="200" y1="130" x2="190" y2="140"/>
+            <line x1="185" y1="150" x2="195" y2="160"/>
+            <line x1="195" y1="150" x2="185" y2="160"/>
+            <line x1="165" y1="190" x2="175" y2="200"/>
+            <line x1="175" y1="190" x2="165" y2="200"/>
+            <line x1="180" y1="230" x2="190" y2="240"/>
+            <line x1="190" y1="230" x2="180" y2="240"/>
+          </g>
+          <!-- surviving paths, thickening -->
+          <g stroke="#d4a592" stroke-width="2.2" stroke-opacity="0.75" fill="none">
+            <path d="M50,110 Q130,105 200,95 Q270,85 330,110 Q360,125 370,140"/>
+          </g>
+          <g stroke="#d4a592" stroke-width="3" stroke-opacity="0.95" fill="none">
+            <path d="M50,145 Q140,140 215,135 Q285,130 330,140 Q360,145 370,140"/>
+          </g>
+          <!-- endpoint -->
+          <circle cx="375" cy="140" r="10" fill="#d4a592"/>
+          <!-- column labels -->
+          <g font-family="JetBrains Mono, monospace" font-size="9" fill="#5c5a52" letter-spacing="1" text-anchor="middle">
+            <text x="50" y="20">GEN</text>
+            <text x="200" y="20">SCORE</text>
+            <text x="330" y="20">PRUNE</text>
+            <text x="375" y="120">KEEP</text>
+          </g>
+          <g font-family="JetBrains Mono, monospace" font-size="8" fill="#5c5a52" letter-spacing="0.5">
+            <text x="30" y="275">EXPLORE MANY · KILL THE WEAK · REROUTE TO THE STRONG · REPEAT</text>
+          </g>
+        </svg>
+        <div class="pattern-caption">Selection pressure as adaptive network</div>
+      </div>
+      <div class="pattern-meta">
+        <div class="pattern-eyebrow">Pattern 05 · Slime Mold</div>
+        <h2 class="pattern-title">Explore many, <em>prune hard.</em></h2>
+        <p class="pattern-principle">Explore many paths in parallel. Score each. Kill the weak. Reroute resources to the strong. Repeat until one or two remain.</p>
+        <div class="spec-list">
+          <div class="spec-row">
+            <div class="spec-label">Data</div>
+            <div class="spec-value">Candidate registry: <code>id, hypothesis, score, last_evaluated, resource_share</code>. A scoring function — judge agent OR a hard metric (revenue, replies, signups).</div>
+          </div>
+          <div class="spec-row">
+            <div class="spec-label">Tools</div>
+            <div class="spec-value">Notion or Supabase for the registry. A judge agent (Claude or Computer) scoring against explicit criteria. Scheduled prune job (n8n or scheduled tasks).</div>
+          </div>
+          <div class="spec-row">
+            <div class="spec-label">Process</div>
+            <div class="spec-value">Generate 10 candidates. Run in parallel. Score. Prune bottom 50%. Double resources on survivors. Repeat weekly until 1–2 remain.</div>
+          </div>
+          <div class="spec-row">
+            <div class="spec-label">Build Time</div>
+            <div class="spec-value">3–4 days.</div>
+          </div>
+          <div class="spec-row">
+            <div class="spec-label">When to Reach</div>
+            <div class="spec-value">Any "narrow the field" decision. Verticals, ICPs, pricing, channels, positioning.</div>
+          </div>
+        </div>
+        <div class="pattern-why">
+          <div class="pattern-why-label">Why it matters</div>
+          <div class="pattern-why-body">This is literally the <strong>discovery sprint we're running right now</strong>, unformalized. Building it makes the selection engine reusable forever. Most demoable to judges: "we have a machine that picks our company for us."</div>
+        </div>
+        <div class="pattern-refusal">
+          <div class="pattern-refusal-label">Refusal · Abstain & Withdraw</div>
+          <div class="pattern-refusal-body">The judge can return <code>NO_CANDIDATE_MEETS_THRESHOLD</code> — <strong>"insufficient signal, declining to act"</strong> as a first-class verdict. A slime mold with nothing worth routing to does not route. Better to kill the generation and re-seed than to pick a winner that doesn't clear the bar.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== BUILD ORDER ===== -->
+    <section class="order">
+      <h2 class="order-title">The order to <em>build them in.</em></h2>
+      <p class="order-lede">Not all five at once. There's a sequence that compounds — each pattern gives leverage the next one needs. Start where the discovery phase is right now, end with the showpiece.</p>
+      <div class="order-list">
+        <div class="order-step first">
+          <div class="order-rank">01</div>
+          <div class="order-main">
+            <div class="order-name">Ant Colony — Scale</div>
+            <div class="order-reason">Run it on the <strong>discovery surface</strong> this week. Scrape candidate verticals, adjacent markets, buyer forums. You'll surface markets the team hasn't seen yet and validate or kill current leads with real language.</div>
+          </div>
+          <div class="order-when">Week 1</div>
+        </div>
+        <div class="order-step">
+          <div class="order-rank">02</div>
+          <div class="order-main">
+            <div class="order-name">Slime Mold — Pruning</div>
+            <div class="order-reason">Formalizes the <strong>vertical-narrowing</strong> process. Becomes the meta-engine that picks every future thing: ICP, channel, offer, price point. Most demoable pattern for the contest narrative.</div>
+          </div>
+          <div class="order-when">Week 2</div>
+        </div>
+        <div class="order-step">
+          <div class="order-rank">03</div>
+          <div class="order-main">
+            <div class="order-name">Mycelium — Signals</div>
+            <div class="order-reason">Once a vertical is locked, agents need <strong>durable shared memory</strong>. Upgrades the Notion Agent Memory from a wiki into a self-prioritizing signal field.</div>
+          </div>
+          <div class="order-when">Week 3–4</div>
+        </div>
+        <div class="order-step">
+          <div class="order-rank">04</div>
+          <div class="order-main">
+            <div class="order-name">Beehive — Specialists</div>
+            <div class="order-reason">Build the <strong>assembly line</strong> for the core workflow of the locked vertical. Typed handoffs, validator gates, max 2 retries. This is where product throughput lives.</div>
+          </div>
+          <div class="order-when">Week 4–6</div>
+        </div>
+        <div class="order-step last">
+          <div class="order-rank">05</div>
+          <div class="order-main">
+            <div class="order-name">Murmuration — Peer Attention</div>
+            <div class="order-reason">The <strong>showpiece</strong>. Variant generation at scale for copy, pricing, offers. Last because it needs a product to apply to — and because it's the most impressive thing to show on pitch day.</div>
+          </div>
+          <div class="order-when">Week 6–8</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="closing">
+      <h2>No single pattern is the system. <em>They layer.</em></h2>
+      <p>In a full operation, all five run at once. <strong>Ant Colony</strong> feeds <strong>Slime Mold</strong> with candidates. Slime Mold prunes to a shortlist. <strong>Beehive</strong> runs production pipelines on the shortlist. <strong>Mycelium</strong> keeps the whole thing remembering what it's learned. <strong>Murmuration</strong> generates variation inside the constraints the others create.</p>
+      <p>And each one carries its own refusal — <strong>decay, dissent, rest, break-off, abstain</strong>. Without them, a coordination primitive becomes an extraction primitive. The organ and the organ's "no" ship together.</p>
+      <p>One organism. Five organs. Five refusals. Coordinated ambient labor that can also stop.</p>
+      <p>The prototypes are cheap. The compounding is where the value is. The refusal layer is what keeps the compounding from going rogue.</p>
+    </section>
+
+    <div class="footer">
+      <span>Unicron Systems · 2026</span>
+      <span>VI. Patterns in Practice</span>
+    </div>
+
+  </div>
+</body>
+</html>

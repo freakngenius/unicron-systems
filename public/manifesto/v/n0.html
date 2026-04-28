@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script>(function(){var t=sessionStorage.getItem(String.fromCharCode(95,95,117,120,98,95,116,107));if(t!=="8c973a4a158f95dafae1906467f968e060df6d28989ac304de4d0ab3c914d03e"){window.location.replace("/manifesto")}})();</script>
+
+<meta charset="UTF-8">
+<link rel="icon" type="image/svg+xml" href="/manifesto/favicon.svg">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Unicron Systems — Paradigm Map · Biomimetic Variant</title>
+<meta name="description" content="The paradigm map, rewritten with refusal, governance, and reciprocity braided through every view. A forest has no CEO — but it has decay, fire, the predator, and the thing that will not grow here.">
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --bg-2: #12121a;
+    --bg-3: #171720;
+    --ink: #e8e6de;
+    --ink-2: #9a9689;
+    --ink-3: #5c5a52;
+    --line: #2a2a32;
+    --accent: #9fd4a1;       /* frontier green */
+    --accent-2: #d4c87a;     /* amber */
+    --accent-3: #b5d4e8;     /* slate-blue */
+    --accent-4: #c4a5d4;     /* violet */
+    --accent-5: #d4a592;     /* coral */
+    --accent-7: #c4a476;     /* bronze — seven-gen */
+    --serif: "Iowan Old Style", "Palatino", "Palatino Linotype", Georgia, serif;
+    --sans: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+    --mono: "JetBrains Mono", "SF Mono", Menlo, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { background: var(--bg); color: var(--ink); font-family: var(--sans); -webkit-font-smoothing: antialiased; }
+
+  /* ---- Top Nav ---- */
+  .topnav { position: sticky; top: 0; z-index: 50; background: rgba(10,10,15,0.92); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border-bottom: 1px solid var(--line); padding: 14px 40px; display: flex; align-items: center; justify-content: space-between; }
+  .topnav-brand { font-family: var(--mono); font-size: 11px; letter-spacing: 0.25em; color: var(--ink-2); text-transform: uppercase; text-decoration: none; }
+  .topnav-brand em { font-style: normal; color: var(--ink-3); }
+  .topnav-brand:hover { color: var(--ink); }
+  .topnav-links { display: flex; gap: 22px; }
+  .topnav-links a { font-family: var(--mono); font-size: 11px; letter-spacing: 0.15em; text-transform: uppercase; text-decoration: none; color: var(--ink-3); padding: 4px 0; border-bottom: 1px solid transparent; transition: color 0.15s, border-color 0.15s; }
+  .topnav-links a:hover { color: var(--ink); }
+  .topnav-variant { font-family: var(--mono); font-size: 9px; letter-spacing: 0.2em; color: var(--accent-7); text-transform: uppercase; padding: 3px 8px; border: 1px dashed var(--accent-7); border-radius: 2px; margin-left: 10px; white-space: nowrap; }
+  @media (max-width: 1200px) { .topnav { flex-direction: column; gap: 10px; padding: 14px 20px; } .topnav-links { gap: 14px; flex-wrap: wrap; justify-content: center; } }
+
+  body { padding: 0 40px 120px; }
+  .frame { max-width: 1240px; margin: 0 auto; }
+
+  /* ---- Hero ---- */
+  .hero { padding: 120px 0 72px; border-bottom: 1px solid var(--line); max-width: 920px; }
+  .hero-eyebrow { font-family: var(--mono); font-size: 11px; letter-spacing: 0.25em; color: var(--ink-3); text-transform: uppercase; margin-bottom: 24px; }
+  .hero h1 { font-family: var(--serif); font-size: 76px; font-weight: 400; letter-spacing: -0.025em; line-height: 1.02; margin-bottom: 20px; }
+  .hero h1 em { font-style: italic; color: var(--accent); }
+  .hero h2 { font-family: var(--serif); font-size: 38px; font-weight: 400; letter-spacing: -0.015em; line-height: 1.15; color: var(--ink); margin-bottom: 32px; max-width: 860px; }
+  .hero h2 em { font-style: italic; color: var(--accent); }
+  .hero-lede { font-family: var(--serif); font-size: 22px; line-height: 1.55; color: var(--ink-2); font-style: italic; margin-bottom: 20px; max-width: 800px; }
+  .hero-body { font-family: var(--serif); font-size: 17px; line-height: 1.6; color: var(--ink-2); max-width: 760px; }
+  .hero-body strong { color: var(--ink); font-weight: 500; }
+
+  /* ---- Section label ---- */
+  .section-label { font-family: var(--mono); font-size: 11px; letter-spacing: 0.25em; text-transform: uppercase; color: var(--ink-3); margin: 72px 0 28px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+
+  /* ---- Cards ---- */
+  .cards { display: grid; grid-template-columns: 1fr 1fr; gap: 2px; background: var(--line); border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+  .card { background: var(--bg-2); padding: 48px 44px; display: flex; flex-direction: column; min-height: 360px; text-decoration: none; color: inherit; transition: background 0.2s; position: relative; }
+  .card:hover { background: var(--bg-3); }
+  .card-num { font-family: var(--serif); font-size: 56px; font-weight: 400; letter-spacing: -0.02em; line-height: 1; margin-bottom: 24px; }
+  .card-1 .card-num { color: var(--accent-2); }
+  .card-2 .card-num { color: var(--accent); }
+  .card-3 .card-num { color: var(--accent-3); }
+  .card-4 .card-num { color: var(--accent-4); }
+  .card-title { font-family: var(--serif); font-size: 32px; font-weight: 400; letter-spacing: -0.01em; line-height: 1.1; margin-bottom: 14px; }
+  .card-sub { font-family: var(--serif); font-size: 17px; font-style: italic; color: var(--ink-2); line-height: 1.5; margin-bottom: 24px; }
+  .card-body { font-family: var(--serif); font-size: 15px; line-height: 1.55; color: var(--ink-2); margin-bottom: auto; }
+  .card-body strong { color: var(--ink); font-weight: 500; }
+  .card-enter { font-family: var(--mono); font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--ink-3); margin-top: 28px; display: flex; align-items: center; gap: 10px; transition: color 0.2s; }
+  .card:hover .card-enter { color: var(--accent); }
+  .card-enter-arrow { transition: transform 0.2s; }
+  .card:hover .card-enter-arrow { transform: translateX(4px); }
+
+  /* ---- Build card (full width, V) ---- */
+  .build-card { margin-top: 2px; background: var(--bg-2); border: 1px solid var(--line); border-radius: 4px; padding: 52px 48px; display: grid; grid-template-columns: 120px 1fr 160px; gap: 40px; align-items: center; text-decoration: none; color: inherit; transition: background 0.2s; }
+  .build-card:hover { background: var(--bg-3); }
+  .build-card-num { font-family: var(--serif); font-size: 72px; font-weight: 400; color: var(--accent-5); line-height: 1; letter-spacing: -0.02em; }
+  .build-card-eyebrow { font-family: var(--mono); font-size: 10px; letter-spacing: 0.25em; color: var(--ink-3); text-transform: uppercase; margin-bottom: 12px; }
+  .build-card-title { font-family: var(--serif); font-size: 34px; font-weight: 400; letter-spacing: -0.01em; line-height: 1.1; margin-bottom: 10px; }
+  .build-card-title em { font-style: italic; color: var(--accent-5); }
+  .build-card-sub { font-family: var(--serif); font-size: 16px; font-style: italic; color: var(--ink-2); line-height: 1.5; max-width: 620px; }
+  .build-card-enter { font-family: var(--mono); font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--ink-3); text-align: right; transition: color 0.2s; }
+  .build-card:hover .build-card-enter { color: var(--accent-5); }
+
+  /* ---- Refusal card (full width, VI) ---- */
+  .refusal-card { margin-top: 2px; background: var(--bg-2); border: 1px solid var(--line); border-radius: 4px; padding: 52px 48px; display: grid; grid-template-columns: 120px 1fr 160px; gap: 40px; align-items: center; text-decoration: none; color: inherit; transition: background 0.2s; }
+  .refusal-card:hover { background: var(--bg-3); }
+  .refusal-card-num { font-family: var(--serif); font-size: 72px; font-weight: 400; color: var(--accent-7); line-height: 1; letter-spacing: -0.02em; }
+  .refusal-card-eyebrow { font-family: var(--mono); font-size: 10px; letter-spacing: 0.25em; color: var(--ink-3); text-transform: uppercase; margin-bottom: 12px; }
+  .refusal-card-title { font-family: var(--serif); font-size: 34px; font-weight: 400; letter-spacing: -0.01em; line-height: 1.1; margin-bottom: 10px; }
+  .refusal-card-title em { font-style: italic; color: var(--accent-7); }
+  .refusal-card-sub { font-family: var(--serif); font-size: 16px; font-style: italic; color: var(--ink-2); line-height: 1.5; max-width: 620px; }
+  .refusal-card-enter { font-family: var(--mono); font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--ink-3); text-align: right; transition: color 0.2s; }
+  .refusal-card:hover .refusal-card-enter { color: var(--accent-7); }
+
+  /* ---- Closing ---- */
+  .closing { margin-top: 80px; padding: 56px 48px; background: var(--bg-2); border: 1px solid var(--line); border-radius: 4px; max-width: 960px; }
+  .closing h2 { font-family: var(--serif); font-size: 34px; font-weight: 400; letter-spacing: -0.01em; line-height: 1.15; margin-bottom: 20px; }
+  .closing h2 em { font-style: italic; color: var(--accent); }
+  .closing p { font-family: var(--serif); font-size: 17px; line-height: 1.6; color: var(--ink-2); margin-bottom: 14px; }
+  .closing p strong { color: var(--ink); font-weight: 500; }
+
+  .footer { margin-top: 80px; padding-top: 32px; border-top: 1px solid var(--line); font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em; color: var(--ink-3); display: flex; justify-content: space-between; text-transform: uppercase; }
+
+  @media (max-width: 900px) {
+    body { padding: 0 20px 60px; }
+    .hero { padding: 60px 0 48px; }
+    .hero h1 { font-size: 44px; }
+    .hero-lede { font-size: 18px; }
+    .cards { grid-template-columns: 1fr; }
+    .card { padding: 36px 28px; min-height: auto; }
+    .card-title { font-size: 26px; }
+    .build-card { grid-template-columns: 1fr; gap: 18px; padding: 32px 28px; text-align: left; }
+    .build-card-enter { text-align: left; }
+    .build-card-title { font-size: 26px; }
+    .refusal-card { grid-template-columns: 1fr; gap: 18px; padding: 32px 28px; text-align: left; }
+    .refusal-card-enter { text-align: left; }
+    .refusal-card-title { font-size: 26px; }
+    .closing { padding: 36px 28px; }
+    .closing h2 { font-size: 26px; }
+  }
+</style>
+<!-- __lock_copy__ -->
+<style>html,body,*{-webkit-user-select:none!important;-moz-user-select:none!important;-ms-user-select:none!important;user-select:none!important;-webkit-touch-callout:none!important;}</style>
+<script>document.addEventListener('contextmenu',function(e){e.preventDefault();});document.addEventListener('copy',function(e){e.preventDefault();});document.addEventListener('cut',function(e){e.preventDefault();});document.addEventListener('dragstart',function(e){e.preventDefault();});document.addEventListener('selectstart',function(e){e.preventDefault();});document.addEventListener('keydown',function(e){if((e.ctrlKey||e.metaKey)&&['c','C','x','X','a','A','s','S','p','P','u','U'].indexOf(e.key)!==-1){e.preventDefault();}});</script>
+</head>
+<body>
+
+  <nav class="topnav">
+    <a href="/manifesto/v/n0.html" class="topnav-brand">Unicron Systems</a>
+    <div class="topnav-links">
+      <a href="/manifesto/v/n1.html">I. Three Factories</a>
+      <a href="/manifesto/v/n2.html">II. Living Systems</a>
+      <a href="/manifesto/v/n3.html">III. Anatomy of an Operation</a>
+      <a href="/manifesto/v/n4.html">IV. Autonomy × Ownership</a>
+      <a href="/manifesto/v/n5.html">V. Seven Generations</a>
+      <a href="/manifesto/v/n6.html">VI. Patterns in Practice</a>
+    </div>
+  </nav>
+
+  <div class="frame">
+
+    <section class="hero">
+      <div class="hero-eyebrow">Paradigm Map · Biomimetic Variant</div>
+      <h1><em>A lush forest</em> has no CEO</h1>
+      <h2>But it has decay, fire, the predator and the thing that will not grow here.</h2>
+      <p class="hero-lede">Living systems solved coordination at scale a billion years ago. This is a working map for copying the whole organism — not just the part that says yes.</p>
+      <p class="hero-body">Six views. <strong>I–IV</strong> build the organism: the paradigm shift from machine to living factory, the five systems behind it, the anatomy of a single operation, and the three axes — autonomy × ownership × reciprocity — that keep it honest. <strong>V</strong> is the refusal layer: decay, dissent, rest, break-off, abstain — the test every other page has to pass. <strong>VI</strong> turns the whole thing into five prototypes you could build this quarter. Read in order. Each page earns the next one.</p>
+    </section>
+
+    <div class="section-label">Four Views</div>
+
+    <div class="cards">
+
+      <a class="card card-1" href="/manifesto/v/n1.html">
+        <div class="card-num">I</div>
+        <div class="card-title">The Three Factories</div>
+        <div class="card-sub">The paradigm shift — with a refusal organ.</div>
+        <div class="card-body">Mechanical → Electrified → Living. Era III now names the fourth thing the forest holds: <strong>a refusal organ that says what the system will not do.</strong> Council elder, taboo keeper, the fire that burns old growth. Without it, "ambient intelligence" is just extraction at faster wattage.</div>
+        <div class="card-enter">Enter <span class="card-enter-arrow">→</span></div>
+      </a>
+
+      <a class="card card-2" href="/manifesto/v/n2.html">
+        <div class="card-num">II</div>
+        <div class="card-title">Living Systems as Orchestration</div>
+        <div class="card-sub">Five organisms. Five governance properties.</div>
+        <div class="card-body">Mycelium, beehive, ant colony, starling murmuration, slime mold. Plus what each one <strong>also</strong> carries: decay, dissent, rest &amp; evaporation, break-off, abstain. The coordination story and the refusal story ship in the same cell.</div>
+        <div class="card-enter">Enter <span class="card-enter-arrow">→</span></div>
+      </a>
+
+      <a class="card card-3" href="/manifesto/v/n3.html">
+        <div class="card-num">III</div>
+        <div class="card-title">Anatomy of an Operation</div>
+        <div class="card-sub">One organism. Seven organs. One refusal gate.</div>
+        <div class="card-body">The single-operation diagram gets two new organs: the <strong>Elder</strong> (continuity log, seven-generations memory) and the <strong>Taboo Keeper</strong> ("will not do" register). Intent now passes a refusal gate before orchestration sees it. A system that cannot refuse is not intelligent — it is only fast.</div>
+        <div class="card-enter">Enter <span class="card-enter-arrow">→</span></div>
+      </a>
+
+      <a class="card card-4" href="/manifesto/v/n4.html">
+        <div class="card-num">IV</div>
+        <div class="card-title">Autonomy × Ownership × Reciprocity</div>
+        <div class="card-sub">Three axes. The third is where it flows back.</div>
+        <div class="card-body">Two axes weren't enough. The companion ladder <strong>R1 → R5</strong> — operator-only, price rebate, contributor share, agent budget &amp; decay, seven-generations flow — asks <strong>where ownership of outcomes flows back to.</strong> A frontier-zone company with R1 is still an extraction engine.</div>
+        <div class="card-enter">Enter <span class="card-enter-arrow">→</span></div>
+      </a>
+
+    </div>
+
+    <div class="section-label">The Refusal Layer</div>
+
+    <a class="refusal-card" href="/manifesto/v/n5.html">
+      <div class="refusal-card-num">V</div>
+      <div>
+        <div class="refusal-card-eyebrow">Seven Generations · Source</div>
+        <div class="refusal-card-title">The page that forced this <em>variant</em> into being.</div>
+        <div class="refusal-card-sub">Not a legacy pose. A decision algorithm for an organism that has descendants — and the test grid whose constraints now braid through pages I–IV and VI. If the rest of the map did not change, this page was a decoration. Now it's the source.</div>
+      </div>
+      <div class="refusal-card-enter">Enter →</div>
+    </a>
+
+    <div class="section-label">Now Build It</div>
+
+    <a class="build-card" href="/manifesto/v/n6.html">
+      <div class="build-card-num">VI</div>
+      <div>
+        <div class="build-card-eyebrow">Patterns in Practice</div>
+        <div class="build-card-title">From organism to <em>architecture</em> — with a "no" per organ.</div>
+        <div class="build-card-sub">Five buildable prototypes. Each one now ships paired with its refusal: <strong>mandatory TTL, validator dissent, NO_SIGNAL as output, break-off on local-rule violation, NO_CANDIDATE_MEETS_THRESHOLD.</strong> The organ and the organ's refusal deploy together.</div>
+      </div>
+      <div class="build-card-enter">Enter →</div>
+    </a>
+
+    <section class="closing">
+      <h2>What this variant <em>changes</em>.</h2>
+      <p>The original map named the coordination story. This one says the coordination story alone is not enough — a system that cannot refuse, decay, dissent, rest, or break off is an extraction engine with a biomimetic paint job.</p>
+      <p><strong>I.</strong> Era III gains a refusal organ. <strong>II.</strong> Each of the five living systems names its governance property. <strong>III.</strong> The anatomy diagram adds an Elder and a Taboo Keeper, plus an explicit refusal gate between intent and orchestration. <strong>IV.</strong> The 5×5 becomes a 5×5×5 — the reciprocity ladder asks where outcomes flow back to. <strong>VI.</strong> Every pattern ships with its "no."</p>
+      <p>Seven Generations (V) stops being a coda and becomes the <strong>source</strong> that the rest of the map answers to — context first, then the build. Pages I–IV and VI are now accountable to the test grid in §6, not just adjacent to it.</p>
+      <p>If an opportunity clears this version of the map, it clears the old one too. The reverse is not true.</p>
+    </section>
+
+    <div class="footer">
+      <span>Unicron Systems · 2026</span>
+      <span></span>
+    </div>
+
+  </div>
+</body>
+</html>

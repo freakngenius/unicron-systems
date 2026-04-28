@@ -1,0 +1,34 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html, body { margin: 0; padding: 0; height: 100%; background: #ffffff; overflow: hidden; }
+  #__next, body, html { height: 100%; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: var(--font-inter), system-ui, -apple-system, sans-serif;
+    color: #0a0a0a;
+    -webkit-font-smoothing: antialiased;
+  }
+}
+
+@layer components {
+  /* Mirrors hifi-tokens.jsx base classes — these are the design system primitives. */
+  .pf-mono { font-family: var(--font-jetbrains-mono), ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+  .pf-label { font: 500 10px/1.2 var(--font-jetbrains-mono), ui-monospace, monospace; letter-spacing: 0.08em; text-transform: uppercase; color: #6b7280; }
+  .pf-h1 { font: 600 22px/1.15 var(--font-inter), system-ui, sans-serif; letter-spacing: -0.01em; color: #0a0a0a; }
+  .pf-h2 { font: 600 14px/1.2 var(--font-inter), system-ui, sans-serif; letter-spacing: -0.005em; color: #0a0a0a; }
+  .pf-body { font: 400 13px/1.45 var(--font-inter), system-ui, sans-serif; color: #0a0a0a; }
+  .pf-meta { font: 500 11px/1.3 var(--font-jetbrains-mono), ui-monospace, monospace; color: #6b7280; }
+  .pf-num { font: 600 14px/1 var(--font-jetbrains-mono), ui-monospace, monospace; color: #0a0a0a; font-variant-numeric: tabular-nums; }
+  .pf-btn { background: #0a0a0a; color: white; border: none; padding: 8px 14px; font: 500 12px/1 var(--font-inter), system-ui, sans-serif; cursor: pointer; border-radius: 3px; letter-spacing: 0.01em; }
+  .pf-btn-ghost { background: transparent; color: #0a0a0a; border: 1px solid rgba(10,10,10,0.12); padding: 7px 13px; font: 500 12px/1 var(--font-inter), system-ui, sans-serif; cursor: pointer; border-radius: 3px; }
+  .pf-pill { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; border: 1px solid rgba(10,10,10,0.12); background: #ffffff; color: #0a0a0a; font: 500 10.5px/1 var(--font-jetbrains-mono), ui-monospace, monospace; letter-spacing: 0.05em; text-transform: uppercase; border-radius: 3px; cursor: pointer; }
+  .pf-pill-active { background: #0a0a0a; color: white; border-color: #0a0a0a; }
+  .pf-pill-hi { background: rgba(34,211,238,0.14); border-color: #22d3ee; color: #0a0a0a; }
+  .pf-pill-warm { background: rgba(163,230,53,0.16); border-color: #a3e635; color: #0a0a0a; }
+  .pf-row { display: flex; align-items: center; }
+  .pf-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+  .pf-scrollbar::-webkit-scrollbar-thumb { background: rgba(10,10,10,0.12); border-radius: 3px; }
+}

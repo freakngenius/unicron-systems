@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Pathfinder Wireframes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;500;600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  html, body { margin: 0; padding: 0; height: 100%; background: #f0eee9; font-family: 'Inter', system-ui, sans-serif; }
+  #root { height: 100%; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script type="text/babel" src="design-canvas.jsx"></script>
+<script type="text/babel" src="tweaks-panel.jsx"></script>
+<script type="text/babel" src="wireframe-primitives.jsx"></script>
+<script type="text/babel" src="dashboards.jsx"></script>
+<script type="text/babel" src="surfaces.jsx"></script>
+
+<script type="text/babel">
+const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+  "showAnnotations": false,
+  "highlightAccent": true
+}/*EDITMODE-END*/;
+
+function App() {
+  const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
+  const a = t.showAnnotations;
+
+  // Honor highlightAccent globally by toggling a CSS variable / class
+  React.useEffect(() => {
+    document.body.style.setProperty('--accent-on', t.highlightAccent ? '1' : '0');
+  }, [t.highlightAccent]);
+
+  return (
+    <>
+      <DesignCanvas>
+        <DCSection id="dashboards" title="Main Dashboard"
+                   subtitle="4 layout directions for the always-visible field-intel surface. Greybox; light/paper.">
+          <DCArtboard id="d-linear" label="A · Linear-ish — calm rails, refined" width={896} height={560}>
+            <DashboardLinear showAnnotations={a} />
+          </DCArtboard>
+          <DCArtboard id="d-bloomberg" label="B · Bloomberg-ish — dense, table-forward" width={896} height={560}>
+            <DashboardBloomberg showAnnotations={a} />
+          </DCArtboard>
+          <DCArtboard id="d-mapfwd" label="C · Mapbox-forward — full-bleed, floating panels" width={896} height={560}>
+            <DashboardMapForward showAnnotations={a} />
+          </DCArtboard>
+          <DCArtboard id="d-mission" label="D · Mission control — branches as fixed nav, bottom dock feed" width={896} height={560}>
+            <DashboardMissionControl showAnnotations={a} />
+          </DCArtboard>
+        </DCSection>
+
+        <DCSection id="branch" title="Branch Focus"
+                   subtitle="4 takes on what 'click a branch' does. Same dashboard chrome, different focus moments.">
+          <DCArtboard id="b-pan" label="A · Pan + soft radius, others dim" width={896} height={560}>
+            <BranchFocusA showAnnotations={a} />
+          </DCArtboard>
+          <DCArtboard id="b-detail" label="B · Branch detail card sits atop right rail" width={896} height={560}>
+            <BranchFocusB showAnnotations={a} />
+          </DCArtboard>
+          <DCArtboard id="b-anchor" label="C · Anchored card on the map pin itself" width={896} height={560}>
+            <BranchFocusC showAnnotations={a} />
+          </DCArtboard>
+          <DCArtboard id="b-zoom" label="D · Aggressive zoom — radius dominates" width={896} height={560}>
+            <BranchFocusD showAnnotations={a} />
+          </DCArtboard>
+        </DCSection>
+
+        <DCSection id="detail" title="Project Detail"
+                   subtitle="Brief says modal — worth probing. Three alternatives side-by-side.">
+          <DCArtboard id="p-modal" label="A · Centered modal (per brief)" width={896} height={560}>
+            <ProjectModalCenter showAnnotations={a} />
+          </DCArtboard>
+          <DCArtboard id="p-drawer" label="B · Right-side drawer, map stays visible" width={896} height={560}>
+            <ProjectDrawerRight showAnnotations={a} />
+          </DCArtboard>
+          <DCArtboard id="p-inline" label="C · Inline expansion in the project list" width={896} height={560}>
+            <ProjectInlineExpand showAnnotations={a} />
+          </DCArtboard>
+        </DCSection>
+
+        <DCSection id="cross" title="Cross-Pollination"
+                   subtitle="Dedicated visual mode — the toggle should transform the map. 4 ways to do it.">
+          <DCArtboard id="x-link" label="A · Dashed links + customer halos" width={896} height={560}>
+            <CrossPollA showAnnotations={a} />
+          </DCArtboard>
+          <DCArtboard id="x-shift" label="B · Map dims, only warm pairs in color" width={896} height={560}>
+            <CrossPollB showAnnotations={a} />
+          </DCArtboard>
+          <DCArtboard id="x-halo" label="C · Customer reach halos + warmth-sorted list" width={896} height={560}>
+            <CrossPollC showAnnotations={a} />
+          </DCArtboard>
+          <DCArtboard id="x-graph" label="D · Network graph: branch → customer → opp" width={896} height={560}>
+            <CrossPollD showAnnotations={a} />
+          </DCArtboard>
+        </DCSection>
+
+      </DesignCanvas>
+
+      <TweaksPanel>
+        <TweakSection label="Wireframe options" />
+        <TweakToggle label="Show annotations" value={t.showAnnotations}
+                     onChange={(v) => setTweak('showAnnotations', v)} />
+        <TweakToggle label="Highlight accent (priority)" value={t.highlightAccent}
+                     onChange={(v) => setTweak('highlightAccent', v)} />
+      </TweaksPanel>
+    </>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>

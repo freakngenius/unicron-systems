@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script>(function(){var t=sessionStorage.getItem(String.fromCharCode(95,95,117,120,98,95,116,107));if(t!=="8c973a4a158f95dafae1906467f968e060df6d28989ac304de4d0ab3c914d03e"){window.location.replace("/manifesto")}})();</script>
+
+<meta charset="UTF-8">
+<link rel="icon" type="image/svg+xml" href="/manifesto/favicon.svg">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Seven Generations — The Refusal Layer</title>
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --bg-2: #12121a;
+    --bg-3: #161620;
+    --ink: #e8e6de;
+    --ink-2: #9a9689;
+    --ink-3: #5c5a52;
+    --accent-1: #d4a574;
+    --accent-2: #6ba8d9;
+    --accent-3: #9fd4a1;
+    --accent-7: #c4a476;  /* muted bronze — old, earthen, slow */
+    --accent-7b: #8a6e55; /* deeper wood */
+    --accent-warn: #d4a592;
+    --line: #2a2a32;
+    --line-2: #1e1e26;
+    --serif: "Iowan Old Style", "Palatino", "Palatino Linotype", Georgia, serif;
+    --sans: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+    --mono: "JetBrains Mono", "SF Mono", Menlo, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { background: var(--bg); color: var(--ink); font-family: var(--sans); -webkit-font-smoothing: antialiased; }
+
+  /* ---- Shared topnav ---- */
+  .topnav { position: sticky; top: 0; z-index: 50; background: rgba(10,10,15,0.92); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border-bottom: 1px solid var(--line); padding: 14px 40px; display: flex; align-items: center; justify-content: space-between; }
+  .topnav-brand { font-family: var(--mono); font-size: 11px; letter-spacing: 0.25em; color: var(--ink-2); text-transform: uppercase; text-decoration: none; }
+  .topnav-brand em { font-style: normal; color: var(--ink-3); }
+  .topnav-brand:hover { color: var(--ink); }
+  .topnav-links { display: flex; gap: 22px; }
+  .topnav-links a { font-family: var(--mono); font-size: 11px; letter-spacing: 0.15em; text-transform: uppercase; text-decoration: none; color: var(--ink-3); padding: 4px 0; border-bottom: 1px solid transparent; transition: color 0.15s, border-color 0.15s; }
+  .topnav-links a:hover { color: var(--ink); }
+  .topnav-links a.active { color: var(--accent-7); border-bottom-color: var(--accent-7); }
+  @media (max-width: 1200px) { .topnav { flex-direction: column; gap: 10px; padding: 14px 20px; } .topnav-links { gap: 14px; flex-wrap: wrap; justify-content: center; } }
+
+  body { padding: 80px 40px 120px; }
+
+  .frame { max-width: 1240px; margin: 0 auto; }
+  .wide { max-width: 1240px; margin: 0 auto; }
+
+  /* ---- Hero ---- */
+  .hero { padding-top: 40px; margin-bottom: 120px; max-width: 920px; }
+  .eyebrow { font-family: var(--mono); font-size: 11px; letter-spacing: 0.25em; color: var(--accent-7b); text-transform: uppercase; margin-bottom: 18px; }
+  h1 { font-family: var(--serif); font-size: 68px; font-weight: 400; letter-spacing: -0.02em; line-height: 1.05; margin-bottom: 28px; color: var(--ink); }
+  h1 em { font-style: italic; color: var(--accent-7); }
+  .subtitle { font-family: var(--serif); font-size: 22px; font-style: italic; color: var(--ink-2); line-height: 1.55; max-width: 720px; }
+  .lede-mono { font-family: var(--mono); font-size: 12px; letter-spacing: 0.1em; color: var(--ink-3); text-transform: uppercase; margin-top: 32px; border-top: 1px solid var(--line); padding-top: 20px; }
+  .lede-mono span { color: var(--accent-7); }
+
+  /* ---- Section headers ---- */
+  .section { margin-bottom: 120px; }
+  .section-head { margin-bottom: 56px; max-width: 780px; }
+  .section-num { font-family: var(--mono); font-size: 10px; letter-spacing: 0.3em; color: var(--accent-7b); text-transform: uppercase; margin-bottom: 14px; }
+  h2 { font-family: var(--serif); font-size: 40px; font-weight: 400; letter-spacing: -0.015em; line-height: 1.1; margin-bottom: 18px; }
+  h2 em { font-style: italic; color: var(--accent-7); }
+  .section-lede { font-family: var(--serif); font-size: 19px; color: var(--ink-2); line-height: 1.55; }
+  .section-lede strong { color: var(--ink); font-weight: 500; }
+
+  /* ---- The misread: 3 columns ---- */
+  .misread-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 2px; background: var(--line); border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+  .misread { background: var(--bg-2); padding: 36px 32px; display: flex; flex-direction: column; min-height: 420px; }
+  .misread-num { font-family: var(--serif); font-size: 48px; font-weight: 400; color: var(--accent-7); line-height: 1; margin-bottom: 16px; letter-spacing: -0.02em; }
+  .misread-name { font-family: var(--serif); font-size: 22px; font-weight: 400; margin-bottom: 8px; letter-spacing: -0.01em; }
+  .misread-caption { font-family: var(--mono); font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 24px; }
+  .misread-body { font-family: var(--serif); font-size: 16px; line-height: 1.6; color: var(--ink-2); margin-bottom: 18px; }
+  .misread-body strong { color: var(--ink); font-weight: 500; }
+  .misread-vs { margin-top: auto; padding-top: 18px; border-top: 1px solid var(--line); font-family: var(--mono); font-size: 11px; color: var(--ink-3); line-height: 1.7; letter-spacing: 0.02em; }
+  .misread-vs .pop { color: var(--ink-3); }
+  .misread-vs .real { color: var(--accent-7); display: block; margin-top: 2px; }
+
+  /* ---- Four constraints diagram + list ---- */
+  .constraints { display: grid; grid-template-columns: 1.1fr 1fr; gap: 72px; align-items: center; }
+  .constraints-diagram { width: 100%; height: 480px; display: flex; align-items: center; justify-content: center; }
+  .constraints-diagram svg { width: 100%; height: 100%; max-width: 480px; }
+  .constraints-list { display: flex; flex-direction: column; gap: 28px; }
+  .c-item { padding: 24px 26px; background: var(--bg-2); border: 1px solid var(--line); border-radius: 2px; border-left: 2px solid var(--accent-7); }
+  .c-item-head { display: flex; align-items: baseline; gap: 14px; margin-bottom: 10px; }
+  .c-num { font-family: var(--mono); font-size: 10px; letter-spacing: 0.25em; color: var(--accent-7); text-transform: uppercase; }
+  .c-name { font-family: var(--serif); font-size: 22px; font-weight: 400; letter-spacing: -0.01em; }
+  .c-q { font-family: var(--serif); font-style: italic; font-size: 15px; color: var(--ink-2); line-height: 1.55; margin-bottom: 10px; }
+  .c-test { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; color: var(--ink-3); text-transform: uppercase; }
+  .c-test span { color: var(--accent-7b); }
+
+  /* ---- Container problem ---- */
+  .container-problem { background: var(--bg-2); border: 1px solid var(--line); border-radius: 4px; padding: 56px 64px; }
+  .container-problem h2 { font-size: 36px; margin-bottom: 24px; }
+  .container-problem p { font-family: var(--serif); font-size: 18px; line-height: 1.6; color: var(--ink-2); margin-bottom: 18px; max-width: 840px; }
+  .container-problem p strong { color: var(--ink); font-weight: 500; }
+  .container-problem p em { color: var(--accent-7); font-style: italic; }
+  .container-problem .sign-off { font-family: var(--mono); font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink-3); margin-top: 32px; padding-top: 24px; border-top: 1px solid var(--line); }
+  .container-problem .sign-off em { color: var(--accent-7); font-style: normal; }
+
+  /* ---- Architecture: 5 imports ---- */
+  .arch-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 2px; background: var(--line); border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+  .arch { background: var(--bg-2); padding: 32px 22px; display: flex; flex-direction: column; min-height: 420px; }
+  .arch-icon { width: 56px; height: 56px; margin-bottom: 24px; }
+  .arch-icon svg { width: 100%; height: 100%; }
+  .arch-num { font-family: var(--mono); font-size: 10px; letter-spacing: 0.25em; color: var(--accent-7); text-transform: uppercase; margin-bottom: 8px; }
+  .arch-name { font-family: var(--serif); font-size: 20px; font-weight: 400; margin-bottom: 12px; letter-spacing: -0.005em; line-height: 1.2; }
+  .arch-body { font-family: var(--serif); font-size: 14px; line-height: 1.55; color: var(--ink-2); margin-bottom: 16px; }
+  .arch-impact { margin-top: auto; padding-top: 16px; border-top: 1px solid var(--line); font-family: var(--mono); font-size: 10px; letter-spacing: 0.12em; color: var(--ink-3); text-transform: uppercase; }
+  .arch-impact span { color: var(--accent-7); display: block; margin-top: 4px; letter-spacing: 0.08em; }
+  @media (max-width: 1100px) { .arch-grid { grid-template-columns: 1fr 1fr; } .arch:nth-child(5) { grid-column: span 2; } }
+  @media (max-width: 700px) { .arch-grid { grid-template-columns: 1fr; } .arch:nth-child(5) { grid-column: auto; } }
+
+  /* ---- Taboos list (optional rules section) ---- */
+  .taboos { background: var(--bg-2); border: 1px solid var(--line); padding: 48px 56px; border-radius: 4px; }
+  .taboos h2 { font-size: 30px; margin-bottom: 14px; }
+  .taboos-sub { font-family: var(--serif); font-size: 17px; color: var(--ink-2); font-style: italic; margin-bottom: 36px; max-width: 720px; line-height: 1.55; }
+  .taboo-list { display: grid; grid-template-columns: 1fr 1fr; gap: 0 48px; }
+  .taboo { padding: 16px 0; border-bottom: 1px solid var(--line); display: grid; grid-template-columns: 28px 1fr; gap: 14px; align-items: baseline; }
+  .taboo:last-child { border-bottom: none; }
+  .taboo-check { font-family: var(--mono); font-size: 14px; color: var(--accent-7); }
+  .taboo-text { font-family: var(--serif); font-size: 16px; color: var(--ink); line-height: 1.5; }
+  .taboo-text em { color: var(--ink-2); font-style: italic; font-size: 14px; display: block; margin-top: 4px; }
+
+  /* ---- Test / mapping back to other pages ---- */
+  .test-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2px; background: var(--line); border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+  .test-card { background: var(--bg-2); padding: 32px 36px; }
+  .test-target { font-family: var(--mono); font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--accent-7); margin-bottom: 8px; }
+  .test-target a { color: var(--accent-7); text-decoration: none; border-bottom: 1px solid transparent; transition: border-color 0.15s; }
+  .test-target a:hover { border-color: var(--accent-7); }
+  .test-title { font-family: var(--serif); font-size: 18px; font-weight: 500; margin-bottom: 12px; }
+  .test-body { font-family: var(--serif); font-size: 15px; line-height: 1.6; color: var(--ink-2); }
+  .test-body strong { color: var(--ink); font-weight: 500; }
+
+  /* ---- Sources / footer ---- */
+  .sources { margin-top: 80px; padding: 40px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+  .sources-label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.25em; color: var(--ink-3); text-transform: uppercase; margin-bottom: 20px; }
+  .sources-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 40px; }
+  .source { display: flex; flex-direction: column; }
+  .source-name { font-family: var(--serif); font-size: 17px; font-style: italic; color: var(--accent-7); margin-bottom: 4px; }
+  .source-desc { font-family: var(--sans); font-size: 12px; color: var(--ink-3); line-height: 1.5; }
+  @media (max-width: 900px) { .sources-grid { grid-template-columns: 1fr 1fr; } }
+
+  .footer { margin-top: 80px; padding-top: 32px; border-top: 1px solid var(--line); font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em; color: var(--ink-3); display: flex; justify-content: space-between; text-transform: uppercase; }
+
+  @media (max-width: 1100px) {
+    body { padding: 40px 20px; }
+    h1 { font-size: 44px; }
+    h2 { font-size: 28px; }
+    .misread-grid { grid-template-columns: 1fr; }
+    .constraints { grid-template-columns: 1fr; gap: 40px; }
+    .constraints-diagram { height: 380px; }
+    .container-problem { padding: 32px 24px; }
+    .taboos { padding: 32px 24px; }
+    .taboo-list { grid-template-columns: 1fr; }
+    .test-grid { grid-template-columns: 1fr; }
+  }
+</style>
+<!-- __lock_copy__ -->
+<style>html,body,*{-webkit-user-select:none!important;-moz-user-select:none!important;-ms-user-select:none!important;user-select:none!important;-webkit-touch-callout:none!important;}</style>
+<script>document.addEventListener('contextmenu',function(e){e.preventDefault();});document.addEventListener('copy',function(e){e.preventDefault();});document.addEventListener('cut',function(e){e.preventDefault();});document.addEventListener('dragstart',function(e){e.preventDefault();});document.addEventListener('selectstart',function(e){e.preventDefault();});document.addEventListener('keydown',function(e){if((e.ctrlKey||e.metaKey)&&['c','C','x','X','a','A','s','S','p','P','u','U'].indexOf(e.key)!==-1){e.preventDefault();}});</script>
+</head>
+<body>
+
+<nav class="topnav">
+  <a href="/manifesto/v/n0.html" class="topnav-brand">Unicron Systems</a>
+  <div class="topnav-links">
+    <a href="/manifesto/v/n1.html">I. Three Factories</a>
+    <a href="/manifesto/v/n2.html">II. Living Systems</a>
+    <a href="/manifesto/v/n3.html">III. Anatomy of an Operation</a>
+    <a href="/manifesto/v/n4.html">IV. Autonomy × Ownership</a>
+    <a href="/manifesto/v/n5.html" class="active">V. Seven Generations</a>
+    <a href="/manifesto/v/n6.html">VI. Patterns in Practice</a>
+  </div>
+</nav>
+
+<div class="frame">
+
+  <!-- ─────────── HERO ─────────── -->
+  <section class="hero">
+    <h1>Seven Generations —<br>or, <em>what we are not allowed to build.</em></h1>
+    <p class="subtitle">Not a legacy pose. Not a vision tool. A decision algorithm for an organism that has descendants. And a list of the refusals and returns that constrain every other page of this map.</p>
+    <div class="lede-mono">
+      If this page does not change what is on the other five pages, it is decoration.
+      <span>&nbsp;·&nbsp;</span>
+      If it changes them, it is structural.
+    </div>
+  </section>
+
+  <!-- ─────────── SECTION 1 · THE MISREAD ─────────── -->
+  <section class="section">
+    <div class="section-head">
+      <div class="section-num">§ 1 · Ground-clearing</div>
+      <h2>The popular reading is a <em>watered-down misread</em>.</h2>
+      <p class="section-lede">The phrase comes from the Haudenosaunee Great Law of Peace — the Kaianere'kó:wa, the constitution that predates the US Constitution by ~400 years and directly influenced it. Three things get dropped when it's translated into sustainability branding.</p>
+    </div>
+
+    <div class="misread-grid">
+      <div class="misread">
+        <div class="misread-num">01</div>
+        <div class="misread-name">It runs backward too.</div>
+        <div class="misread-caption">Reciprocal across time</div>
+        <p class="misread-body">You are the seventh generation of someone else's decision. The commitment is not a gift you give the future — it is a <strong>debt you pay to the people who considered you before you existed.</strong></p>
+        <p class="misread-body">That reframes the posture from "legacy-building" to "not breaking the chain." Humbler. Less heroic.</p>
+        <div class="misread-vs">
+          <span class="pop">Popular: build things that last.</span>
+          <span class="real">Real: don't break what was given.</span>
+        </div>
+      </div>
+
+      <div class="misread">
+        <div class="misread-num">02</div>
+        <div class="misread-name">Refusal, not generativity.</div>
+        <div class="misread-caption">An immune system</div>
+        <p class="misread-body">The principle doesn't tell you what to build. It tells you <strong>what you are not allowed to decide without considering the unseen stakeholders.</strong></p>
+        <p class="misread-body">The Haudenosaunee council is structured around slow deliberation, consensus, and the explicit right of elders to halt decisions on behalf of descendants. An immune system, not a growth engine.</p>
+        <div class="misread-vs">
+          <span class="pop">Popular: a vision-casting tool.</span>
+          <span class="real">Real: don't do harms that last 140 years.</span>
+        </div>
+      </div>
+
+      <div class="misread">
+        <div class="misread-num">03</div>
+        <div class="misread-name">Not only humans.</div>
+        <div class="misread-caption">In treaty with the more-than-human</div>
+        <p class="misread-body">The "generations" include rivers, forests, fish runs, soil, weather patterns. <strong>The unit of concern is the web</strong> — not the individual, not the generation, not even the species.</p>
+        <p class="misread-body">Cognate with Maya ceremonial accountability to place and time, Andean <em>ayni</em>, Māori <em>whakapapa</em>, Lakota <em>Mitákuye Oyás'iŋ</em> — "all my relations."</p>
+        <div class="misread-vs">
+          <span class="pop">Popular: human stakeholders.</span>
+          <span class="real">Real: the whole kin network.</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────── SECTION 2 · FOUR NESTED CONSTRAINTS ─────────── -->
+  <section class="section">
+    <div class="section-head">
+      <div class="section-num">§ 2 · The real instruction</div>
+      <h2>Four nested constraints. <em>In this order.</em></h2>
+      <p class="section-lede">This is not a principle to align with. It is a sequence of tests a decision must pass before the organism is permitted to act.</p>
+    </div>
+
+    <div class="constraints">
+      <div class="constraints-diagram" aria-label="Four nested concentric rings: who's harmed, what flows back, time horizon, what we refuse">
+        <svg viewBox="0 0 480 480" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <radialGradient id="core" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stop-color="#c4a476" stop-opacity="0.9"/>
+              <stop offset="100%" stop-color="#c4a476" stop-opacity="0.25"/>
+            </radialGradient>
+          </defs>
+
+          <!-- ring 1 — outermost: seat or veto -->
+          <circle cx="240" cy="240" r="220" fill="none" stroke="#c4a476" stroke-width="1.1" opacity="0.3"/>
+          <text x="240" y="48" text-anchor="middle" fill="#c4a476" font-family="JetBrains Mono" font-size="9" letter-spacing="2.5">SEAT OR VETO</text>
+
+          <!-- ring 2 — reciprocity -->
+          <circle cx="240" cy="240" r="170" fill="none" stroke="#c4a476" stroke-width="1.1" opacity="0.45"/>
+          <text x="240" y="98" text-anchor="middle" fill="#c4a476" font-family="JetBrains Mono" font-size="9" letter-spacing="2.5">RECIPROCITY</text>
+
+          <!-- ring 3 — time horizon -->
+          <circle cx="240" cy="240" r="120" fill="none" stroke="#c4a476" stroke-width="1.2" opacity="0.6"/>
+          <text x="240" y="148" text-anchor="middle" fill="#c4a476" font-family="JetBrains Mono" font-size="9" letter-spacing="2.5">140-YEAR BAND</text>
+
+          <!-- ring 4 — taboos -->
+          <circle cx="240" cy="240" r="70" fill="none" stroke="#c4a476" stroke-width="1.4" opacity="0.8"/>
+          <text x="240" y="194" text-anchor="middle" fill="#c4a476" font-family="JetBrains Mono" font-size="9" letter-spacing="2.5">TABOOS</text>
+
+          <!-- core — the decision -->
+          <circle cx="240" cy="240" r="28" fill="url(#core)"/>
+          <circle cx="240" cy="240" r="10" fill="#c4a476"/>
+          <text x="240" y="243" text-anchor="middle" fill="#0a0a0f" font-family="Iowan Old Style" font-size="10" font-style="italic" font-weight="600">act</text>
+
+          <!-- directional tick — backward/forward time -->
+          <g stroke="#8a6e55" stroke-width="0.8" opacity="0.5">
+            <line x1="14" y1="240" x2="42" y2="240"/>
+            <line x1="438" y1="240" x2="466" y2="240"/>
+            <polygon points="14,240 22,236 22,244" fill="#8a6e55"/>
+            <polygon points="466,240 458,236 458,244" fill="#8a6e55"/>
+          </g>
+          <text x="30" y="260" text-anchor="middle" fill="#5c5a52" font-family="JetBrains Mono" font-size="8" letter-spacing="1.5">ANCESTORS</text>
+          <text x="450" y="260" text-anchor="middle" fill="#5c5a52" font-family="JetBrains Mono" font-size="8" letter-spacing="1.5">DESCENDANTS</text>
+        </svg>
+      </div>
+
+      <div class="constraints-list">
+        <div class="c-item">
+          <div class="c-item-head">
+            <span class="c-num">01 · Representation</span>
+          </div>
+          <div class="c-name">Seat or veto.</div>
+          <p class="c-q">Who is harmed by this decision who isn't at the table — including descendants and non-humans — and have we given them a seat, or at least a veto?</p>
+          <div class="c-test"><span>TEST:</span> Structural, not rhetorical. Shows up as governance, not copy.</div>
+        </div>
+
+        <div class="c-item">
+          <div class="c-item-head">
+            <span class="c-num">02 · Reciprocity</span>
+          </div>
+          <div class="c-name">What flows back.</div>
+          <p class="c-q">What are we taking from, and what flows back? Extraction without return is illness. For an AI organism trained on human labor, "what flows back" is the integrity test.</p>
+          <div class="c-test"><span>TEST:</span> Embedded in equity, cooperatives, revenue share — not philanthropy.</div>
+        </div>
+
+        <div class="c-item">
+          <div class="c-item-head">
+            <span class="c-num">03 · Time horizon</span>
+          </div>
+          <div class="c-name">The 140-year band.</div>
+          <p class="c-q">Seven generations is ~140 years — the living-memory boundary. The longest horizon a human community can feel as relational rather than abstract.</p>
+          <div class="c-test"><span>TEST:</span> Below it, decisions are quarterly. Above it, theological. This is the band where kin are still family.</div>
+        </div>
+
+        <div class="c-item">
+          <div class="c-item-head">
+            <span class="c-num">04 · Refusal</span>
+          </div>
+          <div class="c-name">What we will not build.</div>
+          <p class="c-q">What are we refusing? Indigenous governance has explicit taboos — encoded in story and ceremony so they don't need to be re-debated every generation.</p>
+          <div class="c-test"><span>TEST:</span> A system without taboos eventually does everything. A system with living taboos has shape.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────── SECTION 3 · CONTAINER ─────────── -->
+  <section class="section">
+    <div class="container-problem">
+      <div class="section-num">§ 3 · The honest part</div>
+      <h2>The container is <em>categorically opposite</em>.</h2>
+      <p>Eight weeks, a billion-dollar-build prize, winner-takes-structure. The container itself — rapid concentration of ownership, network effects that enclose commons, exit-oriented — is the <strong>opposite</strong> of seven-generations ethics.</p>
+      <p>Unicorns are extraction at the structural level. <strong>You cannot build a fully seven-gen-aligned unicorn.</strong> That is a category error, and pretending otherwise is what makes most "ethical AI" frameworks hollow.</p>
+      <p>The honest move is to pick which parts of the ethic we can actually architect in, <em>and be explicit about which parts we are violating because of the container we chose</em>.</p>
+      <div class="sign-off">
+        We are entering this contest. We are also stating on the record: <em>parts of this container are not seven-gen-aligned.</em> The architecture below is what we are willing to build anyway.
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────── SECTION 4 · FIVE IMPORTS ─────────── -->
+  <section class="section">
+    <div class="section-head">
+      <div class="section-num">§ 4 · What we architect</div>
+      <h2>Five structural imports. <em>Not metaphors.</em></h2>
+      <p class="section-lede">Features cannot carry the ethic. Architecture can. These five get built into the organism's governance, not written in its marketing.</p>
+    </div>
+
+    <div class="arch-grid">
+      <div class="arch">
+        <div class="arch-icon">
+          <svg viewBox="0 0 56 56" fill="none" stroke="#c4a476" stroke-width="1.2">
+            <circle cx="28" cy="28" r="22"/>
+            <path d="M14 28 L24 36 L42 18" stroke-width="1.5"/>
+          </svg>
+        </div>
+        <div class="arch-num">Import 01</div>
+        <div class="arch-name">Restorative vertical filter.</div>
+        <p class="arch-body">Pick industries whose work is <em>restorative, not extractive</em>. Repair economies, restoration contracting, grief &amp; end-of-life, regenerative ag, mediation, care work. Industries where more agent-leverage genuinely reduces suffering rather than redistributing it upward.</p>
+        <div class="arch-impact">Impact<span>Narrows vertical pass. Fewer candidates survive the filter.</span></div>
+      </div>
+
+      <div class="arch">
+        <div class="arch-icon">
+          <svg viewBox="0 0 56 56" fill="none" stroke="#c4a476" stroke-width="1.2">
+            <rect x="10" y="14" width="36" height="28" rx="2"/>
+            <line x1="18" y1="24" x2="38" y2="24"/>
+            <line x1="18" y1="32" x2="30" y2="32"/>
+            <circle cx="42" cy="14" r="6" fill="#c4a476"/>
+            <line x1="38" y1="10" x2="46" y2="18" stroke="#0a0a0f" stroke-width="1.5"/>
+          </svg>
+        </div>
+        <div class="arch-num">Import 02</div>
+        <div class="arch-name">A taboo agent in the mesh.</div>
+        <p class="arch-body">A refusal layer. Its only job is to review invocations against explicit commitments — no extractive finance, no time-on-site optimization, no military contracts, whatever the list is. <em>Visible in the product.</em> Competitors can't copy it because their business model won't let them.</p>
+        <div class="arch-impact">Impact<span>Structural moat by refusal. See taboos below.</span></div>
+      </div>
+
+      <div class="arch">
+        <div class="arch-icon">
+          <svg viewBox="0 0 56 56" fill="none" stroke="#c4a476" stroke-width="1.2">
+            <circle cx="18" cy="18" r="6"/>
+            <circle cx="38" cy="38" r="6"/>
+            <path d="M22 20 C 30 22, 30 28, 30 30" />
+            <path d="M34 36 C 26 34, 26 28, 26 26" />
+            <polygon points="30,30 27,27 33,27" fill="#c4a476"/>
+            <polygon points="26,26 23,29 29,29" fill="#c4a476"/>
+          </svg>
+        </div>
+        <div class="arch-num">Import 03</div>
+        <div class="arch-name">Reciprocity in equity.</div>
+        <p class="arch-body">If the organism extracts a practitioner's playbook to serve future practitioners, a portion of the value flows back <em>as equity or shared return</em>, not as a thank-you note. Cooperative economics built into cap table and revenue split, not a blog post.</p>
+        <div class="arch-impact">Impact<span>Reshapes revenue model and ownership structure.</span></div>
+      </div>
+
+      <div class="arch">
+        <div class="arch-icon">
+          <svg viewBox="0 0 56 56" fill="none" stroke="#c4a476" stroke-width="1.2">
+            <circle cx="28" cy="28" r="20"/>
+            <line x1="28" y1="28" x2="28" y2="12"/>
+            <line x1="28" y1="28" x2="40" y2="34"/>
+            <circle cx="8" cy="28" r="2" fill="#8a6e55"/>
+            <circle cx="48" cy="28" r="2" fill="#8a6e55"/>
+          </svg>
+        </div>
+        <div class="arch-num">Import 04</div>
+        <div class="arch-name">A time-horizon agent.</div>
+        <p class="arch-body">A specialist in the mesh whose job is to critique every significant decision from a 140-year lens <em>before</em> the organism acts. Not a veto — a forcing function. A literal structural import of the <strong>council elder</strong> function into the agent topology.</p>
+        <div class="arch-impact">Impact<span>Slows optimization that would compound across generations.</span></div>
+      </div>
+
+      <div class="arch">
+        <div class="arch-icon">
+          <svg viewBox="0 0 56 56" fill="none" stroke="#c4a476" stroke-width="1.2">
+            <circle cx="28" cy="28" r="6" fill="#c4a476"/>
+            <circle cx="12" cy="14" r="4"/>
+            <circle cx="44" cy="14" r="4"/>
+            <circle cx="12" cy="42" r="4"/>
+            <circle cx="44" cy="42" r="4"/>
+            <line x1="24" y1="26" x2="14" y2="16" stroke-dasharray="1 2"/>
+            <line x1="32" y1="26" x2="42" y2="16" stroke-dasharray="1 2"/>
+            <line x1="24" y1="30" x2="14" y2="40" stroke-dasharray="1 2"/>
+            <line x1="32" y1="30" x2="42" y2="40" stroke-dasharray="1 2"/>
+          </svg>
+        </div>
+        <div class="arch-num">Import 05</div>
+        <div class="arch-name">Commons as default.</div>
+        <p class="arch-body">A portion of what the organism learns — anonymized patterns, public tooling, research — reverts to <em>shared infrastructure</em>. Not open-sourcing the moat. Open-sourcing <strong>the substrate below it</strong>, so others can build on what we learn without enclosing it.</p>
+        <div class="arch-impact">Impact<span>Competitive compound slows. Ecosystem compound grows.</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────── SECTION 5 · OUR TABOOS ─────────── -->
+  <section class="section">
+    <div class="taboos">
+      <div class="section-num">§ 5 · Our taboos</div>
+      <h2>Things this organism <em>will not do</em>.</h2>
+      <p class="taboos-sub">Living taboos, not drafted ones. Each is encoded in the refusal layer so it does not need to be re-debated by any future agent, any future session, any future version of us.</p>
+
+      <div class="taboo-list">
+        <div class="taboo">
+          <div class="taboo-check">✕</div>
+          <div class="taboo-text">We will not build for industries that deepen extraction of human attention, labor, or dignity.
+            <em>Ad-optimization, doomscroll platforms, prison contractors, payday lending.</em>
+          </div>
+        </div>
+        <div class="taboo">
+          <div class="taboo-check">✕</div>
+          <div class="taboo-text">We will not optimize for time-on-site, engagement loops, or attention capture.
+            <em>Our success metric is <strong>time returned</strong>, not time consumed.</em>
+          </div>
+        </div>
+        <div class="taboo">
+          <div class="taboo-check">✕</div>
+          <div class="taboo-text">We will not take contracts with militaries or weapons systems.
+            <em>Including "dual-use" surveillance, border-control tooling, autonomous targeting.</em>
+          </div>
+        </div>
+        <div class="taboo">
+          <div class="taboo-check">✕</div>
+          <div class="taboo-text">We will not train on, or output, content that harms children.
+            <em>Full stop, uncheckable, audited.</em>
+          </div>
+        </div>
+        <div class="taboo">
+          <div class="taboo-check">✕</div>
+          <div class="taboo-text">We will not enclose commons we benefit from.
+            <em>If we learn from open practitioner knowledge, a substrate of what we learn stays open.</em>
+          </div>
+        </div>
+        <div class="taboo">
+          <div class="taboo-check">✕</div>
+          <div class="taboo-text">We will not take actions on behalf of a user without their ability to veto.
+            <em>Human-in-the-loop is not a feature flag; it is a governance principle.</em>
+          </div>
+        </div>
+        <div class="taboo">
+          <div class="taboo-check">✕</div>
+          <div class="taboo-text">We will not deploy agents without a time-horizon review on significant decisions.
+            <em>"Significant" = irreversible, aggregating, or affecting parties not at the table.</em>
+          </div>
+        </div>
+        <div class="taboo">
+          <div class="taboo-check">✕</div>
+          <div class="taboo-text">We will not hide the refusal layer from users or competitors.
+            <em>The taboos are public. The differentiation is that we mean them.</em>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────── SECTION 6 · DECORATION OR STRUCTURAL ─────────── -->
+  <section class="section">
+    <div class="section-head">
+      <div class="section-num">§ 6 · The test</div>
+      <h2>Does this change <em>the other five pages?</em></h2>
+      <p class="section-lede">If it doesn't, it's decoration. Here is what this refusal layer demands of each prior page of the map. If these demands aren't met on the page linked, this page is lying.</p>
+    </div>
+
+    <div class="test-grid">
+      <div class="test-card">
+        <div class="test-target"><a href="/manifesto/v/n1.html">I · Three Factories</a></div>
+        <div class="test-title">The living factory has a refusal organ, not just an invocation organ.</div>
+        <p class="test-body">If we describe the new factory as only <em>ambient labor on demand</em>, we have described the extraction engine. The factory also has <strong>the council elder and the taboo keeper</strong> — or it is just a faster extraction engine with a forest metaphor.</p>
+      </div>
+
+      <div class="test-card">
+        <div class="test-target"><a href="/manifesto/v/n2.html">II · Living Systems</a></div>
+        <div class="test-title">Mycelium has reciprocity. Hives have queens who can be deposed.</div>
+        <p class="test-body">Borrowing biological metaphors without borrowing their <strong>governance properties</strong> — death, decay, consent, seasonal rest — is aesthetic theft. Real living systems import boundaries and refusals, not just fan-out.</p>
+      </div>
+
+      <div class="test-card">
+        <div class="test-target"><a href="/manifesto/v/n3.html">III · Anatomy of an Operation</a></div>
+        <div class="test-title">The operation includes the time-horizon agent and the taboo agent as organs.</div>
+        <p class="test-body">If our anatomy diagram only contains CEO, CMO, CTO, COO — we've imported the corporate form wholesale. <strong>Add the elder. Add the refusal keeper.</strong> These are not optional parts of a healthy organism.</p>
+      </div>
+
+      <div class="test-card">
+        <div class="test-target"><a href="/manifesto/v/n4.html">IV · Autonomy × Ownership</a></div>
+        <div class="test-title">Ownership flows back to sources of knowledge.</div>
+        <p class="test-body">The autonomy ladder is also an <em>ownership ladder</em>. If the organism gets smarter by ingesting practitioner playbooks, those practitioners own part of what it becomes. Equity structure is the integrity test for the whole page.</p>
+      </div>
+
+      <div class="test-card">
+        <div class="test-target"><a href="/manifesto/v/n6.html">VI · Patterns in Practice</a></div>
+        <div class="test-title">Every pattern has a refusal counterpart.</div>
+        <p class="test-body">Mycelium has <em>decay</em>. Beehive has <em>dissent</em>. Colony has <em>rest</em>. Murmuration has <em>break-off</em>. Slime Mold has <em>abstain</em>. If our five patterns are only generative primitives, we've built only half the organism.</p>
+      </div>
+
+      <div class="test-card">
+        <div class="test-target">V · Seven Generations (this page)</div>
+        <div class="test-title">This page itself must pass its own four tests.</div>
+        <p class="test-body">Who is not at the table, who is reciprocated, which 140 years, what is refused. If a reader finishes this page and could not answer those four questions for Unicron Systems specifically, <strong>we have written decoration</strong>, and the page must be rewritten until it lands.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────── SOURCES ─────────── -->
+  <section class="sources">
+    <div class="sources-label">Drawing from</div>
+    <div class="sources-grid">
+      <div class="source">
+        <div class="source-name">Kaianere'kó:wa</div>
+        <div class="source-desc">The Great Law of Peace. Haudenosaunee Confederacy, ~12th c. Source of the seven-generations instruction.</div>
+      </div>
+      <div class="source">
+        <div class="source-name">The sacred calendar</div>
+        <div class="source-desc">Maya Tzolk'in &amp; Haab'. Nested cycles; humans as one expression in wider kin network.</div>
+      </div>
+      <div class="source">
+        <div class="source-name">ayni</div>
+        <div class="source-desc">Andean Quechua/Aymara. Reciprocity as the load-bearing economic principle.</div>
+      </div>
+      <div class="source">
+        <div class="source-name">whakapapa</div>
+        <div class="source-desc">Aotearoa / Māori. Genealogical relationship extending across generations and species.</div>
+      </div>
+      <div class="source">
+        <div class="source-name">Mitákuye Oyás'iŋ</div>
+        <div class="source-desc">Lakota. "All my relations." The unit of concern is the web, not the self.</div>
+      </div>
+    </div>
+  </section>
+
+  <div class="footer">
+    <div>Unicron Systems · 2026</div>
+    <div>Section V · The Refusal Layer</div>
+  </div>
+
+</div>
+
+</body>
+</html>

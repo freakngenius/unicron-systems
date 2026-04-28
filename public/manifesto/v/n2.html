@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script>(function(){var t=sessionStorage.getItem(String.fromCharCode(95,95,117,120,98,95,116,107));if(t!=="8c973a4a158f95dafae1906467f968e060df6d28989ac304de4d0ab3c914d03e"){window.location.replace("/manifesto")}})();</script>
+
+<meta charset="UTF-8">
+<link rel="icon" type="image/svg+xml" href="/manifesto/favicon.svg">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Living Systems as Orchestration — Field Guide v0.1</title>
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --bg-2: #12121a;
+    --bg-3: #171720;
+    --ink: #e8e6de;
+    --ink-2: #9a9689;
+    --ink-3: #5c5a52;
+    --line: #2a2a32;
+    --accent: #9fd4a1;      /* living green */
+    --accent-2: #d4c87a;    /* ant/pheromone amber */
+    --accent-3: #b5d4e8;    /* starling slate-blue */
+    --accent-4: #e0b5a4;    /* slime mold sienna */
+    --accent-5: #c4a5d4;    /* mycelium violet */
+    --serif: "Iowan Old Style", "Palatino", "Palatino Linotype", Georgia, serif;
+    --sans: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+    --mono: "JetBrains Mono", "SF Mono", Menlo, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { background: var(--bg); color: var(--ink); font-family: var(--sans); -webkit-font-smoothing: antialiased; }
+
+  /* ---- Top Nav (shared across all three posters) ---- */
+  .topnav { position: sticky; top: 0; z-index: 50; background: rgba(10,10,15,0.92); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border-bottom: 1px solid var(--line); padding: 14px 40px; display: flex; align-items: center; justify-content: space-between; }
+  .topnav-brand { font-family: var(--mono); font-size: 11px; letter-spacing: 0.25em; color: var(--ink-2); text-transform: uppercase; text-decoration: none; }
+  .topnav-brand em { font-style: normal; color: var(--ink-3); }
+  .topnav-brand:hover { color: var(--ink); }
+  .topnav-links { display: flex; gap: 22px; }
+  .topnav-links a { font-family: var(--mono); font-size: 11px; letter-spacing: 0.15em; text-transform: uppercase; text-decoration: none; color: var(--ink-3); padding: 4px 0; border-bottom: 1px solid transparent; transition: color 0.15s, border-color 0.15s; }
+  .topnav-links a:hover { color: var(--ink); }
+  .topnav-links a.active { color: var(--accent); border-bottom-color: var(--accent); }
+  @media (max-width: 1200px) { .topnav { flex-direction: column; gap: 10px; padding: 14px 20px; } .topnav-links { gap: 14px; flex-wrap: wrap; justify-content: center; } }
+
+  body { padding: 80px 40px 120px; }
+
+  .frame { max-width: 1240px; margin: 0 auto; }
+  .title-block { padding-top: 40px; margin-bottom: 64px; max-width: 920px; }
+  .eyebrow { font-family: var(--mono); font-size: 11px; letter-spacing: 0.2em; color: var(--ink-3); text-transform: uppercase; margin-bottom: 16px; }
+  h1 { font-family: var(--serif); font-size: 56px; font-weight: 400; letter-spacing: -0.02em; line-height: 1.05; margin-bottom: 24px; }
+  h1 em { font-style: italic; color: var(--accent); }
+  .subtitle { font-family: var(--serif); font-size: 20px; font-style: italic; color: var(--ink-2); line-height: 1.5; }
+
+  .section-label { font-family: var(--mono); font-size: 11px; letter-spacing: 0.25em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+
+  /* Grid of five cards */
+  .grid-5 { display: grid; grid-template-columns: repeat(5, 1fr); gap: 2px; background: var(--line); border: 1px solid var(--line); border-radius: 4px; overflow: hidden; margin-bottom: 80px; }
+  .card { background: var(--bg-2); padding: 32px 26px; display: flex; flex-direction: column; min-height: 900px; position: relative; }
+  .card-num { font-family: var(--mono); font-size: 10px; letter-spacing: 0.2em; color: var(--ink-3); margin-bottom: 8px; }
+  .card-name { font-family: var(--serif); font-size: 28px; font-weight: 400; letter-spacing: -0.01em; line-height: 1.1; margin-bottom: 4px; }
+  .card-sci { font-family: var(--serif); font-size: 13px; font-style: italic; color: var(--ink-3); margin-bottom: 20px; }
+
+  .diagram { width: 100%; height: 200px; margin: 12px 0 20px; display: flex; align-items: center; justify-content: center; }
+  .diagram svg { width: 100%; height: 100%; }
+
+  .tagline { font-family: var(--serif); font-size: 15px; line-height: 1.5; color: var(--ink); margin-bottom: 24px; font-style: italic; min-height: 72px; }
+
+  .fact { padding: 12px 0; border-top: 1px solid var(--line); }
+  .fact:last-of-type { border-bottom: 1px solid var(--line); }
+  .fact-label { font-family: var(--mono); font-size: 9px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 6px; }
+  .fact-value { font-family: var(--serif); font-size: 14px; line-height: 1.45; color: var(--ink); }
+
+  .primitive { margin-top: 20px; padding: 16px; background: var(--bg-3); border-left: 2px solid currentColor; }
+  .primitive-label { font-family: var(--mono); font-size: 9px; letter-spacing: 0.2em; text-transform: uppercase; margin-bottom: 8px; }
+  .primitive-text { font-family: var(--serif); font-size: 14px; line-height: 1.5; color: var(--ink); }
+
+  .governance { margin-top: 10px; padding: 16px; background: transparent; border-left: 2px dashed currentColor; }
+  .governance-label { font-family: var(--mono); font-size: 9px; letter-spacing: 0.2em; text-transform: uppercase; margin-bottom: 8px; }
+  .governance-text { font-family: var(--serif); font-size: 14px; line-height: 1.5; color: var(--ink); }
+  .governance-text strong { font-weight: 500; }
+
+  .failure { margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--line); }
+  .failure-label { font-family: var(--mono); font-size: 9px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 4px; }
+  .failure-text { font-family: var(--serif); font-size: 13px; font-style: italic; color: var(--ink-2); line-height: 1.45; }
+
+  .c1 { color: var(--accent-5); }
+  .c2 { color: var(--accent); }
+  .c3 { color: var(--accent-2); }
+  .c4 { color: var(--accent-3); }
+  .c5 { color: var(--accent-4); }
+  .c1 .card-name { color: var(--accent-5); }
+  .c2 .card-name { color: var(--accent); }
+  .c3 .card-name { color: var(--accent-2); }
+  .c4 .card-name { color: var(--accent-3); }
+  .c5 .card-name { color: var(--accent-4); }
+
+  /* Synthesis section */
+  .synthesis { margin-top: 40px; padding: 48px 40px; background: var(--bg-2); border: 1px solid var(--line); border-radius: 4px; }
+  .synth-header { margin-bottom: 32px; }
+  .synth-header h2 { font-family: var(--serif); font-size: 40px; font-weight: 400; letter-spacing: -0.01em; line-height: 1.1; margin-bottom: 12px; }
+  .synth-header h2 em { font-style: italic; color: var(--accent); }
+  .synth-header p { font-family: var(--serif); font-size: 17px; font-style: italic; color: var(--ink-2); line-height: 1.55; max-width: 780px; }
+
+  .pulls { display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; margin-top: 28px; }
+  .pull { padding: 18px; background: var(--bg-3); border-top: 2px solid currentColor; }
+  .pull-from { font-family: var(--mono); font-size: 9px; letter-spacing: 0.2em; text-transform: uppercase; margin-bottom: 8px; }
+  .pull-text { font-family: var(--serif); font-size: 14px; line-height: 1.45; color: var(--ink); }
+
+  .pull.p1 { color: var(--accent-5); }
+  .pull.p2 { color: var(--accent); }
+  .pull.p3 { color: var(--accent-2); }
+  .pull.p4 { color: var(--accent-3); }
+  .pull.p5 { color: var(--accent-4); }
+
+  .closing { margin-top: 40px; padding-top: 32px; border-top: 1px solid var(--line); }
+  .closing p { font-family: var(--serif); font-size: 19px; line-height: 1.55; color: var(--ink); margin-bottom: 14px; max-width: 900px; }
+  .closing p.coda { font-style: italic; color: var(--ink-2); }
+  .closing strong { color: var(--accent); font-weight: 500; }
+
+  .footer { margin-top: 80px; padding-top: 32px; border-top: 1px solid var(--line); font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em; color: var(--ink-3); display: flex; justify-content: space-between; text-transform: uppercase; }
+
+  @media (max-width: 1280px) {
+    .grid-5 { grid-template-columns: repeat(2, 1fr); }
+    .card { min-height: auto; }
+    .pulls { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media (max-width: 640px) {
+    .grid-5 { grid-template-columns: 1fr; }
+    .pulls { grid-template-columns: 1fr; }
+    body { padding: 40px 20px; }
+    h1 { font-size: 40px; }
+  }
+</style>
+<!-- __lock_copy__ -->
+<style>html,body,*{-webkit-user-select:none!important;-moz-user-select:none!important;-ms-user-select:none!important;user-select:none!important;-webkit-touch-callout:none!important;}</style>
+<script>document.addEventListener('contextmenu',function(e){e.preventDefault();});document.addEventListener('copy',function(e){e.preventDefault();});document.addEventListener('cut',function(e){e.preventDefault();});document.addEventListener('dragstart',function(e){e.preventDefault();});document.addEventListener('selectstart',function(e){e.preventDefault();});document.addEventListener('keydown',function(e){if((e.ctrlKey||e.metaKey)&&['c','C','x','X','a','A','s','S','p','P','u','U'].indexOf(e.key)!==-1){e.preventDefault();}});</script>
+</head>
+<body>
+
+  <nav class="topnav">
+    <a href="/manifesto/v/n0.html" class="topnav-brand">Unicron Systems</a>
+    <div class="topnav-links">
+      <a href="/manifesto/v/n1.html">I. Three Factories</a>
+      <a href="/manifesto/v/n2.html" class="active">II. Living Systems</a>
+      <a href="/manifesto/v/n3.html">III. Anatomy of an Operation</a>
+      <a href="/manifesto/v/n4.html">IV. Autonomy × Ownership</a>
+      <a href="/manifesto/v/n5.html">V. Seven Generations</a>
+      <a href="/manifesto/v/n6.html">VI. Patterns in Practice</a>
+    </div>
+  </nav>
+
+  <div class="frame">
+
+    <div class="title-block">
+      <h1>Living Systems as <em>Orchestration</em>.<br>Five patterns nature already solved.</h1>
+      <p class="subtitle">Every organism below coordinates at scale without a CEO, without meetings, and without an org chart. Each one holds a primitive that an agent-native company can borrow. Read them as design specs, not metaphors.</p>
+    </div>
+
+    <div class="section-label">The Five Patterns</div>
+
+    <div class="grid-5">
+
+      <!-- CARD 1: MYCELIUM -->
+      <div class="card c1">
+        <div class="card-num">01</div>
+        <div class="card-name">Mycelium</div>
+        <div class="card-sci">the wood wide web · <em>Mycorrhizal networks</em></div>
+
+        <div class="diagram">
+          <svg viewBox="0 0 240 200" xmlns="http://www.w3.org/2000/svg">
+            <!-- trees -->
+            <g fill="#c4a5d4" opacity="0.9">
+              <circle cx="40" cy="50" r="6"/>
+              <rect x="38" y="50" width="4" height="30"/>
+              <circle cx="120" cy="35" r="8"/>
+              <rect x="118" y="35" width="4" height="40"/>
+              <circle cx="200" cy="55" r="6"/>
+              <rect x="198" y="55" width="4" height="28"/>
+            </g>
+            <!-- root network - dense branching -->
+            <g stroke="#c4a5d4" stroke-width="0.7" fill="none" opacity="0.7">
+              <path d="M 40 80 C 50 100, 70 110, 80 130"/>
+              <path d="M 40 80 C 30 110, 45 140, 60 160"/>
+              <path d="M 120 75 C 100 95, 85 115, 80 130"/>
+              <path d="M 120 75 C 130 100, 140 120, 140 150"/>
+              <path d="M 120 75 C 145 95, 165 115, 180 135"/>
+              <path d="M 200 83 C 190 105, 180 120, 180 135"/>
+              <path d="M 200 83 C 215 110, 210 140, 200 165"/>
+              <!-- lateral cross-connections -->
+              <path d="M 60 160 C 90 155, 120 160, 140 150" opacity="0.5"/>
+              <path d="M 140 150 C 160 148, 175 140, 180 135" opacity="0.5"/>
+              <path d="M 80 130 C 100 125, 120 128, 140 130" opacity="0.4"/>
+              <path d="M 45 130 C 80 135, 130 138, 180 140" opacity="0.3"/>
+            </g>
+            <!-- hub nodes / fruiting bodies -->
+            <g fill="#c4a5d4">
+              <circle cx="80" cy="130" r="2.5"/>
+              <circle cx="140" cy="150" r="3"/>
+              <circle cx="180" cy="135" r="2.5"/>
+              <circle cx="60" cy="160" r="2"/>
+              <circle cx="200" cy="165" r="2"/>
+            </g>
+            <!-- signal pulse -->
+            <circle cx="140" cy="150" r="8" fill="none" stroke="#c4a5d4" stroke-width="0.4" opacity="0.4"/>
+            <circle cx="140" cy="150" r="14" fill="none" stroke="#c4a5d4" stroke-width="0.3" opacity="0.2"/>
+          </svg>
+        </div>
+
+        <p class="tagline">A subterranean trade network. Trees exchange carbon, nitrogen, water, warnings — peer-to-peer — through a mycelial middleware they don't own.</p>
+
+        <div class="fact"><div class="fact-label">Communicates via</div><div class="fact-value">Chemical signaling through fungal hyphae — a shared substrate, not direct messaging.</div></div>
+        <div class="fact"><div class="fact-label">Coordination pattern</div><div class="fact-value">Peer-to-peer resource sharing. Keystone hubs route more traffic but no one is in charge.</div></div>
+        <div class="fact"><div class="fact-label">Scale trick</div><div class="fact-value">The network predates the nodes. New trees plug in at the roots.</div></div>
+
+        <div class="primitive">
+          <div class="primitive-label">Primitive for Unicron</div>
+          <div class="primitive-text"><strong>Shared substrate over direct messaging.</strong> Agents don't talk to each other — they write to and read from a common memory (Notion, a vector store, a state graph). Coordination emerges from the substrate, not from routing.</div>
+        </div>
+
+        <div class="governance">
+          <div class="governance-label">Governance · Decay</div>
+          <div class="governance-text">The forest eats its own dead. Fallen trees are not waste — they are the <strong>nutrient bank the next cohort grows from.</strong> The network includes an explicit recycler organ; nothing persists without purpose. For Unicron: memory is pruned, outputs expire, state has a decay function. Without it, the substrate accumulates into sludge.</div>
+        </div>
+
+        <div class="failure">
+          <div class="failure-label">Failure mode</div>
+          <div class="failure-text">If the substrate is poisoned, the whole network poisons. State integrity is load-bearing.</div>
+        </div>
+      </div>
+
+      <!-- CARD 2: BEEHIVE -->
+      <div class="card c2">
+        <div class="card-num">02</div>
+        <div class="card-name">Beehive</div>
+        <div class="card-sci">specialization with signal · <em>Apis mellifera</em></div>
+
+        <div class="diagram">
+          <svg viewBox="0 0 240 200" xmlns="http://www.w3.org/2000/svg">
+            <!-- hexagonal comb background -->
+            <g stroke="#9fd4a1" stroke-width="0.5" fill="none" opacity="0.4">
+              <!-- row 1 -->
+              <polygon points="30,40 45,31 60,40 60,58 45,67 30,58"/>
+              <polygon points="60,40 75,31 90,40 90,58 75,67 60,58"/>
+              <polygon points="90,40 105,31 120,40 120,58 105,67 90,58"/>
+              <polygon points="120,40 135,31 150,40 150,58 135,67 120,58"/>
+              <polygon points="150,40 165,31 180,40 180,58 165,67 150,58"/>
+              <polygon points="180,40 195,31 210,40 210,58 195,67 180,58"/>
+              <!-- row 2 offset -->
+              <polygon points="45,67 60,58 75,67 75,85 60,94 45,85"/>
+              <polygon points="75,67 90,58 105,67 105,85 90,94 75,85"/>
+              <polygon points="105,67 120,58 135,67 135,85 120,94 105,85"/>
+              <polygon points="135,67 150,58 165,67 165,85 150,94 135,85"/>
+              <polygon points="165,67 180,58 195,67 195,85 180,94 165,85"/>
+              <!-- row 3 -->
+              <polygon points="30,94 45,85 60,94 60,112 45,121 30,112"/>
+              <polygon points="60,94 75,85 90,94 90,112 75,121 60,112"/>
+              <polygon points="90,94 105,85 120,94 120,112 105,121 90,112"/>
+              <polygon points="120,94 135,85 150,94 150,112 135,121 120,112"/>
+              <polygon points="150,94 165,85 180,94 180,112 165,121 150,112"/>
+              <polygon points="180,94 195,85 210,94 210,112 195,121 180,112"/>
+            </g>
+            <!-- queen cell highlighted -->
+            <polygon points="105,67 120,58 135,67 135,85 120,94 105,85" fill="#9fd4a1" opacity="0.25"/>
+            <circle cx="120" cy="76" r="3" fill="#9fd4a1"/>
+            <!-- waggle dance figure-8 -->
+            <g stroke="#9fd4a1" stroke-width="0.8" fill="none" opacity="0.9">
+              <path d="M 120 140 C 105 135, 100 155, 115 160 L 125 165 C 140 170, 145 150, 130 145 Z"/>
+              <line x1="115" y1="160" x2="125" y2="165" stroke-width="1.2"/>
+            </g>
+            <text x="120" y="190" text-anchor="middle" fill="#5c5a52" font-family="JetBrains Mono" font-size="10" letter-spacing="1">WAGGLE DANCE</text>
+            <!-- worker bees as dots around dance -->
+            <g fill="#9fd4a1">
+              <circle cx="85" cy="150" r="1.5"/>
+              <circle cx="95" cy="170" r="1.5"/>
+              <circle cx="150" cy="145" r="1.5"/>
+              <circle cx="160" cy="165" r="1.5"/>
+              <circle cx="100" cy="180" r="1.5"/>
+              <circle cx="145" cy="180" r="1.5"/>
+            </g>
+          </svg>
+        </div>
+
+        <p class="tagline">Fifty thousand specialists. The queen doesn't decide — she lays eggs. Information travels by dance: a compressed signal that encodes distance, direction, and quality in one gesture.</p>
+
+        <div class="fact"><div class="fact-label">Communicates via</div><div class="fact-value">Waggle dance (high-bandwidth compressed signal) + pheromones (ambient state).</div></div>
+        <div class="fact"><div class="fact-label">Coordination pattern</div><div class="fact-value">Role specialization. Workers vote foragers into sites by amplifying the dance they trust.</div></div>
+        <div class="fact"><div class="fact-label">Scale trick</div><div class="fact-value">Information is compressed into gesture, not prose. High fidelity, low token cost.</div></div>
+
+        <div class="primitive">
+          <div class="primitive-label">Primitive for Unicron</div>
+          <div class="primitive-text"><strong>Compressed structured signals between specialist agents.</strong> Don't pass natural-language walls of text. Pass schemas — claim-shape, lead-shape, anomaly-shape — that any specialist can amplify, route, or veto. The CEO agent lays the eggs; the workers do the coordinating.</div>
+        </div>
+
+        <div class="governance">
+          <div class="governance-label">Governance · Dissent</div>
+          <div class="governance-text">A scout can return with a dance — and the other foragers can <strong>refuse to amplify it.</strong> If too few agree, the colony will not fly. The queen herself can be replaced (supersedure) when the colony judges her failing. For Unicron: every orchestration must have a scout-veto path — at least one agent whose job is to refuse, not just perform.</div>
+        </div>
+
+        <div class="failure">
+          <div class="failure-label">Failure mode</div>
+          <div class="failure-text">Specialists can't do each other's jobs. If one role is missing, the whole colony starves.</div>
+        </div>
+      </div>
+
+      <!-- CARD 3: ANT COLONY -->
+      <div class="card c3">
+        <div class="card-num">03</div>
+        <div class="card-name">Ant Colony</div>
+        <div class="card-sci">stigmergy · <em>Formicidae</em></div>
+
+        <div class="diagram">
+          <svg viewBox="0 0 240 200" xmlns="http://www.w3.org/2000/svg">
+            <!-- nest -->
+            <g stroke="#d4c87a" fill="none" stroke-width="1">
+              <ellipse cx="40" cy="100" rx="14" ry="10"/>
+              <line x1="40" y1="90" x2="40" y2="85" stroke-width="0.5"/>
+            </g>
+            <!-- food source -->
+            <g fill="#d4c87a" opacity="0.8">
+              <circle cx="200" cy="100" r="6"/>
+              <circle cx="200" cy="100" r="10" fill="none" stroke="#d4c87a" stroke-width="0.4" opacity="0.5"/>
+            </g>
+            <!-- multiple pheromone trails at different intensities -->
+            <!-- faint abandoned trails -->
+            <path d="M 54 100 Q 100 50, 130 60 Q 170 70, 194 100" stroke="#d4c87a" stroke-width="1" fill="none" opacity="0.15" stroke-dasharray="2 2"/>
+            <path d="M 54 100 Q 90 150, 140 160 Q 180 155, 194 100" stroke="#d4c87a" stroke-width="1" fill="none" opacity="0.2" stroke-dasharray="2 2"/>
+            <path d="M 54 100 Q 110 75, 150 85 Q 180 92, 194 100" stroke="#d4c87a" stroke-width="1" fill="none" opacity="0.3"/>
+            <!-- dominant shortest-path trail -->
+            <path d="M 54 100 Q 120 95, 194 100" stroke="#d4c87a" stroke-width="2.5" fill="none" opacity="0.95"/>
+            <!-- ants on dominant trail -->
+            <g fill="#d4c87a">
+              <circle cx="75" cy="99" r="1.4"/>
+              <circle cx="95" cy="98" r="1.4"/>
+              <circle cx="115" cy="97" r="1.4"/>
+              <circle cx="140" cy="98" r="1.4"/>
+              <circle cx="165" cy="99" r="1.4"/>
+              <circle cx="180" cy="100" r="1.4"/>
+            </g>
+            <!-- returning ants -->
+            <g fill="#d4c87a" opacity="0.7">
+              <circle cx="85" cy="103" r="1.2"/>
+              <circle cx="125" cy="102" r="1.2"/>
+              <circle cx="170" cy="103" r="1.2"/>
+            </g>
+            <text x="40" y="130" text-anchor="middle" fill="#5c5a52" font-family="JetBrains Mono" font-size="10" letter-spacing="1">NEST</text>
+            <text x="200" y="130" text-anchor="middle" fill="#5c5a52" font-family="JetBrains Mono" font-size="10" letter-spacing="1">FOOD</text>
+            <text x="120" y="175" text-anchor="middle" fill="#5c5a52" font-family="JetBrains Mono" font-size="9" letter-spacing="1">SHORTEST PATH EMERGES</text>
+          </svg>
+        </div>
+
+        <p class="tagline">No ant knows the shortest path. Each lays pheromone; the shortest path gets reinforced faster; the environment itself does the computing. Intelligence without a brain.</p>
+
+        <div class="fact"><div class="fact-label">Communicates via</div><div class="fact-value">Pheromone trails — the environment holds the state, not the ants.</div></div>
+        <div class="fact"><div class="fact-label">Coordination pattern</div><div class="fact-value">Stigmergy. Decisions are externalized into the world and amplified by repetition.</div></div>
+        <div class="fact"><div class="fact-label">Scale trick</div><div class="fact-value">Individual ants are nearly stateless. The colony remembers.</div></div>
+
+        <div class="primitive">
+          <div class="primitive-label">Primitive for Unicron</div>
+          <div class="primitive-text"><strong>State in the artifact, not in the agent.</strong> Let agents be amnesiac. Store decisions, scores, and "pheromones" on the work itself — deal scorecards, workflow receipts, call transcripts with confidence tags. The best path reinforces itself through repeated traversal.</div>
+        </div>
+
+        <div class="governance">
+          <div class="governance-label">Governance · Rest &amp; Evaporation</div>
+          <div class="governance-text">Pheromones <strong>evaporate on a timer.</strong> Colonies have seasons — brood breaks, winter pauses. Without evaporation and rest the colony runs in mills until it dies. For Unicron: every stored signal decays; every workflow has an explicit off-cycle. A pipeline that never stops isn't alive — it's a waterwheel pretending.</div>
+        </div>
+
+        <div class="failure">
+          <div class="failure-label">Failure mode</div>
+          <div class="failure-text">Ant mills — a closed loop of reinforced bad signal. Stale pheromones can trap the colony in a dead route until it exhausts itself.</div>
+        </div>
+      </div>
+
+      <!-- CARD 4: STARLING MURMURATION -->
+      <div class="card c4">
+        <div class="card-num">04</div>
+        <div class="card-name">Starling Murmuration</div>
+        <div class="card-sci">local rules, global form · <em>Sturnus vulgaris</em></div>
+
+        <div class="diagram">
+          <svg viewBox="0 0 240 200" xmlns="http://www.w3.org/2000/svg">
+            <!-- starlings as chevrons forming a flowing shape -->
+            <g fill="#b5d4e8">
+              <!-- left mass -->
+              <path d="M 40 60 l -3 2 l 3 -1 l 3 1 z"/>
+              <path d="M 55 55 l -3 2 l 3 -1 l 3 1 z"/>
+              <path d="M 50 72 l -3 2 l 3 -1 l 3 1 z"/>
+              <path d="M 65 68 l -3 2 l 3 -1 l 3 1 z"/>
+              <path d="M 45 85 l -3 2 l 3 -1 l 3 1 z"/>
+              <path d="M 60 90 l -3 2 l 3 -1 l 3 1 z"/>
+              <path d="M 75 78 l -3 2 l 3 -1 l 3 1 z"/>
+              <path d="M 70 95 l -3 2 l 3 -1 l 3 1 z"/>
+              <!-- center mass -->
+              <path d="M 85 65 l -3 2 l 3 -1 l 3 1 z"/>
+              <path d="M 95 75 l -3 2 l 3 -1 l 3 1 z"/>
+              <path d="M 90 90 l -3 2 l 3 -1 l 3 1 z"/>
+              <path d="M 105 85 l -3 2 l 3 -1 l 3 1 z"/>
+              <path d="M 115 70 l -3 2 l 3 -1 l 3 1 z"/>
+              <path d="M 120 95 l -3 2 l 3 -1 l 3 1 z"/>
+              <path d="M 125 80 l -3 2 l 3 -1 l 3 1 z"/>
+              <path d="M 135 90 l -3 2 l 3 -1 l 3 1 z"/>
+              <path d="M 140 75 l -3 2 l 3 -1 l 3 1 z"/>
+              <path d="M 145 105 l -3 2 l 3 -1 l 3 1 z"/>
+              <!-- right spiral -->
+              <path d="M 155 85 l -3 2 l 3 -1 l 3 1 z"/>
+              <path d="M 165 100 l -3 2 l 3 -1 l 3 1 z"/>
+              <path d="M 170 75 l -3 2 l 3 -1 l 3 1 z"/>
+              <path d="M 180 90 l -3 2 l 3 -1 l 3 1 z"/>
+              <path d="M 185 110 l -3 2 l 3 -1 l 3 1 z"/>
+              <path d="M 195 85 l -3 2 l 3 -1 l 3 1 z"/>
+              <path d="M 200 100 l -3 2 l 3 -1 l 3 1 z"/>
+            </g>
+            <!-- local attention visualization - showing 7 neighbors for one bird -->
+            <g stroke="#b5d4e8" stroke-width="0.4" fill="none" opacity="0.5">
+              <line x1="120" y1="95" x2="105" y2="85"/>
+              <line x1="120" y1="95" x2="125" y2="80"/>
+              <line x1="120" y1="95" x2="135" y2="90"/>
+              <line x1="120" y1="95" x2="95" y2="75"/>
+              <line x1="120" y1="95" x2="115" y2="70"/>
+              <line x1="120" y1="95" x2="90" y2="90"/>
+              <line x1="120" y1="95" x2="145" y2="105"/>
+            </g>
+            <circle cx="120" cy="95" r="3" fill="none" stroke="#b5d4e8" stroke-width="0.8"/>
+            <!-- shape outline hinting at murmuration form -->
+            <path d="M 30 60 Q 60 40, 100 55 Q 140 65, 180 75 Q 210 85, 210 110 Q 180 115, 140 110 Q 90 115, 50 105 Q 20 95, 30 60" fill="none" stroke="#b5d4e8" stroke-width="0.4" opacity="0.3"/>
+            <text x="120" y="150" text-anchor="middle" fill="#5c5a52" font-family="JetBrains Mono" font-size="9" letter-spacing="1">EACH BIRD WATCHES ~7 NEIGHBORS</text>
+            <text x="120" y="170" text-anchor="middle" fill="#5c5a52" font-family="JetBrains Mono" font-size="9" letter-spacing="1">THE FLOCK NEVER COLLIDES · NEVER NAMES A LEADER</text>
+          </svg>
+        </div>
+
+        <p class="tagline">Thousands of birds, no leader. Each attends to roughly seven neighbors and matches their velocity. A predator appears — the entire flock turns in less than a second. The shape is emergent.</p>
+
+        <div class="fact"><div class="fact-label">Communicates via</div><div class="fact-value">Vision. Velocity matching to nearest neighbors (topological, not spatial — always ~7).</div></div>
+        <div class="fact"><div class="fact-label">Coordination pattern</div><div class="fact-value">Scale-free phase transition. Local rules → global response faster than any signal could travel.</div></div>
+        <div class="fact"><div class="fact-label">Scale trick</div><div class="fact-value">Bounded attention. Each node only watches N peers, regardless of flock size.</div></div>
+
+        <div class="primitive">
+          <div class="primitive-label">Primitive for Unicron</div>
+          <div class="primitive-text"><strong>Bounded peer attention, not global broadcast.</strong> Each agent watches a small fixed set of peers and matches their state. No central dispatcher. Response to threat or opportunity propagates faster than any orchestrator could route it — because it was never routed.</div>
+        </div>
+
+        <div class="governance">
+          <div class="governance-label">Governance · Break-off</div>
+          <div class="governance-text">A murmuration is not one flock — it is many flocks that <strong>split, rejoin, and split again</strong> as conditions change. A starling can peel off without permission; the shape absorbs the loss. Consent is structural: you are in the flock because you keep matching, not because you were assigned. For Unicron: agents and humans can break-off from a workflow at any step. Conformity is not a feature.</div>
+        </div>
+
+        <div class="failure">
+          <div class="failure-label">Failure mode</div>
+          <div class="failure-text">Cascading panic. The same mechanism that outruns predators can produce unrecoverable stampedes on bad signal.</div>
+        </div>
+      </div>
+
+      <!-- CARD 5: SLIME MOLD -->
+      <div class="card c5">
+        <div class="card-num">05</div>
+        <div class="card-name">Slime Mold</div>
+        <div class="card-sci">optimization without a brain · <em>Physarum polycephalum</em></div>
+
+        <div class="diagram">
+          <svg viewBox="0 0 240 200" xmlns="http://www.w3.org/2000/svg">
+            <!-- food sources (like cities in Tokyo rail experiment) -->
+            <g fill="#e0b5a4" opacity="0.9">
+              <circle cx="50" cy="60" r="5"/>
+              <circle cx="180" cy="50" r="5"/>
+              <circle cx="200" cy="130" r="5"/>
+              <circle cx="120" cy="160" r="5"/>
+              <circle cx="50" cy="130" r="5"/>
+              <circle cx="130" cy="95" r="5"/>
+            </g>
+            <!-- initial exploratory veins (thin) -->
+            <g stroke="#e0b5a4" stroke-width="0.6" fill="none" opacity="0.35">
+              <path d="M 130 95 Q 90 80, 50 60"/>
+              <path d="M 130 95 Q 155 72, 180 50"/>
+              <path d="M 130 95 Q 170 110, 200 130"/>
+              <path d="M 130 95 Q 125 125, 120 160"/>
+              <path d="M 130 95 Q 90 115, 50 130"/>
+              <!-- peripheral explorations that didn't find food -->
+              <path d="M 130 95 Q 90 50, 40 30" opacity="0.2"/>
+              <path d="M 130 95 Q 200 70, 220 40" opacity="0.2"/>
+              <path d="M 130 95 Q 210 160, 230 180" opacity="0.2"/>
+              <path d="M 130 95 Q 90 180, 30 195" opacity="0.2"/>
+            </g>
+            <!-- thickened optimal veins -->
+            <g stroke="#e0b5a4" stroke-width="2.2" fill="none" opacity="0.9">
+              <path d="M 130 95 Q 90 80, 50 60"/>
+              <path d="M 130 95 Q 155 72, 180 50"/>
+              <path d="M 130 95 Q 170 110, 200 130"/>
+              <path d="M 130 95 Q 125 125, 120 160"/>
+              <path d="M 130 95 Q 90 115, 50 130"/>
+            </g>
+            <!-- secondary connections between food (network optimization) -->
+            <g stroke="#e0b5a4" stroke-width="1" fill="none" opacity="0.5">
+              <path d="M 50 60 Q 100 50, 180 50"/>
+              <path d="M 180 50 Q 195 90, 200 130"/>
+              <path d="M 200 130 Q 165 145, 120 160"/>
+              <path d="M 120 160 Q 80 145, 50 130"/>
+              <path d="M 50 130 Q 50 95, 50 60"/>
+            </g>
+            <text x="120" y="185" text-anchor="middle" fill="#5c5a52" font-family="JetBrains Mono" font-size="9" letter-spacing="1">VEINS THICKEN ON EFFICIENT PATHS · OTHERS DISSOLVE</text>
+          </svg>
+        </div>
+
+        <p class="tagline">A single-celled organism solves the traveling-salesman problem. It rebuilt the Tokyo rail map in 26 hours. No neurons. Just veins that thicken where nutrient flows best and dissolve where they don't.</p>
+
+        <div class="fact"><div class="fact-label">Communicates via</div><div class="fact-value">Cytoplasmic gradients — the medium carries the signal, the body is the signal.</div></div>
+        <div class="fact"><div class="fact-label">Coordination pattern</div><div class="fact-value">Expand broadly → reinforce what works → prune what doesn't. Optimization by attrition.</div></div>
+        <div class="fact"><div class="fact-label">Scale trick</div><div class="fact-value">The whole organism is the computer. No controller, no memory, just flow dynamics.</div></div>
+
+        <div class="primitive">
+          <div class="primitive-label">Primitive for Unicron</div>
+          <div class="primitive-text"><strong>Spread wide, reinforce on signal, prune aggressively.</strong> Don't commit to one workflow — launch many agent-paths in parallel, measure which ones return outcomes, starve the rest. The winning operation is the one the signal reinforced, not the one the founder picked.</div>
+        </div>
+
+        <div class="governance">
+          <div class="governance-label">Governance · Abstain &amp; Withdraw</div>
+          <div class="governance-text">When there is no food in a direction, the slime mold <strong>pulls its vein back.</strong> It abstains. The most intelligent action is often non-action: retreat, conserve, don't compute. For Unicron: agents must be able to return an abstain — "insufficient signal, declining to act" — as a first-class output. The extraction pattern is the one that always answers.</div>
+        </div>
+
+        <div class="failure">
+          <div class="failure-label">Failure mode</div>
+          <div class="failure-text">Slow to start. Exploration is expensive; you pay for paths you will dissolve. Premature pruning kills diversity.</div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- SYNTHESIS -->
+    <div class="synthesis">
+      <div class="synth-header">
+        <h2>What Unicron is actually <em>building</em>.</h2>
+        <p>The goal is not to pick one of these. It's to braid all five into a single substrate — a company whose nervous system borrows the best primitive from each organism <em>and</em> the refusal property that keeps it alive. A living operation, not an org chart in a new costume.</p>
+      </div>
+
+      <div class="section-label">One primitive from each</div>
+
+      <div class="pulls">
+        <div class="pull p1">
+          <div class="pull-from">From mycelium</div>
+          <div class="pull-text">A shared memory substrate all agents read and write. Notion is the forest floor.</div>
+        </div>
+        <div class="pull p2">
+          <div class="pull-from">From the hive</div>
+          <div class="pull-text">Role-specialized agents passing compressed structured signals, not prose.</div>
+        </div>
+        <div class="pull p3">
+          <div class="pull-from">From ants</div>
+          <div class="pull-text">State externalized onto the artifact. Stateless workers, persistent pheromones.</div>
+        </div>
+        <div class="pull p4">
+          <div class="pull-from">From starlings</div>
+          <div class="pull-text">Bounded peer attention. No global broadcast. Response emerges locally.</div>
+        </div>
+        <div class="pull p5">
+          <div class="pull-from">From slime mold</div>
+          <div class="pull-text">Parallel exploration with ruthless pruning. The winning path reinforces itself.</div>
+        </div>
+      </div>
+
+      <div class="section-label" style="margin-top:36px;">The governance property each one also holds</div>
+
+      <div class="pulls">
+        <div class="pull p1">
+          <div class="pull-from">Mycelium · decay</div>
+          <div class="pull-text">Memory expires. Outputs compost back into substrate. Nothing accrues forever.</div>
+        </div>
+        <div class="pull p2">
+          <div class="pull-from">Hive · dissent</div>
+          <div class="pull-text">At least one agent per loop is empowered to refuse. The queen can be superseded.</div>
+        </div>
+        <div class="pull p3">
+          <div class="pull-from">Ants · rest</div>
+          <div class="pull-text">Pheromones evaporate. Workflows have an off-cycle. No perpetual motion.</div>
+        </div>
+        <div class="pull p4">
+          <div class="pull-from">Starlings · break-off</div>
+          <div class="pull-text">Consent is structural. Agents and humans can peel off without permission.</div>
+        </div>
+        <div class="pull p5">
+          <div class="pull-from">Slime mold · abstain</div>
+          <div class="pull-text">"Insufficient signal, declining to act" is a first-class return value.</div>
+        </div>
+      </div>
+
+      <div class="closing">
+        <p>The composite is not a chart — it is a <strong>topology</strong>. A sovereign operator at a single point of direction. Underneath, a substrate all agents share. Across the substrate, specialists passing compressed signals and attending to a handful of peers. On every artifact, the residue of what worked. In every workflow, many attempts in parallel, pruned by signal — <strong>and a refusal layer braided into every one of them.</strong></p>
+        <p>Run that for 90 days on one vertical and you don't have a product. You have an <strong>organism</strong> — and the first person in any market to run one will look like a wizard to everyone still hiring.</p>
+        <p class="coda">A forest has no CEO. But it has decay, fire, the predator, and the thing that will not grow here. The living factory is not the one that says yes fastest. It is the one that can still say no.</p>
+      </div>
+    </div>
+
+    <div class="footer">
+      <div>Unicron Systems · 2026</div>
+      <div>Living Systems as Orchestration</div>
+    </div>
+
+  </div>
+</body>
+</html>
