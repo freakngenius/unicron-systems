@@ -32,7 +32,10 @@ export function AgentStatusRow({ initialCollapsed = true }: AgentStatusRowProps)
   const [collapsed, setCollapsed] = useState(initialCollapsed);
 
   const AGENTS_H = 64;
-  const MODEL_H = collapsed ? 28 : 92;
+  // Expanded MODEL_H sized to fit ~10 model rows (header + footer + a few
+  // px buffer). Each row is ~14px; cumulative model_calls today shows up to
+  // 6 distinct names but Pulse/Briefing additions may push it higher.
+  const MODEL_H = collapsed ? 28 : 200;
   const TOTAL = AGENTS_H + MODEL_H;
 
   useEffect(() => {

@@ -154,28 +154,52 @@ export function clearUserEmail(): void {
  * Check whether the current user is in the OPERATOR_EMAILS allowlist.
  * Returns `false` until the API call lands; never throws. Customers see
  * `false` (no email set, or email not in list); operators see `true`.
+ *
+ * Re-evaluates whenever `pf_email` changes — both via the cross-tab
+ * `storage` event (another tab edited it) and a synthetic `storage`
+ * event the settings page dispatches when the user updates their email
+ * in the same tab. Without this, typing your email into the "you" field
+ * never unlocks operator-only sections until a manual page refresh.
  */
 export function useIsOperator(): boolean {
   const [isOperator, setIsOperator] = useState(false);
   useEffect(() => {
     let cancelled = false;
-    const email = getUserEmail();
-    if (!email) {
-      setIsOperator(false);
-      return;
+    let lastQueriedEmail: string | null = null;
+
+    async function check(): Promise<void> {
+      const email = getUserEmail();
+      if (email === lastQueriedEmail) return;
+      lastQueriedEmail = email;
+      if (!email) {
+        if (!cancelled) setIsOperator(false);
+        return;
+      }
+      try {
+        const res = await fetch(
+          `${API_BASE}/api/me?email=${encodeURIComponent(email)}`,
+          { cache: 'no-store' },
+        );
+        const data: { isOperator?: boolean } = res.ok ? await res.json() : { isOperator: false };
+        if (!cancelled) setIsOperator(Boolean(data?.isOperator));
+      } catch {
+        if (!cancelled) setIsOperator(false);
+      }
     }
-    void fetch(`${API_BASE}/api/me?email=${encodeURIComponent(email)}`, { cache: 'no-store' })
-      .then((r) => (r.ok ? r.json() : { isOperator: false }))
-      .then((data) => {
-        if (cancelled) return;
-        setIsOperator(Boolean(data?.isOperator));
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setIsOperator(false);
-      });
+
+    void check();
+
+    const onStorage = (e: StorageEvent) => {
+      // Dispatched by both real cross-tab updates and the settings page's
+      // synthetic `new Event('storage')` after the email field blurs. A
+      // synthetic Event's `key` is undefined, so we accept that too.
+      if (e.key && e.key !== EMAIL_KEY) return;
+      void check();
+    };
+    if (typeof window !== 'undefined') window.addEventListener('storage', onStorage);
     return () => {
       cancelled = true;
+      if (typeof window !== 'undefined') window.removeEventListener('storage', onStorage);
     };
   }, []);
   return isOperator;
