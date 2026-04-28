@@ -98,35 +98,16 @@ export function TopBar({
     >
       {/* Brand mark + wordmark */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <div
-          style={{
-            width: 22,
-            height: 22,
-            background: PF.ink,
-            borderRadius: 3,
-            position: 'relative',
-          }}
-        >
-          <div
-            style={{
-              position: 'absolute',
-              inset: 4,
-              border: `1.5px solid ${PF.bg}`,
-              borderRadius: 1,
-            }}
-          />
-          <div
-            style={{
-              position: 'absolute',
-              left: 9,
-              top: 9,
-              width: 4,
-              height: 4,
-              background: PF.hi,
-              borderRadius: 1,
-            }}
-          />
-        </div>
+        {/* Path is basePath-aware (we serve under /pathfinder) so the static
+            file resolves against `public/pathfinder_mark.png`. */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/pathfinder/pathfinder_mark.png"
+          alt="Pathfinder"
+          width={28}
+          height={28}
+          style={{ display: 'block', flexShrink: 0 }}
+        />
         <div style={{ display: 'flex', flexDirection: 'column', gap: 1, whiteSpace: 'nowrap' }}>
           <div className="pf-h2" style={{ letterSpacing: '-0.01em', lineHeight: 1.1 }}>
             Pathfinder: Zedcore
