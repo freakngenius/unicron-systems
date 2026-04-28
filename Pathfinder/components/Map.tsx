@@ -30,6 +30,10 @@ export interface MapProps {
   /** SVG-space center for the zoom; defaults to the viewBox midpoint. */
   centerX?: number;
   centerY?: number;
+  /** Cursor for the map surface (e.g. "grab" / "grabbing" during space-pan). */
+  cursor?: React.CSSProperties['cursor'];
+  /** Mouse-down handler — used by the dashboard to start a space-held pan. */
+  onMouseDown?: (e: React.MouseEvent<HTMLDivElement>) => void;
   children?: React.ReactNode;
 }
 
@@ -40,6 +44,8 @@ export function Map({
   zoom = 1,
   centerX,
   centerY,
+  cursor,
+  onMouseDown,
   children,
 }: MapProps) {
   const z = Math.max(1, zoom);
@@ -53,7 +59,17 @@ export function Map({
   const x = Math.max(0, Math.min(fullW - w, cx - w / 2));
   const y = Math.max(0, Math.min(fullH - h, cy - h / 2));
   return (
-    <div style={{ position: 'relative', width, height, background: MAP_BG, overflow: 'hidden' }}>
+    <div
+      onMouseDown={onMouseDown}
+      style={{
+        position: 'relative',
+        width,
+        height,
+        background: MAP_BG,
+        overflow: 'hidden',
+        cursor: cursor ?? 'auto',
+      }}
+    >
       <svg
         width={width}
         height={height}

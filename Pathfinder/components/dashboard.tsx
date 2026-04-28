@@ -33,7 +33,7 @@ import {
   useNewPins,
 } from './live';
 import { ZoomControl, ZOOM_MIN, ZOOM_MAX, ZOOM_STEP } from './ZoomControl';
-import { lonLatToSvg, svgToPx } from './map-projection';
+import { lonLatToSvg, svgToPx, SVG_VIEWBOX } from './map-projection';
 
 const HI_THRESHOLD = 80;
 const HI = '#22d3ee';
@@ -113,6 +113,19 @@ export function Dashboard({ initialBranches, initialCustomers, initialProjects }
   const [zoom, setZoom] = React.useState(1);
   const [refreshing, setRefreshing] = React.useState(false);
 
+  // Pan state — offset in SVG units relative to the auto-center (selected branch
+  // or viewBox midpoint). Reset whenever the user picks a new branch or "See All".
+  const [panX, setPanX] = React.useState(0);
+  const [panY, setPanY] = React.useState(0);
+  const [spaceHeld, setSpaceHeld] = React.useState(false);
+  const [panning, setPanning] = React.useState(false);
+  const panDragRef = React.useRef<null | {
+    startClient: { x: number; y: number };
+    startPan: { x: number; y: number };
+    /** SVG-units-per-pixel at drag start (frozen so the gesture feels stable). */
+    invScale: number;
+  }>(null);
+
   const handleRefresh = React.useCallback(async () => {
     if (refreshing) return;
     setRefreshing(true);
@@ -143,14 +156,14 @@ export function Dashboard({ initialBranches, initialCustomers, initialProjects }
   // The auto-zoom level (3.0) is calibrated so the 300mi coverage circle (75 SVG units
   // radius / 150 diameter) fills roughly half the viewport — emphasizes the focus
   // without losing context. Manual +/- still works after to override.
+  // Selecting a branch also resets any space-held pan so the new focus is centered.
   const BRANCH_FOCUS_ZOOM = 3.0;
-  const handleSelectBranch = React.useCallback(
-    (id: string | null) => {
-      setSelectedBranchId(id);
-      setZoom(id === null ? 1 : BRANCH_FOCUS_ZOOM);
-    },
-    [],
-  );
+  const handleSelectBranch = React.useCallback((id: string | null) => {
+    setSelectedBranchId(id);
+    setZoom(id === null ? 1 : BRANCH_FOCUS_ZOOM);
+    setPanX(0);
+    setPanY(0);
+  }, []);
 
   // ── Container size measurement (drives px-space conversions) ───────────────
   const containerRef = React.useRef<HTMLDivElement | null>(null);
@@ -167,12 +180,12 @@ export function Dashboard({ initialBranches, initialCustomers, initialProjects }
     return () => window.removeEventListener('resize', update);
   }, []);
 
-  // ── Keyboard: + / − zoom the map only (no UI scaling) ──────────────────────
+  // ── Keyboard: + / − zoom the map only · Space toggles pan-mode ─────────────
   React.useEffect(() => {
     const isTextField = (t: EventTarget | null) =>
       t instanceof HTMLElement &&
       (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable);
-    const onKey = (e: KeyboardEvent) => {
+    const onKeyDown = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey || isTextField(e.target)) return;
       if (e.key === '+' || e.key === '=') {
         e.preventDefault();
@@ -180,11 +193,69 @@ export function Dashboard({ initialBranches, initialCustomers, initialProjects }
       } else if (e.key === '-' || e.key === '_') {
         e.preventDefault();
         zoomOut();
+      } else if (e.code === 'Space' && !e.repeat) {
+        e.preventDefault();
+        setSpaceHeld(true);
       }
     };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.code === 'Space') {
+        setSpaceHeld(false);
+        setPanning(false);
+        panDragRef.current = null;
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('keyup', onKeyUp);
+    };
   }, [zoomIn, zoomOut]);
+
+  // ── Mouse drag: while spaceHeld, drag the map; cursor flips to grab/grabbing ──
+  React.useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      const drag = panDragRef.current;
+      if (!drag) return;
+      const dx = e.clientX - drag.startClient.x;
+      const dy = e.clientY - drag.startClient.y;
+      // Drag right (dx > 0) → map content moves right → viewBox shifts left → panX decreases
+      setPanX(drag.startPan.x - dx * drag.invScale);
+      setPanY(drag.startPan.y - dy * drag.invScale);
+    };
+    const onUp = () => {
+      panDragRef.current = null;
+      setPanning(false);
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    return () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+  }, []);
+
+  const handleMapMouseDown = React.useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      if (!spaceHeld) return;
+      // Only respond to primary (left) button.
+      if (e.button !== 0) return;
+      e.preventDefault();
+      const w = SVG_VIEWBOX.width / Math.max(1, zoom);
+      const h = SVG_VIEWBOX.height / Math.max(1, zoom);
+      // Pixel-to-SVG conversion at the current zoom level. preserveAspectRatio="slice"
+      // uses the larger of the two scales so the SVG covers the container.
+      const scale = Math.max(mapDims.w / w, mapDims.h / h);
+      panDragRef.current = {
+        startClient: { x: e.clientX, y: e.clientY },
+        startPan: { x: panX, y: panY },
+        invScale: 1 / scale,
+      };
+      setPanning(true);
+    },
+    [spaceHeld, zoom, mapDims.w, mapDims.h, panX, panY],
+  );
 
   // ── Derived: per-branch stats for the BranchDock ───────────────────────────
   const branchStats = React.useMemo<Record<string, BranchStats>>(() => {
@@ -252,13 +323,13 @@ export function Dashboard({ initialBranches, initialCustomers, initialProjects }
     ? branches.find((b) => b.id === openProject.nearest_branch_id) ?? null
     : null;
 
-  // Anchored card pixel position — zoom-aware so the card stays glued to the pin
-  // as the user zooms.
+  // Anchored card pixel position — zoom-aware AND pan-aware so the card stays
+  // glued to the pin while the user zooms or space-drags.
   const anchoredPx = selectedBranch
     ? svgToPx(selectedBranch.svgX, selectedBranch.svgY, mapDims.w, mapDims.h, {
         zoom,
-        centerX: selectedBranch.svgX,
-        centerY: selectedBranch.svgY,
+        centerX: selectedBranch.svgX + panX,
+        centerY: selectedBranch.svgY + panY,
       })
     : null;
 
@@ -276,8 +347,10 @@ export function Dashboard({ initialBranches, initialCustomers, initialProjects }
         width={mapDims.w}
         height={mapDims.h}
         zoom={zoom}
-        centerX={selectedBranch?.svgX}
-        centerY={selectedBranch?.svgY}
+        centerX={(selectedBranch?.svgX ?? SVG_VIEWBOX.width / 2) + panX}
+        centerY={(selectedBranch?.svgY ?? SVG_VIEWBOX.height / 2) + panY}
+        cursor={spaceHeld ? (panning ? 'grabbing' : 'grab') : 'auto'}
+        onMouseDown={handleMapMouseDown}
       >
         {/* ─── Default (non-cross-poll) layer ─── */}
         <g opacity={crossPoll ? WARM_DASH : 1}>
