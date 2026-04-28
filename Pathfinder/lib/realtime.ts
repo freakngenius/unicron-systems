@@ -25,6 +25,11 @@ import type { RealtimeChannel } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 import type { AgentLogRow, AgentName, AgentRun, Project } from '@/lib/types';
 
+// Pathfinder is mounted at `/pathfinder` via Next.js basePath. Client-side
+// fetches need the prefix; server-side route handlers don't. Centralize so
+// every realtime hook gets it right.
+const API_BASE = '/pathfinder';
+
 // ────────────────────────────────────────────────────────────────────────
 // Generic store helper — mirrors `_log`, `_agents`, etc. plus subscriber Set.
 // ────────────────────────────────────────────────────────────────────────
@@ -97,7 +102,7 @@ async function backfillLog(limit: number): Promise<void> {
   logBackfillStarted = true;
   try {
     // Try the API route first (Stream 3 owns it; cached headers / shape).
-    const res = await fetch(`/api/activity?limit=${limit}`, { cache: 'no-store' });
+    const res = await fetch(`${API_BASE}/api/activity?limit=${limit}`, { cache: 'no-store' });
     if (res.ok) {
       const data = (await res.json()) as { events?: AgentLogRow[] } | AgentLogRow[];
       const rows = Array.isArray(data) ? data : data.events ?? [];
@@ -186,7 +191,7 @@ async function backfillRuns(): Promise<void> {
   if (runsBackfillStarted) return;
   runsBackfillStarted = true;
   try {
-    const res = await fetch('/api/agents', { cache: 'no-store' });
+    const res = await fetch(`${API_BASE}/api/agents`, { cache: 'no-store' });
     if (res.ok) {
       const data = (await res.json()) as
         | { agents?: AgentRunMap }
@@ -477,7 +482,7 @@ let statsRefcount = 0;
 
 async function fetchStatsOnce(): Promise<void> {
   try {
-    const res = await fetch('/api/stats', { cache: 'no-store' });
+    const res = await fetch(`${API_BASE}/api/stats`, { cache: 'no-store' });
     if (!res.ok) return;
     const data = (await res.json()) as Partial<PfStats> | { stats?: Partial<PfStats> };
     const incoming = (data as { stats?: Partial<PfStats> }).stats ?? (data as Partial<PfStats>);
