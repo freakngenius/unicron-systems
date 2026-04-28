@@ -110,11 +110,25 @@ export async function fetchUsaspendingRecent(): Promise<{ records: IngestorRecor
   const cutoff = new Date(today.getTime() - USASPENDING_LOOKBACK_DAYS * 24 * 60 * 60 * 1000);
   const fmt = (d: Date) => d.toISOString().slice(0, 10);
 
+  // Flat array of 6-digit NAICS prefixes. The earlier `{require: [...]}`
+  // object shape returned a 422 from USAspending — their advanced-search
+  // API expects either an array of strings OR an array of {require,exclude}
+  // objects, not a bare object. Strings are simpler and equivalent for our
+  // construction + engineering coverage.
   const body = {
     filters: {
       award_type_codes: ['A', 'B', 'C', 'D'],
       time_period: [{ start_date: fmt(cutoff), end_date: fmt(today) }],
-      naics_codes: { require: [['23'], ['5413']] },
+      naics_codes: [
+        '236110', // Residential Building Construction
+        '236210', // Industrial Building Construction
+        '236220', // Commercial and Institutional Building Construction
+        '237110', // Water and Sewer Line Construction
+        '237310', // Highway, Street, and Bridge Construction
+        '541330', // Engineering Services
+        '541380', // Testing Laboratories
+        '561621', // Security Systems Services
+      ],
     },
     fields: [
       'Award ID',
@@ -232,15 +246,17 @@ export async function fetchSamGovRecent(): Promise<{ records: IngestorRecord[]; 
     const dd = String(d.getDate()).padStart(2, '0');
     return `${mm}/${dd}/${d.getFullYear()}`;
   };
+  // Wider NAICS net than the v1 spec — narrowing to two codes returned 0
+  // results in the smoke test. SAM accepts comma-separated values in
+  // `ncode` and ORs them together, so adding more codes only widens
+  // coverage. Same set as the USAspending filter so the two sources cover
+  // a comparable opportunity surface.
   const params = new URLSearchParams({
     api_key: apiKey,
     postedFrom: fmt(cutoff),
     postedTo: fmt(today),
     limit: String(SAMGOV_LIMIT),
-    // SAM accepts comma-separated NAICS in the `ncode` param. Use 6-digit
-    // representative codes — broad construction (`236220`) and engineering
-    // services (`541330`). Multi-code queries return the union.
-    ncode: '236220,541330',
+    ncode: '236110,236210,236220,237110,237310,541330,541380,561621',
   });
 
   try {
