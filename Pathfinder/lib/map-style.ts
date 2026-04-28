@@ -1,123 +1,56 @@
-// Dark Pathfinder map style — base #0e1116 (Hi-Fi mapBg), muted geography,
-// suppressed POI / transit / business labels, minimal road weight.
+// Canonical Pathfinder dark map style. Paste this JSON into the GCP Maps
+// Platform → Map Styles console to create a cloud-styled Map ID, then set
+// NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID on Vercel to its ID. While inline `styles`
+// can be passed to <Map>, Google ignores them whenever a mapId is set —
+// AdvancedMarker requires a mapId, so the inline path isn't available.
 //
-// References:
-//   - Mapbox dark-v11 ("operator-grade dark")
-//   - Google Maps Platform Styling Wizard (https://mapstyle.withgoogle.com/)
-//
-// Geometry tones step from `#0a0d12` (water) → `#1a1f26` (land) → `#222933`
-// (administrative/highway accents) so the brightest features are still well
-// below white on the value scale. Labels are kept legible at small sizes
-// (#5a626d for mute, #c9cfd8 for emphasized labels) but never compete with
-// the data layer.
+// Until the cloud-styled Map ID is wired, the dashboard renders with
+// `colorScheme="DARK"` (Google's stock dark) so the data + interactions
+// still work end-to-end.
 
 import type { MapStyleSpec } from '@/lib/types-map';
 
 export const PATHFINDER_DARK_STYLE: MapStyleSpec = [
-  // Base geometry / labels
-  { elementType: 'geometry', stylers: [{ color: '#1a1f26' }] },
-  { elementType: 'labels.text.fill', stylers: [{ color: '#7a8392' }] },
-  { elementType: 'labels.text.stroke', stylers: [{ color: '#0e1116' }] },
+  { elementType: 'geometry', stylers: [{ color: '#212121' }] },
   { elementType: 'labels.icon', stylers: [{ visibility: 'off' }] },
-
-  // Water — slightly cooler than land so coastlines read at a glance
-  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#0a0d12' }] },
-  { featureType: 'water', elementType: 'labels.text.fill', stylers: [{ color: '#3d4654' }] },
-  { featureType: 'water', elementType: 'labels.text.stroke', stylers: [{ color: '#0a0d12' }] },
-
-  // Land / parks — kept to the same tone as base so projects + branches pop
-  {
-    featureType: 'landscape.natural',
-    elementType: 'geometry',
-    stylers: [{ color: '#1a1f26' }],
-  },
-  {
-    featureType: 'landscape.man_made',
-    elementType: 'geometry',
-    stylers: [{ color: '#1c2129' }],
-  },
-  {
-    featureType: 'poi.park',
-    elementType: 'geometry',
-    stylers: [{ color: '#15191f' }],
-  },
-
-  // Suppress all POI labels and consumer business clutter
-  { featureType: 'poi', stylers: [{ visibility: 'off' }] },
-  { featureType: 'poi.park', elementType: 'labels.text', stylers: [{ visibility: 'off' }] },
-  { featureType: 'poi.business', stylers: [{ visibility: 'off' }] },
-  { featureType: 'poi.medical', stylers: [{ visibility: 'off' }] },
-  { featureType: 'poi.school', stylers: [{ visibility: 'off' }] },
-  { featureType: 'poi.attraction', stylers: [{ visibility: 'off' }] },
-  { featureType: 'poi.place_of_worship', stylers: [{ visibility: 'off' }] },
-  { featureType: 'poi.sports_complex', stylers: [{ visibility: 'off' }] },
-  { featureType: 'poi.government', stylers: [{ visibility: 'off' }] },
-
-  // Transit — off
-  { featureType: 'transit', stylers: [{ visibility: 'off' }] },
-  { featureType: 'transit.station', stylers: [{ visibility: 'off' }] },
-  { featureType: 'transit.line', stylers: [{ visibility: 'off' }] },
-
-  // Roads — minimal weight, kept dark, only highways labeled
-  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#222933' }] },
-  { featureType: 'road', elementType: 'geometry.stroke', stylers: [{ color: '#11141a' }] },
-  { featureType: 'road', elementType: 'labels.text.fill', stylers: [{ color: '#5a626d' }] },
-  {
-    featureType: 'road',
-    elementType: 'labels.text.stroke',
-    stylers: [{ color: '#0e1116' }, { weight: 2 }],
-  },
-  { featureType: 'road.local', elementType: 'labels', stylers: [{ visibility: 'off' }] },
-  { featureType: 'road.local', elementType: 'geometry', stylers: [{ color: '#1f242c' }] },
-  { featureType: 'road.arterial', elementType: 'geometry', stylers: [{ color: '#222933' }] },
-  { featureType: 'road.arterial', elementType: 'labels', stylers: [{ visibility: 'off' }] },
-  { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#2a313c' }] },
-  { featureType: 'road.highway', elementType: 'geometry.stroke', stylers: [{ color: '#0a0d12' }] },
-  {
-    featureType: 'road.highway',
-    elementType: 'labels.text.fill',
-    stylers: [{ color: '#7a8392' }],
-  },
-  {
-    featureType: 'road.highway.controlled_access',
-    elementType: 'geometry',
-    stylers: [{ color: '#2a313c' }],
-  },
-
-  // Administrative — keep country/state borders subtle but readable
-  {
-    featureType: 'administrative.country',
-    elementType: 'geometry.stroke',
-    stylers: [{ color: '#3d4654' }, { weight: 1.1 }],
-  },
+  { elementType: 'labels.text.fill', stylers: [{ color: '#757575' }] },
+  { elementType: 'labels.text.stroke', stylers: [{ color: '#212121' }] },
+  { featureType: 'administrative', elementType: 'geometry', stylers: [{ color: '#757575' }] },
   {
     featureType: 'administrative.country',
     elementType: 'labels.text.fill',
-    stylers: [{ color: '#c9cfd8' }],
+    stylers: [{ color: '#9e9e9e' }],
   },
-  {
-    featureType: 'administrative.province',
-    elementType: 'geometry.stroke',
-    stylers: [{ color: '#2a313c' }, { weight: 0.6 }],
-  },
-  {
-    featureType: 'administrative.province',
-    elementType: 'labels.text.fill',
-    stylers: [{ color: '#9aa3b2' }],
-  },
+  { featureType: 'administrative.land_parcel', stylers: [{ visibility: 'off' }] },
   {
     featureType: 'administrative.locality',
     elementType: 'labels.text.fill',
-    stylers: [{ color: '#9aa3b2' }],
+    stylers: [{ color: '#bdbdbd' }],
   },
+  { featureType: 'administrative.neighborhood', stylers: [{ visibility: 'off' }] },
+  { featureType: 'poi', elementType: 'labels.text', stylers: [{ visibility: 'off' }] },
+  { featureType: 'poi', elementType: 'labels.text.fill', stylers: [{ color: '#757575' }] },
+  { featureType: 'poi.business', stylers: [{ visibility: 'off' }] },
+  { featureType: 'poi.business', elementType: 'geometry.fill', stylers: [{ weight: 8 }] },
+  { featureType: 'poi.park', elementType: 'geometry', stylers: [{ color: '#181818' }] },
+  { featureType: 'poi.park', elementType: 'labels.text.fill', stylers: [{ color: '#616161' }] },
+  { featureType: 'poi.park', elementType: 'labels.text.stroke', stylers: [{ color: '#1b1b1b' }] },
+  { featureType: 'road', stylers: [{ visibility: 'off' }] },
+  { featureType: 'road', elementType: 'geometry.fill', stylers: [{ color: '#2c2c2c' }] },
+  { featureType: 'road', elementType: 'labels', stylers: [{ visibility: 'off' }] },
+  { featureType: 'road', elementType: 'labels.icon', stylers: [{ visibility: 'off' }] },
+  { featureType: 'road', elementType: 'labels.text.fill', stylers: [{ color: '#8a8a8a' }] },
+  { featureType: 'road.arterial', elementType: 'geometry', stylers: [{ color: '#373737' }] },
+  { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#3c3c3c' }] },
   {
-    featureType: 'administrative.neighborhood',
-    elementType: 'labels',
-    stylers: [{ visibility: 'off' }],
+    featureType: 'road.highway.controlled_access',
+    elementType: 'geometry',
+    stylers: [{ color: '#4e4e4e' }],
   },
-  {
-    featureType: 'administrative.land_parcel',
-    elementType: 'labels',
-    stylers: [{ visibility: 'off' }],
-  },
+  { featureType: 'road.local', elementType: 'labels.text.fill', stylers: [{ color: '#616161' }] },
+  { featureType: 'transit', stylers: [{ visibility: 'off' }] },
+  { featureType: 'transit', elementType: 'labels.text.fill', stylers: [{ color: '#757575' }] },
+  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#000000' }] },
+  { featureType: 'water', elementType: 'labels.text', stylers: [{ visibility: 'off' }] },
+  { featureType: 'water', elementType: 'labels.text.fill', stylers: [{ color: '#3d3d3d' }] },
 ];

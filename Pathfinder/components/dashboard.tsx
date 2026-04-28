@@ -39,7 +39,9 @@ import { WarmIntroLines } from './map/WarmIntroLines';
 import { useLatLngToPixel } from './map/useLatLngToPixel';
 
 const HI_THRESHOLD = 80;
-const MAP_BG = '#0e1116';
+// Match the canonical Pathfinder dark style's base geometry color so the
+// loading state doesn't flash darker than the tiles when they paint in.
+const MAP_BG = '#212121';
 const DEFAULT_CENTER = { lat: 39.5, lng: -98.5 };
 const DEFAULT_ZOOM = 4;
 const BRANCH_FOCUS_ZOOM = 7;
