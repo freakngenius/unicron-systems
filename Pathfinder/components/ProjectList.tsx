@@ -14,6 +14,7 @@ import * as React from 'react';
 import type { Branch, Project } from '@/lib/types';
 import { CountUpScore, useHeaderHeight, useJustRanked } from './live';
 import { useStarred, useHidden, toggleStar, hideProject } from '@/lib/user-prefs';
+import { Tooltip } from './Tooltip';
 
 const PF = {
   bg: '#ffffff',
@@ -42,6 +43,15 @@ const SORT_LABELS: Record<SortMode, string> = {
   distance: 'Distance',
   posted: 'Posted',
   recent: 'Most recent',
+};
+
+// Glossary copy for the sort-mode pills. Plain-language one-liners; no
+// model branding. Sourced from docs/specs/ranker.md scoring formula.
+const SORT_TOOLTIPS: Record<SortMode, string> = {
+  score: 'Composite 0–100 fit score from the Ranker — higher = closer match to a Zedcor branch and customer base.',
+  distance: 'Sort by miles from the project to the nearest Zedcor branch — closest first.',
+  posted: 'Sort by the date the source originally published the opportunity — newest first.',
+  recent: 'Sort by when the Ranker most recently scored or rescored the opportunity — newest first.',
 };
 
 export interface ProjectListProps {
@@ -209,14 +219,15 @@ export function ProjectList({
         {/* Sort row */}
         <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
           {(Object.keys(SORT_LABELS) as SortMode[]).map((m) => (
-            <button
-              key={m}
-              type="button"
-              className={`pf-pill ${sortMode === m ? 'pf-pill-active' : ''}`}
-              onClick={() => setSortMode(m)}
-            >
-              {SORT_LABELS[m]}
-            </button>
+            <Tooltip key={m} text={SORT_TOOLTIPS[m]} placement="bottom">
+              <button
+                type="button"
+                className={`pf-pill ${sortMode === m ? 'pf-pill-active' : ''}`}
+                onClick={() => setSortMode(m)}
+              >
+                {SORT_LABELS[m]}
+              </button>
+            </Tooltip>
           ))}
         </div>
       </div>

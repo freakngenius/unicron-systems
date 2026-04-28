@@ -9,6 +9,16 @@ import type { Branch, Project } from '@/lib/types';
 import { ScoreChip, StarIcon, VerifierBadge } from './ProjectList';
 import { isFirstOpen, markSeen, Typewriter, useRailHeight } from './live';
 import { useStarred, toggleStar } from '@/lib/user-prefs';
+import { Tooltip } from './Tooltip';
+
+// Glossary copy for the metric-row labels. One-line plain-language hints —
+// surfaced via Tooltip on hover/focus. Keep terse; no model branding.
+const METRIC_TOOLTIPS: Record<string, string> = {
+  Value: 'Estimated dollar value of the project as published on the source record.',
+  Stage: "The project's current phase — e.g., pre-construction, RFP open, contract awarded, in design.",
+  Distance: "Distance from this project's location to the nearest Zedcor branch.",
+  Posted: 'Date the source originally published this opportunity.',
+};
 
 const PF = {
   bg: '#ffffff',
@@ -47,7 +57,7 @@ export function ProjectModal({ project, branch, onClose }: ProjectModalProps) {
 
   const rationale =
     project.rationale ??
-    'Rationale pending. Once Pathfinder Ranker scores this project, the Claude-generated reasoning paragraph will appear here.';
+    'Rationale pending. Once Pathfinder Ranker scores this project, the reasoning will appear here.';
   const hook = project.outreach_hook ?? 'Outreach hook will populate after the Ranker runs.';
   const dist = project.distance_miles != null ? `${project.distance_miles.toFixed(1)} mi` : '—';
   const value = formatValue(project.project_value);
@@ -194,9 +204,15 @@ export function ProjectModal({ project, branch, onClose }: ProjectModalProps) {
                 borderRight: i < 3 ? `1px solid ${PF.ruleSoft}` : 'none',
               }}
             >
-              <span className="pf-label" style={{ fontSize: 9 }}>
-                {cell.label}
-              </span>
+              <Tooltip text={METRIC_TOOLTIPS[cell.label] ?? ''} placement="bottom">
+                <span
+                  className="pf-label"
+                  style={{ fontSize: 9, cursor: 'help', borderBottom: '1px dotted rgba(10,10,10,0.22)' }}
+                  tabIndex={0}
+                >
+                  {cell.label}
+                </span>
+              </Tooltip>
               <div
                 className="pf-num"
                 style={{ fontSize: 16, marginTop: 4, color: cell.accent || PF.ink }}
@@ -220,7 +236,7 @@ export function ProjectModal({ project, branch, onClose }: ProjectModalProps) {
         >
           <Section
             title="Rationale"
-            sub={project.rationale_streamed_at ? 'cached' : 'model: claude-sonnet'}
+            sub={project.rationale_streamed_at ? 'cached' : 'ranker'}
             accent="hi"
           >
             <p className="pf-body" style={{ margin: 0, color: PF.ink }}>
@@ -414,7 +430,7 @@ function formatValue(v: number | null): string {
 function verifierStatusSub(verified: boolean | null): string {
   if (verified === true) return 'passed · all 4 checks';
   if (verified === false) return 'flagged · awaiting re-rank';
-  return 'pending · model: claude-sonnet';
+  return 'awaiting verifier';
 }
 
 /**

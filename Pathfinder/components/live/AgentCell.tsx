@@ -51,7 +51,7 @@ const AGENT_TOOLTIPS: Record<AgentName, string> = {
   ingestor:
     'Ingestor — runs every 6h. Pulls new construction permits, federal contracts, SAM.gov solicitations, and Google News mentions. Correlates them into one project record per opportunity.',
   ranker:
-    'Ranker — every 30 min. Routes each record through cheap classifiers, then Claude Sonnet for the rationale + outreach hook. Writes the score, branch match, and warm-intro signal back to the project row.',
+    'Ranker — every 30 min. Routes each record through a cheap classifier, then a heavier model for the rationale + outreach hook. Writes the score, branch match, and warm-intro signal back to the project row.',
   adjacent:
     'Adjacent Discovery — weekly. Researches multi-branch field-sales orgs in the same shape as Zedcor (specialty trades, restoration, multi-location services) and surfaces them as new outreach targets.',
   // Layer-2 / Layer-3 agents — Agent Status row expansion lands later (see
