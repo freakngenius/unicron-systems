@@ -28,6 +28,12 @@ export const PF_TINTS = {
   amber: '#FFB454',
   amberSoft: 'rgba(255,180,84,0.16)',
   amberRing: 'rgba(255,180,84,0.45)',
+  // Violet — Verifier's tint. Distinct hue so the Generator/Verifier pair
+  // (Ranker amber + Verifier violet) reads as two complementary roles
+  // rather than two shades of the same agent.
+  violet: '#782fe2',
+  violetSoft: 'rgba(120,47,226,0.16)',
+  violetRing: 'rgba(120,47,226,0.45)',
   // Universal "live cycle" color used by every agent's status pill + dot
   // when status === 'running'. Decoupled from each agent's name color so
   // the dashboard reads "active" consistently across the fleet.
@@ -78,7 +84,7 @@ export interface AgentMeta {
   id: AgentName;
   label: string;
   /** null for agents that read as mono ink. */
-  tintKey: 'hi' | 'warm' | 'amber' | null;
+  tintKey: 'hi' | 'warm' | 'amber' | 'violet' | null;
   /** Optional render strategy on top of the base hue. */
   modifier?: AgentTintModifier;
 }
@@ -90,7 +96,7 @@ export interface AgentMeta {
 // | ingestor       | hi      | —            | solid cyan                                     |
 // | ranker         | amber   | —            | golden yellow — matches high-priority pin color|
 // | adjacent       | null    | —            | mono ink                                       |
-// | verifier       | warm    | ringOnly     | lime ring around mono                          |
+// | verifier       | violet  | ringOnly     | violet (#782fe2) ring around mono              |
 // | outreach       | hi      | softFill     | cyan-soft fill, ink text                       |
 // | pulse          | null    | dimItalic    | mono ink, italic, dim                          |
 // | competitive    | hi      | dim          | cyan-dim                                       |
@@ -105,7 +111,7 @@ export const AGENTS: Record<AgentName, AgentMeta> = {
   ingestor: { id: 'ingestor', label: 'INGESTOR', tintKey: 'hi' },
   ranker: { id: 'ranker', label: 'RANKER', tintKey: 'amber' },
   adjacent: { id: 'adjacent', label: 'ADJACENT', tintKey: null },
-  verifier: { id: 'verifier', label: 'VERIFIER', tintKey: 'warm', modifier: 'ringOnly' },
+  verifier: { id: 'verifier', label: 'VERIFIER', tintKey: 'violet', modifier: 'ringOnly' },
   outreach: { id: 'outreach', label: 'OUTREACH', tintKey: 'hi', modifier: 'softFill' },
   pulse: { id: 'pulse', label: 'PULSE', tintKey: null, modifier: 'dimItalic' },
   competitive: { id: 'competitive', label: 'COMPETITIVE', tintKey: 'hi', modifier: 'dim' },
@@ -131,6 +137,7 @@ export function agentTint(name: AgentName | string | null | undefined): string {
   if (ag.tintKey === 'hi') return PF_TINTS.hi;
   if (ag.tintKey === 'warm') return PF_TINTS.warm;
   if (ag.tintKey === 'amber') return PF_TINTS.amber;
+  if (ag.tintKey === 'violet') return PF_TINTS.violet;
   return PF_TINTS.ink;
 }
 
@@ -145,6 +152,7 @@ export function agentTintOnMap(name: AgentName | string | null | undefined): str
   if (ag.tintKey === 'hi') return PF_TINTS.hi;
   if (ag.tintKey === 'warm') return PF_TINTS.warm;
   if (ag.tintKey === 'amber') return PF_TINTS.amber;
+  if (ag.tintKey === 'violet') return PF_TINTS.violet;
   return PF_TINTS.mapInk;
 }
 
