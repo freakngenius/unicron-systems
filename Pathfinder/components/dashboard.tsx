@@ -275,13 +275,12 @@ export function Dashboard({ initialBranches, initialCustomers, initialProjects }
       <APIProvider apiKey={apiKey} libraries={['marker', 'maps']}>
         {/* Map fills the whole container; chrome panels float over it. */}
         <div style={{ position: 'absolute', inset: 0 }}>
-          {/* AdvancedMarker requires a mapId. The dark palette comes from the
-              cloud-styled Map ID (lib/map-style.ts is the canonical JSON
-              pasted into GCP Map Styles). Do NOT also pass `colorScheme` —
-              when both are set, Google's stock scheme wins over the custom
-              cloud style. With only mapId, the cloud style applies cleanly.
-              Falls back to DEMO_MAP_ID (Google's stock) if the env var isn't
-              set, so AdvancedMarker still works during early bring-up. */}
+          {/* AdvancedMarker requires a mapId. Ideal: cloud-styled Map ID
+              with lib/map-style.ts pasted in GCP Map Styles. If the cloud
+              style isn't applying (style not published, mismatch between
+              Map ID and Style, or wrong project), `colorScheme="DARK"` keeps
+              the map at least dark instead of falling all the way back to
+              default light. */}
           <GoogleMap
             mapId={GOOGLE_MAP_ID}
             defaultCenter={DEFAULT_CENTER}
@@ -291,6 +290,7 @@ export function Dashboard({ initialBranches, initialCustomers, initialProjects }
             gestureHandling="greedy"
             disableDefaultUI={true}
             clickableIcons={false}
+            colorScheme="DARK"
             style={{ width: '100%', height: '100%' }}
           >
             <MapController
