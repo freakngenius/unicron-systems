@@ -311,7 +311,35 @@ export function TopBar({
           <PulsingDot color={PF.warm} />
           <span className="pf-label">Live</span>
         </span>
+        <a
+          href="/pathfinder/settings"
+          className="pf-pill"
+          title="Open the operator-grade settings page"
+          style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 5 }}
+        >
+          <SettingsCog />
+          Settings
+        </a>
       </div>
     </div>
+  );
+}
+
+function SettingsCog() {
+  return (
+    <svg
+      width={11}
+      height={11}
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.4}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <circle cx="8" cy="8" r="2.4" />
+      <path d="M8 1.5v2.2 M8 12.3v2.2 M14.5 8h-2.2 M3.7 8H1.5 M12.6 3.4l-1.6 1.6 M5 11l-1.6 1.6 M12.6 12.6l-1.6-1.6 M5 5l-1.6-1.6" />
+    </svg>
   );
 }

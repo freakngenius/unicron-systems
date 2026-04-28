@@ -17,6 +17,7 @@ import React from 'react';
 
 import { hexAlpha, PF_TINTS } from '@/lib/agent-tints';
 import { MODEL_META, tallyModelCost, useCostSummary, useModels } from '@/lib/realtime';
+import { useSettings } from '@/lib/settings';
 
 export interface ModelRoutingStripProps {
   collapsed: boolean;
@@ -28,6 +29,11 @@ export function ModelRoutingStrip({ collapsed, onToggle }: ModelRoutingStripProp
   const { avgMs } = useModels();
   // Cumulative — counts + total_ranked from /api/cost-summary.
   const summary = useCostSummary();
+  // Lead-cost gate (Settings → Display). Customer users (Zedcor side)
+  // never see the toggle in /settings, so this stays false for them.
+  // Operators can flip it on. Hides per-model cost column, the total
+  // cost footer, and the per-lead figure when off.
+  const showLeadCost = useSettings().showLeadCost;
 
   // Build rows from the cumulative model_calls map. Each call is priced
   // via MODEL_META; rows without a price entry render at $0 but still
@@ -123,30 +129,32 @@ export function ModelRoutingStrip({ collapsed, onToggle }: ModelRoutingStripProp
           ))
         )}
         <span style={{ flex: 1 }} />
-        <span
-          className="pf-mono"
-          style={{
-            fontSize: 9,
-            color: PF_TINTS.mapInkDim,
-            letterSpacing: '0.06em',
-            textTransform: 'uppercase',
-            lineHeight: 1,
-            flexShrink: 0,
-          }}
-        >
-          total <span style={{ color: PF_TINTS.mapInk, marginLeft: 4 }}>{fmtCost(totalCost)}</span>
-          <span style={{ marginLeft: 8 }}>·</span>
+        {showLeadCost && (
           <span
+            className="pf-mono"
             style={{
-              marginLeft: 8,
-              color: PF_TINTS.mapInk,
-              fontVariantNumeric: 'tabular-nums',
+              fontSize: 9,
+              color: PF_TINTS.mapInkDim,
+              letterSpacing: '0.06em',
+              textTransform: 'uppercase',
+              lineHeight: 1,
+              flexShrink: 0,
             }}
           >
-            {fmtCost(cpl)}
+            total <span style={{ color: PF_TINTS.mapInk, marginLeft: 4 }}>{fmtCost(totalCost)}</span>
+            <span style={{ marginLeft: 8 }}>·</span>
+            <span
+              style={{
+                marginLeft: 8,
+                color: PF_TINTS.mapInk,
+                fontVariantNumeric: 'tabular-nums',
+              }}
+            >
+              {fmtCost(cpl)}
+            </span>
+            <span style={{ marginLeft: 4 }}>per lead</span>
           </span>
-          <span style={{ marginLeft: 4 }}>per lead</span>
-        </span>
+        )}
         {Chev}
       </div>
     );
@@ -213,7 +221,7 @@ export function ModelRoutingStrip({ collapsed, onToggle }: ModelRoutingStripProp
             key={r.name}
             style={{
               display: 'grid',
-              gridTemplateColumns: '128px 1fr 72px 64px',
+              gridTemplateColumns: showLeadCost ? '128px 1fr 72px 64px' : '128px 1fr 72px',
               columnGap: 12,
               alignItems: 'baseline',
               font: `400 10px ${PF_TINTS.mono}`,
@@ -227,15 +235,17 @@ export function ModelRoutingStrip({ collapsed, onToggle }: ModelRoutingStripProp
             <span style={{ color: PF_TINTS.mapInk, textAlign: 'right' }}>
               {r.calls} <span style={{ color: PF_TINTS.mapInkDim }}>calls</span>
             </span>
-            <span
-              style={{
-                color: PF_TINTS.mapInk,
-                textAlign: 'right',
-                fontVariantNumeric: 'tabular-nums',
-              }}
-            >
-              {fmtCost(r.cost)}
-            </span>
+            {showLeadCost && (
+              <span
+                style={{
+                  color: PF_TINTS.mapInk,
+                  textAlign: 'right',
+                  fontVariantNumeric: 'tabular-nums',
+                }}
+              >
+                {fmtCost(r.cost)}
+              </span>
+            )}
           </div>
         ))
       )}
@@ -243,7 +253,7 @@ export function ModelRoutingStrip({ collapsed, onToggle }: ModelRoutingStripProp
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: '128px 1fr 72px 64px',
+          gridTemplateColumns: showLeadCost ? '128px 1fr 72px 64px' : '128px 1fr 72px',
           columnGap: 12,
           alignItems: 'baseline',
           font: `500 10px ${PF_TINTS.mono}`,
@@ -256,17 +266,21 @@ export function ModelRoutingStrip({ collapsed, onToggle }: ModelRoutingStripProp
         }}
       >
         <span style={{ color: PF_TINTS.mapInkDim }}>total</span>
-        <span style={{ color: PF_TINTS.mapInkDim }}>· {fmtCost(cpl)} per ranked lead</span>
-        <span style={{ color: PF_TINTS.mapInk, textAlign: 'right' }}>{totalCalls}</span>
-        <span
-          style={{
-            color: PF_TINTS.mapInk,
-            textAlign: 'right',
-            fontVariantNumeric: 'tabular-nums',
-          }}
-        >
-          {fmtCost(totalCost)}
+        <span style={{ color: PF_TINTS.mapInkDim }}>
+          {showLeadCost ? `· ${fmtCost(cpl)} per ranked lead` : ''}
         </span>
+        <span style={{ color: PF_TINTS.mapInk, textAlign: 'right' }}>{totalCalls}</span>
+        {showLeadCost && (
+          <span
+            style={{
+              color: PF_TINTS.mapInk,
+              textAlign: 'right',
+              fontVariantNumeric: 'tabular-nums',
+            }}
+          >
+            {fmtCost(totalCost)}
+          </span>
+        )}
       </div>
     </div>
   );
