@@ -191,7 +191,7 @@ export function ProjectModal({ project, branch, onClose }: ProjectModalProps) {
           className="pf-scrollbar"
         >
           <Section
-            title="Claude rationale"
+            title="Rationale"
             sub={project.rationale_streamed_at ? 'cached' : 'model: claude-sonnet'}
             accent="hi"
           >

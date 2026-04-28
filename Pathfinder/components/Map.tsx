@@ -25,18 +25,41 @@ export interface MapProps {
   width: number;
   height: number;
   showGrid?: boolean;
+  /** 1 = full extent. Higher values zoom in around (centerX, centerY). */
+  zoom?: number;
+  /** SVG-space center for the zoom; defaults to the viewBox midpoint. */
+  centerX?: number;
+  centerY?: number;
   children?: React.ReactNode;
 }
 
-export function Map({ width, height, showGrid = true, children }: MapProps) {
+export function Map({
+  width,
+  height,
+  showGrid = true,
+  zoom = 1,
+  centerX,
+  centerY,
+  children,
+}: MapProps) {
+  const z = Math.max(1, zoom);
+  const fullW = SVG_VIEWBOX.width;
+  const fullH = SVG_VIEWBOX.height;
+  const cx = centerX ?? fullW / 2;
+  const cy = centerY ?? fullH / 2;
+  const w = fullW / z;
+  const h = fullH / z;
+  // Clamp the viewBox origin so we never pan past the edges.
+  const x = Math.max(0, Math.min(fullW - w, cx - w / 2));
+  const y = Math.max(0, Math.min(fullH - h, cy - h / 2));
   return (
     <div style={{ position: 'relative', width, height, background: MAP_BG, overflow: 'hidden' }}>
       <svg
         width={width}
         height={height}
-        viewBox={`0 0 ${SVG_VIEWBOX.width} ${SVG_VIEWBOX.height}`}
+        viewBox={`${x} ${y} ${w} ${h}`}
         preserveAspectRatio="xMidYMid slice"
-        style={{ position: 'absolute', inset: 0, display: 'block' }}
+        style={{ position: 'absolute', inset: 0, display: 'block', transition: 'all 180ms ease-out' }}
       >
         {showGrid && (
           <>

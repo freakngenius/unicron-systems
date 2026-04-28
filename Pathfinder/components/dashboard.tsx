@@ -26,6 +26,7 @@ import { MapLegend } from './MapLegend';
 import { CoordsHUD } from './CoordsHUD';
 import { CrossPollBanner } from './CrossPollBanner';
 import { ActivityRail, AgentStatusRow, SonarPing, useNewPins } from './live';
+import { ZoomControl, ZOOM_MIN, ZOOM_MAX, ZOOM_STEP } from './ZoomControl';
 import { lonLatToSvg, svgToPx } from './map-projection';
 
 const HI_THRESHOLD = 80;
@@ -102,6 +103,14 @@ export function Dashboard({ initialBranches, initialCustomers, initialProjects }
   const [branchMin, setBranchMin] = React.useState(false);
   const [listMin, setListMin] = React.useState(false);
   const [activityOpen, setActivityOpen] = React.useState(false);
+  const [zoom, setZoom] = React.useState(1);
+
+  const clampZoom = React.useCallback(
+    (next: number) => Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Math.round(next * 10) / 10)),
+    [],
+  );
+  const zoomIn = React.useCallback(() => setZoom((z) => clampZoom(z + ZOOM_STEP)), [clampZoom]);
+  const zoomOut = React.useCallback(() => setZoom((z) => clampZoom(z - ZOOM_STEP)), [clampZoom]);
 
   // ── Container size measurement (drives px-space conversions) ───────────────
   const containerRef = React.useRef<HTMLDivElement | null>(null);
@@ -117,6 +126,25 @@ export function Dashboard({ initialBranches, initialCustomers, initialProjects }
     window.addEventListener('resize', update);
     return () => window.removeEventListener('resize', update);
   }, []);
+
+  // ── Keyboard: + / − zoom the map only (no UI scaling) ──────────────────────
+  React.useEffect(() => {
+    const isTextField = (t: EventTarget | null) =>
+      t instanceof HTMLElement &&
+      (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey || isTextField(e.target)) return;
+      if (e.key === '+' || e.key === '=') {
+        e.preventDefault();
+        zoomIn();
+      } else if (e.key === '-' || e.key === '_') {
+        e.preventDefault();
+        zoomOut();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [zoomIn, zoomOut]);
 
   // ── Derived: per-branch stats for the BranchDock ───────────────────────────
   const branchStats = React.useMemo<Record<string, BranchStats>>(() => {
@@ -185,7 +213,13 @@ export function Dashboard({ initialBranches, initialCustomers, initialProjects }
       style={{ position: 'fixed', inset: 0, background: '#0e1116' }}
       className="pf-root"
     >
-      <MapSurface width={mapDims.w} height={mapDims.h}>
+      <MapSurface
+        width={mapDims.w}
+        height={mapDims.h}
+        zoom={zoom}
+        centerX={selectedBranch?.svgX}
+        centerY={selectedBranch?.svgY}
+      >
         {/* ─── Default (non-cross-poll) layer ─── */}
         <g opacity={crossPoll ? WARM_DASH : 1}>
           {!crossPoll && selectedBranch && (
@@ -313,6 +347,12 @@ export function Dashboard({ initialBranches, initialCustomers, initialProjects }
       )}
       {crossPoll && <CrossPollBanner count={warmLines.length} />}
       <MapLegend crossPoll={crossPoll} />
+      <ZoomControl
+        zoom={zoom}
+        onZoomIn={zoomIn}
+        onZoomOut={zoomOut}
+        left={crossPoll ? 720 : 580}
+      />
       <CoordsHUD branch={selectedBranch} />
 
       {openProject && (

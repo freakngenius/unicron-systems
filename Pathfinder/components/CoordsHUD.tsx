@@ -14,9 +14,10 @@ const PF = {
 
 export interface CoordsHUDProps {
   branch: Branch | null;
+  zoom?: number;
 }
 
-export function CoordsHUD({ branch }: CoordsHUDProps) {
+export function CoordsHUD({ branch, zoom = 1 }: CoordsHUDProps) {
   if (!branch) return null;
   return (
     <div
@@ -38,8 +39,6 @@ export function CoordsHUD({ branch }: CoordsHUDProps) {
       <span style={{ color: PF.mapInk }}>
         {branch.lat.toFixed(4)}°N {Math.abs(branch.lon).toFixed(4)}°W
       </span>
-      <span style={{ margin: '0 10px', color: 'rgba(255,255,255,0.2)' }}>│</span>
-      <span>ZOOM 5</span>
     </div>
   );
 }
