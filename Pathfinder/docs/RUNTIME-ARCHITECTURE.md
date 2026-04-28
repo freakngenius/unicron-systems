@@ -6,11 +6,13 @@ Pathfinder runs a 10-agent fleet across two runtimes. The split is intentional: 
 
 This split is the contest's defensible answer to "is Computer really the engine, or is this just a wrapper?" — Computer drives every agent that reads the open web, browses LinkedIn, classifies real opportunities, drafts copy, surfaces patterns. Vercel cron only runs the agents whose entire job is "deterministic check + structured write" — those would be a poor use of Computer's research-grade capabilities anyway.
 
-## Final split — 5 / 5
+## Final split — 4 / 6
+
+(Was 5 / 5 — Ingestor migrated to Vercel cron 2026-04-28 when the connector reduced to USAspending + SAM.gov public APIs; both are direct HTTP, no browser automation, no LLM. Google News + Harris County permits are deferred — see "Deferred sources" below — and may bring Ingestor back to a Perplexity Space if those sources need browser automation.)
 
 | # | Agent | Runtime | Why this runtime | Trigger | Schedule |
 |---|---|---|---|---|---|
-| 1 | **Ingestor** | Perplexity Space | Browser automation against Harris County permit portal; cross-source entity correlation; Computer's web stack is the right tool | Cron inside Computer | `0 */6 * * *` (every 6h) |
+| 1 | **Ingestor** | Vercel cron function | USAspending + SAM.gov are public REST APIs; no browser, no LLM, just `fetch` + dedup + batch insert. Sized to fit Vercel's 60s function budget comfortably. | HTTP GET from Vercel cron scheduler | `0 */6 * * *` (every 6h) |
 | 2 | **Adjacent** | Perplexity Space | Open-web discovery across 4 vertical themes; outreach drafting with company research; entirely a research workflow | Cron inside Computer | `0 9 * * 5` (Fri 09:00 UTC) |
 | 3 | **Outreach** | Perplexity Space | LinkedIn lookup + company-website browse for contact identification; voice/tone-controlled drafting per channel | Event-driven inside Computer (verified high-pri lead arrival) | Polling |
 | 4 | **Customer Intel** | Perplexity Space | Press-wire monitoring, LinkedIn job-postings, SEC filings, Google News; signal classification | Cron inside Computer | Every 12h |
@@ -23,13 +25,22 @@ This split is the contest's defensible answer to "is Computer really the engine,
 
 ## Contest narrative
 
-> Computer is the engine for the 5 research-and-reasoning agents — Ingestor crawling permit portals, Adjacent discovering shape-matched companies, Outreach researching LinkedIn contacts, Customer Intel scanning press wires + SEC filings, Competitive synthesizing share trends. These are the workflows that genuinely need Computer's browser + web-search + multi-model routing.
+> Computer is the engine for the 4 research-and-reasoning agents — Adjacent discovering shape-matched companies, Outreach researching LinkedIn contacts, Customer Intel scanning press wires + SEC filings, Competitive synthesizing share trends. These are the workflows that genuinely need Computer's browser + web-search + multi-model routing. (Ingestor used to live here for its Harris County permits browser-automation step; it moved to Vercel cron when that source deferred and the remaining USAspending + SAM.gov connectors collapsed to direct REST calls.)
 >
 > The other 5 agents (Ranker, Verifier, Pulse, Eval, Briefing) are deterministic plumbing — geographic math, statistical pattern detection, retrospective scoring against ground truth, weekly aggregation. Running them on Vercel cron is the honest answer: they don't benefit from Computer, so we don't put them there.
 
 This split is defensible because it's honest. Pathfinder isn't claiming Computer does everything — it's claiming Computer does the work where Computer's capabilities matter, and the rest runs on the cheapest predictable substrate that fits.
 
-## Why Vercel cron for the deterministic 5
+## Deferred sources (Ingestor)
+
+The Ingestor's contest-spec source list was four: USAspending + SAM.gov + Google News + Harris County permits. The Vercel-cron iteration ships the first two. The other two are deferred:
+
+1. **Google News (RSS).** Pending decision on news-source provider. RSS feeds have well-known reliability + paywall issues; the team is evaluating NewsData.io, GDELT, and Newscatcher before code lands. When the decision is made, the new connector becomes a third `fetchXyzRecent()` in `lib/ingestor.ts`. No schema change needed.
+2. **Harris County permits portal (browser automation).** Pending Perplexity contest-support response. Vercel functions don't ship a headless browser by default; the cleanest implementation if Perplexity stays available is a small Computer Space dedicated to browsing the permits search UI on the same 6-hour cadence and writing rows to `pathfinder.projects` directly via Supabase MCP. If Perplexity isn't available, we'll either spin up a Browserless / Playwright-on-Lambda layer or drop Harris from the contest demo's source list.
+
+If both deferred sources land in Computer Spaces, the runtime split returns toward 5/5; if both land in Vercel cron via vendor APIs, the split stays 4/6 with a beefier Ingestor. Either way, the dashboard contract (`agent_log` + `pathfinder.projects`) is unchanged.
+
+## Why Vercel cron for the deterministic 6
 
 - **Direct `lib/scoring.ts` import** — no HTTP roundtrip, no auth header juggling. Pure-function kernel runs in-process with the rest of the dashboard backend. (HTTP scoring endpoints at `/api/scoring/branch` and `/api/scoring/score` remain available for any future external caller, but the in-fleet Vercel cron functions don't use them.)
 - **Same Supabase client** as the read-side API routes — single auth surface, single connection pooler, same RLS-bypassing service role.
@@ -37,7 +48,7 @@ This split is defensible because it's honest. Pathfinder isn't claiming Computer
 - **Predictable cost** — every cycle's token spend is capped by the queue limit. Pulse/Eval/Briefing run once per day or once per week; Ranker + Verifier are bounded at 30 projects per cycle.
 - **Predictable latency** — Vercel functions have a 60-second `maxDuration` (300s on Pro). Ranker/Verifier are sized to fit within 60s for the pilot's projected queue depth.
 
-## Why Perplexity Spaces for the research 5
+## Why Perplexity Spaces for the research 4
 
 - **Browser automation** — Ingestor walks Harris County's permit search UI; Outreach inspects LinkedIn profile pages and company "about" pages; Customer Intel browses SEC EDGAR + PR Newswire; Adjacent browses company locations pages. None of this is reproducible from a serverless function without setting up our own browser-automation infrastructure (Playwright on Lambda, Browserless, etc.) — Computer ships that out of the box.
 - **Multi-model routing inside Computer's catalog** — Ingestor and the research agents benefit from Computer's automatic routing to whichever model fits each step (cheap classifier for filtering, larger model for entity correlation). Replicating that in our own code is doable but reinvents wheels Computer already turns.
@@ -49,7 +60,6 @@ This split is defensible because it's honest. Pathfinder isn't claiming Computer
 ```
 Pathfinder/
 ├── prompts/                        Perplexity Space system prompts
-│   ├── computer-ingestor.md
 │   ├── computer-adjacent.md
 │   ├── computer-outreach.md        (Layer 2 — coming)
 │   ├── computer-customer-intel.md  (Layer 3 — coming)
@@ -57,6 +67,7 @@ Pathfinder/
 │   └── claude-ranking-rationale.md
 ├── docs/
 │   ├── specs/                      Vercel cron behavioral specs
+│   │   ├── ingestor.md             (moved from prompts/ when Ingestor migrated to Vercel cron)
 │   │   ├── ranker.md               (Layer 1.5 — moved from prompts/)
 │   │   ├── verifier.md             (Layer 1 — moved from prompts/)
 │   │   ├── pulse.md                (Layer 2 — coming)
@@ -66,11 +77,12 @@ Pathfinder/
 │   ├── AGENT-DEPLOYMENT-CHECKLIST.md
 │   └── RUNTIME-ARCHITECTURE.md     (this file)
 ├── app/api/cron/                   Vercel cron route handlers
+│   ├── ingestor/route.ts
 │   ├── ranker/route.ts             (Layer 1.5)
 │   ├── verifier/route.ts           (Layer 1)
+│   ├── briefing/route.ts
 │   ├── pulse/route.ts              (Layer 2 — coming)
-│   ├── eval/route.ts               (Layer 3 — coming)
-│   └── briefing/route.ts           (Layer 3 — coming)
+│   └── eval/route.ts               (Layer 3 — coming)
 └── vercel.json                     Cron schedule registry
 ```
 
