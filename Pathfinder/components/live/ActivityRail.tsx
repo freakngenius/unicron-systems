@@ -69,7 +69,9 @@ export function ActivityRail({ open, setOpen }: ActivityRailProps) {
           width: 380,
           height: 36,
           padding: '0 14px',
-          background: PF_TINTS.bg,
+          // Warm taupe so the Agent Log reads as a distinct surface from
+          // both the white chrome panels and the dark map. Same in expanded.
+          background: '#ddd5d1',
           border: `1px solid ${PF_TINTS.ruleSoft}`,
           borderRadius: PF_TINTS.r.md,
           boxShadow: PF_TINTS.shadow.sm,
@@ -117,7 +119,7 @@ export function ActivityRail({ open, setOpen }: ActivityRailProps) {
         right: 16,
         bottom: 16,
         height: 200,
-        background: PF_TINTS.bg,
+        background: '#ddd5d1',
         border: `1px solid ${PF_TINTS.ruleSoft}`,
         borderRadius: PF_TINTS.r.md,
         boxShadow: PF_TINTS.shadow.md,
