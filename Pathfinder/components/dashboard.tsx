@@ -24,8 +24,7 @@ import { CoordsHUD } from './CoordsHUD';
 import { CrossPollBanner } from './CrossPollBanner';
 import { ActivityRail, AgentStatusRow, useHeaderHeight } from './live';
 import { ZoomControl, ZOOM_MIN, ZOOM_MAX, ZOOM_STEP } from './ZoomControl';
-// PATHFINDER_DARK_STYLE in @/lib/map-style is the canonical JSON to paste
-// into the GCP Map Styles console for the Pathfinder dark map.
+import { PATHFINDER_DARK_STYLE } from '@/lib/map-style';
 import { projectTier } from '@/lib/types-map';
 import {
   BranchMarkerGM,
@@ -45,11 +44,6 @@ const MAP_BG = '#212121';
 const DEFAULT_CENTER = { lat: 39.5, lng: -98.5 };
 const DEFAULT_ZOOM = 4;
 const BRANCH_FOCUS_ZOOM = 7;
-// Map ID — used by AdvancedMarker. Override via env to point at a cloud-styled
-// map (recommended: configure dark Pathfinder palette in the GCP console using
-// the JSON in lib/map-style.ts, then set NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID to its ID).
-// Until that's set up, Google's `colorScheme="DARK"` gives a default dark look.
-const GOOGLE_MAP_ID = process.env.NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID || 'DEMO_MAP_ID';
 
 const SOURCE_FILTER_TO_DB: Record<Exclude<SourceKey, 'all'>, string> = {
   usa: 'usaspending',
@@ -275,14 +269,11 @@ export function Dashboard({ initialBranches, initialCustomers, initialProjects }
       <APIProvider apiKey={apiKey} libraries={['marker', 'maps']}>
         {/* Map fills the whole container; chrome panels float over it. */}
         <div style={{ position: 'absolute', inset: 0 }}>
-          {/* AdvancedMarker requires a mapId. Ideal: cloud-styled Map ID
-              with lib/map-style.ts pasted in GCP Map Styles. If the cloud
-              style isn't applying (style not published, mismatch between
-              Map ID and Style, or wrong project), `colorScheme="DARK"` keeps
-              the map at least dark instead of falling all the way back to
-              default light. */}
+          {/* Inline `styles` from the new GCP Map Style editor (JSON-only).
+              We use legacy <Marker> instead of <AdvancedMarker> so we don't
+              need a mapId — and dropping mapId is what lets `styles` apply
+              (Google ignores inline styles whenever a mapId is set). */}
           <GoogleMap
-            mapId={GOOGLE_MAP_ID}
             defaultCenter={DEFAULT_CENTER}
             defaultZoom={DEFAULT_ZOOM}
             minZoom={3}
@@ -290,7 +281,7 @@ export function Dashboard({ initialBranches, initialCustomers, initialProjects }
             gestureHandling="greedy"
             disableDefaultUI={true}
             clickableIcons={false}
-            colorScheme="DARK"
+            styles={PATHFINDER_DARK_STYLE as unknown as google.maps.MapTypeStyle[]}
             style={{ width: '100%', height: '100%' }}
           >
             <MapController
