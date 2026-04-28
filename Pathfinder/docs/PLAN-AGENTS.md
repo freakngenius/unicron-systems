@@ -1,9 +1,11 @@
 # PLAN-AGENTS — Pathfinder 8-Agent Expansion
 
-**Status:** Draft v1 — awaiting Kyle approval
+**Status:** Live · architecture pivoted 2026-04-28
 **Date:** 2026-04-28
-**Pairs with:** `agent-specs/01..08-*.md`, `Pathfinder-Build-Brief-Claude-Code.md`
+**Pairs with:** `agent-specs/01..08-*.md`, `docs/RUNTIME-ARCHITECTURE.md`, `Pathfinder-Build-Brief-Claude-Code.md`
 **Build window:** 5 working days, layer-gated
+
+> **Runtime split (locked 2026-04-28):** 5 Perplexity research agents (Ingestor, Adjacent, Outreach, Customer Intel, Competitive) + 5 Vercel cron deterministic agents (Ranker, Verifier, Pulse, Eval, Briefing). See `docs/RUNTIME-ARCHITECTURE.md` for the full per-agent table and rationale. Original v1 plan assumed all agents were Perplexity Spaces; sections below referencing "Perplexity Space" for Ranker/Verifier/Pulse/Eval/Briefing should be read in light of the runtime pivot — those 5 agents are now Vercel cron functions with behavioral specs at `docs/specs/<agent>.md`.
 
 This plan turns the existing 3-agent Pathfinder fleet (Ingestor + Ranker live; Adjacent silent) into the 8-agent fleet defined in `agent-specs/`. It is layered so each layer is verified end-to-end before the next dispatches. No code or Computer prompts get written until Kyle approves this plan.
 

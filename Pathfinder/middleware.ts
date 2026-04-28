@@ -96,9 +96,11 @@ export function middleware(req: NextRequest) {
 }
 
 export const config = {
-  // Gate everything except Next.js internals + favicon. Pages and API routes both protected.
+  // Gate everything except Next.js internals + favicon + cron endpoints. Pages and API routes both protected.
   // Two patterns because Next.js basePath strips the prefix before matching, and a single
   // `/.*` pattern can skip the bare basePath root in production. `/` covers the root case;
   // the lookahead pattern covers everything else.
-  matcher: ['/', '/((?!_next/|favicon\\.ico).*)'],
+  // `/api/cron/*` is excluded because Vercel cron jobs send `Authorization: Bearer ${CRON_SECRET}`
+  // and the cron handler does its own auth — Basic auth would block the cron POST.
+  matcher: ['/', '/((?!_next/|favicon\\.ico|api/cron/).*)'],
 };

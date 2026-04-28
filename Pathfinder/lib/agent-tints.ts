@@ -22,6 +22,17 @@ export const PF_TINTS = {
   warm: '#a3e635',
   warmSoft: 'rgba(163,230,53,0.16)',
   warmRing: 'rgba(163,230,53,0.45)',
+  // Amber — Ranker's tint, matches the high-priority project marker color.
+  // Same hue as `TIER_COLORS.amber` (#FFB454) so Ranker reads visually as
+  // "the agent that produces high-pri leads".
+  amber: '#FFB454',
+  amberSoft: 'rgba(255,180,84,0.16)',
+  amberRing: 'rgba(255,180,84,0.45)',
+  // Universal "live cycle" color used by every agent's status pill + dot
+  // when status === 'running'. Decoupled from each agent's name color so
+  // the dashboard reads "active" consistently across the fleet.
+  runningGreen: '#a3e635',
+  runningGreenGlow: 'rgba(163,230,53,0.18)',
   ink: '#0a0a0a',
   inkSub: '#3a3f46',
   inkDim: '#6b7280',
@@ -67,7 +78,7 @@ export interface AgentMeta {
   id: AgentName;
   label: string;
   /** null for agents that read as mono ink. */
-  tintKey: 'hi' | 'warm' | null;
+  tintKey: 'hi' | 'warm' | 'amber' | null;
   /** Optional render strategy on top of the base hue. */
   modifier?: AgentTintModifier;
 }
@@ -76,19 +87,23 @@ export interface AgentMeta {
 //
 // | Agent          | tintKey | modifier     | render strategy                                |
 // |----------------|---------|--------------|------------------------------------------------|
-// | ingestor       | hi      | —            | solid cyan (existing)                          |
-// | ranker         | warm    | —            | solid lime (existing)                          |
-// | adjacent       | null    | —            | mono ink (existing)                            |
-// | verifier       | warm    | ringOnly     | lime ring around mono — paired with Ranker     |
-// | outreach       | hi      | softFill     | cyan-soft fill, ink text — downstream of Ranker|
-// | pulse          | null    | dimItalic    | mono ink, italic, dim — system-tuning agent    |
-// | competitive    | hi      | dim          | cyan-dim — research agent like Ingestor        |
-// | briefing       | null    | bold         | mono ink, bold — synthesis agent               |
-// | customer-intel | warm    | dim          | lime-dim — pipeline-adjacent like Ranker       |
+// | ingestor       | hi      | —            | solid cyan                                     |
+// | ranker         | amber   | —            | golden yellow — matches high-priority pin color|
+// | adjacent       | null    | —            | mono ink                                       |
+// | verifier       | warm    | ringOnly     | lime ring around mono                          |
+// | outreach       | hi      | softFill     | cyan-soft fill, ink text                       |
+// | pulse          | null    | dimItalic    | mono ink, italic, dim                          |
+// | competitive    | hi      | dim          | cyan-dim                                       |
+// | briefing       | null    | bold         | mono ink, bold                                 |
+// | customer-intel | warm    | dim          | lime-dim                                       |
 // | eval           | null    | mono         | mono ink, monospace tag prefix `[eval]`        |
+//
+// NOTE: agent-name color is independent of status-pill color. The "active /
+// running" state always renders in `runningGreen` (universal) regardless of
+// agent. tintKey only controls the agent label + activity-rail prefix.
 export const AGENTS: Record<AgentName, AgentMeta> = {
   ingestor: { id: 'ingestor', label: 'INGESTOR', tintKey: 'hi' },
-  ranker: { id: 'ranker', label: 'RANKER', tintKey: 'warm' },
+  ranker: { id: 'ranker', label: 'RANKER', tintKey: 'amber' },
   adjacent: { id: 'adjacent', label: 'ADJACENT', tintKey: null },
   verifier: { id: 'verifier', label: 'VERIFIER', tintKey: 'warm', modifier: 'ringOnly' },
   outreach: { id: 'outreach', label: 'OUTREACH', tintKey: 'hi', modifier: 'softFill' },
@@ -115,6 +130,7 @@ export function agentTint(name: AgentName | string | null | undefined): string {
   if (!ag) return PF_TINTS.inkDim;
   if (ag.tintKey === 'hi') return PF_TINTS.hi;
   if (ag.tintKey === 'warm') return PF_TINTS.warm;
+  if (ag.tintKey === 'amber') return PF_TINTS.amber;
   return PF_TINTS.ink;
 }
 
@@ -128,6 +144,7 @@ export function agentTintOnMap(name: AgentName | string | null | undefined): str
   if (!ag) return PF_TINTS.mapInkDim;
   if (ag.tintKey === 'hi') return PF_TINTS.hi;
   if (ag.tintKey === 'warm') return PF_TINTS.warm;
+  if (ag.tintKey === 'amber') return PF_TINTS.amber;
   return PF_TINTS.mapInk;
 }
 

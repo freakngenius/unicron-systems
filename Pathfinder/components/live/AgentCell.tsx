@@ -9,7 +9,7 @@
 
 import React from 'react';
 
-import { AGENTS, agentTintOnMap, PF_TINTS, hexAlpha } from '@/lib/agent-tints';
+import { AGENTS, agentTintOnMap, PF_TINTS } from '@/lib/agent-tints';
 import type { AgentName, AgentRun } from '@/lib/types';
 import { StatusPill } from './StatusPill';
 
@@ -117,16 +117,18 @@ export function AgentCell({ id, data, showDivider }: AgentCellProps) {
             width: 7,
             height: 7,
             borderRadius: '50%',
-            background: isRunning ? (ag.tintKey ? tint : '#e6e9ef') : 'rgba(255,255,255,0.20)',
-            boxShadow: isRunning
-              ? `0 0 0 3px ${hexAlpha(ag.tintKey ? tint : '#e6e9ef', 0.18)}`
-              : 'none',
+            // Universal: active = runningGreen + glow + pulse. Inactive = gray, no glow, no pulse.
+            background: isRunning ? PF_TINTS.runningGreen : 'rgba(255,255,255,0.20)',
+            boxShadow: isRunning ? `0 0 0 3px ${PF_TINTS.runningGreenGlow}` : 'none',
             animation: isRunning ? 'pf-pulse 1200ms ease-in-out infinite' : 'none',
           }}
         />
         <span
           style={{
             font: `600 13px ${PF_TINTS.sans}`,
+            // Agent name color stays per-tint — that's how the fleet stays
+            // visually distinguishable. Status (active/inactive) is the
+            // universal signal; identity (which agent) is the per-tint one.
             color: ag.tintKey ? tint : PF_TINTS.mapInk,
             letterSpacing: '0.02em',
           }}
@@ -134,7 +136,7 @@ export function AgentCell({ id, data, showDivider }: AgentCellProps) {
           {ag.label}
         </span>
         <span style={{ flex: 1 }} />
-        <StatusPill status={data.status} tint={ag.tintKey ? tint : null} />
+        <StatusPill status={data.status} />
       </div>
       <div style={{ display: 'flex', gap: 18, alignItems: 'baseline' }}>
         {metrics.map((m, i) => (
