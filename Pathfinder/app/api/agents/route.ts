@@ -47,10 +47,23 @@ interface AgentSummary {
   last_run: AgentRun | null;
   records_this_cycle: number;
   avg_latency_ms_last_hour: number | null;
+  /** Sum of records_processed over agent_runs started in the last 24h.
+   *  Drives the "ranked today" / "verified today" / "records" cell stats
+   *  so they reflect cumulative activity, not just the latest cycle. */
+  records_today_total: number;
+  /** Sum of records_processed over agent_runs started in the last 7d.
+   *  Drives the Adjacent "targets / wk" stat. */
+  records_week_total: number;
+  /** Total cycles run this 24h window — used by the Multi-Model Routing
+   *  Strip and the "cycles" mini-counter when the cell asks for it. */
+  cycles_today: number;
 }
 
 export async function GET() {
-  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+  const now = Date.now();
+  const oneHourAgo = new Date(now - 60 * 60 * 1000).toISOString();
+  const oneDayAgo = new Date(now - 24 * 60 * 60 * 1000).toISOString();
+  const oneWeekAgo = new Date(now - 7 * 24 * 60 * 60 * 1000).toISOString();
 
   const summaries = await Promise.all(
     AGENTS.map(async (agent): Promise<AgentSummary> => {
@@ -62,6 +75,29 @@ export async function GET() {
         .order('started_at', { ascending: false })
         .limit(1);
       const lastRun = (runRows?.[0] ?? null) as AgentRun | null;
+
+      // 24h + 7d aggregate (records_processed sum + cycle count). One query
+      // returns both windows; we filter client-side. Capped at 200 rows
+      // since no agent runs more than ~50 cycles/day in this fleet.
+      const aggRes = await supabase
+        .from('agent_runs')
+        .select('started_at, records_processed')
+        .eq('agent_name', agent)
+        .gte('started_at', oneWeekAgo)
+        .order('started_at', { ascending: false })
+        .limit(500);
+      const aggRows = (aggRes.data ?? []) as Array<{ started_at: string; records_processed: number | null }>;
+      let recordsToday = 0;
+      let recordsWeek = 0;
+      let cyclesToday = 0;
+      for (const r of aggRows) {
+        const recs = r.records_processed ?? 0;
+        recordsWeek += recs;
+        if (r.started_at >= oneDayAgo) {
+          recordsToday += recs;
+          cyclesToday += 1;
+        }
+      }
 
       // Average latency over last hour
       const logsRes = await supabase
@@ -90,7 +126,7 @@ export async function GET() {
       } else {
         // success — derive from recency
         const completedAt = lastRun.completed_at ? new Date(lastRun.completed_at).getTime() : 0;
-        const stale = Date.now() - completedAt > FIVE_MIN_MS;
+        const stale = now - completedAt > FIVE_MIN_MS;
         if (isScheduled) {
           status = 'scheduled';
         } else {
@@ -104,6 +140,9 @@ export async function GET() {
         last_run: lastRun,
         records_this_cycle: lastRun?.records_processed ?? 0,
         avg_latency_ms_last_hour: avgLatency,
+        records_today_total: recordsToday,
+        records_week_total: recordsWeek,
+        cycles_today: cyclesToday,
       };
     }),
   );

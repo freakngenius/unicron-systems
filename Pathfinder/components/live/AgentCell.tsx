@@ -220,11 +220,19 @@ function fmtAgo(sec: number): string {
  * Optional extras passed in by the row container — fields that don't live
  * on `agent_runs` but the cell still needs to render. Kept as a separate
  * arg so the simple ingestor/ranker call sites stay clean while the
- * Verifier branch can pull in its escalation count.
+ * Verifier branch can pull in its escalation count and every cell can
+ * pull in 24h/7d aggregates from `/api/agents`.
  */
 export interface DeriveCellExtras {
   /** Verifier-only: count of projects with `verifier_pass_count >= 2`. */
   escalatedCount?: number;
+  /** Sum of records_processed across agent_runs started in the last 24h.
+   *  Used for "ranked today" / "verified today" / "records" counters so
+   *  the cell shows cumulative activity rather than just the latest cycle. */
+  recordsToday?: number;
+  /** Sum of records_processed across agent_runs started in the last 7d.
+   *  Used by Adjacent for "targets / wk". */
+  recordsWeek?: number;
 }
 
 export function deriveCellData(
@@ -246,7 +254,9 @@ export function deriveCellData(
       status,
       lastCycleSec: -1,
       nextRunLabel: 'fri 09:00 utc',
-      targetsLastWeek: run?.records_processed ?? 0,
+      // True 7d sum from /api/agents aggregates; falls back to the latest
+      // cycle's records_processed if aggregates haven't loaded yet.
+      targetsLastWeek: extras?.recordsWeek ?? run?.records_processed ?? 0,
     };
   }
 
@@ -254,10 +264,10 @@ export function deriveCellData(
     return {
       status: 'idle',
       lastCycleSec: -1,
-      recordsThisCycle: 0,
-      rankedToday: 0,
-      recordsToday: 0,
-      verifiedToday: 0,
+      recordsThisCycle: extras?.recordsToday ?? 0,
+      rankedToday: extras?.recordsToday ?? 0,
+      recordsToday: extras?.recordsToday ?? 0,
+      verifiedToday: extras?.recordsToday ?? 0,
       escalatedCount: extras?.escalatedCount ?? 0,
       latMs: 0,
     };
@@ -280,19 +290,20 @@ export function deriveCellData(
     return {
       status,
       lastCycleSec,
-      recordsThisCycle: run.records_new ?? 0,
-      recordsToday: run.records_processed ?? 0,
+      // "records" header reads as a 24h cumulative count when /api/agents
+      // aggregates have loaded; falls back to records_new for this cycle.
+      recordsThisCycle: extras?.recordsToday ?? run.records_new ?? 0,
+      recordsToday: extras?.recordsToday ?? run.records_processed ?? 0,
       latMs,
     };
   }
   if (id === 'verifier') {
-    // Verifier processes one project per pass; `records_processed` on the
-    // latest run is "verified in this cycle". Escalations come from the
-    // projects table via the `extras` arg (no `agent_runs` column for it).
+    // True 24h sum of records_processed when aggregates available; falls
+    // back to the latest cycle's records_processed.
     return {
       status,
       lastCycleSec,
-      verifiedToday: run.records_processed ?? 0,
+      verifiedToday: extras?.recordsToday ?? run.records_processed ?? 0,
       escalatedCount: extras?.escalatedCount ?? 0,
     };
   }
@@ -300,7 +311,7 @@ export function deriveCellData(
   return {
     status,
     lastCycleSec,
-    rankedToday: run.records_processed ?? 0,
+    rankedToday: extras?.recordsToday ?? run.records_processed ?? 0,
     latMs,
   };
 }

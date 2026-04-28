@@ -19,7 +19,7 @@
 // The realtime channels are opened lazily on first subscribe and torn down
 // when the last subscriber unmounts, so SSR + tab-backgrounding stay clean.
 
-import { useEffect, useReducer, useRef } from 'react';
+import { useEffect, useReducer, useRef, useState } from 'react';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 
 import { supabase } from '@/lib/supabase';
@@ -200,29 +200,98 @@ let runsChannel: RealtimeChannel | null = null;
 let runsRefcount = 0;
 let runsBackfillStarted = false;
 
+/**
+ * Shape returned by `/api/agents` — one entry per agent with the latest
+ * `agent_runs` row nested under `last_run` plus 24h/7d aggregates. We
+ * unwrap `last_run` into the flat `AgentRunMap` the cells consume; the
+ * aggregates land in `aggregatesStore` and AgentCell reads both. Older
+ * response shapes (raw AgentRun array, or `{ agents: ... }` envelope) are
+ * still supported as fallbacks for older deploys.
+ */
+interface AgentSummaryShape {
+  agent?: AgentName;
+  last_run?: AgentRun | null;
+  records_today_total?: number;
+  records_week_total?: number;
+  cycles_today?: number;
+}
+
+export interface AgentAggregates {
+  recordsToday: number;
+  recordsWeek: number;
+  cyclesToday: number;
+}
+
+export type AgentAggregatesMap = Record<AgentName, AgentAggregates>;
+
+const initialAggregates: AgentAggregates = { recordsToday: 0, recordsWeek: 0, cyclesToday: 0 };
+const initialAggregatesMap: AgentAggregatesMap = {
+  ingestor: { ...initialAggregates },
+  ranker: { ...initialAggregates },
+  adjacent: { ...initialAggregates },
+  verifier: { ...initialAggregates },
+  outreach: { ...initialAggregates },
+  pulse: { ...initialAggregates },
+  competitive: { ...initialAggregates },
+  briefing: { ...initialAggregates },
+  'customer-intel': { ...initialAggregates },
+  eval: { ...initialAggregates },
+};
+const aggregatesStore = new Store<AgentAggregatesMap>(initialAggregatesMap);
+
+export function useAgentAggregates(): AgentAggregatesMap {
+  const [snap, setSnap] = useState<AgentAggregatesMap>(aggregatesStore.get());
+  useEffect(() => aggregatesStore.subscribe(setSnap), []);
+  return snap;
+}
+
+function isSummaryMap(v: unknown): v is Record<string, AgentSummaryShape> {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return false;
+  // any value that has a `last_run` field (even null) → summary shape
+  return Object.values(v as Record<string, unknown>).some(
+    (entry) => entry && typeof entry === 'object' && 'last_run' in (entry as object),
+  );
+}
+
 async function backfillRuns(): Promise<void> {
   if (runsBackfillStarted) return;
   runsBackfillStarted = true;
   try {
     const res = await fetch(`${API_BASE}/api/agents`, { cache: 'no-store' });
     if (res.ok) {
-      const data = (await res.json()) as
-        | { agents?: AgentRunMap }
-        | AgentRunMap
-        | AgentRun[];
-      let map: AgentRunMap = { ...initialRunMap };
+      const data = (await res.json()) as unknown;
+      const map: AgentRunMap = { ...initialRunMap };
       if (Array.isArray(data)) {
-        for (const r of data) map[r.agent_name] = r;
-      } else if ((data as { agents?: AgentRunMap }).agents) {
-        map = { ...map, ...(data as { agents: AgentRunMap }).agents };
-      } else {
-        map = { ...map, ...(data as AgentRunMap) };
+        for (const r of data as AgentRun[]) {
+          if (r?.agent_name) map[r.agent_name] = r;
+        }
+      } else if (isSummaryMap(data)) {
+        // Current shape: { ingestor: { last_run: AgentRun|null, ... }, ... }
+        const aggMap: AgentAggregatesMap = { ...initialAggregatesMap };
+        for (const [name, summary] of Object.entries(data as Record<string, AgentSummaryShape>)) {
+          if (summary?.last_run) map[name as AgentName] = summary.last_run;
+          if (summary && typeof summary === 'object') {
+            aggMap[name as AgentName] = {
+              recordsToday: summary.records_today_total ?? 0,
+              recordsWeek: summary.records_week_total ?? 0,
+              cyclesToday: summary.cycles_today ?? 0,
+            };
+          }
+        }
+        aggregatesStore.set(aggMap);
+      } else if (data && typeof data === 'object' && 'agents' in (data as object)) {
+        // Legacy envelope: { agents: AgentRunMap }
+        const inner = (data as { agents: AgentRunMap }).agents;
+        Object.assign(map, inner);
+      } else if (data && typeof data === 'object') {
+        // Legacy raw AgentRunMap (Layer 1)
+        Object.assign(map, data as Partial<AgentRunMap>);
       }
       runsStore.set(map);
       return;
     }
   } catch {
-    // fall through
+    // fall through to Supabase fallback
   }
   // Direct Supabase fallback — newest run per agent.
   const { data, error } = await supabase

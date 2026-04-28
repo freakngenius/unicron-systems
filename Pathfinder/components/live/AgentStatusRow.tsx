@@ -15,7 +15,7 @@
 import React, { useEffect, useState } from 'react';
 
 import { hexAlpha, PF_TINTS } from '@/lib/agent-tints';
-import { setHeaderHeight, useAgentRuns, useEscalations } from '@/lib/realtime';
+import { setHeaderHeight, useAgentRuns, useAgentAggregates, useEscalations } from '@/lib/realtime';
 import type { AgentName } from '@/lib/types';
 import { AgentCell, deriveCellData } from './AgentCell';
 import { ModelRoutingStrip } from './ModelRoutingStrip';
@@ -27,6 +27,7 @@ export interface AgentStatusRowProps {
 
 export function AgentStatusRow({ initialCollapsed = true }: AgentStatusRowProps) {
   const runs = useAgentRuns();
+  const aggregates = useAgentAggregates();
   const escalations = useEscalations();
   const [collapsed, setCollapsed] = useState(initialCollapsed);
 
@@ -67,6 +68,8 @@ export function AgentStatusRow({ initialCollapsed = true }: AgentStatusRowProps)
             id={id}
             data={deriveCellData(id, runs[id], {
               escalatedCount: id === 'verifier' ? escalations.length : undefined,
+              recordsToday: aggregates[id]?.recordsToday,
+              recordsWeek: aggregates[id]?.recordsWeek,
             })}
             showDivider={i > 0}
           />
