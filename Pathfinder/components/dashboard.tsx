@@ -29,6 +29,7 @@ import { ZoomControl, ZOOM_MIN, ZOOM_MAX, ZOOM_STEP } from './ZoomControl';
 import { PATHFINDER_DARK_STYLE } from '@/lib/map-style';
 import { projectTier } from '@/lib/types-map';
 import { useHidden } from '@/lib/user-prefs';
+import { useScoringConfig } from '@/lib/scoring-config';
 import {
   BranchMarkerGM,
   CustomerMarkerGM,
@@ -40,7 +41,7 @@ import { ProjectClusterLayer, type ClusterMarker } from './map/ProjectClusterLay
 import { WarmIntroLines } from './map/WarmIntroLines';
 import { useLatLngToPixel } from './map/useLatLngToPixel';
 
-const HI_THRESHOLD = 80;
+const HI_THRESHOLD_FALLBACK = 80;
 // Match the canonical Pathfinder dark style's base geometry color so the
 // loading state doesn't flash darker than the tiles when they paint in.
 const MAP_BG = '#212121';
@@ -183,6 +184,8 @@ export function Dashboard({ initialBranches, initialCustomers, initialProjects }
   }, []);
 
   // ── Derived: per-branch stats for the BranchDock ───────────────────────────
+  const { high_priority_threshold } = useScoringConfig();
+  const hiThreshold = high_priority_threshold || HI_THRESHOLD_FALLBACK;
   const branchStats = React.useMemo<Record<string, BranchStats>>(() => {
     const m: Record<string, BranchStats> = {};
     for (const b of initialBranches) m[b.id] = { count: 0, hi: 0 };
@@ -190,10 +193,10 @@ export function Dashboard({ initialBranches, initialCustomers, initialProjects }
       const bid = p.nearest_branch_id;
       if (!bid || !m[bid]) continue;
       m[bid].count += 1;
-      if ((p.score ?? 0) >= HI_THRESHOLD) m[bid].hi += 1;
+      if ((p.score ?? 0) >= hiThreshold) m[bid].hi += 1;
     }
     return m;
-  }, [initialBranches, initialProjects]);
+  }, [initialBranches, initialProjects, hiThreshold]);
 
   // ── Derived: filtered project list for the right rail ──────────────────────
   // Branch selection is now a CAMERA operation (auto-fit zoom). The right

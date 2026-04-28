@@ -16,6 +16,7 @@ import { CountUpScore, useHeaderHeight, useJustRanked } from './live';
 import { useStarred, useHidden, toggleStar, hideProject } from '@/lib/user-prefs';
 import { stageLabel } from '@/lib/stages';
 import { sourceLabel } from '@/lib/sources';
+import { useScoringConfig } from '@/lib/scoring-config';
 import { Tooltip } from './Tooltip';
 
 const PF = {
@@ -35,7 +36,9 @@ const PF = {
   mono: 'var(--font-jetbrains-mono), ui-monospace, monospace',
 } as const;
 
-const HI_THRESHOLD = 80;
+// Fallback only — the live value comes from useScoringConfig() below.
+// Kept so server-side renders + tests don't blow up before the hook resolves.
+const HI_THRESHOLD_FALLBACK = 80;
 
 type SortMode = 'score' | 'distance' | 'posted' | 'recent';
 type FilterMode = 'all' | 'starred';
@@ -309,7 +312,8 @@ function ProjectRow({
 }) {
   const justRanked = useJustRanked();
   const isJustRanked = justRanked.has(project.id);
-  const hi = (project.score ?? 0) >= HI_THRESHOLD;
+  const { high_priority_threshold } = useScoringConfig();
+  const hi = (project.score ?? 0) >= (high_priority_threshold || HI_THRESHOLD_FALLBACK);
   const showWarm = crossPoll && !!project.warm_for_customer_id;
   const [hover, setHover] = React.useState(false);
 

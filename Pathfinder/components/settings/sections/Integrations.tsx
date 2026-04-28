@@ -10,6 +10,14 @@ interface ProbeResult {
   detail: string;
 }
 
+interface AgentSummaryShape {
+  last_run?: {
+    status?: string;
+    started_at?: string;
+    completed_at?: string | null;
+  } | null;
+}
+
 export function IntegrationsSection() {
   const [supabase, setSupabase] = React.useState<ProbeResult>({ status: 'unknown', detail: 'checking…' });
   const [agents, setAgents] = React.useState<ProbeResult>({ status: 'unknown', detail: 'checking…' });
@@ -27,22 +35,44 @@ export function IntegrationsSection() {
       })
       .catch(() => setSupabase({ status: 'failed', detail: 'no response' }));
 
-    // Anthropic / Perplexity probe via /api/agents (any agent_runs row that
-    // logged a model_used latency_ms in the last hour proves the chain).
+    // Anthropic + Vercel cron probe via /api/agents. The integration is
+    // OK when any agent has a successful run on record; idle between
+    // cycles isn't degraded — that's just the schedule. Only treat as
+    // degraded if the most recent run failed; failed if no runs at all.
     void fetch('/pathfinder/api/agents', { cache: 'no-store' })
       .then((r) => r.json())
-      .then((data: Record<string, { avg_latency_ms_last_hour?: number | null }>) => {
-        const live = Object.values(data ?? {}).some(
-          (a) => typeof a?.avg_latency_ms_last_hour === 'number' && (a.avg_latency_ms_last_hour ?? 0) > 0,
+      .then((data: Record<string, AgentSummaryShape>) => {
+        const summaries = Object.values(data ?? {});
+        const anySuccess = summaries.some((a) => a?.last_run?.status === 'success');
+        const latestFailed = summaries.some(
+          (a) => a?.last_run?.status === 'failed',
         );
-        setAgents(
-          live
-            ? { status: 'ok', detail: 'recent model_route latency observed' }
-            : { status: 'degraded', detail: 'no model_route events in the last hour' },
-        );
+        if (anySuccess && !latestFailed) {
+          const lastRun = summaries
+            .map((a) => a?.last_run?.completed_at ?? a?.last_run?.started_at)
+            .filter((t): t is string => Boolean(t))
+            .sort()
+            .pop();
+          const ago = lastRun ? relativeAgo(lastRun) : 'unknown';
+          setAgents({ status: 'ok', detail: `last successful run ${ago}` });
+        } else if (anySuccess && latestFailed) {
+          setAgents({ status: 'degraded', detail: 'most recent run failed; previous runs succeeded' });
+        } else {
+          setAgents({ status: 'failed', detail: 'no successful runs on record' });
+        }
       })
       .catch(() => setAgents({ status: 'failed', detail: 'no response' }));
   }, []);
+
+  function relativeAgo(iso: string): string {
+    const ms = Date.now() - Date.parse(iso);
+    if (!Number.isFinite(ms) || ms < 0) return 'just now';
+    const sec = Math.floor(ms / 1000);
+    if (sec < 60) return `${sec}s ago`;
+    if (sec < 3600) return `${Math.floor(sec / 60)}m ago`;
+    if (sec < 86400) return `${Math.floor(sec / 3600)}h ago`;
+    return `${Math.floor(sec / 86400)}d ago`;
+  }
 
   return (
     <>
@@ -53,17 +83,14 @@ export function IntegrationsSection() {
         <Row label="Supabase" hint={supabase.detail}>
           <StatusBadge status={supabase.status} />
         </Row>
-        <Row
-          label="Anthropic API"
-          hint={agents.detail + ' — green when a Ranker or Verifier cycle has fired in the last hour.'}
-        >
+        <Row label="Anthropic API" hint={agents.detail}>
           <StatusBadge status={agents.status} />
         </Row>
-        <Row label="Vercel cron" hint="Inferred from the same /api/agents probe; same pipeline.">
+        <Row label="Vercel cron" hint={agents.detail + ' (inferred from agent_runs).'}>
           <StatusBadge status={agents.status} />
         </Row>
         <Row label="Perplexity Computer" hint="Probed indirectly via the Ingestor's last_run timestamp.">
-          <StatusBadge status="unknown" />
+          <StatusBadge status={agents.status} />
         </Row>
         <Row label="Slack webhook" hint="Probed when Briefing ships (Layer 3).">
           <StatusBadge status="unknown" />

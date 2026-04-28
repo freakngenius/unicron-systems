@@ -11,6 +11,7 @@ import { isFirstOpen, markSeen, Typewriter, useRailHeight } from './live';
 import { useStarred, toggleStar } from '@/lib/user-prefs';
 import { stageLabel, stagesEnumerated } from '@/lib/stages';
 import { sourceLabel, sourcesEnumerated } from '@/lib/sources';
+import { useScoringConfig } from '@/lib/scoring-config';
 import { Tooltip } from './Tooltip';
 
 // Width applied to every project-detail tooltip — Stage's full taxonomy
@@ -42,7 +43,7 @@ const PF = {
   mono: 'var(--font-jetbrains-mono), ui-monospace, monospace',
 } as const;
 
-const HI_THRESHOLD = 80;
+const HI_THRESHOLD_FALLBACK = 80;
 
 export interface ProjectModalProps {
   project: Project;
@@ -60,7 +61,8 @@ export function ProjectModal({ project, branch, onClose }: ProjectModalProps) {
   }, [onClose]);
 
   const railH = useRailHeight();
-  const hi = (project.score ?? 0) >= HI_THRESHOLD;
+  const { high_priority_threshold } = useScoringConfig();
+  const hi = (project.score ?? 0) >= (high_priority_threshold || HI_THRESHOLD_FALLBACK);
   const starredSet = useStarred();
   const isStarred = starredSet.has(project.id);
 

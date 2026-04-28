@@ -20,8 +20,50 @@ import {
   useIsOperator,
   useSettings,
 } from '@/lib/settings';
+import type { Branch } from '@/lib/types';
 import { hexAlpha, PF_TINTS } from '@/lib/agent-tints';
 import { Button, Card, Row, Select, Toggle } from '../Field';
+
+// IANA time zones the dashboard ships with. "Browser local" is empty
+// string — the renderer falls through to Intl.DateTimeFormat() default.
+const TIME_ZONE_OPTIONS: { value: string; label: string }[] = [
+  { value: '', label: 'Browser local' },
+  { value: 'America/New_York', label: 'America/New_York (Eastern)' },
+  { value: 'America/Chicago', label: 'America/Chicago (Central)' },
+  { value: 'America/Denver', label: 'America/Denver (Mountain)' },
+  { value: 'America/Los_Angeles', label: 'America/Los_Angeles (Pacific)' },
+  { value: 'America/Phoenix', label: 'America/Phoenix (no DST)' },
+  { value: 'America/Anchorage', label: 'America/Anchorage (Alaska)' },
+  { value: 'Pacific/Honolulu', label: 'Pacific/Honolulu (Hawaii)' },
+  { value: 'UTC', label: 'UTC' },
+];
+
+function BranchSelect({
+  value,
+  onChange,
+}: {
+  value: string | null;
+  onChange: (next: string | null) => void;
+}) {
+  const [branches, setBranches] = React.useState<Branch[] | null>(null);
+  React.useEffect(() => {
+    void fetch('/pathfinder/api/branches', { cache: 'no-store' })
+      .then((r) => r.json())
+      .then(setBranches)
+      .catch(() => setBranches([]));
+  }, []);
+  const opts = [
+    { value: '__all__', label: 'All branches' },
+    ...(branches ?? []).map((b) => ({ value: b.id, label: `${b.name} (${b.code})` })),
+  ];
+  return (
+    <Select<string>
+      value={value ?? '__all__'}
+      onChange={(next) => onChange(next === '__all__' ? null : next)}
+      options={opts}
+    />
+  );
+}
 
 export function DisplaySection() {
   const persisted = useSettings();
@@ -131,41 +173,24 @@ export function DisplaySection() {
 
       <Row
         label="Default branch view"
-        hint="Coming in Phase 2 — uses the dashboard's branch picker today."
+        hint="Which branch the dashboard focuses on first when loading. Loaded from /api/branches."
       >
-        <span
-          className="pf-mono"
-          style={{ fontSize: 11, color: PF_TINTS.inkDim }}
-        >
-          all branches
-        </span>
+        <BranchSelect
+          value={draft.defaultBranchId}
+          onChange={(next) => setDraft({ ...draft, defaultBranchId: next })}
+        />
       </Row>
 
       <Row
         label="Time zone"
-        hint="Coming in Phase 2 — currently uses your browser's local zone."
+        hint="IANA zone used for timestamps in agent log + project posted dates. Empty = your browser's local zone."
       >
-        <span
-          className="pf-mono"
-          style={{ fontSize: 11, color: PF_TINTS.inkDim }}
-        >
-          {Intl.DateTimeFormat().resolvedOptions().timeZone}
-        </span>
+        <Select<string>
+          value={draft.timeZone}
+          onChange={(next) => setDraft({ ...draft, timeZone: next })}
+          options={TIME_ZONE_OPTIONS}
+        />
       </Row>
-
-      {!isOperator && (
-        <Row
-          label="More options"
-          hint="Lead-cost visibility is operator-controlled. If your email should be in the operator allowlist, contact Kyle."
-        >
-          <span
-            className="pf-mono"
-            style={{ fontSize: 11, color: PF_TINTS.inkDim }}
-          >
-            customer view
-          </span>
-        </Row>
-      )}
 
       {/* Tiny audit hint of what would happen on Save */}
       {dirty && (

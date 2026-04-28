@@ -25,7 +25,8 @@
 
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
-import { nearestBranch, scoreProject, SCORE_TOLERANCE } from '@/lib/scoring';
+import { nearestBranch, scoreProject, SCORE_TOLERANCE as SCORE_TOLERANCE_FALLBACK } from '@/lib/scoring';
+import { fetchActiveScoringConfig } from '@/lib/scoring-config-server';
 import type { Branch, Customer, Project } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
@@ -424,8 +425,12 @@ async function verifyOneProject(args: {
   project: Project;
   branches: Branch[];
   customers: Customer[];
+  /** Cycle-local tolerance read from ranking_config at the start of the
+   *  GET handler. Passed in so a /settings edit takes effect on the very
+   *  next cycle without a redeploy. */
+  scoreTolerance: number;
 }): Promise<ProjectVerdict> {
-  const { admin, project, branches, customers } = args;
+  const { admin, project, branches, customers, scoreTolerance } = args;
   const failures: string[] = [];
   const project_id = project.id;
 
@@ -530,7 +535,7 @@ async function verifyOneProject(args: {
       const ranker_score = project.score ?? 0;
       const recomputed_score = recomputed.composite_score;
       const delta = ranker_score - recomputed_score;
-      const within = Math.abs(delta) <= SCORE_TOLERANCE;
+      const within = Math.abs(delta) <= scoreTolerance;
       const verdict = within ? 'within tolerance' : 'out of tolerance';
       await writeLog(admin, 'check_score', {
         message: `score sensibility · ${project_id} · ranker=${ranker_score} recompute=${recomputed_score} · ${verdict}`,
@@ -782,6 +787,12 @@ export async function GET(req: Request) {
   const branches = branchesRes.data ?? [];
   const customers = customersRes.data ?? [];
 
+  // Active scoring config — read once at cycle start so the Verifier
+  // honours edits made via /settings without a redeploy. Falls back to
+  // the lib/scoring.ts compile-time constant if the DB is empty / errors.
+  const scoringConfig = await fetchActiveScoringConfig();
+  const SCORE_TOLERANCE = scoringConfig.score_tolerance ?? SCORE_TOLERANCE_FALLBACK;
+
   // 6. Per-project loop
   const cycleStart = Date.now();
   const stats: CycleStats = {
@@ -816,7 +827,7 @@ export async function GET(req: Request) {
 
     let verdict: ProjectVerdict;
     try {
-      verdict = await verifyOneProject({ admin, project, branches, customers });
+      verdict = await verifyOneProject({ admin, project, branches, customers, scoreTolerance: SCORE_TOLERANCE });
     } catch (err) {
       // Unexpected error during checks. Log + continue.
       await writeLog(admin, 'error', {

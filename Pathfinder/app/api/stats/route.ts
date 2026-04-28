@@ -9,14 +9,14 @@
 
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
+import { fetchActiveScoringConfig } from '@/lib/scoring-config-server';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-const HI_THRESHOLD = 80;
-
 export async function GET() {
   const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const { high_priority_threshold: HI_THRESHOLD } = await fetchActiveScoringConfig();
 
   // Total projects
   const totalQ = supabase.from('projects').select('id', { count: 'exact', head: true });

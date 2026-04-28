@@ -36,6 +36,8 @@ export interface PathfinderSettings {
   defaultSort: SortMode;
   /** Show customer markers / cross-pollination warm-intros by default. */
   crossPollDefault: boolean;
+  /** IANA time zone for date/timestamp rendering. Empty string = browser local zone. */
+  timeZone: string;
   /** Demo-mode banner + synthetic-data indicators. */
   demoMode: boolean;
   /** "Operations view" — broader operator-only feature gate covering Pulse
@@ -49,6 +51,7 @@ export const DEFAULT_SETTINGS: PathfinderSettings = {
   defaultBranchId: null,
   defaultSort: 'score',
   crossPollDefault: false,
+  timeZone: '',
   demoMode: false,
   operationsView: false,
 };

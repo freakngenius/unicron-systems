@@ -66,7 +66,12 @@ export function SettingsShell() {
   return (
     <div
       style={{
-        minHeight: '100vh',
+        // The dashboard sets `body { overflow: hidden }` so the map fills
+        // the viewport without document scroll. The settings page needs
+        // its own scroll container, so we lock outer height to the
+        // viewport and let `overflow: auto` here handle the scroll.
+        height: '100vh',
+        overflow: 'auto',
         background: PF_TINTS.bgAlt,
         color: PF_TINTS.ink,
         font: `400 13px/1.5 ${PF_TINTS.sans}`,

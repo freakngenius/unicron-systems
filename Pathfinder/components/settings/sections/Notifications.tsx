@@ -58,7 +58,7 @@ export function NotificationsSection() {
               borderRadius: 3,
             }}
           >
-            #unicronsystems
+            #zedcor
           </span>
         </Row>
         <Phase2Banner note="Per-branch routing (#pathfinder-{branch-code}) ships with the Zedcor production rollout." />
