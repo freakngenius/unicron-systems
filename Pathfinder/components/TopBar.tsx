@@ -183,23 +183,23 @@ export function TopBar({
     >
       {/* Brand mark + wordmark */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        {/* Path is basePath-aware (we serve under /pathfinder) so the static
-            file resolves against `public/pathfinder_mark.png`. */}
+        {/* SVG mark — basePath-aware (we serve under /pathfinder) so the
+            static file resolves against `public/pathfinder_mark.svg`. */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src="/pathfinder/pathfinder_mark.png"
+          src="/pathfinder/pathfinder_mark.svg"
           alt="Pathfinder"
           width={28}
           height={28}
           style={{ display: 'block', flexShrink: 0 }}
         />
         <div style={{ display: 'flex', flexDirection: 'column', gap: 1, whiteSpace: 'nowrap' }}>
-          {/* Wordmark image (287×30 native). Height 18px matches the
-              previous `pf-h2 14px/1.2` rendered text height; width auto
-              preserves aspect ratio (≈ 172px). */}
+          {/* SVG wordmark (viewBox 138.78×15.86, aspect ~8.75:1). Height
+              18px matches the previous `pf-h2 14px/1.2` rendered text
+              height; width auto preserves aspect ratio (≈ 158px). */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src="/pathfinder/pathfinder_zedcor.png"
+            src="/pathfinder/pathfinder_zedcor.svg"
             alt="Pathfinder · Zedcor"
             height={18}
             style={{ display: 'block', height: 18, width: 'auto' }}
