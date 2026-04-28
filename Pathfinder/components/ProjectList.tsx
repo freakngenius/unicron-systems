@@ -14,6 +14,8 @@ import * as React from 'react';
 import type { Branch, Project } from '@/lib/types';
 import { CountUpScore, useHeaderHeight, useJustRanked } from './live';
 import { useStarred, useHidden, toggleStar, hideProject } from '@/lib/user-prefs';
+import { stageLabel } from '@/lib/stages';
+import { sourceLabel } from '@/lib/sources';
 import { Tooltip } from './Tooltip';
 
 const PF = {
@@ -313,7 +315,8 @@ function ProjectRow({
 
   const dist = project.distance_miles != null ? `${project.distance_miles.toFixed(1)} mi` : '—';
   const value = formatProjectValue(project.project_value);
-  const stage = project.project_stage ?? '—';
+  const stage = stageLabel(project.project_stage);
+  const sourceDisplay = sourceLabel(project.source);
   // Show whichever timestamp signals the most recent activity. ranked_at
   // (Ranker just touched it) wins over ingested_at when it's newer.
   const recencyMs = mostRecentMs(project);
@@ -351,7 +354,7 @@ function ProjectRow({
             color: PF.inkDim,
           }}
         >
-          {project.source} · {dist} · {recencyLabel}
+          {sourceDisplay} · {dist} · {recencyLabel}
         </span>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
           <VerifierBadge verified={project.verified ?? null} />

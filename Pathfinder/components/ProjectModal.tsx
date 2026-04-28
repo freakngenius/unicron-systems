@@ -9,13 +9,22 @@ import type { Branch, Project } from '@/lib/types';
 import { ScoreChip, StarIcon, VerifierBadge } from './ProjectList';
 import { isFirstOpen, markSeen, Typewriter, useRailHeight } from './live';
 import { useStarred, toggleStar } from '@/lib/user-prefs';
+import { stageLabel, stagesEnumerated } from '@/lib/stages';
+import { sourceLabel, sourcesEnumerated } from '@/lib/sources';
 import { Tooltip } from './Tooltip';
 
-// Glossary copy for the metric-row labels. One-line plain-language hints —
-// surfaced via Tooltip on hover/focus. Keep terse; no model branding.
+// Width applied to every project-detail tooltip — Stage's full taxonomy
+// list (5 values) is the longest and reads correctly at 165px without
+// wrapping into >3 lines. Distance, Value, Posted all get the same width
+// for visual consistency in the metrics row.
+const METRIC_TOOLTIP_WIDTH = 165;
+
+// Glossary copy for the metric-row labels. Built from the canonical
+// stage / source taxonomies so the tooltip stays in sync as the data
+// model evolves — change `lib/stages.ts` and the tooltip updates.
 const METRIC_TOOLTIPS: Record<string, string> = {
   Value: 'Estimated dollar value of the project as published on the source record.',
-  Stage: "The project's current phase — e.g., pre-construction, RFP open, contract awarded, in design.",
+  Stage: `The project's current phase. Possible values: ${stagesEnumerated()}.`,
   Distance: "Distance from this project's location to the nearest Zedcor branch.",
   Posted: 'Date the source originally published this opportunity.',
 };
@@ -61,7 +70,8 @@ export function ProjectModal({ project, branch, onClose }: ProjectModalProps) {
   const hook = project.outreach_hook ?? 'Outreach hook will populate after the Ranker runs.';
   const dist = project.distance_miles != null ? `${project.distance_miles.toFixed(1)} mi` : '—';
   const value = formatValue(project.project_value);
-  const stage = project.project_stage ?? '—';
+  const stage = stageLabel(project.project_stage);
+  const sourceDisplay = sourceLabel(project.source);
   const sourceUrl = sourceLinkFor(project);
   const firstOpen = isFirstOpen(project.id);
 
@@ -135,7 +145,7 @@ export function ProjectModal({ project, branch, onClose }: ProjectModalProps) {
                   letterSpacing: '0.04em',
                 }}
               >
-                {project.source_id} · {project.source} · posted {project.posted_date ?? '—'}
+                {project.source_id} · {sourceDisplay} · posted {project.posted_date ?? '—'}
               </div>
             </div>
             <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0 }}>
@@ -204,7 +214,7 @@ export function ProjectModal({ project, branch, onClose }: ProjectModalProps) {
                 borderRight: i < 3 ? `1px solid ${PF.ruleSoft}` : 'none',
               }}
             >
-              <Tooltip text={METRIC_TOOLTIPS[cell.label] ?? ''} placement="bottom">
+              <Tooltip text={METRIC_TOOLTIPS[cell.label] ?? ''} placement="bottom" maxWidth={METRIC_TOOLTIP_WIDTH}>
                 <span
                   className="pf-label"
                   style={{ fontSize: 9, cursor: 'help', borderBottom: '1px dotted rgba(10,10,10,0.22)' }}
@@ -288,7 +298,7 @@ export function ProjectModal({ project, branch, onClose }: ProjectModalProps) {
             </div>
           </Section>
 
-          <Section title="Source record" sub={project.source}>
+          <Section title="Source record" sub={sourceDisplay}>
             {sourceUrl ? (
               <a
                 href={sourceUrl}

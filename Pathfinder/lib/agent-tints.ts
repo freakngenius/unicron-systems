@@ -31,9 +31,9 @@ export const PF_TINTS = {
   // Violet — Verifier's tint. Distinct hue so the Generator/Verifier pair
   // (Ranker amber + Verifier violet) reads as two complementary roles
   // rather than two shades of the same agent.
-  violet: '#782fe2',
-  violetSoft: 'rgba(120,47,226,0.16)',
-  violetRing: 'rgba(120,47,226,0.45)',
+  violet: '#9d35ff',
+  violetSoft: 'rgba(157,53,255,0.16)',
+  violetRing: 'rgba(157,53,255,0.45)',
   // Universal "live cycle" color used by every agent's status pill + dot
   // when status === 'running'. Decoupled from each agent's name color so
   // the dashboard reads "active" consistently across the fleet.
@@ -96,7 +96,7 @@ export interface AgentMeta {
 // | ingestor       | hi      | —            | solid cyan                                     |
 // | ranker         | amber   | —            | golden yellow — matches high-priority pin color|
 // | adjacent       | null    | —            | mono ink                                       |
-// | verifier       | violet  | ringOnly     | violet (#782fe2) ring around mono              |
+// | verifier       | violet  | ringOnly     | violet (#9d35ff) ring around mono              |
 // | outreach       | hi      | softFill     | cyan-soft fill, ink text                       |
 // | pulse          | null    | dimItalic    | mono ink, italic, dim                          |
 // | competitive    | hi      | dim          | cyan-dim                                       |
