@@ -43,6 +43,15 @@ export interface AgentCellProps {
   showDivider: boolean;
 }
 
+const AGENT_TOOLTIPS: Record<AgentName, string> = {
+  ingestor:
+    'Ingestor — runs every 6h. Pulls new construction permits, federal contracts, SAM.gov solicitations, and Google News mentions. Correlates them into one project record per opportunity.',
+  ranker:
+    'Ranker — every 30 min. Routes each record through cheap classifiers, then Claude Sonnet for the rationale + outreach hook. Writes the score, branch match, and warm-intro signal back to the project row.',
+  adjacent:
+    'Adjacent Discovery — weekly. Researches multi-branch field-sales orgs in the same shape as Zedcor (specialty trades, restoration, multi-location services) and surfaces them as new outreach targets.',
+};
+
 export function AgentCell({ id, data, showDivider }: AgentCellProps) {
   const ag = AGENTS[id];
   const tint = agentTintOnMap(id);
@@ -73,7 +82,15 @@ export function AgentCell({ id, data, showDivider }: AgentCellProps) {
           }}
         />
       )}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 10,
+          cursor: 'help',
+        }}
+        title={AGENT_TOOLTIPS[id]}
+      >
         <span
           style={{
             width: 7,

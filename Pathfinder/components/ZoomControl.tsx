@@ -15,9 +15,13 @@ const PF = {
   mono: 'var(--font-jetbrains-mono), ui-monospace, monospace',
 } as const;
 
-export const ZOOM_MIN = 1;
-export const ZOOM_MAX = 6;
-export const ZOOM_STEP = 0.5;
+// Match Google Maps' zoom range for the Pathfinder map (configured on
+// <Map minZoom={3} maxZoom={16}> in dashboard.tsx). The previous value of 6
+// here was leftover from the SVG-era stylized scale and made the zoom-in
+// button stay disabled past the auto-fit zoom.
+export const ZOOM_MIN = 3;
+export const ZOOM_MAX = 16;
+export const ZOOM_STEP = 1;
 
 export interface ZoomControlProps {
   zoom: number;
@@ -55,7 +59,7 @@ export function ZoomControl({ zoom, onZoomIn, onZoomOut, hint, left = 580 }: Zoo
         gap: 8,
       }}
     >
-      <span style={{ color: PF.mapInk }}>ZOOM {zoom.toFixed(1)}×</span>
+      <span style={{ color: PF.mapInk }}>ZOOM {zoom.toFixed(0)}×</span>
       <span style={{ color: 'rgba(255,255,255,0.2)' }}>│</span>
       <ZoomButton symbol="−" label="Zoom out (–)" disabled={atMin} onClick={onZoomOut} />
       <ZoomButton symbol="+" label="Zoom in (+)" disabled={atMax} onClick={onZoomIn} />

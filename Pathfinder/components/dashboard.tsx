@@ -23,9 +23,11 @@ import { MapLegend } from './MapLegend';
 import { CoordsHUD } from './CoordsHUD';
 import { CrossPollBanner } from './CrossPollBanner';
 import { ActivityRail, AgentStatusRow, useHeaderHeight } from './live';
+import { StatPopover, type StatBucket } from './StatPopover';
 import { ZoomControl, ZOOM_MIN, ZOOM_MAX, ZOOM_STEP } from './ZoomControl';
 import { PATHFINDER_DARK_STYLE } from '@/lib/map-style';
 import { projectTier } from '@/lib/types-map';
+import { useHidden } from '@/lib/user-prefs';
 import {
   BranchMarkerGM,
   CustomerMarkerGM,
@@ -74,6 +76,7 @@ export function Dashboard({ initialBranches, initialCustomers, initialProjects }
   const [mapInstance, setMapInstance] = React.useState<google.maps.Map | null>(null);
   const [mapZoom, setMapZoom] = React.useState(DEFAULT_ZOOM);
   const [cardHidden, setCardHidden] = React.useState(false);
+  const [statBucket, setStatBucket] = React.useState<StatBucket | null>(null);
 
   const handleSelectBranch = React.useCallback((id: string | null) => {
     setSelectedBranchId(id);
@@ -173,25 +176,29 @@ export function Dashboard({ initialBranches, initialCustomers, initialProjects }
   }, [initialBranches, initialProjects]);
 
   // ── Derived: filtered project list for the right rail ──────────────────────
+  // Branch selection is now a CAMERA operation (auto-fit zoom). The right
+  // rail always shows every project so users always see the full corpus —
+  // selecting a branch doesn't make pins disappear from the list. Source +
+  // cross-poll filters still apply so the user can narrow on demand.
   const filteredProjects = React.useMemo<Project[]>(() => {
+    let r = initialProjects.slice();
     if (crossPoll) {
-      return initialProjects
-        .filter((p) => !!p.warm_for_customer_id)
-        .sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+      r = r.filter((p) => !!p.warm_for_customer_id);
     }
-    let r = selectedBranchId
-      ? initialProjects.filter((p) => p.nearest_branch_id === selectedBranchId)
-      : initialProjects.slice();
     if (source !== 'all') {
       const db = SOURCE_FILTER_TO_DB[source];
       r = r.filter((p) => p.source === db);
     }
     return r.sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
-  }, [initialProjects, selectedBranchId, source, crossPoll]);
+  }, [initialProjects, source, crossPoll]);
 
-  const totalForBranch = selectedBranchId
-    ? initialProjects.filter((p) => p.nearest_branch_id === selectedBranchId).length
-    : initialProjects.length;
+  // For the "X of Y" header — Y is the un-narrowed corpus (post-crossPoll
+  // since that's a mode, not a filter; pre-source so the user sees how
+  // aggressively their source filter narrowed the universe).
+  const totalForHeader = React.useMemo(() => {
+    if (crossPoll) return initialProjects.filter((p) => !!p.warm_for_customer_id).length;
+    return initialProjects.length;
+  }, [initialProjects, crossPoll]);
 
   // ── Cross-poll: warm-intro lines (customer → project) ──────────────────────
   const warmLines = React.useMemo(() => {
@@ -228,11 +235,14 @@ export function Dashboard({ initialBranches, initialCustomers, initialProjects }
   const branchDockRight = 16 + (branchMin ? 44 : 240) + 8;
   const projectListLeft = mapDims.w - 16 - (listMin ? 44 : 380) - 8;
 
-  // Project markers fed to the clusterer.
+  // Project markers fed to the clusterer. Hidden projects are dropped from
+  // the map AND the cluster math so the count badges match what's visible
+  // in the right-rail list.
+  const hidden = useHidden();
   const projectClusterMarkers = React.useMemo<ClusterMarker[]>(() => {
     if (crossPoll) return [];
     return initialProjects
-      .filter((p) => p.lat != null && p.lon != null)
+      .filter((p) => p.lat != null && p.lon != null && !hidden.has(p.id))
       .map((p) => {
         const tier = projectTier({
           score: p.score,
@@ -248,7 +258,7 @@ export function Dashboard({ initialBranches, initialCustomers, initialProjects }
           onClick: () => setOpenProjectId(p.id),
         };
       });
-  }, [initialProjects, crossPoll]);
+  }, [initialProjects, crossPoll, hidden]);
 
   // ── Render ─────────────────────────────────────────────────────────────────
   if (!apiKey) {
@@ -379,6 +389,7 @@ export function Dashboard({ initialBranches, initialCustomers, initialProjects }
           setCrossPoll={setCrossPoll}
           onRefresh={handleRefresh}
           refreshing={refreshing}
+          onStatClick={(bucket) => setStatBucket((prev) => (prev === bucket ? null : bucket))}
         />
         <AgentStatusRow />
         <BranchDock
@@ -392,7 +403,7 @@ export function Dashboard({ initialBranches, initialCustomers, initialProjects }
         <ProjectList
           branch={selectedBranch}
           projects={filteredProjects}
-          totalCount={crossPoll ? warmLines.length : totalForBranch}
+          totalCount={totalForHeader}
           onOpen={(p) => setOpenProjectId(p.id)}
           crossPoll={crossPoll}
           minimized={listMin}
@@ -414,6 +425,17 @@ export function Dashboard({ initialBranches, initialCustomers, initialProjects }
             project={openProject}
             branch={openProjectBranch}
             onClose={() => setOpenProjectId(null)}
+          />
+        )}
+
+        {statBucket && (
+          <StatPopover
+            bucket={statBucket}
+            projects={initialProjects}
+            rightOffset={statBucket === 'new' ? 240 : statBucket === 'total' ? 160 : 90}
+            topOffset={84}
+            onClose={() => setStatBucket(null)}
+            onOpenProject={(p) => setOpenProjectId(p.id)}
           />
         )}
 

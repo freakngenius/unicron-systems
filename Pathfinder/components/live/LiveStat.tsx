@@ -16,11 +16,17 @@ export interface LiveStatProps {
   accent?: 'hi' | null;
   /** Render in muted ink instead of full ink. */
   muted?: boolean;
+  /** Click handler — when set, the stat becomes a button that surfaces the
+   * matching project list as a popover. */
+  onClick?: () => void;
+  /** Optional native browser tooltip; useful when onClick is set so users
+   * know the stat is interactive. */
+  title?: string;
 }
 
 const SLOT_WIDTH: Record<StatsKey, number> = { new: 56, total: 70, ranked: 56, err: 40 };
 
-export function LiveStat({ label, valueKey, accent, muted }: LiveStatProps) {
+export function LiveStat({ label, valueKey, accent, muted, onClick, title }: LiveStatProps) {
   const { stats, bumped } = useStats();
   const value = stats[valueKey];
   const ts = bumped[valueKey];
@@ -39,6 +45,20 @@ export function LiveStat({ label, valueKey, accent, muted }: LiveStatProps) {
 
   return (
     <div
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onClick={onClick}
+      onKeyDown={
+        onClick
+          ? (e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                onClick();
+              }
+            }
+          : undefined
+      }
+      title={title}
       style={{
         display: 'flex',
         flexDirection: 'column',
@@ -46,6 +66,7 @@ export function LiveStat({ label, valueKey, accent, muted }: LiveStatProps) {
         alignItems: 'flex-end',
         width: SLOT,
         flexShrink: 0,
+        cursor: onClick ? 'pointer' : 'default',
       }}
     >
       <span
