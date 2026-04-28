@@ -84,8 +84,12 @@ export function ProjectList({
         return tb - ta;
       });
     } else {
-      // most recent — by ingested_at
-      arr.sort((a, b) => Date.parse(b.ingested_at) - Date.parse(a.ingested_at));
+      // Most recent — prefer ranked_at (touched whenever the Ranker scores or
+      // the Refresh button bumps a project) and fall back to ingested_at when
+      // no ranking has happened yet. Using ingested_at alone made the sort
+      // look static because the synthetic backfill writes everything at the
+      // same timestamp.
+      arr.sort((a, b) => mostRecentMs(b) - mostRecentMs(a));
     }
     return arr;
   }, [projects, hidden, starred, filterMode, sortMode]);
@@ -299,7 +303,11 @@ function ProjectRow({
   const dist = project.distance_miles != null ? `${project.distance_miles.toFixed(1)} mi` : '—';
   const value = formatProjectValue(project.project_value);
   const stage = project.project_stage ?? '—';
-  const ago = relativeTime(project.ingested_at);
+  // Show whichever timestamp signals the most recent activity. ranked_at
+  // (Ranker just touched it) wins over ingested_at when it's newer.
+  const recencyMs = mostRecentMs(project);
+  const isRanked = !!project.ranked_at && Date.parse(project.ranked_at) === recencyMs;
+  const recencyLabel = `${isRanked ? 'ranked' : 'added'} ${relativeTime(new Date(recencyMs).toISOString())}`;
 
   return (
     <div
@@ -332,7 +340,7 @@ function ProjectRow({
             color: PF.inkDim,
           }}
         >
-          {project.source} · {dist} · added {ago}
+          {project.source} · {dist} · {recencyLabel}
         </span>
         {isJustRanked && project.score != null ? (
           <CountUpScore target={project.score} hi={hi} warm={showWarm} />
@@ -537,6 +545,15 @@ function formatProjectValue(v: number | null): string {
   if (v >= 1_000_000) return `$${(v / 1_000_000).toFixed(1)}M`;
   if (v >= 1_000) return `$${(v / 1_000).toFixed(0)}K`;
   return `$${v.toFixed(0)}`;
+}
+
+/** Most-recent ms — prefer ranked_at, then ingested_at. Returns 0 if neither
+ * parses. Used by the "Most recent" sort. */
+function mostRecentMs(p: Project): number {
+  const r = p.ranked_at ? Date.parse(p.ranked_at) : NaN;
+  if (Number.isFinite(r)) return r;
+  const i = p.ingested_at ? Date.parse(p.ingested_at) : NaN;
+  return Number.isFinite(i) ? i : 0;
 }
 
 /** Returns a short relative-time label like "5m ago" / "2d ago" / "just now". */
