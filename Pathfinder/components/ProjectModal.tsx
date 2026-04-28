@@ -6,7 +6,7 @@
 
 import * as React from 'react';
 import type { Branch, Project } from '@/lib/types';
-import { ScoreChip, StarIcon } from './ProjectList';
+import { ScoreChip, StarIcon, VerifierBadge } from './ProjectList';
 import { isFirstOpen, markSeen, Typewriter, useRailHeight } from './live';
 import { useStarred, toggleStar } from '@/lib/user-prefs';
 
@@ -236,6 +236,23 @@ export function ProjectModal({ project, branch, onClose }: ProjectModalProps) {
             </p>
           </Section>
 
+          <Section title="Verifier" sub={verifierStatusSub(project.verified ?? null)}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+              <VerifierBadge verified={project.verified ?? null} />
+              {(project.verifier_pass_count ?? 0) > 0 && (
+                <span
+                  className="pf-mono"
+                  style={{ fontSize: 10, color: PF.inkDim, letterSpacing: '0.04em' }}
+                >
+                  pass count · {project.verifier_pass_count}
+                </span>
+              )}
+            </div>
+            <p className="pf-body" style={{ margin: 0, color: PF.ink }}>
+              {verifierBodyText(project.verified ?? null, project.verifier_notes ?? null)}
+            </p>
+          </Section>
+
           <Section title="Recommended outreach" sub="generated · approve before sending">
             <p className="pf-body" style={{ margin: 0, color: PF.ink }}>
               {hook}
@@ -391,6 +408,29 @@ function formatValue(v: number | null): string {
   if (v >= 1_000_000) return `$${(v / 1_000_000).toFixed(1)}M`;
   if (v >= 1_000) return `$${(v / 1_000).toFixed(0)}K`;
   return `$${v.toFixed(0)}`;
+}
+
+/** Sub-label shown next to the "Verifier" section title — short status hint. */
+function verifierStatusSub(verified: boolean | null): string {
+  if (verified === true) return 'passed · all 4 checks';
+  if (verified === false) return 'flagged · awaiting re-rank';
+  return 'pending · model: claude-sonnet';
+}
+
+/**
+ * Body text for the Verifier section. Falls back to documented defaults when
+ * `verifier_notes` is empty or null, so the section is never blank.
+ */
+function verifierBodyText(verified: boolean | null, notes: string | null): string {
+  const trimmed = (notes ?? '').trim();
+  if (verified === null) {
+    return 'Pending verification — Generator-Verifier loop will check rationale, branch attribution, score sensibility, and customer references.';
+  }
+  if (trimmed.length > 0) return trimmed;
+  if (verified === true) {
+    return 'Verifier passed all 4 checks (rationale · branch · score · customer-refs).';
+  }
+  return 'Verifier flagged at least one check. Awaiting re-rank.';
 }
 
 function sourceLinkFor(p: Project): string | null {

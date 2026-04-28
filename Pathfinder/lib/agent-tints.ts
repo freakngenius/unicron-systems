@@ -1,13 +1,17 @@
 // agent-tints.ts — agent → color helper.
 //
-// Per the Computer-As-Engine design feedback, only two agents get a hue:
-//   - Ingestor → `hi` cyan   (#22d3ee)
-//   - Ranker   → `warm` lime (#a3e635)
-//   - Adjacent stays mono ink (#0a0a0a) — distinguished by tagging only,
-//     so we don't invent a third hue.
+// The dashboard's tint palette is a hard constraint: only three base hues
+// (`hi` cyan, `warm` lime, `ink` mono) plus alpha variations. To distinguish
+// the 8-agent fleet (plus `eval`) without inventing new colors, every agent
+// resolves to one of those three base hues and optionally carries a render
+// `modifier` describing how the consumer should treat it (ring, soft fill,
+// dim, italic, bold, mono prefix). The base resolver — `agentTint` and
+// `agentTintOnMap` — still returns one of the 3 hues; the `modifier` field
+// is metadata for surfaces that want to layer additional weight or texture
+// on top.
 //
-// Used by the activity rail (line prefix tint), agent status row (cell
-// pulse + name color), and any future surface that wants per-agent color.
+// Tint mapping is documented in docs/PLAN-AGENTS.md §4.1; modifier names
+// match that table verbatim so reviewers can cross-check.
 
 import type { AgentName } from '@/lib/types';
 
@@ -39,25 +43,71 @@ export const PF_TINTS = {
   r: { sm: 3, md: 5, lg: 8 },
 } as const;
 
+/**
+ * Render-strategy modifier for an agent. Resolves on top of the base hue
+ * (`hi` / `warm` / `ink`). Consumers may ignore the modifier — the base
+ * tint is always usable on its own.
+ *
+ *  - `ringOnly`   — outline ring around mono text (paired generators)
+ *  - `softFill`   — low-alpha fill, ink text (downstream of a generator)
+ *  - `dim`        — desaturated/lower contrast variant
+ *  - `dimItalic`  — dim + italic, signals a "background" agent
+ *  - `bold`       — heavier weight, signals synthesis importance
+ *  - `mono`       — monospace tag prefix, signals system-meta
+ */
+export type AgentTintModifier =
+  | 'ringOnly'
+  | 'softFill'
+  | 'dim'
+  | 'dimItalic'
+  | 'bold'
+  | 'mono';
+
 export interface AgentMeta {
   id: AgentName;
   label: string;
-  /** null for Adjacent — mono ink, no hue. */
+  /** null for agents that read as mono ink. */
   tintKey: 'hi' | 'warm' | null;
+  /** Optional render strategy on top of the base hue. */
+  modifier?: AgentTintModifier;
 }
 
+// Tint table — see docs/PLAN-AGENTS.md §4.1.
+//
+// | Agent          | tintKey | modifier     | render strategy                                |
+// |----------------|---------|--------------|------------------------------------------------|
+// | ingestor       | hi      | —            | solid cyan (existing)                          |
+// | ranker         | warm    | —            | solid lime (existing)                          |
+// | adjacent       | null    | —            | mono ink (existing)                            |
+// | verifier       | warm    | ringOnly     | lime ring around mono — paired with Ranker     |
+// | outreach       | hi      | softFill     | cyan-soft fill, ink text — downstream of Ranker|
+// | pulse          | null    | dimItalic    | mono ink, italic, dim — system-tuning agent    |
+// | competitive    | hi      | dim          | cyan-dim — research agent like Ingestor        |
+// | briefing       | null    | bold         | mono ink, bold — synthesis agent               |
+// | customer-intel | warm    | dim          | lime-dim — pipeline-adjacent like Ranker       |
+// | eval           | null    | mono         | mono ink, monospace tag prefix `[eval]`        |
 export const AGENTS: Record<AgentName, AgentMeta> = {
   ingestor: { id: 'ingestor', label: 'INGESTOR', tintKey: 'hi' },
   ranker: { id: 'ranker', label: 'RANKER', tintKey: 'warm' },
   adjacent: { id: 'adjacent', label: 'ADJACENT', tintKey: null },
+  verifier: { id: 'verifier', label: 'VERIFIER', tintKey: 'warm', modifier: 'ringOnly' },
+  outreach: { id: 'outreach', label: 'OUTREACH', tintKey: 'hi', modifier: 'softFill' },
+  pulse: { id: 'pulse', label: 'PULSE', tintKey: null, modifier: 'dimItalic' },
+  competitive: { id: 'competitive', label: 'COMPETITIVE', tintKey: 'hi', modifier: 'dim' },
+  briefing: { id: 'briefing', label: 'BRIEFING', tintKey: null, modifier: 'bold' },
+  'customer-intel': {
+    id: 'customer-intel',
+    label: 'CUSTOMER-INTEL',
+    tintKey: 'warm',
+    modifier: 'dim',
+  },
+  eval: { id: 'eval', label: 'EVAL', tintKey: null, modifier: 'mono' },
 };
 
 /**
  * Returns the hex color for an agent's name in chrome contexts (white panels).
- * - ingestor → hi cyan
- * - ranker   → warm lime
- * - adjacent → mono ink #0a0a0a (no hue)
- * - unknown  → inkDim
+ * Always resolves to one of the three base hues — modifiers are advisory and
+ * should be read by callers from `AGENTS[name].modifier`.
  */
 export function agentTint(name: AgentName | string | null | undefined): string {
   if (!name) return PF_TINTS.inkDim;
@@ -69,8 +119,8 @@ export function agentTint(name: AgentName | string | null | undefined): string {
 }
 
 /**
- * `agentTint` for *map* contexts (deep slate background) — adjacent uses
- * the bright mapInk so it stays legible against the dark map.
+ * `agentTint` for *map* contexts (deep slate background) — null-tint agents
+ * use the bright mapInk so they stay legible against the dark map.
  */
 export function agentTintOnMap(name: AgentName | string | null | undefined): string {
   if (!name) return PF_TINTS.mapInkDim;

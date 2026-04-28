@@ -342,11 +342,14 @@ function ProjectRow({
         >
           {project.source} · {dist} · {recencyLabel}
         </span>
-        {isJustRanked && project.score != null ? (
-          <CountUpScore target={project.score} hi={hi} warm={showWarm} />
-        ) : (
-          <ScoreChip value={project.score} hi={hi} warm={showWarm} />
-        )}
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          <VerifierBadge verified={project.verified ?? null} />
+          {isJustRanked && project.score != null ? (
+            <CountUpScore target={project.score} hi={hi} warm={showWarm} />
+          ) : (
+            <ScoreChip value={project.score} hi={hi} warm={showWarm} />
+          )}
+        </span>
       </div>
       <div style={{ font: `500 13px/1.35 ${PF.sans}`, color: PF.ink, paddingRight: 56 }}>
         {project.title}
@@ -503,6 +506,79 @@ function EyeOffIcon({ size = 14 }: { size?: number }) {
       <path d="M13 8 c-.5 1.2-1.3 2.3-2.3 3" />
       <circle cx="8" cy="8" r="1.6" />
     </svg>
+  );
+}
+
+/**
+ * Small badge surfacing the Verifier's verdict.
+ * - `verified === true`  → "✓ verified"   muted-green pill (warm-soft bg, lime-deep ink)
+ * - `verified === false` → "⚠ unverified" amber-soft pill (matches Star icon's #FFB454 hue)
+ * - `verified === null`  → "↻ pending"    inkDim text, no background
+ *
+ * Stays inside the existing palette — uses `PF.warmSoft` and the Star/amber
+ * #FFB454 already in the file. Lime-deep `#65a30d` is the canonical
+ * Tailwind lime-600 paired with our `warm` (#a3e635) lime-400 fill, so it
+ * is a tonal sibling of `PF.warm` rather than a new hue.
+ */
+export function VerifierBadge({ verified }: { verified: boolean | null }) {
+  if (verified === true) {
+    return (
+      <span
+        title="Verifier passed all 4 checks"
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 3,
+          padding: '2px 6px',
+          borderRadius: 2,
+          background: PF.warmSoft,
+          font: `600 9.5px ${PF.mono}`,
+          letterSpacing: '0.06em',
+          textTransform: 'uppercase',
+          color: '#65a30d',
+        }}
+      >
+        ✓ verified
+      </span>
+    );
+  }
+  if (verified === false) {
+    return (
+      <span
+        title="Verifier flagged at least one check"
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 3,
+          padding: '2px 6px',
+          borderRadius: 2,
+          background: 'rgba(255,180,84,0.18)',
+          font: `600 9.5px ${PF.mono}`,
+          letterSpacing: '0.06em',
+          textTransform: 'uppercase',
+          color: PF.ink,
+        }}
+      >
+        ⚠ unverified
+      </span>
+    );
+  }
+  return (
+    <span
+      title="Pending verification"
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 3,
+        padding: '2px 6px',
+        font: `500 9.5px ${PF.mono}`,
+        letterSpacing: '0.06em',
+        textTransform: 'uppercase',
+        color: PF.inkDim,
+      }}
+    >
+      ↻ pending
+    </span>
   );
 }
 

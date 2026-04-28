@@ -17,6 +17,9 @@ import type { AgentName, AgentRun } from '@/lib/types';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
+// Layer-1 scope: only the three agents whose cells already render. New
+// agents (verifier, outreach, pulse, competitive, briefing, customer-intel,
+// eval) join this list as their AgentStatusRow cells ship in later layers.
 const AGENTS: AgentName[] = ['ingestor', 'ranker', 'adjacent'];
 const FIVE_MIN_MS = 5 * 60 * 1000;
 
@@ -86,8 +89,10 @@ export async function GET() {
     }),
   );
 
-  // Shape: { ingestor, ranker, adjacent }
-  const result: Record<AgentName, AgentSummary> = {
+  // Shape: { ingestor, ranker, adjacent } — partial because only the
+  // Layer-1 agents have data on this endpoint. Layer-2/3 agents surface
+  // through dedicated /api/agents/<name> endpoints.
+  const result: Partial<Record<AgentName, AgentSummary>> = {
     ingestor: summaries.find((s) => s.agent === 'ingestor')!,
     ranker: summaries.find((s) => s.agent === 'ranker')!,
     adjacent: summaries.find((s) => s.agent === 'adjacent')!,

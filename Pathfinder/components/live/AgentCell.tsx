@@ -50,6 +50,23 @@ const AGENT_TOOLTIPS: Record<AgentName, string> = {
     'Ranker — every 30 min. Routes each record through cheap classifiers, then Claude Sonnet for the rationale + outreach hook. Writes the score, branch match, and warm-intro signal back to the project row.',
   adjacent:
     'Adjacent Discovery — weekly. Researches multi-branch field-sales orgs in the same shape as Zedcor (specialty trades, restoration, multi-location services) and surfaces them as new outreach targets.',
+  // Layer-2 / Layer-3 agents — Agent Status row expansion lands later (see
+  // docs/PLAN-AGENTS.md §4.2). Tooltips are stubbed so the AgentName union
+  // type-checks; rendering for these cells is a Liveness-Subagent task.
+  verifier:
+    'Verifier — event-driven. Runs after the Ranker writes. Checks rationale, branch attribution, score sensibility, and customer references. Generator-Verifier pattern.',
+  outreach:
+    'Outreach — drafts personalized email / LinkedIn / voicemail copy per ranked project. Ships into ProjectModal as expandable channel tabs.',
+  pulse:
+    'Pulse — observes rep behavior and ranking outcomes; proposes scoring-config tunings for human approval.',
+  competitive:
+    'Competitive — surfaces competitor contract trends per geography. Anchored to BranchDock.',
+  briefing:
+    'Briefing — synthesizes weekly org-wide and per-branch briefs. Delivered to Slack + email.',
+  'customer-intel':
+    'Customer Intel — flags expansion / M&A / hiring / incident / filing / press signals on existing customers; renders icons on the customer map layer.',
+  eval:
+    'Eval — weekly retrospective against ground-truth seeds. Scores would-have-caught rate. System-meta pill in the TopBar.',
 };
 
 export function AgentCell({ id, data, showDivider }: AgentCellProps) {

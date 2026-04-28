@@ -2,7 +2,17 @@
 // Every stream imports from here so the Supabase row shape, the API responses, and the React props
 // share one definition.
 
-export type AgentName = 'ingestor' | 'ranker' | 'adjacent';
+export type AgentName =
+  | 'ingestor'
+  | 'ranker'
+  | 'adjacent'
+  | 'verifier'
+  | 'outreach'
+  | 'pulse'
+  | 'competitive'
+  | 'briefing'
+  | 'customer-intel'
+  | 'eval';
 
 export type AgentRunStatus = 'running' | 'success' | 'failed';
 
@@ -52,6 +62,11 @@ export interface Project {
   warm_for_customer_id: string | null;
   ingested_at: string;
   ranked_at: string | null;
+  // Verifier output (added 0005_agent_expansion_layer1).
+  // null = pending verification; true = passed all 4 checks; false = at least one check failed.
+  verified?: boolean | null;
+  verifier_notes?: string | null;
+  verifier_pass_count?: number;
 }
 
 export interface AgentLogRow {

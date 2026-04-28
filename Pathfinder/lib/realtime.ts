@@ -172,7 +172,20 @@ export function useAgentLog(limit: number = LOG_CAP): AgentLogRow[] {
 // ────────────────────────────────────────────────────────────────────────
 
 export type AgentRunMap = Record<AgentName, AgentRun | null>;
-const initialRunMap: AgentRunMap = { ingestor: null, ranker: null, adjacent: null };
+// All 10 agent slots default to null. Layer-1 surfaces the original three;
+// Layer-2/3 agents will populate as their cycles begin landing rows.
+const initialRunMap: AgentRunMap = {
+  ingestor: null,
+  ranker: null,
+  adjacent: null,
+  verifier: null,
+  outreach: null,
+  pulse: null,
+  competitive: null,
+  briefing: null,
+  'customer-intel': null,
+  eval: null,
+};
 const runsStore = new Store<AgentRunMap>(initialRunMap);
 
 function patchRun(row: AgentRun) {
