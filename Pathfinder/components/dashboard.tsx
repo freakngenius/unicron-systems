@@ -275,12 +275,13 @@ export function Dashboard({ initialBranches, initialCustomers, initialProjects }
       <APIProvider apiKey={apiKey} libraries={['marker', 'maps']}>
         {/* Map fills the whole container; chrome panels float over it. */}
         <div style={{ position: 'absolute', inset: 0 }}>
-          {/* AdvancedMarker requires a mapId. Google ignores inline `styles`
-              when mapId is set — dark palette must come from a cloud-styled
-              map ID configured in the GCP console (paste lib/map-style.ts as
-              the JSON and use `pathfinder-dark-v1` as the Map ID). Until
-              that's set up the map renders with Google's default styling but
-              all data + interactions still work. */}
+          {/* AdvancedMarker requires a mapId. The dark palette comes from the
+              cloud-styled Map ID (lib/map-style.ts is the canonical JSON
+              pasted into GCP Map Styles). Do NOT also pass `colorScheme` —
+              when both are set, Google's stock scheme wins over the custom
+              cloud style. With only mapId, the cloud style applies cleanly.
+              Falls back to DEMO_MAP_ID (Google's stock) if the env var isn't
+              set, so AdvancedMarker still works during early bring-up. */}
           <GoogleMap
             mapId={GOOGLE_MAP_ID}
             defaultCenter={DEFAULT_CENTER}
@@ -290,7 +291,6 @@ export function Dashboard({ initialBranches, initialCustomers, initialProjects }
             gestureHandling="greedy"
             disableDefaultUI={true}
             clickableIcons={false}
-            colorScheme="DARK"
             style={{ width: '100%', height: '100%' }}
           >
             <MapController
