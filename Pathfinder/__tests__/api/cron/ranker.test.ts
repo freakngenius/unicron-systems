@@ -106,7 +106,7 @@ describe.runIf(haveCreds)('GET /api/cron/ranker', () => {
 
   beforeEach(async () => {
     // Wipe stale `running` ranker rows so overlap protection doesn't trip.
-    const { setAnthropicForTesting } = await import('@/app/api/cron/ranker/route');
+    const { setAnthropicForTesting } = await import('@/lib/anthropic');
     setAnthropicForTesting(anthropicStub as unknown as Parameters<typeof setAnthropicForTesting>[0]);
 
     await admin
@@ -117,7 +117,7 @@ describe.runIf(haveCreds)('GET /api/cron/ranker', () => {
   });
 
   afterEach(async () => {
-    const { setAnthropicForTesting } = await import('@/app/api/cron/ranker/route');
+    const { setAnthropicForTesting } = await import('@/lib/anthropic');
     setAnthropicForTesting(null);
   });
 
@@ -273,7 +273,7 @@ describe.runIf(haveCreds)('GET /api/cron/ranker', () => {
   });
 
   it('demotes a project when classifier says no', { timeout: 60_000 }, async () => {
-    const { setAnthropicForTesting } = await import('@/app/api/cron/ranker/route');
+    const { setAnthropicForTesting } = await import('@/lib/anthropic');
     setAnthropicForTesting(anthropicStubNo as unknown as Parameters<typeof setAnthropicForTesting>[0]);
 
     const { data: branches } = await admin.from('branches').select('*').limit(1);

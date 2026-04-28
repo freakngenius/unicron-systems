@@ -19,7 +19,19 @@ const apiKey = process.env.ANTHROPIC_API_KEY;
 // module). Callers should still expect a hard failure at call time.
 let _client: Anthropic | null = null;
 
+// Test-only override. Cron-route tests inject a stub via `setAnthropicForTesting`
+// instead of monkey-patching the SDK. Production paths never set this.
+// Lives here (not in route files) because Next.js App Router only allows a
+// fixed set of named exports from `route.ts` files.
+type AnthropicLike = Pick<Anthropic, 'messages'>;
+let _override: AnthropicLike | null = null;
+
+export function setAnthropicForTesting(stub: AnthropicLike | null): void {
+  _override = stub;
+}
+
 export function anthropic(): Anthropic {
+  if (_override) return _override as Anthropic;
   if (_client) return _client;
   if (!apiKey) {
     throw new Error('ANTHROPIC_API_KEY is not set');

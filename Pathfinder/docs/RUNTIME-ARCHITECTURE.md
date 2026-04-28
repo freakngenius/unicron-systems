@@ -74,6 +74,41 @@ Pathfinder/
 └── vercel.json                     Cron schedule registry
 ```
 
+## Cron trigger — Vercel Hobby workaround
+
+Vercel's Hobby plan caps cron jobs at **once per day**. Ranker (`*/30 * * * *`) and Verifier (`0,30 * * * *`) need a 30-minute cadence, so the crons are NOT registered in `vercel.json` directly. Two enablement paths:
+
+**Path A — Upgrade Vercel to Pro ($20/mo).** Add this to `vercel.json`:
+```json
+{
+  "crons": [
+    { "path": "/api/cron/verifier", "schedule": "0,30 * * * *" },
+    { "path": "/api/cron/ranker",   "schedule": "*/30 * * * *" }
+  ]
+}
+```
+Then re-deploy. Vercel handles auth + invocation natively.
+
+**Path B — External cron (GitHub Actions, Upstash, EasyCron).** The route handlers are runtime-agnostic — they accept any HTTP GET with the right Bearer token. Example GitHub Actions workflow at `.github/workflows/pathfinder-cron.yml`:
+```yaml
+name: pathfinder-cron
+on:
+  schedule:
+    - cron: '*/30 * * * *'
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          curl -fsS -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            https://pathfinder-ashy.vercel.app/pathfinder/api/cron/verifier
+          curl -fsS -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            https://pathfinder-ashy.vercel.app/pathfinder/api/cron/ranker
+```
+GitHub Actions cron schedules drift 5–15 min — fine for our use case. Free, no plan upgrade. The downside: introduces a third runtime in the operator story.
+
+**Current state:** Path B not yet wired. Cron handlers ship live with Path-B-ready auth; pick a path and uncomment the relevant config.
+
 ## Operator model
 
 | Action | Where |

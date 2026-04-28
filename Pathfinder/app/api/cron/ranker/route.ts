@@ -27,7 +27,6 @@
 // `supabaseAdmin()` helper (db.schema='pathfinder' is pinned there).
 
 import { NextResponse } from 'next/server';
-import Anthropic from '@anthropic-ai/sdk';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { supabaseAdmin } from '@/lib/supabase';
@@ -129,28 +128,12 @@ async function writeLog(
 }
 
 // ---------------------------------------------------------------------------
-// Anthropic client (lazy, with test seam)
+// Anthropic client — shared with lib/anthropic.ts. The lazy client + test
+// override live there because Next.js App Router restricts which symbols
+// route.ts files may export.
 // ---------------------------------------------------------------------------
 
-let _anthropic: Anthropic | null = null;
-function anthropicClient(): Anthropic {
-  if (_anthropic) return _anthropic;
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) throw new Error('ANTHROPIC_API_KEY is not set');
-  _anthropic = new Anthropic({ apiKey });
-  return _anthropic;
-}
-
-// Test-only hook so the integration test can stub Haiku + Sonnet without
-// monkey-patching the SDK. Tests import this and call setAnthropicForTesting(stub).
-let _anthropicOverride: Pick<Anthropic, 'messages'> | null = null;
-export function setAnthropicForTesting(stub: Pick<Anthropic, 'messages'> | null): void {
-  _anthropicOverride = stub;
-}
-
-function anthropic(): Pick<Anthropic, 'messages'> {
-  return _anthropicOverride ?? anthropicClient();
-}
+import { anthropic } from '@/lib/anthropic';
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -342,7 +325,7 @@ async function generateRationale(args: {
 /** Split Sonnet output into the prose rationale + the trailing HOOK line.
  * Mirrors the parser in `lib/claude.ts` but inlined so we don't drag the
  * cloud-only `lib/anthropic.ts` import path through this route. */
-export function parseRationaleAndHook(text: string): { rationale: string; outreach_hook: string } {
+function parseRationaleAndHook(text: string): { rationale: string; outreach_hook: string } {
   const idx = text.search(/\bHOOK\s*:/i);
   if (idx < 0) {
     return { rationale: text.trim(), outreach_hook: '' };

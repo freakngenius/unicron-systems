@@ -104,7 +104,7 @@ describe.runIf(haveCreds)('GET /api/cron/verifier', () => {
     // Always stub Sonnet (so a real call never fires during tests) and
     // wipe any leftover `running` verifier agent_runs rows from earlier
     // tests that may otherwise trigger overlap protection.
-    const { setAnthropicForTesting } = await import('@/app/api/cron/verifier/route');
+    const { setAnthropicForTesting } = await import('@/lib/anthropic');
     setAnthropicForTesting(sonnetStub as unknown as Parameters<typeof setAnthropicForTesting>[0]);
 
     await admin
@@ -116,7 +116,7 @@ describe.runIf(haveCreds)('GET /api/cron/verifier', () => {
 
   afterEach(async () => {
     // Clear the Anthropic stub so cross-test state can't leak.
-    const { setAnthropicForTesting } = await import('@/app/api/cron/verifier/route');
+    const { setAnthropicForTesting } = await import('@/lib/anthropic');
     setAnthropicForTesting(null);
   });
 

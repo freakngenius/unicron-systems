@@ -24,7 +24,6 @@
 // MCP layer — but the schema discipline holds.
 
 import { NextResponse } from 'next/server';
-import Anthropic from '@anthropic-ai/sdk';
 import { supabaseAdmin } from '@/lib/supabase';
 import { nearestBranch, scoreProject, SCORE_TOLERANCE } from '@/lib/scoring';
 import type { Branch, Customer, Project } from '@/lib/types';
@@ -120,25 +119,12 @@ async function writeLog(
 }
 
 // ---------------------------------------------------------------------------
-// Anthropic client (lazy)
+// Anthropic client — shared with lib/anthropic.ts. The lazy client + test
+// override live there because Next.js App Router restricts which symbols
+// route.ts files may export.
 // ---------------------------------------------------------------------------
 
-let _anthropic: Anthropic | null = null;
-function anthropicClient(): Anthropic {
-  if (_anthropic) return _anthropic;
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) throw new Error('ANTHROPIC_API_KEY is not set');
-  _anthropic = new Anthropic({ apiKey });
-  return _anthropic;
-}
-
-// Test-only hook so the integration test can stub Sonnet without monkey-
-// patching the SDK. Tests import this and call setAnthropicForTesting(stub).
-// In production it's `null` and the lazy `anthropicClient()` runs.
-let _anthropicOverride: Pick<Anthropic, 'messages'> | null = null;
-export function setAnthropicForTesting(stub: Pick<Anthropic, 'messages'> | null): void {
-  _anthropicOverride = stub;
-}
+import { anthropic as anthropicClient } from '@/lib/anthropic';
 
 // ---------------------------------------------------------------------------
 // Anchor extraction (Check 1, deterministic step)
@@ -167,7 +153,7 @@ const CUSTOMER_SUFFIX_RE = /\b(Inc|LLC|L\.L\.C\.|Corp|Corporation|Co|Company|Bui
 
 /** Extract candidate fact anchors from a rationale string. Heuristic only —
  * Sonnet does the actual confirm/flag classification afterward. */
-export function extractAnchors(rationale: string): Anchor[] {
+function extractAnchors(rationale: string): Anchor[] {
   if (!rationale) return [];
   const seen = new Set<string>();
   const out: Anchor[] = [];
@@ -246,7 +232,7 @@ function normalizeCustomerName(s: string): string {
  * matches a customer in the table, after suffix-normalization }. Branch
  * names + Zedcor entities are excluded so a mention of "PHX" or "Zedcor"
  * doesn't get flagged as an unknown customer. */
-export function extractCustomerRefs(args: {
+function extractCustomerRefs(args: {
   rationale: string;
   outreachHook: string;
   customers: Pick<Customer, 'name'>[];
@@ -309,7 +295,7 @@ async function classifyAnchorsWithSonnet(args: {
   customers: Customer[];
   anchors: Anchor[];
 }): Promise<{ result: SonnetAnchorResponse | null; latency_ms: number; reason?: 'parse_failed' | 'rate_limited' }> {
-  const client = _anthropicOverride ?? anthropicClient();
+  const client = anthropicClient();
 
   const system = [
     'You are the Pathfinder Verifier rationale-accuracy step.',
