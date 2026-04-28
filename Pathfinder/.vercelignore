@@ -1,0 +1,14 @@
+# Project-root .vercelignore for the Pathfinder Vercel project.
+#
+# Empty by design. Vercel reads this in preference to the repo-root
+# `.vercelignore` (which excludes `Pathfinder/` so the parent
+# `unicron-systems` Vercel project doesn't try to deploy it). Without
+# this file, Vercel falls back to the repo-root one and strips the
+# entire Pathfinder source tree before the build runs — package.json
+# disappears and `next build` fails with "No Next.js version detected".
+#
+# Don't add exclusions here without confirming both:
+#   1. They wouldn't be auto-stripped by Next.js's default bundling
+#      (test files, .md files, .gitignore'd dirs already aren't bundled).
+#   2. The corresponding entry isn't already in the repo-root
+#      `.vercelignore` covering the parent project.
