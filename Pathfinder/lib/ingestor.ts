@@ -142,7 +142,11 @@ export async function fetchUsaspendingRecent(): Promise<{ records: IngestorRecor
       'Place of Performance City Code',
       'generated_internal_id',
     ],
-    sort: 'Period of Performance Start Date',
+    // USAspending's `sort` accepts a closed set of field names that does
+    // NOT include "Period of Performance Start Date" (run 102 returned
+    // 400 with the valid list). 'Award Amount' is reliably present and
+    // gives us highest-value awards first — useful demo bias anyway.
+    sort: 'Award Amount',
     order: 'desc',
     limit: USASPENDING_LIMIT,
   };
@@ -246,17 +250,16 @@ export async function fetchSamGovRecent(): Promise<{ records: IngestorRecord[]; 
     const dd = String(d.getDate()).padStart(2, '0');
     return `${mm}/${dd}/${d.getFullYear()}`;
   };
-  // Wider NAICS net than the v1 spec — narrowing to two codes returned 0
-  // results in the smoke test. SAM accepts comma-separated values in
-  // `ncode` and ORs them together, so adding more codes only widens
-  // coverage. Same set as the USAspending filter so the two sources cover
-  // a comparable opportunity surface.
+  // Drop `ncode` for now — runs 101 + 102 returned 0 records with the
+  // 8-code construction/engineering filter, which is suspicious for a
+  // 14-day window. Pulling base 14-day opportunities to verify auth +
+  // date format are sane; we narrow back down (or filter client-side
+  // post-fetch) once we've confirmed records actually flow.
   const params = new URLSearchParams({
     api_key: apiKey,
     postedFrom: fmt(cutoff),
     postedTo: fmt(today),
     limit: String(SAMGOV_LIMIT),
-    ncode: '236110,236210,236220,237110,237310,541330,541380,561621',
   });
 
   try {
