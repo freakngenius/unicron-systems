@@ -1,0 +1,36 @@
+[
+  { "id": "c-mh",   "name": "Memorial Hermann Health System", "lat": 29.71,  "lon": -95.40, "served_by_branch_id": "hou-002", "customer_since": "2020-04-12", "monthly_value": 18400 },
+  { "id": "c-ph",   "name": "Port of Houston Authority",      "lat": 29.74,  "lon": -95.27, "served_by_branch_id": "hou-002", "customer_since": "2021-09-03", "monthly_value": 32100 },
+  { "id": "c-met",  "name": "METRO Houston",                  "lat": 29.76,  "lon": -95.36, "served_by_branch_id": "hou-002", "customer_since": "2022-02-18", "monthly_value": 21500 },
+  { "id": "c-tmc",  "name": "Texas Medical Center",           "lat": 29.708, "lon": -95.398,"served_by_branch_id": "hou-002", "customer_since": "2019-11-21", "monthly_value": 28700 },
+  { "id": "c-cw",   "name": "Centerpoint Energy West",        "lat": 29.78,  "lon": -95.45, "served_by_branch_id": "hou-002", "customer_since": "2023-01-09", "monthly_value": 14200 },
+  { "id": "c-sjr",  "name": "San Jacinto River Auth.",        "lat": 30.06,  "lon": -95.42, "served_by_branch_id": "hou-002", "customer_since": "2022-07-14", "monthly_value": 9800 },
+
+  { "id": "c-bh",   "name": "Banner Health",                  "lat": 33.46,  "lon": -112.08,"served_by_branch_id": "phx-001", "customer_since": "2021-06-04", "monthly_value": 24800 },
+  { "id": "c-mc",   "name": "Maricopa County Public Works",   "lat": 33.42,  "lon": -112.07,"served_by_branch_id": "phx-001", "customer_since": "2022-04-30", "monthly_value": 17600 },
+  { "id": "c-asu",  "name": "Arizona State University",       "lat": 33.42,  "lon": -111.93,"served_by_branch_id": "phx-001", "customer_since": "2020-08-25", "monthly_value": 22300 },
+  { "id": "c-srp",  "name": "Salt River Project",             "lat": 33.40,  "lon": -111.93,"served_by_branch_id": "phx-001", "customer_since": "2023-03-11", "monthly_value": 19400 },
+  { "id": "c-tin",  "name": "Tucson Intermodal",              "lat": 32.22,  "lon": -110.94,"served_by_branch_id": "phx-001", "customer_since": "2024-02-08", "monthly_value": 11200 },
+
+  { "id": "c-em",   "name": "Emory Healthcare",               "lat": 33.79,  "lon": -84.32, "served_by_branch_id": "atl-003", "customer_since": "2022-09-19", "monthly_value": 26100 },
+  { "id": "c-ct",   "name": "Centennial Trust Properties",    "lat": 33.76,  "lon": -84.39, "served_by_branch_id": "atl-003", "customer_since": "2023-05-04", "monthly_value": 13900 },
+  { "id": "c-mart", "name": "MARTA",                          "lat": 33.77,  "lon": -84.39, "served_by_branch_id": "atl-003", "customer_since": "2022-12-01", "monthly_value": 19700 },
+  { "id": "c-ga-tech","name": "Georgia Tech Facilities",      "lat": 33.776, "lon": -84.398,"served_by_branch_id": "atl-003", "customer_since": "2023-08-14", "monthly_value": 15300 },
+  { "id": "c-ja",   "name": "Jackson Health (FL)",            "lat": 25.79,  "lon": -80.21, "served_by_branch_id": "atl-003", "customer_since": "2024-01-22", "monthly_value": 11800 },
+
+  { "id": "c-uc",   "name": "United Center Operations",       "lat": 41.881, "lon": -87.674,"served_by_branch_id": "chi-004", "customer_since": "2021-10-05", "monthly_value": 16200 },
+  { "id": "c-cta",  "name": "Chicago Transit Authority",      "lat": 41.88,  "lon": -87.63, "served_by_branch_id": "chi-004", "customer_since": "2020-05-20", "monthly_value": 29400 },
+  { "id": "c-uic",  "name": "University of Illinois Chicago", "lat": 41.87,  "lon": -87.65, "served_by_branch_id": "chi-004", "customer_since": "2022-03-28", "monthly_value": 18600 },
+  { "id": "c-mwrd", "name": "Metro Water Reclamation",        "lat": 41.85,  "lon": -87.69, "served_by_branch_id": "chi-004", "customer_since": "2023-07-11", "monthly_value": 14900 },
+  { "id": "c-ohf",  "name": "O'Hare Facilities",              "lat": 41.97,  "lon": -87.90, "served_by_branch_id": "chi-004", "customer_since": "2019-12-15", "monthly_value": 34800 },
+  { "id": "c-mke",  "name": "Milwaukee Brewing Co.",          "lat": 43.04,  "lon": -87.91, "served_by_branch_id": "chi-004", "customer_since": "2024-03-04", "monthly_value": 8400 },
+
+  { "id": "c-bc",   "name": "Boeing Commercial Sites",        "lat": 47.55,  "lon": -122.31,"served_by_branch_id": "sea-005", "customer_since": "2023-11-09", "monthly_value": 27300 },
+  { "id": "c-pa",   "name": "Port of Seattle Authority",      "lat": 47.59,  "lon": -122.34,"served_by_branch_id": "sea-005", "customer_since": "2023-06-17", "monthly_value": 22800 },
+  { "id": "c-uw",   "name": "University of Washington",       "lat": 47.65,  "lon": -122.30,"served_by_branch_id": "sea-005", "customer_since": "2024-01-10", "monthly_value": 17100 },
+  { "id": "c-st",   "name": "Sound Transit",                  "lat": 47.60,  "lon": -122.32,"served_by_branch_id": "sea-005", "customer_since": "2023-09-23", "monthly_value": 19500 },
+  { "id": "c-ch",   "name": "City of Hillsboro Public Works", "lat": 45.52,  "lon": -122.99,"served_by_branch_id": "sea-005", "customer_since": "2024-02-29", "monthly_value": 9700 },
+  { "id": "c-pcc",  "name": "Pierce County Construction",     "lat": 47.20,  "lon": -122.45,"served_by_branch_id": "sea-005", "customer_since": "2024-04-02", "monthly_value": 8200 },
+  { "id": "c-vmg",  "name": "Vancouver Maritime Group",       "lat": 49.28,  "lon": -123.12,"served_by_branch_id": "sea-005", "customer_since": "2024-03-19", "monthly_value": 10400 },
+  { "id": "c-pdx",  "name": "PDX Airport Operations",         "lat": 45.59,  "lon": -122.59,"served_by_branch_id": "sea-005", "customer_since": "2023-10-30", "monthly_value": 21900 }
+]
