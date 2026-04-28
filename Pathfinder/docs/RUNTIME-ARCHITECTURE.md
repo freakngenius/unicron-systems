@@ -119,6 +119,60 @@ GitHub Actions cron schedules drift 5–15 min — fine for our use case. Free, 
 | Pause an agent | Perplexity: pause the Space schedule. Vercel: comment out the cron entry in `vercel.json` and re-deploy. |
 | Verify an agent is firing | Both runtimes write to `pathfinder.agent_log` with the same shape. The dashboard's Activity Rail and Agent Status Row are runtime-agnostic. |
 
+## Deployment chain — strict GitHub-first
+
+**Rule.** Pathfinder deploys flow through this chain only:
+
+```
+new feature branch
+  → local commits
+  → push to GitHub (origin/<branch>)
+  → open PR
+  → human merge to main (Kyle approves + clicks Squash & Merge)
+  → Vercel auto-deploys from main on the merge
+```
+
+**Hard prohibitions.**
+
+- **No `vercel deploy --prod` from CLI.** It bypasses PR review, mixes unreviewed commits into the deployment record, and creates two parallel deploy paths (CLI + git) that can silently drift.
+- **No direct pushes to `main`.** Every change goes via PR.
+- **No Vercel API or MCP `deploy_to_vercel` calls** that bypass the git trigger.
+
+**Why we lock it down.** The contest build sprint produced 18+ direct-to-main commits + CLI-only deploys; the audit trail lived in `vercel deploy` invocations rather than on GitHub PRs. Locking the chain means:
+
+- Every change has a PR with a description, reviewer comment thread, and a single clear merge commit on `main`.
+- The Vercel deploys table reads as a 1:1 reflection of `main` — no orphan CLI deploys with `gitDirty: "1"`.
+- Rollbacks are git-revert + merge, not "find the last good Vercel deployment and promote it."
+
+**Operator setup (one-time).** As of 2026-04-28 the Pathfinder Vercel project is **not yet linked to GitHub** — every recent deploy was CLI-triggered. To enable the auto-deploy half of the chain:
+
+1. Vercel UI → `pathfinder` project → **Settings → Git** → **Connect Git Repository**
+2. Choose `freakngenius/unicron-systems`
+3. **Production Branch:** `main`
+4. **Root Directory:** `Pathfinder`
+5. **Include source files outside of the Root Directory:** off (Vercel only watches `Pathfinder/`)
+6. Save. Vercel does an initial build from current `main`.
+7. Optional: enable preview deployments for non-main branches so PRs get a Vercel preview URL automatically.
+
+**Operator setup — recurring.** Once Git is linked, the merge-to-main webhook handles deploys. To keep CLI deploys from happening accidentally:
+
+- Don't run `vercel deploy --prod` from any local shell. If you need to redeploy without a code change (e.g. after rotating an env var), use the **Redeploy** button on the latest deployment in the Vercel UI.
+- Don't approve PRs that introduce CLI deploy steps in CI or hooks.
+- If a hot-fix during a live demo justifies a CLI deploy, log it in the next PR description and revert the workflow on the very next change.
+
+**Exceptions explicitly allowed.**
+
+- `vercel env add|rm` for managing secrets (`OPERATOR_EMAILS`, `CRON_SECRET`, `RESEND_API_KEY`, etc.). These don't deploy — they only mutate the env-var store. The next git-merge auto-deploy picks up the new values.
+- `vercel env pull` for fetching production env values into a local `.env.production.local` (already gitignored).
+
+**`vercel.json`** lives in the repo and is the only config that affects Vercel build behavior from the codebase side. Cron schedules go here. There is no `git`/`deployment` block — that lives in the Vercel project settings (managed via the UI / API, not vercel.json).
+
+**Trace check.** A Vercel deploy with `meta.actor: "claude"` + `meta.gitDirty: "1"` is a tell that the chain was bypassed. After the GitHub link is enabled, every legitimate deploy should show:
+
+- `meta.gitCommitRef: "main"`
+- `meta.gitDirty: "0"` (no uncommitted local changes)
+- `meta.actor` populated by the GitHub user who merged the PR (not "claude")
+
 ## Auth model
 
 - **Perplexity Space agents** authenticate to Supabase via the MCP grant configured in their Space settings (scoped to schema `pathfinder` only).
