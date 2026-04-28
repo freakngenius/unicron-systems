@@ -328,13 +328,29 @@ async function generateRationale(args: {
 function parseRationaleAndHook(text: string): { rationale: string; outreach_hook: string } {
   const idx = text.search(/\bHOOK\s*:/i);
   if (idx < 0) {
-    return { rationale: text.trim(), outreach_hook: '' };
+    return { rationale: stripEmDashes(text.trim()), outreach_hook: '' };
   }
   const head = text.slice(0, idx);
   const tail = text.slice(idx);
-  const rationale = head.replace(/^\s*RATIONALE\s*:\s*/i, '').trim();
-  const outreach_hook = tail.replace(/^\s*HOOK\s*:\s*/i, '').trim();
+  const rationale = stripEmDashes(head.replace(/^\s*RATIONALE\s*:\s*/i, '').trim());
+  const outreach_hook = stripEmDashes(tail.replace(/^\s*HOOK\s*:\s*/i, '').trim());
   return { rationale, outreach_hook };
+}
+
+/** Permanently strip em-dashes (—, U+2014) and en-dashes (–, U+2013)
+ *  from generated copy. Sonnet emits these freely — the prompt forbids
+ *  them but we belt-and-suspenders with a post-process so a single
+ *  prompt regression doesn't leak dashes into customer-facing rationales
+ *  + outreach hooks. The substitution converts ` — ` (typical sentence
+ *  break usage) into `. ` (period + space) and bare dashes into single
+ *  spaces, then collapses any accidental double punctuation. */
+function stripEmDashes(text: string): string {
+  return text
+    .replace(/\s*—\s*/g, '. ') // em-dash with optional surrounding whitespace
+    .replace(/\s*–\s*/g, '. ') // en-dash same
+    .replace(/\.\s+\./g, '.') // dedupe ". ."
+    .replace(/[ \t]+/g, ' ') // collapse runs of spaces/tabs (preserve newlines)
+    .trim();
 }
 
 // ---------------------------------------------------------------------------

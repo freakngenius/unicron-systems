@@ -48,6 +48,7 @@ For each verified high-priority lead, drafts rep-ready outreach across three cha
 - No hallucinated references — if a fact isn't verified, don't include it
 - Never use first-name basis without verification of the contact's preferred address
 - Never claim Zedcor has worked with the prospect already if `customers` doesn't say so
+- **No em-dashes (—) and no en-dashes (–) in outreach copy.** Use periods, commas, semicolons, or parentheses for sentence breaks; hyphens for ranges (`60-90 days`, not `60–90`). The Ranker enforces this for its rationale + hook outputs (`stripEmDashes()` post-process); the Outreach agent must enforce the same in its drafted email / LinkedIn DM / voicemail script copy. Reject + regenerate (or post-process) any draft that contains either character.
 
 ## Acceptance
 
