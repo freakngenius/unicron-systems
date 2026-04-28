@@ -73,11 +73,21 @@ export function Dashboard({ initialBranches, initialCustomers, initialProjects }
   const [focusKey, setFocusKey] = React.useState(0);
   const [mapInstance, setMapInstance] = React.useState<google.maps.Map | null>(null);
   const [mapZoom, setMapZoom] = React.useState(DEFAULT_ZOOM);
+  const [cardHidden, setCardHidden] = React.useState(false);
 
   const handleSelectBranch = React.useCallback((id: string | null) => {
     setSelectedBranchId(id);
     setFocusKey((k) => k + 1);
+    setCardHidden(false); // re-show the anchored card whenever a branch is (re)picked
   }, []);
+
+  // Click anywhere on the map (NOT a branch marker) → fade the anchored card.
+  // Re-clicking the branch marker or the city in BranchDock brings it back.
+  React.useEffect(() => {
+    if (!mapInstance) return;
+    const lis = mapInstance.addListener('click', () => setCardHidden(true));
+    return () => lis.remove();
+  }, [mapInstance]);
 
   const handleRefresh = React.useCallback(async () => {
     if (refreshing) return;
@@ -286,6 +296,7 @@ export function Dashboard({ initialBranches, initialCustomers, initialProjects }
           >
             <MapController
               branches={initialBranches}
+              projects={initialProjects}
               selectedBranchId={selectedBranchId}
               focusKey={focusKey}
               onMapReady={setMapInstance}
@@ -303,14 +314,6 @@ export function Dashboard({ initialBranches, initialCustomers, initialProjects }
               />
             ))}
 
-            {/* Coverage radius around the selected branch. */}
-            {!crossPoll && selectedBranch && (
-              <CoverageCircle
-                lat={selectedBranch.lat}
-                lng={selectedBranch.lon}
-                miles={selectedBranch.coverage_radius_miles}
-              />
-            )}
 
             {/* Default project layer (clustered, color-tiered). */}
             <ProjectClusterLayer markers={projectClusterMarkers} />
@@ -343,7 +346,16 @@ export function Dashboard({ initialBranches, initialCustomers, initialProjects }
           </GoogleMap>
         </div>
 
-        {/* Anchored branch card — floats over the map, glued to the branch lat/lng. */}
+        {/* Coverage focus ring — DOM overlay sized in viewport pixels so it
+            stays the same on-screen footprint regardless of zoom. */}
+        {!crossPoll && selectedBranch && (
+          <CoverageCircle lat={selectedBranch.lat} lng={selectedBranch.lon} />
+        )}
+
+        {/* Anchored branch card — floats over the map, glued to the branch lat/lng.
+            Fades in/out via opacity (kept mounted while a branch is selected so the
+            transition runs both directions). Click-away on the map hides it; clicking
+            the branch marker / dock entry re-shows it. */}
         {!crossPoll && selectedBranch && (
           <AnchoredBranchCardOverlay
             branch={selectedBranch}
@@ -355,6 +367,7 @@ export function Dashboard({ initialBranches, initialCustomers, initialProjects }
             inRangeCount={branchStats[selectedBranch.id]?.count ?? 0}
             hiCount={branchStats[selectedBranch.id]?.hi ?? 0}
             customerCount={customersForBranch}
+            hidden={cardHidden}
           />
         )}
 
@@ -412,7 +425,8 @@ export function Dashboard({ initialBranches, initialCustomers, initialProjects }
 
 // AnchoredBranchCardOverlay — wraps AnchoredBranchCard with the
 // useLatLngToPixel hook so the card stays glued to the branch's lat/lng
-// through pan + zoom. Renders nothing when the branch is off-screen.
+// through pan + zoom. Fades opacity to 0 when `hidden` so the dismissal
+// animates instead of cutting.
 function AnchoredBranchCardOverlay(props: {
   branch: Branch;
   containerW: number;
@@ -423,9 +437,20 @@ function AnchoredBranchCardOverlay(props: {
   inRangeCount: number;
   hiCount: number;
   customerCount: number;
+  hidden: boolean;
 }) {
-  const { branch, ...rest } = props;
+  const { branch, hidden, ...rest } = props;
   const px = useLatLngToPixel(branch.lat, branch.lon);
   if (!px) return null;
-  return <AnchoredBranchCard branch={branch} anchorPx={px} {...rest} />;
+  return (
+    <div
+      style={{
+        opacity: hidden ? 0 : 1,
+        pointerEvents: hidden ? 'none' : 'auto',
+        transition: 'opacity 220ms ease-out',
+      }}
+    >
+      <AnchoredBranchCard branch={branch} anchorPx={px} {...rest} />
+    </div>
+  );
 }

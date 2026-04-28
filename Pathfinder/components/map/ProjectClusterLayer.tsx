@@ -10,8 +10,7 @@ import * as React from 'react';
 import { useMap } from '@vis.gl/react-google-maps';
 import { MarkerClusterer, type Marker as ClustererMarker } from '@googlemaps/markerclusterer';
 import { TIER_COLORS } from '@/lib/types-map';
-
-const MAP_BG = '#0e1116';
+import { projectCrossIcon } from './MapMarkers';
 
 export interface ClusterMarker {
   id: string;
@@ -38,17 +37,10 @@ export function ProjectClusterLayer({ markers, spiderfyZoom = 10 }: ProjectClust
     const offsetMarkers = spiderfyOverlaps(markers, spiderfyZoom, map.getZoom() ?? spiderfyZoom);
 
     const built: google.maps.Marker[] = offsetMarkers.map((m) => {
-      const icon: google.maps.Symbol = {
-        path: google.maps.SymbolPath.CIRCLE,
-        fillColor: m.color,
-        fillOpacity: 1,
-        strokeColor: MAP_BG,
-        strokeWeight: 1.5,
-        scale: m.hi ? 7 : 5,
-      };
+      const icon = projectCrossIcon(m.color, m.hi);
       const marker = new google.maps.Marker({
         position: { lat: m.lat, lng: m.lng },
-        icon,
+        icon: icon ?? undefined,
         zIndex: m.hi ? 100 : 10,
       });
       marker.addListener('click', m.onClick);

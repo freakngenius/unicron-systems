@@ -60,7 +60,11 @@ export function BranchMarkerGM({ lat, lng, code, selected, onClick }: BranchMark
   );
 }
 
-// ── Project marker — simple colored dot, slightly larger when hi-priority ─
+// ── Project marker — SVG cross + radial gradient halo. Hi-priority gets a
+// thicker, brighter cross + stronger halo so the eye picks it up first;
+// low-signal projects render as a faint mute-gray cross with no halo. The
+// halo is drawn as a soft radial fade so multiple crosses next to each
+// other read as a heat cluster instead of a hard grid of plus signs.
 export interface ProjectMarkerGMProps {
   lat: number;
   lng: number;
@@ -70,26 +74,42 @@ export interface ProjectMarkerGMProps {
 }
 
 export function ProjectMarkerGM({ lat, lng, color, hi, onClick }: ProjectMarkerGMProps) {
-  const icon = React.useMemo<google.maps.Symbol | null>(() => {
-    if (typeof google === 'undefined') return null;
-    return {
-      path: google.maps.SymbolPath.CIRCLE,
-      fillColor: color,
-      fillOpacity: 1,
-      strokeColor: MAP_BG,
-      strokeWeight: 1.5,
-      scale: hi ? 7 : 5,
-    };
-  }, [color, hi]);
+  const icon = React.useMemo(() => projectCrossIcon(color, !!hi), [color, hi]);
   if (!icon) return null;
-  return (
-    <Marker
-      position={{ lat, lng }}
-      icon={icon}
-      onClick={onClick}
-      zIndex={hi ? 100 : 10}
-    />
-  );
+  return <Marker position={{ lat, lng }} icon={icon} onClick={onClick} zIndex={hi ? 100 : 10} />;
+}
+
+/** Shared helper so the legacy `<Marker>` component AND the
+ * MarkerClusterer's native marker construction render identical pins. */
+export function projectCrossIcon(color: string, hi: boolean): google.maps.Icon | null {
+  if (typeof google === 'undefined') return null;
+  // Halo (soft radial fade) is sized larger than the arms; cross arms scale up
+  // for hi-priority. Total icon footprint is 28x28 so the click target stays
+  // healthy.
+  const size = 28;
+  const arm = hi ? 6 : 5;
+  const stroke = hi ? 2.2 : 1.5;
+  const haloOpacity = hi ? 0.55 : 0.25;
+  const haloOuter = hi ? 13 : 10;
+  const id = `pf-halo-${color.replace('#', '')}-${hi ? 'h' : 'l'}`;
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
+      <defs>
+        <radialGradient id="${id}" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stop-color="${color}" stop-opacity="${haloOpacity}"/>
+          <stop offset="60%" stop-color="${color}" stop-opacity="${haloOpacity * 0.35}"/>
+          <stop offset="100%" stop-color="${color}" stop-opacity="0"/>
+        </radialGradient>
+      </defs>
+      <circle cx="${size / 2}" cy="${size / 2}" r="${haloOuter}" fill="url(#${id})"/>
+      <line x1="${size / 2 - arm}" y1="${size / 2}" x2="${size / 2 + arm}" y2="${size / 2}" stroke="${color}" stroke-width="${stroke}" stroke-linecap="round"/>
+      <line x1="${size / 2}" y1="${size / 2 - arm}" x2="${size / 2}" y2="${size / 2 + arm}" stroke="${color}" stroke-width="${stroke}" stroke-linecap="round"/>
+    </svg>`;
+  return {
+    url: svgDataUrl(svg),
+    scaledSize: new google.maps.Size(size, size),
+    anchor: new google.maps.Point(size / 2, size / 2),
+  };
 }
 
 // ── Customer marker — small ring with a center dot. Magenta in cross-poll. ─
