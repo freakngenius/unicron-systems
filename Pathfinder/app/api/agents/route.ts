@@ -17,11 +17,29 @@ import type { AgentName, AgentRun } from '@/lib/types';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-// Layer-1 scope: only the three agents whose cells already render. New
-// agents (verifier, outreach, pulse, competitive, briefing, customer-intel,
-// eval) join this list as their AgentStatusRow cells ship in later layers.
-const AGENTS: AgentName[] = ['ingestor', 'ranker', 'adjacent'];
+// Returns the full 10-agent fleet so any deployed Computer agent surfaces
+// here without a code change. Cells render only for agents AgentStatusRow
+// has spec'd (currently ingestor / ranker / verifier / adjacent); the rest
+// surface via /api/agents/<name>-specific endpoints.
+const AGENTS: AgentName[] = [
+  'ingestor',
+  'ranker',
+  'adjacent',
+  'verifier',
+  'outreach',
+  'pulse',
+  'competitive',
+  'briefing',
+  'customer-intel',
+  'eval',
+];
 const FIVE_MIN_MS = 5 * 60 * 1000;
+const SCHEDULED_AGENTS: ReadonlySet<AgentName> = new Set<AgentName>([
+  'adjacent',
+  'competitive',
+  'briefing',
+  'eval',
+]);
 
 interface AgentSummary {
   agent: AgentName;
@@ -62,8 +80,9 @@ export async function GET() {
 
       // Derive status
       let status: AgentSummary['status'];
+      const isScheduled = SCHEDULED_AGENTS.has(agent);
       if (!lastRun) {
-        status = agent === 'adjacent' ? 'scheduled' : 'idle';
+        status = isScheduled ? 'scheduled' : 'idle';
       } else if (lastRun.status === 'running') {
         status = 'running';
       } else if (lastRun.status === 'failed') {
@@ -72,7 +91,7 @@ export async function GET() {
         // success — derive from recency
         const completedAt = lastRun.completed_at ? new Date(lastRun.completed_at).getTime() : 0;
         const stale = Date.now() - completedAt > FIVE_MIN_MS;
-        if (agent === 'adjacent') {
+        if (isScheduled) {
           status = 'scheduled';
         } else {
           status = stale ? 'idle' : 'running';
@@ -89,13 +108,14 @@ export async function GET() {
     }),
   );
 
-  // Shape: { ingestor, ranker, adjacent } — partial because only the
-  // Layer-1 agents have data on this endpoint. Layer-2/3 agents surface
-  // through dedicated /api/agents/<name> endpoints.
-  const result: Partial<Record<AgentName, AgentSummary>> = {
-    ingestor: summaries.find((s) => s.agent === 'ingestor')!,
-    ranker: summaries.find((s) => s.agent === 'ranker')!,
-    adjacent: summaries.find((s) => s.agent === 'adjacent')!,
-  };
+  // Full 10-agent shape. Agents without any agent_runs rows yet return a
+  // null `last_run` and a derived `idle` (or `scheduled`) status.
+  const result: Record<AgentName, AgentSummary> = AGENTS.reduce(
+    (acc, agent) => {
+      acc[agent] = summaries.find((s) => s.agent === agent)!;
+      return acc;
+    },
+    {} as Record<AgentName, AgentSummary>,
+  );
   return NextResponse.json(result);
 }
