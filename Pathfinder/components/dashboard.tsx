@@ -134,6 +134,21 @@ export function Dashboard({ initialBranches, initialCustomers, initialProjects }
     mapInstance.setZoom(Math.max(3, z - 1));
   }, [mapInstance]);
 
+  // ── When the project modal opens, center + zoom the map underneath on
+  //    the project's location. The modal sits centered over the map but
+  //    leaves its edges visible; centering the map there means closing
+  //    the modal reveals the exact spot the user was just inspecting.
+  //    Zoom 11 ≈ city-block level, tight enough to show neighborhood
+  //    context without the project marker drifting offscreen behind the
+  //    modal. Project must have lat/lon (some news-source projects don't).
+  React.useEffect(() => {
+    if (!mapInstance || !openProjectId) return;
+    const p = initialProjects.find((x) => x.id === openProjectId);
+    if (!p || p.lat == null || p.lon == null) return;
+    mapInstance.panTo({ lat: p.lat, lng: p.lon });
+    mapInstance.setZoom(11);
+  }, [mapInstance, openProjectId, initialProjects]);
+
   // ── Keyboard: + / − zoom shortcuts (spacebar + drag is now native to GM) ──
   React.useEffect(() => {
     const isTextField = (t: EventTarget | null) =>
