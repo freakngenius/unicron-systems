@@ -6,6 +6,18 @@
 //
 // Gates everything except Next.js internals, favicon, and the Vercel `/_next/*`
 // asset paths — pages AND API routes are protected, per the build brief.
+//
+// HOST PRESERVATION (don't break this):
+// Pathfinder is served at www.unicron.systems/pathfinder via a server-side
+// rewrite from the parent unicron-systems Next.js project. The browser's URL
+// bar must stay on unicron.systems even though the actual server response
+// comes from pathfinder-ashy.vercel.app. The middleware never calls
+// `NextResponse.redirect()` — it only `next()`s through (success) or
+// returns a 401/429 response (failure). Both are host-agnostic. If you
+// ever need to redirect from this file, build the redirect URL from
+// `request.headers.get('x-forwarded-host')` + `x-forwarded-proto`, NOT
+// from `request.nextUrl` / `request.url` (those resolve to the Vercel
+// deploy hostname when reverse-proxied and would leak it to the browser).
 
 import { NextResponse, type NextRequest } from 'next/server';
 

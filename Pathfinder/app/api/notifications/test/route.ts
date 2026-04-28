@@ -18,6 +18,7 @@ import {
   type DeliveryResult,
 } from '@/lib/notifications';
 import { buildOrgBriefing } from '@/lib/briefing';
+import { publicUrl } from '@/lib/public-url';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -145,6 +146,6 @@ function sampleFixture(): BriefingPayload {
     ],
     adjacentDigest:
       'Adjacent agent surfaced 3 next-customer candidates this week — equipment rental + temp services.',
-    dashboardUrl: 'https://pathfinder-ashy.vercel.app/pathfinder',
+    dashboardUrl: publicUrl(),
   };
 }

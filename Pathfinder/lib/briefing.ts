@@ -16,8 +16,8 @@ import {
   type DeliveryResult,
 } from '@/lib/notifications';
 import { fetchActiveScoringConfig } from '@/lib/scoring-config-server';
+import { publicUrl } from '@/lib/public-url';
 
-const DASHBOARD_URL = 'https://pathfinder-ashy.vercel.app/pathfinder';
 export const ORG_RECIPIENT = process.env.BRIEFING_ORG_EMAIL ?? 'kyle@demystified.ai';
 
 // Service-role client lazily resolved at first write so build-time
@@ -281,7 +281,7 @@ export async function buildOrgBriefing(): Promise<BriefingPayload> {
       (adjacentNew ?? 0) > 0
         ? `Adjacent agent surfaced ${adjacentNew} next-customer candidates this week. View all in dashboard.`
         : undefined,
-    dashboardUrl: DASHBOARD_URL,
+    dashboardUrl: publicUrl(),
   };
 }
 
