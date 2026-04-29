@@ -3,6 +3,7 @@
     { "path": "/api/cron/ingestor", "schedule": "0 */6 * * *" },
     { "path": "/api/cron/verifier", "schedule": "0,30 * * * *" },
     { "path": "/api/cron/ranker", "schedule": "0,30 * * * *" },
-    { "path": "/api/cron/briefing", "schedule": "0 6 * * 5" }
+    { "path": "/api/cron/briefing", "schedule": "0 6 * * 5" },
+    { "path": "/api/cron/slack-alerts", "schedule": "*/10 * * * *" }
   ]
 }

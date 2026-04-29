@@ -116,5 +116,13 @@ export const config = {
   // and the cron handler does its own auth — Basic auth would block the cron POST.
   // `/api/notifications/*` is excluded for the same reason — the test endpoint
   // verifies CRON_SECRET itself so we can curl from anywhere.
-  matcher: ['/', '/((?!_next/|favicon\\.ico|api/cron/|api/notifications/).*)'],
+  // `/api/slack/install/callback` is excluded because Slack itself hits the redirect URL
+  // without credentials; auth is via the OAuth `state` token + code exchange (see lib/slack/install.ts).
+  // `/api/slack/events` and `/api/slack/actions` are excluded because Slack signs both
+  // payloads with the signing secret (see lib/slack/bot.ts verifySlackSignature).
+  // Note that `/api/slack/install/start` is NOT excluded — it's operator-only, gated.
+  matcher: [
+    '/',
+    '/((?!_next/|favicon\\.ico|api/cron/|api/notifications/|api/slack/install/callback|api/slack/events|api/slack/actions).*)',
+  ],
 };

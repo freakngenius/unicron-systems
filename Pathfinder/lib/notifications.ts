@@ -122,7 +122,12 @@ export async function sendEmail(args: SendEmailArgs): Promise<DeliveryResult> {
 }
 
 // ────────────────────────────────────────────────────────────────────────
-// Slack — direct webhook POST with Block Kit payload
+// Slack — two delivery paths:
+//   1. sendSlack         — legacy webhook POST (kept as fallback for envs
+//                          where no workspace install exists)
+//   2. sendSlackDigest   — bot-token chat.postMessage to a workspace + channel
+//                          (P0-04). Briefing flow prefers this when a
+//                          slack_workspaces row exists for the recipient.
 // ────────────────────────────────────────────────────────────────────────
 
 interface SlackBlock {
@@ -152,6 +157,41 @@ export async function sendSlack(args: {
     return { ok: true, channel: 'slack' };
   } catch (e) {
     return { ok: false, channel: 'slack', error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+export async function sendSlackDigest(args: {
+  /** Slack team_id (T0123…) — must match a row in pathfinder.slack_workspaces. */
+  teamId: string;
+  /** Channel id (C0123…) for chat.postMessage. */
+  channelId: string;
+  text: string;
+  blocks: SlackBlock[];
+}): Promise<DeliveryResult> {
+  // Imported lazily so this module stays usable in code paths that don't
+  // need the bot (e.g. plain webhook delivery in environments where Slack
+  // installs aren't wired up yet).
+  const { getClient } = await import('@/lib/slack/bot');
+  try {
+    const client = await getClient(args.teamId);
+    const res = await client.chat.postMessage({
+      channel: args.channelId,
+      text: args.text,
+      blocks: args.blocks as unknown as never[],
+    });
+    return {
+      ok: true,
+      channel: 'slack',
+      recipient: `${args.teamId}:${args.channelId}`,
+      message_id: (res.ts as string | undefined) ?? undefined,
+    };
+  } catch (e) {
+    return {
+      ok: false,
+      channel: 'slack',
+      recipient: `${args.teamId}:${args.channelId}`,
+      error: e instanceof Error ? e.message : String(e),
+    };
   }
 }
 
