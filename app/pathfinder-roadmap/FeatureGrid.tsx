@@ -13,16 +13,21 @@ export default function FeatureGrid({
   const filtered =
     filter === 'all' ? features : features.filter((f) => f.status === filter);
 
+  const visibleCategories = ROADMAP_CATEGORIES.filter((category) =>
+    filtered.some((f) => f.category === category),
+  );
+
   return (
     <div className={styles.featureGridRoot}>
-      {ROADMAP_CATEGORIES.map((category) => {
+      {visibleCategories.map((category, idx) => {
         const matching = filtered.filter((f) => f.category === category);
-        if (matching.length === 0) return null;
         return (
           <CategorySection
             key={category}
             category={category}
             features={matching}
+            index={idx}
+            total={visibleCategories.length}
           />
         );
       })}

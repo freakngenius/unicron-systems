@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import styles from './roadmap.module.css';
 import type { RoadmapData } from '@/data/roadmap';
+import { ROADMAP_CATEGORIES } from '@/data/roadmap';
 import Hero from './Hero';
 import StatusFilterBar, { type FilterValue } from './StatusFilterBar';
 import FeatureGrid from './FeatureGrid';
@@ -24,10 +25,23 @@ export default function RoadmapClient({ data }: { data: RoadmapData }) {
     return c;
   }, [data.features]);
 
+  const totalCategories = useMemo(
+    () =>
+      ROADMAP_CATEGORIES.filter((cat) =>
+        data.features.some((f) => f.category === cat),
+      ).length,
+    [data.features],
+  );
+
   return (
     <main className={styles.root}>
+      <div className={styles.grain} aria-hidden="true" />
       <div className={styles.container}>
-        <Hero lastUpdated={data.lastUpdated} />
+        <Hero
+          lastUpdated={data.lastUpdated}
+          counts={counts}
+          totalCategories={totalCategories}
+        />
         <StatusFilterBar value={filter} onChange={setFilter} counts={counts} />
         <FeatureGrid features={data.features} filter={filter} />
         <Footer />

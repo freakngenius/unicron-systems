@@ -1,16 +1,16 @@
-import type { Metadata } from 'next';
-import { Inter, JetBrains_Mono } from 'next/font/google';
+import type { Metadata, Viewport } from 'next';
+import { Outfit, JetBrains_Mono } from 'next/font/google';
 
-const inter = Inter({
+const outfit = Outfit({
   subsets: ['latin'],
-  variable: '--font-inter',
+  variable: '--font-display',
   display: 'swap',
   weight: ['400', '500'],
 });
 
 const jetbrains = JetBrains_Mono({
   subsets: ['latin'],
-  variable: '--font-jetbrains-mono',
+  variable: '--font-mono',
   display: 'swap',
   weight: ['400', '500'],
 });
@@ -39,9 +39,13 @@ export const metadata: Metadata = {
   },
 };
 
+export const viewport: Viewport = {
+  themeColor: '#FAFBFC',
+};
+
 export default function Layout({ children }: { children: React.ReactNode }) {
   return (
-    <div className={`${inter.variable} ${jetbrains.variable}`}>
+    <div className={`${outfit.variable} ${jetbrains.variable}`}>
       {children}
     </div>
   );
