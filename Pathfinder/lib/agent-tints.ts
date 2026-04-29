@@ -123,6 +123,7 @@ export const AGENTS: Record<AgentName, AgentMeta> = {
     modifier: 'dim',
   },
   eval: { id: 'eval', label: 'EVAL', tintKey: null, modifier: 'mono' },
+  'contact-resolver': { id: 'contact-resolver', label: 'CONTACT', tintKey: null },
 };
 
 /**

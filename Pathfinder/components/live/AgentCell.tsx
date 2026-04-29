@@ -71,6 +71,8 @@ const AGENT_TOOLTIPS: Record<AgentName, string> = {
     'Customer Intel — flags expansion / M&A / hiring / incident / filing / press signals on existing customers; renders icons on the customer map layer.',
   eval:
     'Eval — weekly retrospective against ground-truth seeds. Scores would-have-caught rate. System-meta pill in the TopBar.',
+  'contact-resolver':
+    'Contact Resolver — every 10 min. Extracts source-side contacts from raw_payload on verified projects. v1 = Phase 1 only (free, no third-party API spend).',
 };
 
 export function AgentCell({ id, data, showDivider }: AgentCellProps) {

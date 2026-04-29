@@ -185,6 +185,7 @@ const initialRunMap: AgentRunMap = {
   briefing: null,
   'customer-intel': null,
   eval: null,
+  'contact-resolver': null,
 };
 const runsStore = new Store<AgentRunMap>(initialRunMap);
 
@@ -236,6 +237,7 @@ const initialAggregatesMap: AgentAggregatesMap = {
   briefing: { ...initialAggregates },
   'customer-intel': { ...initialAggregates },
   eval: { ...initialAggregates },
+  'contact-resolver': { ...initialAggregates },
 };
 const aggregatesStore = new Store<AgentAggregatesMap>(initialAggregatesMap);
 

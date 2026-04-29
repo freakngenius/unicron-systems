@@ -18,6 +18,7 @@ const SCHEDULES: Record<AgentName, { runtime: string; schedule: string }> = {
   briefing: { runtime: 'vercel cron', schedule: '0 6 * * 5' },
   'customer-intel': { runtime: 'perplexity space', schedule: 'every 12h' },
   eval: { runtime: 'vercel cron', schedule: '0 6 * * 0' },
+  'contact-resolver': { runtime: 'vercel cron', schedule: '*/10 * * * *' },
 };
 
 export function AgentsSection() {
