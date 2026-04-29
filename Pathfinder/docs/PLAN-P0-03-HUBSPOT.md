@@ -2,7 +2,14 @@
 
 **Branch:** `feat/p0-03-hubspot-sync` (worktree-isolated, off `origin/main` at `6909640`)
 **Spec:** `Pathfinder/Pathfinder-Feature-Specs.md` § "P0 Feature 3 — HubSpot bidirectional sync" (lines 155–174)
-**Status:** draft — no code until Kyle approves.
+**Status:** approved 2026-04-28. Decisions folded in below; building now.
+
+### Approval decisions
+- **Q1.** P0-03 owns `lib/lead-actions.ts` and bootstraps `pathfinder.lead_actions`. Public interface documented in `docs/LEAD-ACTIONS-API.md` so P0-04 + P0-01 wire against a stable contract.
+- **Q2.** Ship `POST /api/hubspot/push-deal` only. Human triggers land in P0-04 (Slack bot) and P0-01 (chat panel).
+- **Q3.** Path (a). `docs/HUBSPOT-SANDBOX-SETUP.md` walks Kyle through HubSpot account → Private App → token → Vercel env. Live test before merge.
+- **Q4.** Full 7-stage map (5 HubSpot-mirrored + 2 local-only).
+- **Env rename.** `HUBSPOT_WEBHOOK_SECRET` → `HUBSPOT_APP_SECRET`. Bearer token env name is `HUBSPOT_API_KEY` (Kyle's chosen name; matches the value he'll drop in Vercel).
 
 ---
 
@@ -18,7 +25,7 @@ Acceptance gates from the spec:
 
 Hard constraints from the prompt:
 - Custom property `pathfinder_lead_id` on every pushed deal.
-- Webhook authenticates against `HUBSPOT_WEBHOOK_SECRET` (see §9 — this stores the HubSpot **app secret** used by HubSpot's v3 signature).
+- Webhook authenticates against `HUBSPOT_APP_SECRET` (HubSpot Private App secret; HubSpot's v3 signature is HMAC-SHA256 keyed by it).
 - Stage map documented in `docs/HUBSPOT-STAGE-MAP.md`.
 - All HubSpot HTTP calls retry on 429 with exponential backoff that honors `Retry-After`.
 - Every push and every webhook is audit-logged to `pathfinder.agent_log` with `agent_name='hubspot-sync'`.
@@ -44,7 +51,7 @@ Hard constraints from the prompt:
 
 ### Edits to shared files (additive only — coordinate)
 - `lib/types.ts` — add `'hubspot-sync'` to `AgentName`, add `LeadAction` interface + table entry in `PathfinderDatabase`. **Append-only** edits to avoid stepping on the cherry-pick on `feat/outreach-drafter` and the chat additions on `feat/p0-01-intelligence-chat`.
-- `.env.example` — append `HUBSPOT_PRIVATE_APP_TOKEN`, `HUBSPOT_WEBHOOK_SECRET`, `HUBSPOT_PORTAL_ID`, `HUBSPOT_DEAL_PIPELINE_ID`, plus the four `HUBSPOT_STAGE_*_ID` env names listed in §7.
+- `.env.example` — append `HUBSPOT_API_KEY`, `HUBSPOT_APP_SECRET`, `HUBSPOT_PORTAL_ID`, `HUBSPOT_DEAL_PIPELINE_ID`, plus the five `HUBSPOT_STAGE_*_ID` env names listed in §7.
 
 ### Files I will **not** touch
 - `vercel.json` (push-deal and webhook are event-driven HTTP; no cron entries needed).
@@ -154,7 +161,7 @@ Conflict check vs other branches:
 - Retry policy lives here:
   - `fetch` wrapper that on `429` reads `Retry-After` (seconds) and waits, otherwise applies exponential backoff `300ms · 2^n + jitter` capped at 30s, max 5 attempts.
   - On terminal failure, throws `HubspotError` carrying status + body for the audit log.
-- Auth: `Authorization: Bearer ${token}`. Token comes from `HUBSPOT_PRIVATE_APP_TOKEN` env (private-app token, scoped `crm.objects.deals.read|write` and `crm.objects.notes.write`).
+- Auth: `Authorization: Bearer ${token}`. Token comes from `HUBSPOT_API_KEY` env (HubSpot Private App token, scoped `crm.objects.deals.read|write` and `crm.objects.notes.write`).
 
 ### `lib/hubspot/deal-mapper.ts`
 Pure functions, easy to unit-test:
@@ -206,7 +213,7 @@ Backed by an env-driven lookup table. `docs/HUBSPOT-STAGE-MAP.md` is the human-r
 - Reads raw body (signature is over the unparsed body — needs `await req.text()`, then `JSON.parse` after verification).
 - Verifies `X-HubSpot-Signature-v3`:
   - Reject if `X-HubSpot-Request-Timestamp` is missing or > 5 min skewed.
-  - Build `requestMethod + requestUri + requestBody + timestamp`, HMAC-SHA256 with `HUBSPOT_WEBHOOK_SECRET`, base64, constant-time compare.
+  - Build `requestMethod + requestUri + requestBody + timestamp`, HMAC-SHA256 with `HUBSPOT_APP_SECRET`, base64, constant-time compare.
 - Parses HubSpot's array body (each subscription delivers one or more change events).
 - For each `dealstage`-property change: call `applyHubspotStageEvent` with `dealId = objectId`, `newStageId = propertyValue`, `eventId = eventId`, `occurredAt = occurredAt`.
 - Returns `200 { ok: true, processed: n, skipped: m }` even on partial failure (HubSpot retries non-2xx and we don't want a single bad event to block the batch); failures audit-log individually.
@@ -246,8 +253,8 @@ Every audit row uses `agent_name='hubspot-sync'`. Event types: `accept_recorded`
 
 ## 9. Security
 
-- **`HUBSPOT_PRIVATE_APP_TOKEN`** — Bearer token for outbound HubSpot calls. Server-only env. Never logged.
-- **`HUBSPOT_WEBHOOK_SECRET`** — stores the HubSpot **app secret** used to compute the v3 signature. Named `HUBSPOT_WEBHOOK_SECRET` per the prompt; the variable's literal use is HubSpot-side HMAC verification. Documented in `.env.example` with a clarifying comment so a future reader doesn't mistake it for a Pathfinder-issued shared secret.
+- **`HUBSPOT_API_KEY`** — Bearer token for outbound HubSpot calls (HubSpot Private App token). Server-only env. Never logged.
+- **`HUBSPOT_APP_SECRET`** — HubSpot Private App secret used to verify the v3 webhook signature (HMAC-SHA256 over `requestMethod + requestUri + requestBody + timestamp`). Server-only env. Never logged.
 - **`CRON_SECRET`** — gates `/api/hubspot/push-deal` (internal-only callers). Same pattern as `app/api/cron/*`.
 - **Idempotency** — `lead_actions.unique (project_id, actor_email)` prevents double-accepts; webhook idempotency via `hubspot_last_event_id`.
 - **No PII to logs** — webhook body is not echoed in audit rows on signature failure; the success path stores HubSpot's structured event data (object id, stage id, timestamp) but not free-form note text from HubSpot replies.
