@@ -117,7 +117,9 @@ Close at end: `{ completed_at: now(), records_processed, records_new, status, er
 
 ## Stop Conditions
 
-- Cycle exceeds 50 seconds (Vercel function `maxDuration: 60`, 10s buffer): abort, log `error` with `reason='cycle_timeout'`, mark run `failed`.
+- Cycle exceeds 270 seconds (Vercel Pro `maxDuration: 300`, 30s buffer): stop launching new work, allow in-flight projects to finish, log `error` with `reason='cycle_timeout'`. The cycle still closes as `success` with partial progress — unranked rows still have `score IS NULL` and the next cycle picks them up.
+- Up to **5 projects process concurrently** within a cycle (`RANK_CONCURRENCY = 5`). Sonnet calls dominate latency; running them in parallel turns sequential ~4s/row into roughly `4s × ceil(N / 5)`. With `QUEUE_LIMIT = 200`, a single invocation drains 200 rows in ~3 minutes.
+- After a successful Ingestor cycle that inserted >0 new rows, the Ingestor fires a fire-and-forget GET against `/api/cron/ranker` with the same `CRON_SECRET`. Fresh ingests get ranked immediately rather than waiting for the next 30-min cron boundary. The Ranker's overlap protection still applies — a concurrent scheduled fire is a no-op.
 - Overlapping cycle detected (running row started within the last 25 minutes): log `error` with `reason='overlapping_cycle'` and exit 200 with `{skipped: 'overlapping_cycle'}`. Empty cycles do NOT open an `agent_runs` row.
 
 ## Operating Principles
