@@ -133,6 +133,81 @@ export interface OutreachDraft {
   dismissed_at: string | null;
 }
 
+// Intelligence Chat (P0-01) — see docs/PLAN-P0-01-INTELLIGENCE-CHAT.md.
+// Mirrors supabase/migrations/0009_chat.sql.
+
+export type ChatMessageRole = 'user' | 'assistant' | 'system';
+
+export type ChatMessageKind =
+  | 'text'
+  | 'outreach_draft'
+  | 'action_result'
+  | 'error';
+
+export interface ChatThread {
+  id: string;
+  user_email: string;
+  context_key: string;
+  context_label: string;
+  context_snapshot: Record<string, unknown>;
+  created_at: string;
+  last_message_at: string;
+}
+
+export interface ChatMessage {
+  id: number;
+  thread_id: string;
+  role: ChatMessageRole;
+  kind: ChatMessageKind;
+  content: string;
+  payload: Record<string, unknown>;
+  model_used: string | null;
+  latency_ms: number | null;
+  created_at: string;
+}
+
+export interface ChatSourceCitation {
+  url: string;
+  title: string;
+}
+
+export interface ChatTablesQueried {
+  table: string;
+  rowsRead: number;
+}
+
+// Snapshot the dashboard passes to the chat backend so the assistant knows
+// what the user is currently looking at. The server re-fetches the rows
+// referenced by IDs — never trust client-supplied row data.
+export interface ChatContextSnapshot {
+  view: 'dashboard' | 'project_modal' | 'settings';
+  selectedBranchId: string | null;
+  openProjectId: string | null;
+  sourceFilter: string;
+  crossPoll: boolean;
+  filteredProjectIds: string[];
+  totalProjects: number;
+  hiddenProjectIds: string[];
+  timestamp: string;
+}
+
+// Action IDs the chat can dispatch. Wired set runs end-to-end on this
+// branch; deferred set returns 501 with the audit row pattern in
+// PLAN-P0-01-INTELLIGENCE-CHAT.md § 8.
+export type ChatActionId =
+  // Wired
+  | 'copy_draft'
+  | 'save_draft'
+  | 'regenerate_draft'
+  | 'export_csv'
+  | 'summarize_pipeline'
+  // Deferred — write audit row, surface "queued / saved for sync" reply
+  | 'accept_lead_to_hubspot'
+  | 'push_to_pipeline'
+  | 'schedule_followup'
+  | 'add_note';
+
+
 // Database type bag for the typed Supabase client.
 export interface PathfinderDatabase {
   pathfinder: {
@@ -150,6 +225,25 @@ export interface PathfinderDatabase {
           draft_at?: string;
         };
         Update: Partial<OutreachDraft>;
+        Relationships: [];
+      };
+      chat_threads: {
+        Row: ChatThread;
+        Insert: Omit<ChatThread, 'id' | 'created_at' | 'last_message_at'> & {
+          id?: string;
+          created_at?: string;
+          last_message_at?: string;
+        };
+        Update: Partial<ChatThread>;
+        Relationships: [];
+      };
+      chat_messages: {
+        Row: ChatMessage;
+        Insert: Omit<ChatMessage, 'id' | 'created_at'> & {
+          id?: number;
+          created_at?: string;
+        };
+        Update: Partial<ChatMessage>;
         Relationships: [];
       };
     };

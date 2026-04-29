@@ -148,6 +148,10 @@ export interface TopBarProps {
   escalationOpen?: boolean;
   /** Click handler for the EscalationPill. */
   onEscalationClick?: () => void;
+  /** Whether the Intelligence Chat panel is open. */
+  chatOpen?: boolean;
+  /** Click handler for the chat toggle pill. */
+  onChatToggle?: () => void;
 }
 
 export function TopBar({
@@ -161,6 +165,8 @@ export function TopBar({
   escalationCount = 0,
   escalationOpen = false,
   onEscalationClick,
+  chatOpen = false,
+  onChatToggle,
 }: TopBarProps) {
   return (
     <div
@@ -278,6 +284,20 @@ export function TopBar({
         />
       )}
 
+      {onChatToggle && (
+        <button
+          type="button"
+          className={`pf-pill ${chatOpen ? 'pf-pill-active' : ''}`}
+          onClick={onChatToggle}
+          title="Open the Intelligence Chat panel — ask, draft outreach, take actions"
+          aria-label={chatOpen ? 'Close Intelligence Chat' : 'Open Intelligence Chat'}
+          aria-pressed={chatOpen}
+        >
+          <ChatBubbleIcon />
+          Chat
+        </button>
+      )}
+
       <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 20 }}>
         <LiveStat
           valueKey="new"
@@ -340,6 +360,24 @@ function SettingsCog() {
     >
       <circle cx="8" cy="8" r="2.4" />
       <path d="M8 1.5v2.2 M8 12.3v2.2 M14.5 8h-2.2 M3.7 8H1.5 M12.6 3.4l-1.6 1.6 M5 11l-1.6 1.6 M12.6 12.6l-1.6-1.6 M5 5l-1.6-1.6" />
+    </svg>
+  );
+}
+
+function ChatBubbleIcon() {
+  return (
+    <svg
+      width={11}
+      height={11}
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.4}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M2.5 3 h11 a1 1 0 0 1 1 1 v6.5 a1 1 0 0 1 -1 1 H6 L3 14 v-2.5 H2.5 a1 1 0 0 1 -1 -1 V4 a1 1 0 0 1 1 -1 z" />
     </svg>
   );
 }
