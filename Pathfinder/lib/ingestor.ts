@@ -481,6 +481,12 @@ export async function runIngestorCycle(): Promise<IngestorCycleStats> {
         deduped,
       },
     });
+
+    // Auto-trigger Ranker so fresh ingest doesn't sit waiting for the
+    // next 30-min cron boundary. Fire-and-forget — Ranker does its own
+    // overlap protection + agent_runs lifecycle, so we don't need to
+    // block the Ingestor cycle on it.
+    void triggerRanker(writeResult.inserted);
   }
 
   return stats;
@@ -500,6 +506,56 @@ function truncate(s: string | null, n: number): string {
   if (s === null) return '';
   if (s.length <= n) return s;
   return s.slice(0, n - 1) + '…';
+}
+
+// ────────────────────────────────────────────────────────────────────────
+// Ranker auto-trigger (fire-and-forget)
+//
+// After a successful ingest writes new rows, ping the Ranker so it picks
+// them up immediately rather than waiting for the next 30-min cron
+// boundary. Uses CRON_SECRET — same auth gate the Vercel cron uses, so
+// the Ranker doesn't need to distinguish "scheduled" from "ingest-driven"
+// invocations. The Ranker's overlap-protection + maxDuration handle the
+// case where it's already running.
+// ────────────────────────────────────────────────────────────────────────
+
+async function triggerRanker(insertedCount: number): Promise<void> {
+  const secret = process.env.CRON_SECRET;
+  if (!secret) return; // local dev / preview — Ranker still has its cron
+  // Build the URL from VERCEL_URL when present so the call hits the same
+  // deployment that just inserted the rows. Falls back to the public host.
+  const host =
+    process.env.VERCEL_URL ??
+    process.env.PATHFINDER_PUBLIC_HOST ??
+    'pathfinder-ashy.vercel.app';
+  const proto = host.startsWith('localhost') ? 'http' : 'https';
+  const basePath = '/pathfinder';
+  const url = `${proto}://${host}${basePath}/api/cron/ranker`;
+  try {
+    // Don't await the response — fire-and-forget. Ranker can take 30s+ on
+    // a 200-row queue; we don't want to extend the Ingestor function's
+    // wall time. AbortSignal with a short timeout in case fetch hangs.
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 2000);
+    void fetch(url, {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${secret}` },
+      signal: controller.signal,
+    })
+      .catch(() => {
+        /* ignore — best-effort trigger */
+      })
+      .finally(() => clearTimeout(timer));
+    await writeIngestorLog({
+      eventType: 'auto_trigger_ranker',
+      data: {
+        message: `ranker · auto-trigger · ${insertedCount} new rows queued`,
+        inserted: insertedCount,
+      },
+    });
+  } catch {
+    // best-effort
+  }
 }
 
 function normalizeIsoDate(d: string | undefined): string | null {

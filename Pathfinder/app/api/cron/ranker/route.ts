@@ -35,11 +35,11 @@ import type { Branch, Customer, Project } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
-// Vercel function timeout. Sonnet calls run 2-5s each; Haiku ~0.5-1s. With a
-// 30-row queue and three retry slots we want headroom. 60s is the Hobby/Pro
-// free ceiling. The per-iteration budget below (CYCLE_BUDGET_MS) leaves a
-// safety margin against this hard ceiling.
-export const maxDuration = 60;
+// Vercel Pro maxDuration ceiling is 300s. With Sonnet calls in flight at
+// concurrency RANK_CONCURRENCY, and a CYCLE_BUDGET_MS buffer below 300, a
+// single invocation comfortably ranks 200+ rows. Old 60s ceiling forced
+// us to batch at 30/cycle and chain 30-min cron fires; that's gone now.
+export const maxDuration = 300;
 
 // Spec constants — match prompts/computer-ranker.md (now docs/specs/ranker.md).
 const HAIKU_MODEL = 'claude-haiku-4-5';
@@ -47,8 +47,12 @@ const SONNET_MODEL = 'claude-sonnet-4-5';
 const HAIKU_MAX_TOKENS = 16;
 const SONNET_MAX_TOKENS = 1_000;
 const ANTHROPIC_BACKOFF_MS = [5_000, 15_000, 45_000];
-const CYCLE_BUDGET_MS = 50_000; // leave a 10s buffer under maxDuration=60.
-const QUEUE_LIMIT = 30;
+const CYCLE_BUDGET_MS = 270_000; // 30s buffer under maxDuration=300.
+const QUEUE_LIMIT = 200;
+// Concurrency ceiling for in-flight Sonnet calls within a cycle. Anthropic
+// rate limits comfortably accommodate 5 parallel; Haiku triage runs serial
+// because it's fast enough to not matter.
+const RANK_CONCURRENCY = 5;
 const RATIONALE_PROMPT_PATH = path.join(process.cwd(), 'prompts', 'claude-ranking-rationale.md');
 
 // ---------------------------------------------------------------------------
@@ -542,208 +546,66 @@ export async function GET(req: Request) {
   const branchById = new Map(branches.map((b) => [b.id, b]));
   const customerById = new Map(customers.map((c) => [c.id, c]));
 
-  // 6. Per-project loop
+  // 6. Per-project pool — RANK_CONCURRENCY workers consume the queue
+  //    until empty, the cycle-budget tripwire fires, or a fatal error
+  //    surfaces. Sonnet + Haiku calls are the dominant latency; running
+  //    them in parallel turns a 4s/row sequential pipeline into roughly
+  //    `4s × ceil(N / RANK_CONCURRENCY)` per cycle.
   const cycleStart = Date.now();
   let processed = 0;
   let ranked = 0;
   let filtered = 0;
+  let fatalError: string | null = null;
+  let timedOut = false;
 
-  for (const project of queue) {
-    if (Date.now() - cycleStart > CYCLE_BUDGET_MS) {
-      await writeLog(admin, 'error', { message: 'cycle_timeout', reason: 'cycle_timeout' });
-      await markRunFailed(admin, runId, 'cycle_timeout');
-      return NextResponse.json({ error: 'cycle_timeout', processed }, { status: 500 });
-    }
-    processed++;
-
-    // Stage 1 — cheap classifier (Haiku)
-    let classify: ClassifyResult;
-    try {
-      classify = await classifyOpportunity(project);
-    } catch (err) {
-      await writeLog(admin, 'error', {
-        message: `classifier failed · ${project.id} · ${(err as Error).message}`,
-        reason: 'unexpected_error',
-        project_id: project.id,
-      });
-      continue;
-    }
-
-    if (classify.decision === null) {
-      const reason = classify.reason === 'rate_limited' ? 'anthropic_rate_limited' : 'anthropic_parse_failed';
-      await writeLog(admin, 'error', {
-        message: reason === 'anthropic_rate_limited' ? 'haiku 429 · backoff exhausted' : 'haiku parse failed',
-        reason,
-        project_id: project.id,
-      });
-      // Leave score NULL so a future cycle picks it up.
-      continue;
-    }
-
-    // Log the model_route for the triage call (always, even on "no").
-    await writeLog(
-      admin,
-      'model_route',
-      {
-        message: `multi-model route · ${HAIKU_MODEL} for triage · ${classify.latency_ms}ms`,
-        stage: 'triage',
-        project_id: project.id,
-      },
-      { model_used: HAIKU_MODEL, latency_ms: classify.latency_ms },
-    );
-
-    if (classify.decision === 'no') {
-      // Demote: score=0, no rationale, log score_assign, write back, continue.
-      const writeFields: RankerWriteFields = {
-        score: 0,
-        rationale: 'Filtered as non-opportunity by classifier',
-        outreach_hook: null,
-        nearest_branch_id: null,
-        distance_miles: null,
-        warm_for_customer_id: null,
-        ranked_at: new Date().toISOString(),
-      };
-      const w = await persistProject(admin, project.id, writeFields);
-      if (!w.ok) {
-        await writeLog(admin, 'error', {
-          message: `supabase write failed · ${project.id}`,
-          reason: 'supabase_write_failed',
-          project_id: project.id,
-        });
-        await markRunFailed(admin, runId, `supabase_write_failed: ${w.error}`);
-        return NextResponse.json({ error: 'supabase_write_failed' }, { status: 500 });
+  const cursor = { next: 0 };
+  const worker = async (): Promise<void> => {
+    while (true) {
+      if (fatalError) return;
+      if (Date.now() - cycleStart > CYCLE_BUDGET_MS) {
+        timedOut = true;
+        return;
       }
-      await writeLog(admin, 'score_assign', {
-        message: `${project.id} · score 0 · demoted by classifier`,
-        project_id: project.id,
-        score: 0,
-        nearest_branch_code: null,
-        components: { branch_fit: 0, stage_fit: 0, value: 0, adjacency: 0 },
-        demoted: true,
-      });
-      filtered++;
-      continue;
-    }
-
-    // Stage 2 — geographic scoring (deterministic, free)
-    let scoring;
-    let nearest_branch_id: string | null = null;
-    let distance_miles: number | null = null;
-    let warm_for_customer_id: string | null = null;
-    let composite_score = 0;
-    let nearest_branch_code: string | null = null;
-    let stageComponentScores = { branch_fit: 0, stage_fit: 0, value: 0, adjacency: 0 };
-
-    if (project.lat == null || project.lon == null || branches.length === 0) {
-      // Null-coordinate exception: cap at 60, no geo signal.
-      const stageBoost = (() => {
-        const s = (project.project_stage ?? '').trim().toUpperCase();
-        if (s === 'RFP') return 90;
-        if (s === 'PRE') return 75;
-        if (s === 'PLN') return 55;
-        if (s === 'NWS') return 35;
-        return 50;
-      })();
-      composite_score = Math.min(60, Math.round(0.3 * stageBoost + 0.2 * 0));
-      stageComponentScores = { branch_fit: 0, stage_fit: stageBoost, value: 0, adjacency: 0 };
-    } else {
-      try {
-        scoring = scoreProject({ project, branches, customers });
-        nearest_branch_id = scoring.nearest_branch_id;
-        distance_miles = scoring.distance_miles;
-        warm_for_customer_id = scoring.warm_for_customer_id;
-        composite_score = scoring.composite_score;
-        nearest_branch_code = branchById.get(scoring.nearest_branch_id)?.code ?? null;
-        stageComponentScores = {
-          branch_fit: scoring.geo_score,
-          stage_fit: scoring.stage_score,
-          value: 0,
-          adjacency: scoring.customer_score,
-        };
-      } catch (err) {
-        await writeLog(admin, 'error', {
-          message: `score recompute failed · ${project.id} · ${(err as Error).message}`,
-          reason: 'score_recompute_failed',
-          project_id: project.id,
-        });
-        continue;
-      }
-    }
-
-    // Stage 3 — Sonnet rationale + outreach hook
-    const branch = nearest_branch_id ? branchById.get(nearest_branch_id) ?? null : null;
-    const warmCustomer = warm_for_customer_id ? customerById.get(warm_for_customer_id) ?? null : null;
-
-    let rationaleResult: RationaleResult;
-    try {
-      rationaleResult = await generateRationale({
+      const idx = cursor.next++;
+      if (idx >= queue.length) return;
+      const project = queue[idx];
+      const outcome = await processOneProject({
+        admin,
         project,
-        branch,
-        warmCustomer,
-        distance_miles,
+        branches,
+        customers,
+        branchById,
+        customerById,
       });
-    } catch (err) {
-      await writeLog(admin, 'error', {
-        message: `sonnet failed · ${project.id} · ${(err as Error).message}`,
-        reason: 'unexpected_error',
-        project_id: project.id,
-      });
-      continue;
+      processed++;
+      if (outcome.kind === 'ranked') ranked++;
+      else if (outcome.kind === 'filtered') filtered++;
+      else if (outcome.kind === 'fatal') {
+        // First fatal wins; subsequent workers exit on next loop check.
+        fatalError = outcome.error ?? 'unknown_fatal_error';
+      }
+      // 'soft' outcomes (Sonnet rate-limit, parse fail, etc.) leave
+      // score NULL and are picked up on a future cycle. No counter bump.
     }
+  };
 
-    if (rationaleResult.reason) {
-      const reason = rationaleResult.reason === 'rate_limited' ? 'anthropic_rate_limited' : 'anthropic_parse_failed';
-      await writeLog(admin, 'error', {
-        message: reason === 'anthropic_rate_limited' ? 'sonnet 429 · backoff exhausted' : 'sonnet parse failed',
-        reason,
-        project_id: project.id,
-      });
-      // Leave score NULL on Sonnet failure (per spec — re-rank on next cycle).
-      continue;
-    }
+  await Promise.all(Array.from({ length: RANK_CONCURRENCY }, () => worker()));
 
-    await writeLog(
-      admin,
-      'rationale_generate',
-      {
-        message: `rationale generated · ${project.id} · ${rationaleResult.outreach_hook ? 'with hook' : 'no hook'}`,
-        project_id: project.id,
-        paragraph_count: rationaleResult.rationale.split(/\n\n+/).length,
-        hook_length: rationaleResult.outreach_hook.length,
-      },
-      { model_used: SONNET_MODEL, latency_ms: rationaleResult.latency_ms },
+  if (fatalError) {
+    await markRunFailed(admin, runId, fatalError);
+    return NextResponse.json(
+      { error: fatalError, processed, ranked, filtered },
+      { status: 500 },
     );
+  }
 
-    // Stage 4 — write back
-    const writeFields: RankerWriteFields = {
-      score: composite_score,
-      rationale: rationaleResult.rationale,
-      outreach_hook: rationaleResult.outreach_hook || null,
-      nearest_branch_id,
-      distance_miles,
-      warm_for_customer_id,
-      ranked_at: new Date().toISOString(),
-    };
-    const w = await persistProject(admin, project.id, writeFields);
-    if (!w.ok) {
-      await writeLog(admin, 'error', {
-        message: `supabase write failed · ${project.id}`,
-        reason: 'supabase_write_failed',
-        project_id: project.id,
-      });
-      await markRunFailed(admin, runId, `supabase_write_failed: ${w.error}`);
-      return NextResponse.json({ error: 'supabase_write_failed' }, { status: 500 });
-    }
-
-    await writeLog(admin, 'score_assign', {
-      message: `${project.id} · score ${composite_score}${nearest_branch_code ? ` · branch ${nearest_branch_code}` : ''}`,
-      project_id: project.id,
-      score: composite_score,
-      nearest_branch_code,
-      components: stageComponentScores,
-      demoted: false,
+  if (timedOut) {
+    await writeLog(admin, 'error', {
+      message: `cycle_budget_exceeded · processed ${processed}/${queue.length}`,
+      reason: 'cycle_timeout',
     });
-    ranked++;
+    // Don't fail the run — mark success with partial progress so the next
+    // cycle can pick up the unranked tail (those rows still have score NULL).
   }
 
   // 7. Cycle close
@@ -776,6 +638,221 @@ export async function GET(req: Request) {
     filtered,
     latency_ms: Date.now() - t0,
   });
+}
+
+// ---------------------------------------------------------------------------
+// Per-project pipeline (Haiku triage → geo score → Sonnet rationale → write)
+// Returns one of four outcomes:
+//   - 'ranked'    — full pipeline succeeded, row updated with score + rationale
+//   - 'filtered'  — Haiku said no, row updated with score=0
+//   - 'soft'      — recoverable error (Sonnet 429, parse fail, etc.); row left
+//                    with score NULL so a future cycle re-ranks
+//   - 'fatal'     — supabase write failed; cycle should abort
+// ---------------------------------------------------------------------------
+
+type ProjectOutcome =
+  | { kind: 'ranked' }
+  | { kind: 'filtered' }
+  | { kind: 'soft' }
+  | { kind: 'fatal'; error?: string };
+
+async function processOneProject(args: {
+  admin: Admin;
+  project: Project;
+  branches: Branch[];
+  customers: Customer[];
+  branchById: Map<string, Branch>;
+  customerById: Map<string, Customer>;
+}): Promise<ProjectOutcome> {
+  const { admin, project, branches, customers, branchById, customerById } = args;
+
+  // Stage 1 — Haiku triage
+  let classify: ClassifyResult;
+  try {
+    classify = await classifyOpportunity(project);
+  } catch (err) {
+    await writeLog(admin, 'error', {
+      message: `classifier failed · ${project.id} · ${(err as Error).message}`,
+      reason: 'unexpected_error',
+      project_id: project.id,
+    });
+    return { kind: 'soft' };
+  }
+
+  if (classify.decision === null) {
+    const reason =
+      classify.reason === 'rate_limited' ? 'anthropic_rate_limited' : 'anthropic_parse_failed';
+    await writeLog(admin, 'error', {
+      message:
+        reason === 'anthropic_rate_limited'
+          ? 'haiku 429 · backoff exhausted'
+          : 'haiku parse failed',
+      reason,
+      project_id: project.id,
+    });
+    return { kind: 'soft' };
+  }
+
+  await writeLog(
+    admin,
+    'model_route',
+    {
+      message: `multi-model route · ${HAIKU_MODEL} for triage · ${classify.latency_ms}ms`,
+      stage: 'triage',
+      project_id: project.id,
+    },
+    { model_used: HAIKU_MODEL, latency_ms: classify.latency_ms },
+  );
+
+  if (classify.decision === 'no') {
+    const writeFields: RankerWriteFields = {
+      score: 0,
+      rationale: 'Filtered as non-opportunity by classifier',
+      outreach_hook: null,
+      nearest_branch_id: null,
+      distance_miles: null,
+      warm_for_customer_id: null,
+      ranked_at: new Date().toISOString(),
+    };
+    const w = await persistProject(admin, project.id, writeFields);
+    if (!w.ok) {
+      await writeLog(admin, 'error', {
+        message: `supabase write failed · ${project.id}`,
+        reason: 'supabase_write_failed',
+        project_id: project.id,
+      });
+      return { kind: 'fatal', error: `supabase_write_failed: ${w.error}` };
+    }
+    await writeLog(admin, 'score_assign', {
+      message: `${project.id} · score 0 · demoted by classifier`,
+      project_id: project.id,
+      score: 0,
+      nearest_branch_code: null,
+      components: { branch_fit: 0, stage_fit: 0, value: 0, adjacency: 0 },
+      demoted: true,
+    });
+    return { kind: 'filtered' };
+  }
+
+  // Stage 2 — geographic scoring (deterministic, free)
+  let scoring;
+  let nearest_branch_id: string | null = null;
+  let distance_miles: number | null = null;
+  let warm_for_customer_id: string | null = null;
+  let composite_score = 0;
+  let nearest_branch_code: string | null = null;
+  let stageComponentScores = { branch_fit: 0, stage_fit: 0, value: 0, adjacency: 0 };
+
+  if (project.lat == null || project.lon == null || branches.length === 0) {
+    const stageBoost = (() => {
+      const s = (project.project_stage ?? '').trim().toUpperCase();
+      if (s === 'RFP') return 90;
+      if (s === 'PRE') return 75;
+      if (s === 'PLN') return 55;
+      if (s === 'NWS') return 35;
+      return 50;
+    })();
+    composite_score = Math.min(60, Math.round(0.3 * stageBoost + 0.2 * 0));
+    stageComponentScores = { branch_fit: 0, stage_fit: stageBoost, value: 0, adjacency: 0 };
+  } else {
+    try {
+      scoring = scoreProject({ project, branches, customers });
+      nearest_branch_id = scoring.nearest_branch_id;
+      distance_miles = scoring.distance_miles;
+      warm_for_customer_id = scoring.warm_for_customer_id;
+      composite_score = scoring.composite_score;
+      nearest_branch_code = branchById.get(scoring.nearest_branch_id)?.code ?? null;
+      stageComponentScores = {
+        branch_fit: scoring.geo_score,
+        stage_fit: scoring.stage_score,
+        value: 0,
+        adjacency: scoring.customer_score,
+      };
+    } catch (err) {
+      await writeLog(admin, 'error', {
+        message: `score recompute failed · ${project.id} · ${(err as Error).message}`,
+        reason: 'score_recompute_failed',
+        project_id: project.id,
+      });
+      return { kind: 'soft' };
+    }
+  }
+
+  // Stage 3 — Sonnet rationale + outreach hook
+  const branch = nearest_branch_id ? branchById.get(nearest_branch_id) ?? null : null;
+  const warmCustomer = warm_for_customer_id
+    ? customerById.get(warm_for_customer_id) ?? null
+    : null;
+
+  let rationaleResult: RationaleResult;
+  try {
+    rationaleResult = await generateRationale({ project, branch, warmCustomer, distance_miles });
+  } catch (err) {
+    await writeLog(admin, 'error', {
+      message: `sonnet failed · ${project.id} · ${(err as Error).message}`,
+      reason: 'unexpected_error',
+      project_id: project.id,
+    });
+    return { kind: 'soft' };
+  }
+
+  if (rationaleResult.reason) {
+    const reason =
+      rationaleResult.reason === 'rate_limited'
+        ? 'anthropic_rate_limited'
+        : 'anthropic_parse_failed';
+    await writeLog(admin, 'error', {
+      message:
+        reason === 'anthropic_rate_limited'
+          ? 'sonnet 429 · backoff exhausted'
+          : 'sonnet parse failed',
+      reason,
+      project_id: project.id,
+    });
+    return { kind: 'soft' };
+  }
+
+  await writeLog(
+    admin,
+    'rationale_generate',
+    {
+      message: `rationale generated · ${project.id} · ${rationaleResult.outreach_hook ? 'with hook' : 'no hook'}`,
+      project_id: project.id,
+      paragraph_count: rationaleResult.rationale.split(/\n\n+/).length,
+      hook_length: rationaleResult.outreach_hook.length,
+    },
+    { model_used: SONNET_MODEL, latency_ms: rationaleResult.latency_ms },
+  );
+
+  // Stage 4 — write back
+  const writeFields: RankerWriteFields = {
+    score: composite_score,
+    rationale: rationaleResult.rationale,
+    outreach_hook: rationaleResult.outreach_hook || null,
+    nearest_branch_id,
+    distance_miles,
+    warm_for_customer_id,
+    ranked_at: new Date().toISOString(),
+  };
+  const w = await persistProject(admin, project.id, writeFields);
+  if (!w.ok) {
+    await writeLog(admin, 'error', {
+      message: `supabase write failed · ${project.id}`,
+      reason: 'supabase_write_failed',
+      project_id: project.id,
+    });
+    return { kind: 'fatal', error: `supabase_write_failed: ${w.error}` };
+  }
+
+  await writeLog(admin, 'score_assign', {
+    message: `${project.id} · score ${composite_score}${nearest_branch_code ? ` · branch ${nearest_branch_code}` : ''}`,
+    project_id: project.id,
+    score: composite_score,
+    nearest_branch_code,
+    components: stageComponentScores,
+    demoted: false,
+  });
+  return { kind: 'ranked' };
 }
 
 async function markRunFailed(admin: Admin, runId: number, error_message: string): Promise<void> {
