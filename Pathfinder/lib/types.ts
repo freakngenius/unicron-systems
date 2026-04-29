@@ -100,6 +100,39 @@ export interface AdjacentTarget {
   surfaced_at: string;
 }
 
+// Outreach drafts (P0-02) — written by the Outreach agent in
+// lib/outreach.ts + app/api/cron/outreach/route.ts. Mirrors
+// supabase/migrations/0010_outreach_drafts.sql.
+
+export type OutreachChannel = 'email' | 'linkedin' | 'voicemail';
+export type OutreachStatus = 'draft' | 'sent' | 'dismissed';
+
+export interface OutreachDraft {
+  id: number;
+  project_id: string;
+  channel: OutreachChannel;
+  recipient_name: string | null;
+  recipient_title: string | null;
+  recipient_contact: string | null;
+  // Email subject — null for linkedin / voicemail per the schema-level CHECK.
+  draft_subject: string | null;
+  draft_body: string;
+  // The Ranker may already have flagged a warm-intro path on the project row
+  // via warm_for_customer_id. Outreach copies that forward when it generates
+  // copy that mentions the relationship. Null when no warm path exists.
+  warm_intro_via: string | null;
+  word_count: number | null;
+  char_count: number | null;
+  // Each warning is a tag like "email_word_count_out_of_range" or
+  // "dash_substituted" — see lib/outreach.ts for the canonical list.
+  verifier_warnings: string[];
+  model_used: string | null;
+  sent_status: OutreachStatus;
+  draft_at: string;
+  sent_at: string | null;
+  dismissed_at: string | null;
+}
+
 // Database type bag for the typed Supabase client.
 export interface PathfinderDatabase {
   pathfinder: {
@@ -110,6 +143,15 @@ export interface PathfinderDatabase {
       agent_log: { Row: AgentLogRow; Insert: Omit<AgentLogRow, 'id' | 'ts'> & { id?: number; ts?: string }; Update: Partial<AgentLogRow>; Relationships: [] };
       agent_runs: { Row: AgentRun; Insert: Omit<AgentRun, 'id' | 'started_at'> & { id?: number; started_at?: string }; Update: Partial<AgentRun>; Relationships: [] };
       adjacent_targets: { Row: AdjacentTarget; Insert: Omit<AdjacentTarget, 'id' | 'surfaced_at'> & { id?: number; surfaced_at?: string }; Update: Partial<AdjacentTarget>; Relationships: [] };
+      outreach_drafts: {
+        Row: OutreachDraft;
+        Insert: Omit<OutreachDraft, 'id' | 'draft_at'> & {
+          id?: number;
+          draft_at?: string;
+        };
+        Update: Partial<OutreachDraft>;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;
