@@ -26,6 +26,8 @@ import { ActivityRail, AgentStatusRow, useEscalations, useHeaderHeight } from '.
 import { StatPopover, type StatBucket } from './StatPopover';
 import { EscalationPopover } from './EscalationPopover';
 import { ZoomControl, ZOOM_MIN, ZOOM_MAX, ZOOM_STEP } from './ZoomControl';
+import { IntelligenceChat } from './chat';
+import { buildSnapshot } from '@/lib/chat/context';
 import { PATHFINDER_DARK_STYLE } from '@/lib/map-style';
 import { projectTier } from '@/lib/types-map';
 import { useHidden } from '@/lib/user-prefs';
@@ -82,6 +84,7 @@ export function Dashboard({ initialBranches, initialCustomers, initialProjects }
   const [cardHidden, setCardHidden] = React.useState(false);
   const [statBucket, setStatBucket] = React.useState<StatBucket | null>(null);
   const [escalationOpen, setEscalationOpen] = React.useState(false);
+  const [chatOpen, setChatOpen] = React.useState(false);
   const escalations = useEscalations();
 
   const handleSelectBranch = React.useCallback((id: string | null) => {
@@ -428,6 +431,8 @@ export function Dashboard({ initialBranches, initialCustomers, initialProjects }
           escalationCount={escalations.length}
           escalationOpen={escalationOpen}
           onEscalationClick={() => setEscalationOpen((v) => !v)}
+          chatOpen={chatOpen}
+          onChatToggle={() => setChatOpen((v) => !v)}
         />
         <AgentStatusRow />
         <BranchDock
@@ -492,6 +497,30 @@ export function Dashboard({ initialBranches, initialCustomers, initialProjects }
         )}
 
         <ActivityRail open={activityOpen} setOpen={setActivityOpen} />
+
+        {/* Intelligence Chat panel — slides in from the right when open.
+            ProjectList sits at right:16. The chat panel sits at right:0
+            with width 420px and pushes ProjectList visually via z-order
+            (chat is z=80, ProjectList is below). The map and other chrome
+            don't reflow; ProjectList is always visible at right:16 but
+            covered when chat is open. Plan § 5.1. */}
+        <IntelligenceChat
+          open={chatOpen}
+          onClose={() => setChatOpen(false)}
+          snapshot={buildSnapshot({
+            view: 'dashboard',
+            selectedBranchId,
+            openProjectId,
+            sourceFilter: source,
+            crossPoll,
+            filteredProjects,
+            totalProjects: totalForHeader,
+            hiddenProjectIds: Array.from(hidden),
+          })}
+          branches={initialBranches}
+          projects={initialProjects}
+          customers={initialCustomers}
+        />
       </APIProvider>
     </div>
   );

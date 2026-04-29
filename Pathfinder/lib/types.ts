@@ -148,6 +148,113 @@ export interface LeadAction {
   updated_at: string;
 }
 
+// Outreach drafts (P0-02) — written by the Outreach agent in
+// lib/outreach.ts + app/api/cron/outreach/route.ts. Mirrors
+// supabase/migrations/0010_outreach_drafts.sql.
+
+export type OutreachChannel = 'email' | 'linkedin' | 'voicemail';
+export type OutreachStatus = 'draft' | 'sent' | 'dismissed';
+
+export interface OutreachDraft {
+  id: number;
+  project_id: string;
+  channel: OutreachChannel;
+  recipient_name: string | null;
+  recipient_title: string | null;
+  recipient_contact: string | null;
+  // Email subject — null for linkedin / voicemail per the schema-level CHECK.
+  draft_subject: string | null;
+  draft_body: string;
+  // The Ranker may already have flagged a warm-intro path on the project row
+  // via warm_for_customer_id. Outreach copies that forward when it generates
+  // copy that mentions the relationship. Null when no warm path exists.
+  warm_intro_via: string | null;
+  word_count: number | null;
+  char_count: number | null;
+  // Each warning is a tag like "email_word_count_out_of_range" or
+  // "dash_substituted" — see lib/outreach.ts for the canonical list.
+  verifier_warnings: string[];
+  model_used: string | null;
+  sent_status: OutreachStatus;
+  draft_at: string;
+  sent_at: string | null;
+  dismissed_at: string | null;
+}
+
+// Intelligence Chat (P0-01) — see docs/PLAN-P0-01-INTELLIGENCE-CHAT.md.
+// Mirrors supabase/migrations/0009_chat.sql.
+
+export type ChatMessageRole = 'user' | 'assistant' | 'system';
+
+export type ChatMessageKind =
+  | 'text'
+  | 'outreach_draft'
+  | 'action_result'
+  | 'error';
+
+export interface ChatThread {
+  id: string;
+  user_email: string;
+  context_key: string;
+  context_label: string;
+  context_snapshot: Record<string, unknown>;
+  created_at: string;
+  last_message_at: string;
+}
+
+export interface ChatMessage {
+  id: number;
+  thread_id: string;
+  role: ChatMessageRole;
+  kind: ChatMessageKind;
+  content: string;
+  payload: Record<string, unknown>;
+  model_used: string | null;
+  latency_ms: number | null;
+  created_at: string;
+}
+
+export interface ChatSourceCitation {
+  url: string;
+  title: string;
+}
+
+export interface ChatTablesQueried {
+  table: string;
+  rowsRead: number;
+}
+
+// Snapshot the dashboard passes to the chat backend so the assistant knows
+// what the user is currently looking at. The server re-fetches the rows
+// referenced by IDs — never trust client-supplied row data.
+export interface ChatContextSnapshot {
+  view: 'dashboard' | 'project_modal' | 'settings';
+  selectedBranchId: string | null;
+  openProjectId: string | null;
+  sourceFilter: string;
+  crossPoll: boolean;
+  filteredProjectIds: string[];
+  totalProjects: number;
+  hiddenProjectIds: string[];
+  timestamp: string;
+}
+
+// Action IDs the chat can dispatch. Wired set runs end-to-end on this
+// branch; deferred set returns 501 with the audit row pattern in
+// PLAN-P0-01-INTELLIGENCE-CHAT.md § 8.
+export type ChatActionId =
+  // Wired
+  | 'copy_draft'
+  | 'save_draft'
+  | 'regenerate_draft'
+  | 'export_csv'
+  | 'summarize_pipeline'
+  // Deferred — write audit row, surface "queued / saved for sync" reply
+  | 'accept_lead_to_hubspot'
+  | 'push_to_pipeline'
+  | 'schedule_followup'
+  | 'add_note';
+
 // Slack workspace install (added 0012_slack_workspaces). One row per
 // customer Slack workspace. bot_token is sensitive — never read by the
 // anon client; only `lib/slack/bot.ts` (server-side, service-role) reads
@@ -206,6 +313,7 @@ export interface SlackMessageRow {
   resolved_action: SlackResolvedAction | null;
 }
 
+
 // Database type bag for the typed Supabase client.
 export interface PathfinderDatabase {
   pathfinder: {
@@ -217,6 +325,34 @@ export interface PathfinderDatabase {
       agent_runs: { Row: AgentRun; Insert: Omit<AgentRun, 'id' | 'started_at'> & { id?: number; started_at?: string }; Update: Partial<AgentRun>; Relationships: [] };
       adjacent_targets: { Row: AdjacentTarget; Insert: Omit<AdjacentTarget, 'id' | 'surfaced_at'> & { id?: number; surfaced_at?: string }; Update: Partial<AdjacentTarget>; Relationships: [] };
       lead_actions: { Row: LeadAction; Insert: Omit<LeadAction, 'id' | 'created_at' | 'updated_at'> & { id?: number; created_at?: string; updated_at?: string }; Update: Partial<LeadAction>; Relationships: [] };
+      outreach_drafts: {
+        Row: OutreachDraft;
+        Insert: Omit<OutreachDraft, 'id' | 'draft_at'> & {
+          id?: number;
+          draft_at?: string;
+        };
+        Update: Partial<OutreachDraft>;
+        Relationships: [];
+      };
+      chat_threads: {
+        Row: ChatThread;
+        Insert: Omit<ChatThread, 'id' | 'created_at' | 'last_message_at'> & {
+          id?: string;
+          created_at?: string;
+          last_message_at?: string;
+        };
+        Update: Partial<ChatThread>;
+        Relationships: [];
+      };
+      chat_messages: {
+        Row: ChatMessage;
+        Insert: Omit<ChatMessage, 'id' | 'created_at'> & {
+          id?: number;
+          created_at?: string;
+        };
+        Update: Partial<ChatMessage>;
+        Relationships: [];
+      };
       slack_workspaces: { Row: SlackWorkspace; Insert: Omit<SlackWorkspace, 'installed_at'> & { installed_at?: string }; Update: Partial<SlackWorkspace>; Relationships: [] };
       slack_branch_routes: { Row: SlackBranchRoute; Insert: Omit<SlackBranchRoute, 'created_at' | 'updated_at'> & { created_at?: string; updated_at?: string }; Update: Partial<SlackBranchRoute>; Relationships: [] };
       slack_messages: { Row: SlackMessageRow; Insert: Omit<SlackMessageRow, 'id' | 'posted_at'> & { id?: number; posted_at?: string }; Update: Partial<SlackMessageRow>; Relationships: [] };
