@@ -26,6 +26,11 @@ import {
   draftOutreach,
   type IterationIntent,
 } from '@/lib/chat/outreach-drafter';
+import {
+  parseTablesFooter,
+  stripStreamingFooter,
+  stripTrailingTablesLine,
+} from '@/lib/chat/footer';
 import type {
   Branch,
   ChatContextSnapshot,
@@ -294,16 +299,8 @@ async function hydrateContext(snapshot: ChatContextSnapshot): Promise<Hydrated> 
   return { project, branch, warmCustomer, filteredProjects, allBranches };
 }
 
-// ── Provenance footer parsing (Sonar emits `TABLES: ...` at end) ─────────
-
-function parseTablesFooter(text: string): string[] {
-  const m = text.match(/TABLES:\s*([^\n]+)$/m);
-  if (!m) return [];
-  return m[1]
-    .split(',')
-    .map((s) => s.trim().replace(/^pathfinder\./, ''))
-    .filter((s) => s.length > 0);
-}
+// Provenance footer parsing lives in lib/chat/footer.ts (extracted for
+// unit testing). See __tests__/chat/footer.test.ts for the matrix.
 
 // ── Sonar query construction (handles every default-path turn) ───────────
 //
@@ -330,7 +327,9 @@ function buildSonarSystemPrompt(args: {
     `- When the question is about external context (news, contractor history, market trends), use web search and cite sources.`,
     `- When you don't have data to answer, say so plainly. Never fabricate.`,
     ``,
-    `At the very end of your response, on its own line, write "TABLES:" followed by a comma-separated list of pathfinder.* tables you reasoned over (e.g., "TABLES: projects, branches"). The host strips this line for display and renders it as a structured provenance footer. If you used no internal tables, write "TABLES: (none)".`,
+    `Provenance footer (REQUIRED, exact format): The very last line of your response must be exactly:`,
+    `  TABLES: name1, name2`,
+    `(comma-separated list of pathfinder.* tables you reasoned over, no "pathfinder." prefix). Do NOT format this line as a markdown header (no "##", no "**", no "---" rule above it). Do NOT label it "Tables Used:" or similar — exactly "TABLES:" followed by the list. If you used no internal tables, write "TABLES: (none)". The host strips this exact line and renders it as a structured footer.`,
     ``,
     `── PATHFINDER CONTEXT ──`,
   ];
@@ -579,7 +578,7 @@ export async function POST(req: NextRequest): Promise<Response> {
           })) {
             if (ev.type === 'delta') {
               acc += ev.text;
-              const safe = stripTablesFooter(ev.text, acc);
+              const safe = stripStreamingFooter(ev.text, acc);
               if (safe.length > 0) {
                 controller.enqueue(sseChunk({ type: 'delta', text: safe }));
               }
@@ -641,25 +640,7 @@ function workflowActionPrompt(): string {
   return 'Pick an action below. CSV export and pipeline summary run instantly. HubSpot push and scheduled follow-up are queued for when those integrations land.';
 }
 
-function stripTablesFooter(delta: string, accumulated: string): string {
-  // If the accumulated stream now contains "TABLES:" (header for the
-  // structured footer the model emits at the end), suppress everything
-  // from there onward. The current `delta` is what we just received.
-  const tablesIdx = accumulated.lastIndexOf('TABLES:');
-  if (tablesIdx < 0) return delta;
-  const accBefore = accumulated.slice(0, tablesIdx);
-  const visibleSoFar = accBefore.length;
-  // delta arrived AFTER `accBefore` was already streamed. The portion of
-  // `delta` we should keep is whatever overlaps with the visible region.
-  const accLength = accumulated.length;
-  const deltaStart = accLength - delta.length;
-  if (deltaStart >= visibleSoFar) return ''; // entirely after the footer
-  return delta.slice(0, visibleSoFar - deltaStart);
-}
-
-function stripTrailingTablesLine(text: string): string {
-  return text.replace(/\n?TABLES:\s*[^\n]*\s*$/m, '');
-}
+// Streaming-strip and trailing-strip helpers live in lib/chat/footer.ts.
 
 // ── GET handler ────────────────────────────────────────────────────────────
 

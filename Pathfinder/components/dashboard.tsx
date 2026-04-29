@@ -520,6 +520,13 @@ export function Dashboard({ initialBranches, initialCustomers, initialProjects }
           branches={initialBranches}
           projects={initialProjects}
           customers={initialCustomers}
+          onOpenProject={(projectId) => {
+            // Click on `sam.gov:...` chip inside chat → open the project modal.
+            // Verify the ID exists in the loaded set so we don't open a ghost.
+            if (initialProjects.some((p) => p.id === projectId)) {
+              setOpenProjectId(projectId);
+            }
+          }}
         />
       </APIProvider>
     </div>
