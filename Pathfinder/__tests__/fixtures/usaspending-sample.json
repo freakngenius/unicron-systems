@@ -1,0 +1,37 @@
+{
+  "id": "USA-CONT-AWD-VA12-2026-001234",
+  "generated_unique_award_id": "CONT_AWD_VA12_2026_001234",
+  "type": "A",
+  "type_description": "BPA Call",
+  "recipient_name": "Acme Construction Corp",
+  "recipient_unique_id": "ABC123XYZ4567",
+  "recipient_uei": "ABC123XYZ4567",
+  "awarding_agency": {
+    "id": 79,
+    "toptier_agency": {
+      "name": "Department of Veterans Affairs",
+      "code": "036"
+    },
+    "subtier_agency": {
+      "name": "Veterans Health Administration",
+      "code": "VHA"
+    },
+    "office_agency_name": "VA Houston Procurement Office"
+  },
+  "funding_agency": {
+    "toptier_agency": { "name": "Department of Veterans Affairs" }
+  },
+  "period_of_performance": {
+    "start_date": "2026-05-01",
+    "end_date": "2027-04-30"
+  },
+  "place_of_performance": {
+    "location_country_code": "USA",
+    "state_code": "TX",
+    "city_name": "Houston",
+    "zip5": "77030"
+  },
+  "obligated_amount": 4500000,
+  "base_and_all_options_value": 4500000,
+  "naics_code": "238210"
+}

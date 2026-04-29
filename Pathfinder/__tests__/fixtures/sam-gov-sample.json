@@ -1,0 +1,33 @@
+{
+  "noticeId": "abcdef0123456789abcdef0123456789",
+  "title": "Perimeter Security System Upgrade — VA Houston Medical Center",
+  "type": "Combined Synopsis/Solicitation",
+  "department": "Department of Veterans Affairs",
+  "subTier": "Veterans Health Administration",
+  "office": "Network Contracting Office 16",
+  "naicsCode": "238210",
+  "classificationCode": "Y1DA",
+  "postedDate": "2026-04-15",
+  "responseDeadline": "2026-05-15T17:00:00Z",
+  "placeOfPerformance": {
+    "city": { "name": "Houston" },
+    "state": { "code": "TX" },
+    "country": { "code": "USA" }
+  },
+  "pointOfContact": [
+    {
+      "fullName": "Jane Smith",
+      "title": "Contracting Officer",
+      "email": "jane.smith@va.gov",
+      "phone": "713-555-0100"
+    },
+    {
+      "fullName": "Robert Johnson",
+      "title": "Contract Specialist",
+      "email": "robert.johnson@va.gov",
+      "phone": "713-555-0101"
+    }
+  ],
+  "active": "Yes",
+  "url": "https://sam.gov/opp/abcdef0123456789abcdef0123456789/view"
+}
