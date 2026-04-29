@@ -41,7 +41,7 @@ export default function StatusFilterBar({
         const className = [
           styles.pill,
           styles.filterPill,
-          item.pillClass ?? '',
+          item.pillClass ?? styles.filterPillAll,
           isActive ? styles.pillActive : '',
         ]
           .filter(Boolean)
@@ -55,10 +55,11 @@ export default function StatusFilterBar({
             className={className}
             data-testid={`filter-${item.key}`}
           >
+            {item.pillClass ? (
+              <span className={styles.pillDot} aria-hidden="true" />
+            ) : null}
             {item.label}
-            <span className={`${styles.mono} ${styles.count}`}>
-              {counts[item.key]}
-            </span>
+            <span className={styles.count}>{counts[item.key]}</span>
           </button>
         );
       })}
