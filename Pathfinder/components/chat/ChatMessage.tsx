@@ -11,6 +11,7 @@
 
 import * as React from 'react';
 import type { ChatMessage as ChatMessageRow, ChatSourceCitation } from '@/lib/types';
+import { MarkdownBody } from './MarkdownBody';
 
 const PF = {
   ink: '#0a0a0a',
@@ -44,9 +45,11 @@ export interface ChatMessageProps {
   message: ChatMessageRow;
   threadId: string;
   onAction: (action: string, params: Record<string, unknown>) => void;
+  /** Optional click handler for inline-code project-id refs in markdown. */
+  onProjectClick?: (projectId: string) => void;
 }
 
-export function ChatMessage({ message, threadId, onAction }: ChatMessageProps) {
+export function ChatMessage({ message, threadId, onAction, onProjectClick }: ChatMessageProps) {
   if (message.kind === 'outreach_draft' && message.payload?.bundle) {
     return (
       <OutreachBundleCard
@@ -63,12 +66,18 @@ export function ChatMessage({ message, threadId, onAction }: ChatMessageProps) {
   if (message.kind === 'error') {
     return <ErrorBubble text={message.content} />;
   }
-  return <TextBubble message={message} />;
+  return <TextBubble message={message} onProjectClick={onProjectClick} />;
 }
 
 // ── Text bubble ────────────────────────────────────────────────────────────
 
-function TextBubble({ message }: { message: ChatMessageRow }) {
+function TextBubble({
+  message,
+  onProjectClick,
+}: {
+  message: ChatMessageRow;
+  onProjectClick?: (projectId: string) => void;
+}) {
   const isUser = message.role === 'user';
   const sources = (message.payload?.sources as ChatSourceCitation[] | undefined) ?? [];
   const tables = (message.payload?.tables as string[] | undefined) ?? [];
@@ -88,15 +97,19 @@ function TextBubble({ message }: { message: ChatMessageRow }) {
         {isUser ? 'You' : 'Pathfinder'}
         {degraded && <span style={{ marginLeft: 6, color: PF.warm }}>· degraded</span>}
       </div>
-      <div
-        className="pf-body"
-        style={{
-          whiteSpace: 'pre-wrap',
-          wordBreak: 'break-word',
-        }}
-      >
-        {message.content}
-      </div>
+      {/* User turns are short and don't contain markdown — render plain.
+          Assistant turns get full markdown rendering (tables, bold, code,
+          lists, project-id links) via MarkdownBody. */}
+      {isUser ? (
+        <div
+          className="pf-body"
+          style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
+        >
+          {message.content}
+        </div>
+      ) : (
+        <MarkdownBody text={message.content} onProjectClick={onProjectClick} />
+      )}
       {(sources.length > 0 || tables.length > 0) && (
         <ProvenanceFooter sources={sources} tables={tables} />
       )}

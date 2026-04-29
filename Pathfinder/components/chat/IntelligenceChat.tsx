@@ -57,6 +57,10 @@ export interface IntelligenceChatProps {
   // For future use; included so the warm-customer hook can render in the
   // indicator. Currently not consumed beyond keeping the prop typed.
   customers?: Pick<Customer, 'id' | 'name'>[];
+  // When set, inline-code project IDs in markdown become clickable and
+  // call this on click — the dashboard wires this to setOpenProjectId,
+  // so a click in chat opens the project modal underneath.
+  onOpenProject?: (projectId: string) => void;
 }
 
 export function IntelligenceChat({
@@ -65,6 +69,7 @@ export function IntelligenceChat({
   snapshot,
   branches,
   projects,
+  onOpenProject,
 }: IntelligenceChatProps) {
   const contextKey = React.useMemo(() => buildContextKey(snapshot), [snapshot]);
   const contextLabel = React.useMemo(
@@ -405,6 +410,7 @@ export function IntelligenceChat({
             message={m}
             threadId={thread?.id ?? ''}
             onAction={dispatchAction}
+            onProjectClick={onOpenProject}
           />
         ))}
         {streaming && (
