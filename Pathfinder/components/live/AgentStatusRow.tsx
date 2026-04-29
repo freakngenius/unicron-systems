@@ -43,7 +43,11 @@ export function AgentStatusRow({ initialCollapsed = true }: AgentStatusRowProps)
     setHeaderHeight(76 + TOTAL + 16);
   }, [TOTAL]);
 
-  const cellOrder: AgentName[] = ['ingestor', 'ranker', 'verifier', 'adjacent'];
+  // 5-cell single row per Kyle 2026-04-28. Outreach sits between Verifier
+  // and Adjacent (it's the next-after-verify step in the agent pipeline).
+  // 5 × 20% width holds at 1280px+; if a future tier adds more cells, the
+  // row drops to a 2-row grid (Layer 2 Liveness's job, see file header).
+  const cellOrder: AgentName[] = ['ingestor', 'ranker', 'verifier', 'outreach', 'adjacent'];
 
   return (
     <div

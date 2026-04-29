@@ -5,13 +5,14 @@
 // Streams the rationale char-by-char on first open via Stream 4's <Typewriter />.
 
 import * as React from 'react';
-import type { Branch, Project } from '@/lib/types';
+import type { Branch, OutreachDraft, Project } from '@/lib/types';
 import { ScoreChip, StarIcon, VerifierBadge } from './ProjectList';
 import { isFirstOpen, markSeen, Typewriter, useRailHeight } from './live';
 import { useStarred, toggleStar } from '@/lib/user-prefs';
 import { stageLabel, stagesEnumerated } from '@/lib/stages';
 import { sourceLabel, sourcesEnumerated } from '@/lib/sources';
 import { useScoringConfig } from '@/lib/scoring-config';
+import { useOutreachDraftsForProject } from '@/lib/outreach-drafts-client';
 import { Tooltip } from './Tooltip';
 
 // Width applied to every project-detail tooltip — Stage's full taxonomy
@@ -65,6 +66,7 @@ export function ProjectModal({ project, branch, onClose }: ProjectModalProps) {
   const hi = (project.score ?? 0) >= (high_priority_threshold || HI_THRESHOLD_FALLBACK);
   const starredSet = useStarred();
   const isStarred = starredSet.has(project.id);
+  const { drafts: outreachDrafts, loading: draftsLoading } = useOutreachDraftsForProject(project.id);
 
   const rationale =
     project.rationale ??
@@ -321,6 +323,10 @@ export function ProjectModal({ project, branch, onClose }: ProjectModalProps) {
             </div>
           </Section>
 
+          <Section title="Outreach drafts" sub={draftsSub(outreachDrafts, draftsLoading)}>
+            <OutreachDraftsBlock drafts={outreachDrafts} loading={draftsLoading} />
+          </Section>
+
           <Section title="Source record" sub={sourceDisplay}>
             {sourceUrl ? (
               <a
@@ -457,6 +463,150 @@ function formatValue(v: number | null): string {
   if (v >= 1_000_000) return `$${(v / 1_000_000).toFixed(1)}M`;
   if (v >= 1_000) return `$${(v / 1_000).toFixed(0)}K`;
   return `$${v.toFixed(0)}`;
+}
+
+// ────────────────────────────────────────────────────────────────────
+// Outreach drafts section — view-only renderer for the three channels
+// (email + linkedin + voicemail) the Outreach Drafter agent produced.
+// Iterating, regenerating, and sending drafts ships with the
+// Intelligence Chat panel; this section is a pure read surface.
+// ────────────────────────────────────────────────────────────────────
+
+function draftsSub(drafts: OutreachDraft[], loading: boolean): string {
+  if (loading) return 'loading…';
+  if (drafts.length === 0) return 'pending · 15,45 cron';
+  // Drafts are ordered by channel asc then draft_at desc; latest cycle's
+  // three rows lead. Surface that timestamp in the sub-label so reviewers
+  // see how fresh the copy is.
+  const latest = drafts.reduce((max, d) => (d.draft_at > max ? d.draft_at : max), drafts[0].draft_at);
+  return `latest · ${relativeTime(latest)}`;
+}
+
+function OutreachDraftsBlock({ drafts, loading }: { drafts: OutreachDraft[]; loading: boolean }) {
+  if (loading) {
+    return (
+      <p className="pf-body" style={{ margin: 0, color: PF.inkDim }}>
+        Loading drafts…
+      </p>
+    );
+  }
+  if (drafts.length === 0) {
+    return (
+      <p className="pf-body" style={{ margin: 0, color: PF.inkDim }}>
+        No drafts yet. The Outreach agent runs at 15 and 45 past every hour
+        and writes within ~30 minutes of verification.
+      </p>
+    );
+  }
+  // Group by channel and show the most recent draft per channel. The cron
+  // writes one row per channel per cycle; subsequent iterations (chat
+  // panel) will append additional rows. We always display the latest.
+  const byChannel = pickLatestPerChannel(drafts);
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      {byChannel.email && <DraftCard draft={byChannel.email} />}
+      {byChannel.linkedin && <DraftCard draft={byChannel.linkedin} />}
+      {byChannel.voicemail && <DraftCard draft={byChannel.voicemail} />}
+    </div>
+  );
+}
+
+function pickLatestPerChannel(drafts: OutreachDraft[]): {
+  email: OutreachDraft | null;
+  linkedin: OutreachDraft | null;
+  voicemail: OutreachDraft | null;
+} {
+  const out: { email: OutreachDraft | null; linkedin: OutreachDraft | null; voicemail: OutreachDraft | null } = {
+    email: null,
+    linkedin: null,
+    voicemail: null,
+  };
+  for (const d of drafts) {
+    const cur = out[d.channel];
+    if (!cur || d.draft_at > cur.draft_at) out[d.channel] = d;
+  }
+  return out;
+}
+
+const CHANNEL_LABEL: Record<OutreachDraft['channel'], string> = {
+  email: 'Email',
+  linkedin: 'LinkedIn DM',
+  voicemail: 'Voicemail (25 sec)',
+};
+
+function DraftCard({ draft }: { draft: OutreachDraft }) {
+  return (
+    <div
+      style={{
+        background: PF.bg,
+        border: `1px solid ${PF.ruleSoft}`,
+        borderRadius: 4,
+        padding: 12,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 8,
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'baseline',
+          justifyContent: 'space-between',
+          gap: 12,
+        }}
+      >
+        <span
+          className="pf-label"
+          style={{ fontSize: 9, color: PF.ink }}
+        >
+          {CHANNEL_LABEL[draft.channel]}
+        </span>
+        <span
+          className="pf-mono"
+          style={{ fontSize: 9, color: PF.inkDim, letterSpacing: '0.04em' }}
+        >
+          {draft.word_count ?? 0} words · {relativeTime(draft.draft_at)}
+        </span>
+      </div>
+      {draft.draft_subject && (
+        <div
+          className="pf-mono"
+          style={{
+            fontSize: 11,
+            color: PF.ink,
+            background: PF.bgAlt,
+            padding: '6px 8px',
+            borderRadius: 3,
+            wordBreak: 'break-word',
+          }}
+        >
+          Subject: {draft.draft_subject}
+        </div>
+      )}
+      <p
+        className="pf-body"
+        style={{
+          margin: 0,
+          color: PF.ink,
+          whiteSpace: 'pre-wrap',
+          fontSize: 12.5,
+          lineHeight: 1.5,
+        }}
+      >
+        {draft.draft_body}
+      </p>
+    </div>
+  );
+}
+
+function relativeTime(iso: string): string {
+  const ms = Date.now() - Date.parse(iso);
+  if (!Number.isFinite(ms) || ms < 0) return 'just now';
+  const sec = Math.floor(ms / 1000);
+  if (sec < 60) return `${sec}s ago`;
+  if (sec < 3600) return `${Math.floor(sec / 60)}m ago`;
+  if (sec < 86400) return `${Math.floor(sec / 3600)}h ago`;
+  return `${Math.floor(sec / 86400)}d ago`;
 }
 
 /** Sub-label shown next to the "Verifier" section title — short status hint. */

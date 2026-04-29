@@ -17,6 +17,7 @@ import { useStarred, useHidden, toggleStar, hideProject } from '@/lib/user-prefs
 import { stageLabel } from '@/lib/stages';
 import { sourceLabel } from '@/lib/sources';
 import { useScoringConfig } from '@/lib/scoring-config';
+import { useOutreachDraftCounts } from '@/lib/outreach-drafts-client';
 import { Tooltip } from './Tooltip';
 
 const PF = {
@@ -84,6 +85,9 @@ export function ProjectList({
   const [filterMode, setFilterMode] = React.useState<FilterMode>('all');
   const starred = useStarred();
   const hidden = useHidden();
+  // Hoisted to ProjectList (not per-row) so 50+ ProjectRow instances share
+  // a single fetch instead of N parallel ones on mount.
+  const { counts: draftCounts } = useOutreachDraftCounts();
 
   const visibleProjects = React.useMemo(() => {
     let arr = projects.filter((p) => !hidden.has(p.id));
@@ -247,6 +251,7 @@ export function ProjectList({
               onOpen={() => onOpen(p)}
               crossPoll={crossPoll}
               starred={starred.has(p.id)}
+              draftCount={draftCounts[p.id] ?? 0}
             />
           ))
         )}
@@ -304,11 +309,13 @@ function ProjectRow({
   onOpen,
   crossPoll,
   starred,
+  draftCount,
 }: {
   project: Project;
   onOpen: () => void;
   crossPoll: boolean;
   starred: boolean;
+  draftCount: number;
 }) {
   const justRanked = useJustRanked();
   const isJustRanked = justRanked.has(project.id);
@@ -387,26 +394,61 @@ function ProjectRow({
         <span className="pf-mono" style={{ fontSize: 10, color: PF.inkDim }}>
           {value}
         </span>
-        {showWarm && (
+        {(showWarm || draftCount > 0) && (
           <span
             style={{
               marginLeft: 'auto',
               display: 'inline-flex',
               alignItems: 'center',
-              gap: 4,
-              font: `600 9.5px ${PF.mono}`,
-              letterSpacing: '0.06em',
-              textTransform: 'uppercase',
-              color: PF.ink,
-              padding: '2px 6px',
-              borderRadius: 2,
-              background: PF.warmSoft,
+              gap: 6,
             }}
           >
-            <span
-              style={{ width: 5, height: 5, background: PF.warm, transform: 'rotate(45deg)' }}
-            />
-            warm
+            {draftCount > 0 && (
+              <span
+                className="pf-mono"
+                title={`${draftCount} outreach draft${draftCount === 1 ? '' : 's'} ready in modal`}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  font: `600 9.5px ${PF.mono}`,
+                  letterSpacing: '0.06em',
+                  textTransform: 'uppercase',
+                  color: PF.ink,
+                  padding: '2px 6px',
+                  borderRadius: 2,
+                  background: PF.hiSoft,
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {draftCount} draft{draftCount === 1 ? '' : 's'}
+              </span>
+            )}
+            {showWarm && (
+              <span
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 4,
+                  font: `600 9.5px ${PF.mono}`,
+                  letterSpacing: '0.06em',
+                  textTransform: 'uppercase',
+                  color: PF.ink,
+                  padding: '2px 6px',
+                  borderRadius: 2,
+                  background: PF.warmSoft,
+                }}
+              >
+                <span
+                  style={{
+                    width: 5,
+                    height: 5,
+                    background: PF.warm,
+                    transform: 'rotate(45deg)',
+                  }}
+                />
+                warm
+              </span>
+            )}
           </span>
         )}
       </div>
