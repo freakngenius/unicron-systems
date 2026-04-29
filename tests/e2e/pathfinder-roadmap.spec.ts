@@ -3,7 +3,7 @@ import { test, expect } from '@playwright/test';
 // Public, no-auth route — does not pass through /gate.
 
 test.describe('Pathfinder roadmap page', () => {
-  test('renders hero, all 47 cards, and 14 category sections at desktop', async ({
+  test('renders hero, all 60 cards, and 15 category sections at desktop', async ({
     page,
     baseURL,
   }) => {
@@ -15,10 +15,10 @@ test.describe('Pathfinder roadmap page', () => {
     await expect(page.getByRole('heading', { level: 1, name: 'Roadmap' })).toBeVisible();
 
     const cards = page.getByTestId('feature-card');
-    await expect(cards).toHaveCount(47);
+    await expect(cards).toHaveCount(60);
 
     const sections = page.getByTestId('category-section');
-    await expect(sections).toHaveCount(14);
+    await expect(sections).toHaveCount(15);
   });
 
   test('status filter pills filter the grid client-side', async ({
@@ -33,25 +33,25 @@ test.describe('Pathfinder roadmap page', () => {
     await page.getByTestId('filter-live').click();
     await expect(page.getByTestId('feature-card')).toHaveCount(10);
 
-    // Building → 7
+    // Building → 10
     await page.getByTestId('filter-building').click();
-    await expect(page.getByTestId('feature-card')).toHaveCount(7);
-
-    // Planned → 9
-    await page.getByTestId('filter-planned').click();
-    await expect(page.getByTestId('feature-card')).toHaveCount(9);
-
-    // Considering → 11
-    await page.getByTestId('filter-considering').click();
-    await expect(page.getByTestId('feature-card')).toHaveCount(11);
-
-    // Future → 10
-    await page.getByTestId('filter-future').click();
     await expect(page.getByTestId('feature-card')).toHaveCount(10);
 
-    // All → 47 again
+    // Planned → 10
+    await page.getByTestId('filter-planned').click();
+    await expect(page.getByTestId('feature-card')).toHaveCount(10);
+
+    // Considering → 14
+    await page.getByTestId('filter-considering').click();
+    await expect(page.getByTestId('feature-card')).toHaveCount(14);
+
+    // Future → 16
+    await page.getByTestId('filter-future').click();
+    await expect(page.getByTestId('feature-card')).toHaveCount(16);
+
+    // All → 60 again
     await page.getByTestId('filter-all').click();
-    await expect(page.getByTestId('feature-card')).toHaveCount(47);
+    await expect(page.getByTestId('feature-card')).toHaveCount(60);
   });
 
   test('mobile viewport renders without horizontal scroll', async ({ browser, baseURL }) => {
@@ -71,8 +71,8 @@ test.describe('Pathfinder roadmap page', () => {
     }));
     expect(dimensions.docWidth).toBeLessThanOrEqual(dimensions.viewportWidth);
 
-    // All 47 cards still render at mobile (just stacked).
-    await expect(page.getByTestId('feature-card')).toHaveCount(47);
+    // All 60 cards still render at mobile (just stacked).
+    await expect(page.getByTestId('feature-card')).toHaveCount(60);
 
     await context.close();
   });

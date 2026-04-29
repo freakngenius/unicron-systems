@@ -14,8 +14,8 @@ const VALID_STATUSES: RoadmapStatus[] = [
 ];
 
 describe('roadmapData', () => {
-  it('has at least 47 features (matches spec seed)', () => {
-    expect(roadmapData.features.length).toBeGreaterThanOrEqual(47);
+  it('has at least 60 features (matches current spec seed)', () => {
+    expect(roadmapData.features.length).toBeGreaterThanOrEqual(60);
   });
 
   it('every feature has a valid status', () => {
