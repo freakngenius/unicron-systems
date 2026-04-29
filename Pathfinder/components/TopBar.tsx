@@ -132,6 +132,186 @@ if (typeof document !== 'undefined' && !document.getElementById('pf-spin-kf')) {
   document.head.appendChild(s);
 }
 
+// Drawer transitions injected as a stylesheet so we can honor
+// `prefers-reduced-motion`. Inline-style transitions can't be media-queried;
+// these classes can.
+if (typeof document !== 'undefined' && !document.getElementById('pf-src-drawer-css')) {
+  const s = document.createElement('style');
+  s.id = 'pf-src-drawer-css';
+  s.textContent = `
+    .pf-src-chevron { transition: transform 160ms cubic-bezier(0.16, 1, 0.3, 1); }
+    .pf-src-pop { transition: opacity 160ms cubic-bezier(0.16, 1, 0.3, 1), transform 160ms cubic-bezier(0.16, 1, 0.3, 1); }
+    @media (prefers-reduced-motion: reduce) {
+      .pf-src-chevron, .pf-src-pop { transition: none !important; }
+    }
+  `;
+  document.head.appendChild(s);
+}
+
+function ChevronDownIcon({ open }: { open: boolean }) {
+  return (
+    <svg
+      width={9}
+      height={9}
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.6}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      className="pf-src-chevron"
+      style={{
+        transform: open ? 'rotate(180deg)' : 'rotate(0deg)',
+        marginLeft: 2,
+      }}
+    >
+      <path d="M3 6l5 5 5-5" />
+    </svg>
+  );
+}
+
+function CheckIcon() {
+  return (
+    <svg
+      width={11}
+      height={11}
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M3 8.5l3 3 7-7" />
+    </svg>
+  );
+}
+
+function SourcesDrawer({
+  source,
+  setSource,
+}: {
+  source: SourceKey;
+  setSource: (s: SourceKey) => void;
+}) {
+  const [open, setOpen] = React.useState(false);
+  const triggerRef = React.useRef<HTMLButtonElement | null>(null);
+  const popoverRef = React.useRef<HTMLDivElement | null>(null);
+
+  // Outside-click + ESC closes. Effect runs only while open so we don't
+  // attach/detach unnecessarily.
+  React.useEffect(() => {
+    if (!open) return;
+    function onPointer(e: MouseEvent) {
+      const t = e.target as Node | null;
+      if (!t) return;
+      if (popoverRef.current?.contains(t)) return;
+      if (triggerRef.current?.contains(t)) return;
+      setOpen(false);
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') {
+        setOpen(false);
+        triggerRef.current?.focus();
+      }
+    }
+    document.addEventListener('mousedown', onPointer);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onPointer);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  return (
+    <div style={{ position: 'relative', display: 'inline-flex' }}>
+      <button
+        ref={triggerRef}
+        type="button"
+        className="pf-pill"
+        onClick={() => setOpen((v) => !v)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-controls="topbar-sources-popover"
+        title="Filter projects by source"
+        style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+      >
+        Sources
+        <ChevronDownIcon open={open} />
+      </button>
+
+      <div
+        ref={popoverRef}
+        id="topbar-sources-popover"
+        role="listbox"
+        aria-label="Filter projects by source"
+        className="pf-src-pop"
+        style={{
+          position: 'absolute',
+          top: '100%',
+          left: 0,
+          marginTop: 6,
+          minWidth: 200,
+          background: PF.bg,
+          border: `1px solid ${PF.ruleSoft}`,
+          borderRadius: 5,
+          boxShadow:
+            '0 12px 32px rgba(10,10,10,0.16), 0 0 0 1px rgba(10,10,10,0.08)',
+          padding: 4,
+          zIndex: 10,
+          opacity: open ? 1 : 0,
+          transform: open ? 'translateY(0)' : 'translateY(-4px)',
+          pointerEvents: open ? 'auto' : 'none',
+        }}
+      >
+        {SOURCE_KEYS.map((s) => {
+          const active = source === s;
+          return (
+            <button
+              key={s}
+              type="button"
+              role="option"
+              aria-selected={active}
+              onClick={() => {
+                setSource(s);
+                setOpen(false);
+                triggerRef.current?.focus();
+              }}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 12,
+                padding: '8px 10px',
+                borderRadius: 3,
+                font: '500 12px/1 var(--font-inter), system-ui, sans-serif',
+                color: PF.ink,
+                background: 'transparent',
+                border: 0,
+                width: '100%',
+                textAlign: 'left',
+                cursor: 'pointer',
+                fontWeight: active ? 600 : 500,
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'rgba(10,10,10,0.05)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'transparent';
+              }}
+            >
+              <span>{SOURCE_LABELS[s]}</span>
+              {active ? <CheckIcon /> : <span style={{ width: 11 }} />}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export interface TopBarProps {
   source: SourceKey;
   setSource: (s: SourceKey) => void;
@@ -224,19 +404,7 @@ export function TopBar({
       </div>
 
       <div style={{ width: 1, height: 24, background: PF.ruleSoft }} />
-      <div className="pf-label">Sources</div>
-      <div style={{ display: 'flex', gap: 4 }}>
-        {SOURCE_KEYS.map((s) => (
-          <button
-            key={s}
-            type="button"
-            className={`pf-pill ${source === s ? 'pf-pill-active' : ''}`}
-            onClick={() => setSource(s)}
-          >
-            {SOURCE_LABELS[s]}
-          </button>
-        ))}
-      </div>
+      <SourcesDrawer source={source} setSource={setSource} />
 
       <div style={{ width: 1, height: 24, background: PF.ruleSoft }} />
       <button
