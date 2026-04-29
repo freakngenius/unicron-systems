@@ -14,6 +14,15 @@ export type AgentName =
   | 'customer-intel'
   | 'eval';
 
+// Wider name set used only by `agent_log` / `agent_runs` writes. Service
+// integrations (`hubspot-sync`) audit through the same log table but do
+// not have a dashboard surface, so they aren't part of the UI-facing
+// AgentName union (which gates the agent metadata maps in
+// lib/agent-tints, lib/realtime, components/settings/sections/Agents,
+// etc.). The 0011_hubspot_sync.sql CHECK constraint enumerates the same
+// set.
+export type LogAgentName = AgentName | 'hubspot-sync';
+
 export type AgentRunStatus = 'running' | 'success' | 'failed';
 
 export type ProjectSource = 'usaspending' | 'sam.gov' | 'news' | 'harris';
@@ -71,7 +80,7 @@ export interface Project {
 
 export interface AgentLogRow {
   id: number;
-  agent_name: AgentName;
+  agent_name: LogAgentName;
   event_type: string;
   event_data: Record<string, unknown>;
   latency_ms: number | null;
@@ -100,6 +109,41 @@ export interface AdjacentTarget {
   surfaced_at: string;
 }
 
+// Lead actions (added 0011_hubspot_sync). The five HubSpot-mirrored
+// statuses flow back through `app/api/webhooks/hubspot`; the two
+// local-only statuses (`dismissed`, `snoozed`) are written by Slack-bot
+// and chat-panel actions and never round-trip to HubSpot. See
+// docs/HUBSPOT-STAGE-MAP.md for the full stage map.
+export type LeadActionStatus =
+  | 'accepted'
+  | 'meeting_booked'
+  | 'proposal_sent'
+  | 'closed_won'
+  | 'closed_lost'
+  | 'dismissed'
+  | 'snoozed';
+
+export interface LeadAction {
+  id: number;
+  project_id: string;
+  actor_email: string;
+  status: LeadActionStatus;
+  attested_pipeline_value: number | null;
+  first_action_date: string | null;
+  note: string | null;
+  hubspot_deal_id: string | null;
+  hubspot_pipeline_id: string | null;
+  hubspot_stage_id: string | null;
+  hubspot_pushed_at: string | null;
+  hubspot_last_event_at: string | null;
+  hubspot_last_event_id: string | null;
+  closed_won_amount: number | null;
+  closed_won_at: string | null;
+  closed_lost_reason: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 // Database type bag for the typed Supabase client.
 export interface PathfinderDatabase {
   pathfinder: {
@@ -110,6 +154,7 @@ export interface PathfinderDatabase {
       agent_log: { Row: AgentLogRow; Insert: Omit<AgentLogRow, 'id' | 'ts'> & { id?: number; ts?: string }; Update: Partial<AgentLogRow>; Relationships: [] };
       agent_runs: { Row: AgentRun; Insert: Omit<AgentRun, 'id' | 'started_at'> & { id?: number; started_at?: string }; Update: Partial<AgentRun>; Relationships: [] };
       adjacent_targets: { Row: AdjacentTarget; Insert: Omit<AdjacentTarget, 'id' | 'surfaced_at'> & { id?: number; surfaced_at?: string }; Update: Partial<AdjacentTarget>; Relationships: [] };
+      lead_actions: { Row: LeadAction; Insert: Omit<LeadAction, 'id' | 'created_at' | 'updated_at'> & { id?: number; created_at?: string; updated_at?: string }; Update: Partial<LeadAction>; Relationships: [] };
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;
