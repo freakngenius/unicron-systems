@@ -1,8 +1,8 @@
 // __tests__/chat/outreach-drafter.test.ts — pure-rules tests for the
-// outreach drafter. The pipeline that calls Anthropic is exercised via a
-// stubbed client; we never hit the real API in CI.
+// outreach drafter. The pipeline that calls Perplexity Sonar is exercised
+// via setSonarForTesting; we never hit the real API in CI.
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
 import {
   draftOutreach,
   purgeDashes,
@@ -15,7 +15,7 @@ import {
   VOICEMAIL_WORD_MIN,
   VOICEMAIL_WORD_MAX,
 } from '@/lib/chat/outreach-drafter';
-import { setAnthropicForTesting } from '@/lib/anthropic';
+import { setSonarForTesting } from '@/lib/chat/sonar';
 import type { Branch, Project } from '@/lib/types';
 
 // ── Pure rules ────────────────────────────────────────────────────────────
@@ -186,7 +186,7 @@ describe('outreach length constants', () => {
   });
 });
 
-// ── Anthropic-stubbed pipeline ────────────────────────────────────────────
+// ── Sonar-stubbed pipeline ────────────────────────────────────────────────
 
 const fakeProject = {
   id: 'proj-test-1',
@@ -226,20 +226,20 @@ const fakeBranch = {
 function makeStub(responses: string[]) {
   let i = 0;
   return {
-    messages: {
-      create: async () => {
-        const text = responses[Math.min(i, responses.length - 1)];
-        i++;
-        return { content: [{ type: 'text', text }] };
-      },
-      stream: async () => {
-        throw new Error('stream not used in drafter');
-      },
+    complete: async () => {
+      const text = responses[Math.min(i, responses.length - 1)];
+      i++;
+      return {
+        text,
+        citations: [],
+        model: 'sonar',
+        latencyMs: 1,
+      };
     },
-  } as unknown as Parameters<typeof setAnthropicForTesting>[0];
+  };
 }
 
-afterEach(() => setAnthropicForTesting(null));
+afterEach(() => setSonarForTesting(null));
 
 describe('draftOutreach pipeline', () => {
   it('returns a passing bundle on first try when the model produces compliant JSON', async () => {
@@ -252,7 +252,7 @@ describe('draftOutreach pipeline', () => {
       voicemail: { body: sentencesOfLength(70) },
       provenance: ['projects:proj-test-1', 'branches:b-hou'],
     };
-    setAnthropicForTesting(makeStub([JSON.stringify(draft)]));
+    setSonarForTesting(makeStub([JSON.stringify(draft)]));
 
     const result = await draftOutreach({
       project: fakeProject,
@@ -279,7 +279,7 @@ describe('draftOutreach pipeline', () => {
       voicemail: { body: sentencesOfLength(70) },
       provenance: ['projects:proj-test-1'],
     };
-    setAnthropicForTesting(makeStub([JSON.stringify(tooShort), JSON.stringify(passing)]));
+    setSonarForTesting(makeStub([JSON.stringify(tooShort), JSON.stringify(passing)]));
 
     const result = await draftOutreach({
       project: fakeProject,
@@ -298,7 +298,7 @@ describe('draftOutreach pipeline', () => {
       voicemail: { body: 'tiny' },
       provenance: [],
     };
-    setAnthropicForTesting(
+    setSonarForTesting(
       makeStub([JSON.stringify(broken), JSON.stringify(broken), JSON.stringify(broken)]),
     );
 
@@ -330,7 +330,7 @@ describe('draftOutreach pipeline', () => {
       voicemail: { body: sentencesOfLength(70) },
       provenance: [],
     };
-    setAnthropicForTesting(makeStub([JSON.stringify(dashy), JSON.stringify(clean)]));
+    setSonarForTesting(makeStub([JSON.stringify(dashy), JSON.stringify(clean)]));
     const result = await draftOutreach({
       project: fakeProject,
       branch: fakeBranch,
@@ -347,7 +347,7 @@ describe('draftOutreach pipeline', () => {
       voicemail: { body: sentencesOfLength(70) },
       provenance: [],
     };
-    setAnthropicForTesting(makeStub(['```json\n' + JSON.stringify(draft) + '\n```']));
+    setSonarForTesting(makeStub(['```json\n' + JSON.stringify(draft) + '\n```']));
     const result = await draftOutreach({
       project: fakeProject,
       branch: fakeBranch,

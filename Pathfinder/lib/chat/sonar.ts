@@ -59,6 +59,7 @@ export type SonarStreamEvent =
   | { type: 'done' };
 
 export function isSonarConfigured(): boolean {
+  if (_override) return true;
   return Boolean(process.env.PERPLEXITY_API_KEY);
 }
 
@@ -66,6 +67,19 @@ function apiKey(): string {
   const key = process.env.PERPLEXITY_API_KEY;
   if (!key) throw new SonarNotConfiguredError();
   return key;
+}
+
+// Test-only override. Mirrors setAnthropicForTesting in lib/anthropic.ts.
+// When set, completeSonar / streamSonar bypass the HTTP fetch and return
+// the override's responses. Production paths never set this.
+interface SonarTestStub {
+  complete: (req: SonarRequest) => Promise<SonarResponse>;
+  stream?: (req: SonarRequest) => AsyncGenerator<SonarStreamEvent, void, unknown>;
+}
+let _override: SonarTestStub | null = null;
+
+export function setSonarForTesting(stub: SonarTestStub | null): void {
+  _override = stub;
 }
 
 function recencyFilter(days?: number): 'hour' | 'day' | 'week' | 'month' {
@@ -96,6 +110,7 @@ function buildBody(req: SonarRequest, stream: boolean): Record<string, unknown> 
 }
 
 export async function completeSonar(req: SonarRequest): Promise<SonarResponse> {
+  if (_override) return _override.complete(req);
   const startedAt = Date.now();
   const res = await fetch(ENDPOINT, {
     method: 'POST',
@@ -129,6 +144,18 @@ export async function completeSonar(req: SonarRequest): Promise<SonarResponse> {
 // `data: {"choices":[{"delta":{"content":"..."}}]}` lines, with citations
 // arriving on the final chunk under `citations`.
 export async function* streamSonar(req: SonarRequest): AsyncGenerator<SonarStreamEvent, void, unknown> {
+  if (_override?.stream) {
+    yield* _override.stream(req);
+    return;
+  }
+  if (_override) {
+    // Stream-stub not provided; replay completeSonar as a single delta.
+    const r = await _override.complete(req);
+    if (r.text) yield { type: 'delta', text: r.text };
+    if (r.citations.length > 0) yield { type: 'citations', items: r.citations };
+    yield { type: 'done' };
+    return;
+  }
   const res = await fetch(ENDPOINT, {
     method: 'POST',
     headers: {
@@ -153,7 +180,11 @@ export async function* streamSonar(req: SonarRequest): AsyncGenerator<SonarStrea
       const { value, done } = await reader.read();
       if (done) break;
       buffer += decoder.decode(value, { stream: true });
-      const events = buffer.split('\n\n');
+      // Sonar uses CRLF (`\r\n\r\n`); standard SSE uses LF (`\n\n`).
+      // Normalize CRLF→LF first, then split on the canonical LF separator
+      // so this parser handles both.
+      const normalized = buffer.replace(/\r\n/g, '\n');
+      const events = normalized.split('\n\n');
       buffer = events.pop() ?? '';
       for (const block of events) {
         const line = block.trim();

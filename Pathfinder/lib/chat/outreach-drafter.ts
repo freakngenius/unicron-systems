@@ -14,7 +14,10 @@
 // Pipeline:
 //   1. Build a structured context block from project + branch + warm
 //      customer (when present)
-//   2. Single Sonnet 4.6 call requesting a JSON object with the 3 drafts
+//   2. Single Perplexity Sonar call requesting a JSON object with the 3
+//      drafts. Sonar gives us web-grounded color (e.g., recent project
+//      news) for free while still respecting the structured-context
+//      system prompt for relationship facts.
 //   3. Run the verifier suite — regex checks, length checks, hallucination
 //      check
 //   4. On verifier failure: re-prompt with the specific failure reason,
@@ -24,17 +27,16 @@
 //   6. Final-pass dash purge on every channel as a safety net (replaces
 //      em-dash with ", " and en-dash with " to ")
 //
-// This module is the chat-iteration surface. The peer's
-// lib/outreach.ts (P0-02 branch) handles the agent-driven, post-Ranker
-// surface. The two will share a rules module post-merge; for V1 they
-// both implement the rules in-place.
+// Engine swap (2026-04-29): Kyle moved chat off Claude entirely. The
+// chat panel — including outreach drafting — runs on Perplexity Sonar.
+// Other Claude usage in the codebase (Ranker rationale fallback, etc.)
+// stays as-is.
 
-import Anthropic from '@anthropic-ai/sdk';
-import { anthropic } from '@/lib/anthropic';
+import { completeSonar } from '@/lib/chat/sonar';
 import type { Branch, Customer, Project } from '@/lib/types';
 
-export const DRAFTER_MODEL = process.env.PF_OUTREACH_MODEL ?? 'claude-sonnet-4-6';
-const MAX_TOKENS = 1200;
+export const DRAFTER_MODEL = process.env.PF_OUTREACH_MODEL ?? 'sonar';
+const MAX_TOKENS = 1500;
 const MAX_RETRIES = 2;
 
 // ── Length / tone constraints (spec) ──────────────────────────────────────
@@ -288,8 +290,7 @@ function userPrompt(input: DraftInput, retryReasons: string[]): string {
 
 // ── Main entry point ───────────────────────────────────────────────────────
 
-export async function draftOutreach(input: DraftInput, deps?: { client?: Anthropic }): Promise<OutreachBundle> {
-  const client = deps?.client ?? anthropic();
+export async function draftOutreach(input: DraftInput): Promise<OutreachBundle> {
   const allowedNames = buildAllowedNames(input);
 
   let lastDraft: OutreachBundle | null = null;
@@ -297,17 +298,18 @@ export async function draftOutreach(input: DraftInput, deps?: { client?: Anthrop
   let dashSubstituted = false;
 
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-    const res = await client.messages.create({
+    const res = await completeSonar({
+      systemPrompt: systemPrompt(),
+      query: userPrompt(input, retryReasons),
+      maxTokens: MAX_TOKENS,
       model: DRAFTER_MODEL,
-      max_tokens: MAX_TOKENS,
-      system: systemPrompt(),
-      messages: [{ role: 'user', content: userPrompt(input, retryReasons) }],
+      // Outreach drafting doesn't need fresh web data — drafts must stay
+      // anchored to the structured pathfinder.* context. Cap recency to
+      // a year so Sonar's search adds the lightest possible tax.
+      recencyDays: 365,
     });
 
-    const text = res.content
-      .map((b) => (b.type === 'text' ? b.text : ''))
-      .join('')
-      .trim();
+    const text = res.text.trim();
 
     let parsed: {
       email: { subject: string; body: string };

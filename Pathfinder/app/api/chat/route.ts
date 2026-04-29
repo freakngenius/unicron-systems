@@ -15,9 +15,7 @@
 // Plan: docs/PLAN-P0-01-INTELLIGENCE-CHAT.md.
 
 import type { NextRequest } from 'next/server';
-import Anthropic from '@anthropic-ai/sdk';
 import { supabaseAdmin } from '@/lib/supabase';
-import { anthropic } from '@/lib/anthropic';
 import {
   isSonarConfigured,
   SONAR_UNCONFIGURED_MESSAGE,
@@ -43,9 +41,12 @@ import type {
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const CHAT_MODEL = process.env.PF_CHAT_MODEL ?? 'claude-sonnet-4-6';
-const CLASSIFIER_MODEL = process.env.PF_CHAT_CLASSIFIER_MODEL ?? 'claude-sonnet-4-6';
-const SUMMARY_MODEL = process.env.PF_CHAT_SUMMARY_MODEL ?? 'claude-sonnet-4-6';
+// Engine note (2026-04-29): Kyle moved the entire chat panel off Claude
+// onto Perplexity Sonar. Sonar is the only LLM this route talks to. Other
+// places in the codebase that use Claude (Ranker rationale fallback at
+// /api/rationale, etc.) stay on Claude. The classifier path that used
+// Sonnet tool_use is gone — replaced by a regex intent detector below.
+
 const HISTORY_TURN_LIMIT = 12; // last 6 user/assistant pairs
 const MESSAGES_GET_LIMIT = 50;
 
@@ -81,158 +82,82 @@ function sseChunk(payload: SseEvent): Uint8Array {
   return new TextEncoder().encode(`data: ${JSON.stringify(payload)}\n\n`);
 }
 
-// ── Classifier ─────────────────────────────────────────────────────────────
+// ── Intent detector (regex, no LLM call) ──────────────────────────────────
+//
+// Sonar handles the heavy lifting (Q&A, web research, forecasting, internal
+// data narration) as a single default path. We only need to peel off two
+// special cases: outreach drafting and workflow actions — both bypass the
+// Sonar streaming path.
+//
+// Order of checks matters: outreach phrases like "draft outreach for this
+// lead" must not be caught by the workflow regex, and vice versa.
 
 type ResponseKind =
-  | 'read_only_internal'
-  | 'web_research'
-  | 'outreach_draft'
-  | 'workflow_action'
-  | 'forecast_or_summary'
-  | 'sonar_unconfigured';
+  | 'sonar_default' // → streamSonar (handles classes A, B, D, E, G transparently)
+  | 'outreach_draft' // → draftOutreach (Sonar via lib/chat/outreach-drafter)
+  | 'workflow_action' // → surface action buttons (no LLM call)
+  | 'sonar_unconfigured'; // → emit verbatim spec § 0 Q2 message
 
 interface Classification {
   kind: Exclude<ResponseKind, 'sonar_unconfigured'>;
   outreachIntent?: IterationIntent;
   audienceOverride?: string;
-  needsSonar: boolean;
-  reasoning: string;
 }
 
-const CLASSIFIER_TOOLS: Anthropic.Messages.Tool[] = [
-  {
-    name: 'read_only_internal',
-    description:
-      'Use when the user is asking about projects, branches, customers, or pipeline data already present in pathfinder.* tables. No web research needed. Examples: "tell me more about this prime contractor" (when project context provides it), "show me TX leads with score over 80", "which branches have the highest unverified queue".',
-    input_schema: {
-      type: 'object',
-      properties: {
-        reasoning: { type: 'string' },
-      },
-      required: ['reasoning'],
-    },
-  },
-  {
-    name: 'web_research',
-    description:
-      'Use when answering requires current web information — recent news, contractor history, public expansion announcements, etc. Examples: "what other projects has this prime contractor led in the past 12 months", "pull the latest news on this project", "has this customer signaled expansion plans publicly".',
-    input_schema: {
-      type: 'object',
-      properties: {
-        reasoning: { type: 'string' },
-      },
-      required: ['reasoning'],
-    },
-  },
-  {
-    name: 'outreach_draft',
-    description:
-      'Use when the user is asking to draft, iterate on, or modify outreach (email + LinkedIn + voicemail). Returns a 3-channel bundle. Examples: "draft outreach for this lead", "make it tighter", "less salesy", "add the warm intro path", "open with a question", "rewrite for the VP of Facilities". Pick the right intent.',
-    input_schema: {
-      type: 'object',
-      properties: {
-        intent: {
-          type: 'string',
-          enum: [
-            'fresh',
-            'tighten',
-            'less_salesy',
-            'add_warm_intro',
-            'open_with_question',
-            'add_time_slot',
-            'audience_pivot',
-          ],
-        },
-        audience_override: { type: 'string' },
-        reasoning: { type: 'string' },
-      },
-      required: ['intent', 'reasoning'],
-    },
-  },
-  {
-    name: 'workflow_action',
-    description:
-      'Use when the user is asking the system to take an action — accept a lead, push to HubSpot, schedule a follow-up, export CSV, summarize this week. The route returns action buttons / triggers without a full response.',
-    input_schema: {
-      type: 'object',
-      properties: {
-        action_id: {
-          type: 'string',
-          enum: [
-            'copy_draft',
-            'save_draft',
-            'regenerate_draft',
-            'export_csv',
-            'summarize_pipeline',
-            'accept_lead_to_hubspot',
-            'push_to_pipeline',
-            'schedule_followup',
-            'add_note',
-          ],
-        },
-        reasoning: { type: 'string' },
-      },
-      required: ['action_id', 'reasoning'],
-    },
-  },
-  {
-    name: 'forecast_or_summary',
-    description:
-      'Use for forecasting, summarization, or comparison questions answered from internal data plus narration. Examples: "what does next quarter pipeline look like", "generate the Friday brief now", "compare this branch performance to the rest of the network".',
-    input_schema: {
-      type: 'object',
-      properties: {
-        reasoning: { type: 'string' },
-      },
-      required: ['reasoning'],
-    },
-  },
-];
+const OUTREACH_TRIGGER_RE =
+  /\b(draft|write|generate|compose|create|prepare)\b.{0,20}\b(outreach|email|email\s*draft|message|dm|voicemail|copy)\b|\b(outreach\s+for|outreach\s+to|outreach\s+draft)\b/i;
+const TIGHTEN_RE = /\b(tighten|tighter|shorter|trim|cut\s+(it|that)?\s*down|more concise|less wordy)\b/i;
+const LESS_SALESY_RE = /\b(less\s+salesy|less\s+sales-y|less\s+sales(\s+pitch)?|tone\s+(it|that)?\s*down|more\s+restrained|less\s+pushy|less\s+aggressive)\b/i;
+const ADD_WARM_INTRO_RE = /\b(warm\s+intro|warm-intro|warm\s+introduction|reference\s+our|mention\s+our|our\s+relationship\s+with)\b/i;
+const OPEN_WITH_QUESTION_RE = /\b(open\s+with\s+(a\s+)?question|start\s+with\s+(a\s+)?question|lead\s+with\s+(a\s+)?question|question\s+instead)\b/i;
+const ADD_TIME_SLOT_RE = /\b(time\s+slot|specific\s+time|two\s+(times|slots)|propose\s+a\s+time|suggest\s+a\s+time|calendar\s+option)\b/i;
+const AUDIENCE_PIVOT_RE = /\b(rewrite\s+(for|as)|address(ed)?\s+to|for\s+the\s+(VP|CEO|CFO|COO|CTO|director|manager|owner|head)|pivot\s+(the|to)\s+audience)\b/i;
 
-async function classify(
-  client: Anthropic,
-  message: string,
-  snapshot: ChatContextSnapshot,
-): Promise<Classification> {
-  const res = await client.messages.create({
-    model: CLASSIFIER_MODEL,
-    max_tokens: 256,
-    tools: CLASSIFIER_TOOLS,
-    tool_choice: { type: 'any' },
-    system:
-      'You route Pathfinder Intelligence Chat user turns to one of five backend paths. Pick exactly one tool. The user message and the dashboard context snapshot are provided.',
-    messages: [
-      {
-        role: 'user',
-        content: `CONTEXT SNAPSHOT:\n${JSON.stringify(snapshot)}\n\nUSER MESSAGE:\n${message}`,
-      },
-    ],
-  });
-  const tool = res.content.find((b) => b.type === 'tool_use');
-  if (!tool || tool.type !== 'tool_use') {
-    return { kind: 'read_only_internal', needsSonar: false, reasoning: 'classifier_fallback' };
+const ACTION_HUBSPOT_RE = /\b(push\s+to\s+hubspot|send\s+to\s+hubspot|sync\s+to\s+hubspot|accept(ed)?\s+(this|the\s+lead|it).{0,30}hubspot|move\s+(this|it)\s+(to|into)\s+hubspot)\b/i;
+const ACTION_PIPELINE_RE = /\b(push\s+to\s+pipeline|send\s+to\s+pipeline|move\s+to\s+pipeline)\b/i;
+const ACTION_SCHEDULE_RE = /\b(schedule\s+(a\s+)?follow[-\s]?up|set\s+(a\s+)?reminder|remind\s+me|follow\s*up\s+on\s+this)\b/i;
+const ACTION_NOTE_RE = /\b(add\s+(a\s+)?note|attach\s+(a\s+)?note|leave\s+(a\s+)?note)\b/i;
+const ACTION_EXPORT_CSV_RE = /\bexport\b.{0,40}\bcsv\b|\bcsv\s+(of|for|export|download)\b|\bdownload\s+(as\s+)?csv\b/i;
+const ACTION_SUMMARIZE_RE = /\b(summari[sz]e|summary\s+of)\b.{0,40}\b(pipeline|this\s+week|this\s+month|activity|brief)\b|\bgenerate\s+(the\s+)?(friday\s+)?brief\b/i;
+
+function classify(message: string): Classification {
+  // ── Outreach drafting (highest priority — the spec's Class C) ──
+  // Iteration intents take precedence over "fresh" if both signals match —
+  // a turn like "draft outreach but make it tighter" still maps to fresh
+  // because OUTREACH_TRIGGER_RE catches first; if the user says only "make
+  // it tighter" without a draft trigger we still map to outreach because
+  // the iteration words are unambiguous in chat context.
+  if (OUTREACH_TRIGGER_RE.test(message)) {
+    return { kind: 'outreach_draft', outreachIntent: 'fresh' };
   }
-  const input = tool.input as Record<string, unknown>;
-  const reasoning = String(input.reasoning ?? '');
-  switch (tool.name) {
-    case 'web_research':
-      return { kind: 'web_research', needsSonar: true, reasoning };
-    case 'outreach_draft':
-      return {
-        kind: 'outreach_draft',
-        outreachIntent: (input.intent as IterationIntent) ?? 'fresh',
-        audienceOverride: input.audience_override as string | undefined,
-        needsSonar: false,
-        reasoning,
-      };
-    case 'workflow_action':
-      return { kind: 'workflow_action', needsSonar: false, reasoning };
-    case 'forecast_or_summary':
-      return { kind: 'forecast_or_summary', needsSonar: false, reasoning };
-    case 'read_only_internal':
-    default:
-      return { kind: 'read_only_internal', needsSonar: false, reasoning };
+  if (TIGHTEN_RE.test(message)) return { kind: 'outreach_draft', outreachIntent: 'tighten' };
+  if (LESS_SALESY_RE.test(message)) return { kind: 'outreach_draft', outreachIntent: 'less_salesy' };
+  if (ADD_WARM_INTRO_RE.test(message)) return { kind: 'outreach_draft', outreachIntent: 'add_warm_intro' };
+  if (OPEN_WITH_QUESTION_RE.test(message)) return { kind: 'outreach_draft', outreachIntent: 'open_with_question' };
+  if (ADD_TIME_SLOT_RE.test(message)) return { kind: 'outreach_draft', outreachIntent: 'add_time_slot' };
+  if (AUDIENCE_PIVOT_RE.test(message)) {
+    const m = /\bfor\s+the\s+(VP|CEO|CFO|COO|CTO|director|manager|owner|head)[a-z\s]*/i.exec(message);
+    return {
+      kind: 'outreach_draft',
+      outreachIntent: 'audience_pivot',
+      audienceOverride: m ? m[0].replace(/^for\s+the\s+/i, '').trim() : undefined,
+    };
   }
+
+  // ── Workflow actions (Class F) ──
+  if (
+    ACTION_HUBSPOT_RE.test(message) ||
+    ACTION_PIPELINE_RE.test(message) ||
+    ACTION_SCHEDULE_RE.test(message) ||
+    ACTION_NOTE_RE.test(message) ||
+    ACTION_EXPORT_CSV_RE.test(message) ||
+    ACTION_SUMMARIZE_RE.test(message)
+  ) {
+    return { kind: 'workflow_action' };
+  }
+
+  // ── Default: Sonar (Classes A, B, D, E, G) ──
+  return { kind: 'sonar_default' };
 }
 
 // ── Thread / message persistence ──────────────────────────────────────────
@@ -369,137 +294,7 @@ async function hydrateContext(snapshot: ChatContextSnapshot): Promise<Hydrated> 
   return { project, branch, warmCustomer, filteredProjects, allBranches };
 }
 
-// ── Internal-only response (read_only / forecast) ─────────────────────────
-
-function buildInternalSystemPrompt(): string {
-  return `You are Pathfinder's Intelligence Chat. You answer questions about Zedcor Security Systems' lead intelligence using only the structured data provided in the user message. Be specific, restrained, and direct.
-
-Style rules — non-negotiable:
-- No em-dashes (—) or en-dashes (–). Use commas, periods, or "to" instead.
-- No buzzwords ("synergy", "leverage", "cutting-edge").
-- When you reference a project, branch, or customer, name it specifically.
-- When you don't have data to answer, say so plainly. Never fabricate.
-
-When summarizing or comparing branches, prefer concrete numbers (counts, scores, dates) over qualitative language. When a query asks for a list, return a compact markdown list with project IDs in backticks so the dashboard can link them.
-
-Provenance: at the end of your response, on a new line, write "TABLES:" followed by a comma-separated list of pathfinder.* tables you reasoned over (e.g., "TABLES: projects, branches"). The host strips this line for display and surfaces it as a structured provenance footer.`;
-}
-
-function buildInternalUserPayload(args: {
-  userMessage: string;
-  snapshot: ChatContextSnapshot;
-  hydrated: Hydrated;
-  history: ChatMessage[];
-}): string {
-  const { snapshot, hydrated, history, userMessage } = args;
-  const compactProject = hydrated.project
-    ? {
-        id: hydrated.project.id,
-        title: hydrated.project.title,
-        summary: hydrated.project.summary,
-        source: hydrated.project.source,
-        project_value: hydrated.project.project_value,
-        project_stage: hydrated.project.project_stage,
-        posted_date: hydrated.project.posted_date,
-        score: hydrated.project.score,
-        rationale: hydrated.project.rationale,
-        nearest_branch_id: hydrated.project.nearest_branch_id,
-        distance_miles: hydrated.project.distance_miles,
-        warm_for_customer_id: hydrated.project.warm_for_customer_id,
-        verified: hydrated.project.verified ?? null,
-      }
-    : null;
-  const compactBranch = hydrated.branch
-    ? {
-        id: hydrated.branch.id,
-        code: hydrated.branch.code,
-        name: hydrated.branch.name,
-        coverage_radius_miles: hydrated.branch.coverage_radius_miles,
-      }
-    : null;
-  const compactCustomer = hydrated.warmCustomer
-    ? {
-        id: hydrated.warmCustomer.id,
-        name: hydrated.warmCustomer.name,
-        served_by_branch_id: hydrated.warmCustomer.served_by_branch_id,
-      }
-    : null;
-  const compactFiltered = hydrated.filteredProjects.slice(0, 50).map((p) => ({
-    id: p.id,
-    title: p.title,
-    score: p.score,
-    project_value: p.project_value,
-    nearest_branch_id: p.nearest_branch_id,
-    project_stage: p.project_stage,
-    distance_miles: p.distance_miles,
-    posted_date: p.posted_date,
-  }));
-  const branches = hydrated.allBranches.map((b) => ({
-    id: b.id,
-    code: b.code,
-    name: b.name,
-  }));
-
-  const blocks: string[] = [
-    `VIEW: ${snapshot.view}`,
-    `FOCUSED PROJECT: ${JSON.stringify(compactProject)}`,
-    `FOCUSED BRANCH: ${JSON.stringify(compactBranch)}`,
-    `WARM CUSTOMER: ${JSON.stringify(compactCustomer)}`,
-    `BRANCHES: ${JSON.stringify(branches)}`,
-    `FILTERED PROJECTS (top ${compactFiltered.length}): ${JSON.stringify(compactFiltered)}`,
-    `SOURCE FILTER: ${snapshot.sourceFilter} | CROSS-POLL: ${snapshot.crossPoll}`,
-    `TOTAL PROJECTS IN VIEW: ${snapshot.totalProjects}`,
-  ];
-  if (history.length > 0) {
-    const compactHistory = history.slice(-HISTORY_TURN_LIMIT).map((m) => ({
-      role: m.role,
-      content: m.content.slice(0, 1200),
-    }));
-    blocks.push(`PRIOR TURNS: ${JSON.stringify(compactHistory)}`);
-  }
-  blocks.push(`USER MESSAGE: ${userMessage}`);
-  return blocks.join('\n\n');
-}
-
-async function* streamInternal(args: {
-  client: Anthropic;
-  userMessage: string;
-  snapshot: ChatContextSnapshot;
-  hydrated: Hydrated;
-  history: ChatMessage[];
-  model: string;
-}): AsyncGenerator<{ delta?: string; tables?: string[] }> {
-  const stream = args.client.messages.stream({
-    model: args.model,
-    max_tokens: 1024,
-    system: buildInternalSystemPrompt(),
-    messages: [
-      {
-        role: 'user',
-        content: buildInternalUserPayload({
-          userMessage: args.userMessage,
-          snapshot: args.snapshot,
-          hydrated: args.hydrated,
-          history: args.history,
-        }),
-      },
-    ],
-  });
-
-  let accumulated = '';
-  for await (const event of stream) {
-    if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
-      const text = event.delta.text;
-      accumulated += text;
-      yield { delta: text };
-    }
-  }
-  // Strip the TABLES: trailing line and surface tables array.
-  const tables = parseTablesFooter(accumulated);
-  if (tables.length > 0) {
-    yield { tables };
-  }
-}
+// ── Provenance footer parsing (Sonar emits `TABLES: ...` at end) ─────────
 
 function parseTablesFooter(text: string): string[] {
   const m = text.match(/TABLES:\s*([^\n]+)$/m);
@@ -510,13 +305,98 @@ function parseTablesFooter(text: string): string[] {
     .filter((s) => s.length > 0);
 }
 
-// ── Web research path (Sonar) ─────────────────────────────────────────────
+// ── Sonar query construction (handles every default-path turn) ───────────
+//
+// Sonar's `system` slot carries the agent voice + style rules + the full
+// internal-data context block. The `query` slot carries only the user's
+// message. We DO want Sonar to do its web search — it adds free citations
+// and recent context — but we also want it to lean on the structured data
+// we already have for branches, projects, customers, etc. Putting the data
+// in `system` and the question in `query` keeps the search query crisp.
 
-function buildSonarQuery(userMessage: string, hydrated: Hydrated): string {
-  const projectHint = hydrated.project
-    ? ` Project context: "${hydrated.project.title}".`
-    : '';
-  return `${userMessage}${projectHint}`;
+function buildSonarSystemPrompt(args: {
+  snapshot: ChatContextSnapshot;
+  hydrated: Hydrated;
+  history: ChatMessage[];
+}): string {
+  const lines: string[] = [
+    `You are Pathfinder's Intelligence Chat for Zedcor Security Systems. Be specific, restrained, direct.`,
+    ``,
+    `Style rules — non-negotiable:`,
+    `- No em-dashes (—) or en-dashes (–). Use commas, periods, or "to" instead.`,
+    `- No buzzwords ("synergy", "leverage", "cutting-edge").`,
+    `- When you reference a project, branch, or customer, name it specifically. Use project IDs in backticks when listing.`,
+    `- When the question is about Zedcor's own pipeline, prefer the structured PATHFINDER context over web search results.`,
+    `- When the question is about external context (news, contractor history, market trends), use web search and cite sources.`,
+    `- When you don't have data to answer, say so plainly. Never fabricate.`,
+    ``,
+    `At the very end of your response, on its own line, write "TABLES:" followed by a comma-separated list of pathfinder.* tables you reasoned over (e.g., "TABLES: projects, branches"). The host strips this line for display and renders it as a structured provenance footer. If you used no internal tables, write "TABLES: (none)".`,
+    ``,
+    `── PATHFINDER CONTEXT ──`,
+  ];
+  const compactProject = args.hydrated.project
+    ? {
+        id: args.hydrated.project.id,
+        title: args.hydrated.project.title,
+        summary: args.hydrated.project.summary,
+        source: args.hydrated.project.source,
+        project_value: args.hydrated.project.project_value,
+        project_stage: args.hydrated.project.project_stage,
+        posted_date: args.hydrated.project.posted_date,
+        score: args.hydrated.project.score,
+        rationale: args.hydrated.project.rationale,
+        nearest_branch_id: args.hydrated.project.nearest_branch_id,
+        distance_miles: args.hydrated.project.distance_miles,
+        warm_for_customer_id: args.hydrated.project.warm_for_customer_id,
+        verified: args.hydrated.project.verified ?? null,
+      }
+    : null;
+  const compactBranch = args.hydrated.branch
+    ? {
+        id: args.hydrated.branch.id,
+        code: args.hydrated.branch.code,
+        name: args.hydrated.branch.name,
+        coverage_radius_miles: args.hydrated.branch.coverage_radius_miles,
+      }
+    : null;
+  const compactCustomer = args.hydrated.warmCustomer
+    ? {
+        id: args.hydrated.warmCustomer.id,
+        name: args.hydrated.warmCustomer.name,
+        served_by_branch_id: args.hydrated.warmCustomer.served_by_branch_id,
+      }
+    : null;
+  const compactFiltered = args.hydrated.filteredProjects.slice(0, 50).map((p) => ({
+    id: p.id,
+    title: p.title,
+    score: p.score,
+    project_value: p.project_value,
+    nearest_branch_id: p.nearest_branch_id,
+    project_stage: p.project_stage,
+    distance_miles: p.distance_miles,
+    posted_date: p.posted_date,
+  }));
+  const branches = args.hydrated.allBranches.map((b) => ({
+    id: b.id,
+    code: b.code,
+    name: b.name,
+  }));
+  lines.push(`VIEW: ${args.snapshot.view}`);
+  lines.push(`FOCUSED PROJECT: ${JSON.stringify(compactProject)}`);
+  lines.push(`FOCUSED BRANCH: ${JSON.stringify(compactBranch)}`);
+  lines.push(`WARM CUSTOMER: ${JSON.stringify(compactCustomer)}`);
+  lines.push(`BRANCHES: ${JSON.stringify(branches)}`);
+  lines.push(`FILTERED PROJECTS (top ${compactFiltered.length}): ${JSON.stringify(compactFiltered)}`);
+  lines.push(`SOURCE FILTER: ${args.snapshot.sourceFilter} | CROSS-POLL: ${args.snapshot.crossPoll}`);
+  lines.push(`TOTAL PROJECTS IN VIEW: ${args.snapshot.totalProjects}`);
+  if (args.history.length > 0) {
+    const compactHistory = args.history.slice(-HISTORY_TURN_LIMIT).map((m) => ({
+      role: m.role,
+      content: m.content.slice(0, 1200),
+    }));
+    lines.push(`PRIOR TURNS: ${JSON.stringify(compactHistory)}`);
+  }
+  return lines.join('\n');
 }
 
 // ── POST handler ──────────────────────────────────────────────────────────
@@ -565,13 +445,15 @@ export async function POST(req: NextRequest): Promise<Response> {
           content: body.message,
         });
 
-        // 2. Classify.
-        const client = anthropic();
-        const classification = await classify(client, body.message, body.contextSnapshot);
+        // 2. Classify (regex, no LLM call).
+        const classification = classify(body.message);
 
         // 3. Determine effective response kind (handle Sonar-unconfigured).
+        // With the Sonar swap, EVERY non-action turn needs Sonar — so the
+        // unconfigured guard now applies to the default path AND the
+        // outreach path.
         let kind: ResponseKind = classification.kind;
-        if (kind === 'web_research' && !isSonarConfigured()) {
+        if ((kind === 'sonar_default' || kind === 'outreach_draft') && !isSonarConfigured()) {
           kind = 'sonar_unconfigured';
         }
 
@@ -652,58 +534,9 @@ export async function POST(req: NextRequest): Promise<Response> {
           return;
         }
 
-        if (kind === 'web_research') {
-          const sonarQuery = buildSonarQuery(body.message, hydrated);
-          let acc = '';
-          let citations: ChatSourceCitation[] = [];
-          try {
-            for await (const ev of streamSonar({ query: sonarQuery, recencyDays: 30 })) {
-              if (ev.type === 'delta') {
-                acc += ev.text;
-                controller.enqueue(sseChunk({ type: 'delta', text: ev.text }));
-              } else if (ev.type === 'citations') {
-                citations = ev.items;
-                controller.enqueue(sseChunk({ type: 'sources', items: ev.items }));
-              }
-            }
-          } catch (err) {
-            const fallback =
-              err instanceof SonarRequestError
-                ? `Web research request failed (status ${err.status}). Try again, or rephrase to use only data from the dashboard.`
-                : `Web research is currently unavailable. Try again, or rephrase to use only data from the dashboard.`;
-            controller.enqueue(sseChunk({ type: 'delta', text: fallback }));
-            await appendMessage({
-              threadId: thread.id,
-              role: 'assistant',
-              kind: 'error',
-              content: fallback,
-              payload: { reason: 'sonar_error', detail: String(err) },
-            });
-            controller.enqueue(sseChunk({ type: 'done', latencyMs: Date.now() - startedAt }));
-            controller.close();
-            return;
-          }
-
-          await appendMessage({
-            threadId: thread.id,
-            role: 'assistant',
-            kind: 'text',
-            content: acc.trim(),
-            payload: { sources: citations, classified_as: 'web_research' },
-            modelUsed: 'sonar',
-          });
-          controller.enqueue(sseChunk({ type: 'done', latencyMs: Date.now() - startedAt }));
-          controller.close();
-          return;
-        }
-
         if (kind === 'workflow_action') {
-          // Surface the action as a button. The user clicks to execute.
-          // The classifier already picked the action_id; we trust it.
           const reply = workflowActionPrompt();
           controller.enqueue(sseChunk({ type: 'delta', text: reply }));
-          // Note: the actions list comes from the classifier reasoning; we
-          // expose all wired actions inline so the user can pick.
           controller.enqueue(
             sseChunk({
               type: 'actions',
@@ -727,43 +560,62 @@ export async function POST(req: NextRequest): Promise<Response> {
           return;
         }
 
-        // read_only_internal or forecast_or_summary — both stream from
-        // Sonnet over the hydrated internal data.
+        // sonar_default — covers classes A (project Q&A), B (web research),
+        // D (cross-record pull), E (competitive Q&A), G (forecasting). The
+        // structured pathfinder.* context goes in the Sonar system prompt;
+        // the user's question goes in the query slot. Sonar's web search
+        // adds free citations for any external context.
         let acc = '';
-        let tables: string[] = [];
-        for await (const chunk of streamInternal({
-          client,
-          userMessage: body.message,
-          snapshot: body.contextSnapshot,
-          hydrated,
-          history,
-          model: kind === 'forecast_or_summary' ? SUMMARY_MODEL : CHAT_MODEL,
-        })) {
-          if (chunk.delta) {
-            const visible = chunk.delta;
-            acc += visible;
-            // Strip a trailing TABLES: footer line from the streamed deltas
-            // so the user doesn't see it. We only suppress when a delta
-            // begins with TABLES: at the start of a line — otherwise we
-            // pass through.
-            const safe = stripTablesFooter(visible, acc);
-            if (safe.length > 0) {
-              controller.enqueue(sseChunk({ type: 'delta', text: safe }));
+        let citations: ChatSourceCitation[] = [];
+        try {
+          for await (const ev of streamSonar({
+            systemPrompt: buildSonarSystemPrompt({
+              snapshot: body.contextSnapshot,
+              hydrated,
+              history,
+            }),
+            query: body.message,
+            recencyDays: 30,
+          })) {
+            if (ev.type === 'delta') {
+              acc += ev.text;
+              const safe = stripTablesFooter(ev.text, acc);
+              if (safe.length > 0) {
+                controller.enqueue(sseChunk({ type: 'delta', text: safe }));
+              }
+            } else if (ev.type === 'citations') {
+              citations = ev.items;
             }
           }
-          if (chunk.tables) tables = chunk.tables;
+        } catch (err) {
+          const fallback =
+            err instanceof SonarRequestError
+              ? `Sonar request failed (status ${err.status}). Try again, or rephrase.`
+              : `Chat is currently unavailable. ${err instanceof Error ? err.message : String(err)}`;
+          controller.enqueue(sseChunk({ type: 'delta', text: fallback }));
+          await appendMessage({
+            threadId: thread.id,
+            role: 'assistant',
+            kind: 'error',
+            content: fallback,
+            payload: { reason: 'sonar_error', detail: String(err) },
+          });
+          controller.enqueue(sseChunk({ type: 'done', latencyMs: Date.now() - startedAt }));
+          controller.close();
+          return;
         }
 
-        if (tables.length > 0) {
-          controller.enqueue(sseChunk({ type: 'sources', items: [], tables }));
+        const tables = parseTablesFooter(acc);
+        if (citations.length > 0 || tables.length > 0) {
+          controller.enqueue(sseChunk({ type: 'sources', items: citations, tables }));
         }
         await appendMessage({
           threadId: thread.id,
           role: 'assistant',
           kind: 'text',
           content: stripTrailingTablesLine(acc).trim(),
-          payload: { tables, classified_as: classification.kind },
-          modelUsed: kind === 'forecast_or_summary' ? SUMMARY_MODEL : CHAT_MODEL,
+          payload: { sources: citations, tables, classified_as: 'sonar_default' },
+          modelUsed: 'sonar',
         });
         controller.enqueue(sseChunk({ type: 'done', latencyMs: Date.now() - startedAt }));
         controller.close();
