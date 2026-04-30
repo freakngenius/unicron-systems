@@ -16,6 +16,7 @@ import React, { useEffect, useState } from 'react';
 
 import { hexAlpha, PF_TINTS } from '@/lib/agent-tints';
 import { setHeaderHeight, useAgentRuns, useAgentAggregates, useEscalations } from '@/lib/realtime';
+import { useSettings } from '@/lib/settings';
 import type { AgentName } from '@/lib/types';
 import { AgentCell, deriveCellData } from './AgentCell';
 import { ModelRoutingStrip } from './ModelRoutingStrip';
@@ -30,12 +31,18 @@ export function AgentStatusRow({ initialCollapsed = true }: AgentStatusRowProps)
   const aggregates = useAgentAggregates();
   const escalations = useEscalations();
   const [collapsed, setCollapsed] = useState(initialCollapsed);
+  // Operator-only toggle (Settings → Display). When false (the customer-
+  // facing default), the model-routing strip is hidden entirely and the
+  // header shrinks to just the four agent cells.
+  const showModelBar = useSettings().showModelBar;
 
   const AGENTS_H = 64;
   // Expanded MODEL_H sized to fit ~10 model rows (header + footer + a few
   // px buffer). Each row is ~14px; cumulative model_calls today shows up to
   // 6 distinct names but Pulse/Briefing additions may push it higher.
-  const MODEL_H = collapsed ? 28 : 200;
+  // When the operator toggle is off, MODEL_H collapses to 0 and the strip
+  // doesn't render — the header becomes just the four agent cells.
+  const MODEL_H = !showModelBar ? 0 : collapsed ? 28 : 200;
   const TOTAL = AGENTS_H + MODEL_H;
 
   useEffect(() => {
@@ -78,7 +85,9 @@ export function AgentStatusRow({ initialCollapsed = true }: AgentStatusRowProps)
           />
         ))}
       </div>
-      <ModelRoutingStrip collapsed={collapsed} onToggle={() => setCollapsed((c) => !c)} />
+      {showModelBar && (
+        <ModelRoutingStrip collapsed={collapsed} onToggle={() => setCollapsed((c) => !c)} />
+      )}
     </div>
   );
 }

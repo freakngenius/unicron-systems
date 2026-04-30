@@ -101,6 +101,37 @@ export function DisplaySection() {
         <Row
           label={
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+              Show model routing bar
+              <span
+                className="pf-mono"
+                style={{
+                  fontSize: 9,
+                  color: '#9d35ff',
+                  letterSpacing: '0.10em',
+                  textTransform: 'uppercase',
+                  padding: '1px 6px',
+                  border: `1px solid ${hexAlpha('#9d35ff', 0.45)}`,
+                  borderRadius: 2,
+                }}
+              >
+                operator
+              </span>
+            </span>
+          }
+          hint="When on, the dashboard header shows the multi-model routing strip with model names + call counts. Off by default; customers never see the toggle."
+        >
+          <Toggle
+            checked={draft.showModelBar}
+            onChange={(next) => setDraft({ ...draft, showModelBar: next })}
+            label="Show model routing bar"
+          />
+        </Row>
+      )}
+
+      {isOperator && (
+        <Row
+          label={
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
               Show lead cost
               <span
                 className="pf-mono"
@@ -118,7 +149,7 @@ export function DisplaySection() {
               </span>
             </span>
           }
-          hint="When on, the multi-model routing strip shows per-model cost columns plus the cumulative total + per-ranked-lead figures. Customers never see this toggle."
+          hint="When on, the multi-model routing strip shows per-model cost columns plus the cumulative total + per-ranked-lead figures. Requires the model routing bar to be visible. Customers never see this toggle."
         >
           <Toggle
             checked={draft.showLeadCost}
@@ -219,7 +250,7 @@ export function DisplaySection() {
             letterSpacing: '0.04em',
           }}
         >
-          defaults: showLeadCost=off, sort=score, range=7d, cross-poll=off
+          defaults: showModelBar=off, showLeadCost=off, sort=score, range=7d, cross-poll=off
         </div>
       )}
     </Card>
