@@ -12,7 +12,8 @@ export type AgentName =
   | 'competitive'
   | 'briefing'
   | 'customer-intel'
-  | 'eval';
+  | 'eval'
+  | 'contact-resolver';
 
 // Wider name set used only by `agent_log` / `agent_runs` writes. Service
 // integrations (`hubspot-sync`, `slack-bot`) audit through the same log
@@ -181,6 +182,47 @@ export interface OutreachDraft {
   dismissed_at: string | null;
 }
 
+// Project contacts (P0-02c) — written by the Contact Resolver in
+// lib/contacts/extractor.ts + app/api/cron/contact-resolver/route.ts.
+// Mirrors supabase/migrations/0013_project_contacts.sql.
+//
+// v1 only writes source='raw_payload' rows from Phase 1 extraction.
+// The source CHECK already covers the v2 surface ('apollo', 'hunter',
+// 'sonar', 'manual') so the follow-up PR adds Phase 2/3 logic without
+// a schema change. See docs/PLAN-P0-02C-CONTACT-RESOLVER.md and
+// agent-specs/11-computer-contact-resolver.md.
+
+export type ContactRole =
+  | 'owner'
+  | 'gc'
+  | 'site_super'
+  | 'contracting_officer'
+  | 'decision_maker'
+  | 'other';
+
+export type ContactSource =
+  | 'raw_payload'
+  | 'apollo'
+  | 'hunter'
+  | 'sonar'
+  | 'manual';
+
+export interface ProjectContact {
+  id: string;
+  project_id: string;
+  contact_role: ContactRole;
+  full_name: string;
+  email: string | null;
+  phone: string | null;
+  linkedin_url: string | null;
+  company: string | null;
+  title: string | null;
+  source: ContactSource;
+  confidence: number;
+  inferred: boolean;
+  surfaced_at: string;
+}
+
 // Intelligence Chat (P0-01) — see docs/PLAN-P0-01-INTELLIGENCE-CHAT.md.
 // Mirrors supabase/migrations/0009_chat.sql.
 
@@ -332,6 +374,15 @@ export interface PathfinderDatabase {
           draft_at?: string;
         };
         Update: Partial<OutreachDraft>;
+        Relationships: [];
+      };
+      project_contacts: {
+        Row: ProjectContact;
+        Insert: Omit<ProjectContact, 'id' | 'surfaced_at'> & {
+          id?: string;
+          surfaced_at?: string;
+        };
+        Update: Partial<ProjectContact>;
         Relationships: [];
       };
       chat_threads: {
