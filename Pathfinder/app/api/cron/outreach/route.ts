@@ -33,8 +33,22 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 export const maxDuration = 60;
 
-const QUEUE_LIMIT = 15;
-const CYCLE_TIMEOUT_MS = 12 * 60 * 1_000;
+// CYCLE_TIMEOUT_MS must stay safely under maxDuration (Vercel kills the
+// function instance at the maxDuration ceiling). Mirrors the Ranker
+// pattern at app/api/cron/ranker/route.ts:50 (CYCLE_BUDGET_MS = 50_000)
+// — 10s buffer under the 60s ceiling so the in-flight per-project step
+// can finish AND the cleanup writes (markRunFailed, write_success log)
+// land before the function dies. Prior value was 12 minutes which
+// caused agent_runs rows to leak `status='running'` whenever Vercel
+// killed the instance at 60s before internal cleanup fired (Phase 1
+// Finding A in MEMORY/audit-pathfinder.md).
+//
+// QUEUE_LIMIT trimmed to 5 so a 50s budget covers a full cycle: each
+// outreach draft is one Anthropic call (~5–10s) plus DB writes. 5×10s
+// = 50s leaves ~10s for cleanup. Twice-per-hour cron × 5 = 240/day
+// capacity, well above realistic verified-high-priority arrival rate.
+const QUEUE_LIMIT = 5;
+const CYCLE_TIMEOUT_MS = 50_000;
 
 // ────────────────────────────────────────────────────────────────────
 // Auth — bearer CRON_SECRET, with ?secret=… escape hatch for local dev.
