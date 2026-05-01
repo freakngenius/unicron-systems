@@ -13,11 +13,20 @@ import {
   delivery,
   slackAlertOnVerified,
   architectTuningCron,
+  architectDiscoveryCron,
 } from '@/lib/inngest/functions';
 
 export const { GET, POST, PUT } = serve({
   client: inngest,
-  functions: [qualifierRank, verifier, outreach, delivery, slackAlertOnVerified, architectTuningCron],
+  functions: [
+    qualifierRank,
+    verifier,
+    outreach,
+    delivery,
+    slackAlertOnVerified,
+    architectTuningCron,
+    architectDiscoveryCron,
+  ],
 });
 
 export const dynamic = 'force-dynamic';

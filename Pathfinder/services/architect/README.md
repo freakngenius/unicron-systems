@@ -262,8 +262,62 @@ Failing any gate moves the proposal from `proposals` to `rejected` with a struct
 
 ---
 
+## Discovery session (Gate D3)
+
+### Trigger
+
+Three paths per spec §5:
+1. **Weekly Inngest cron** — `pathfinder-architect-discovery-weekly` (Sunday 04:00 UTC, 2 hours after the tuning cron to avoid stacking).
+2. **Manual operator action** — `POST /api/architect/discover` with `trigger: 'manual'`.
+3. **AdjacencyMapper threshold** — Stream A's AdjacencyMapper (Gate A2) fires `pathfinder/architect.discovery.adjacency_triggered` events; an Inngest subscriber here calls `runDiscovery({ trigger: 'adjacency_threshold', context })`. Subscriber not yet wired — TODO when A2 lands.
+
+### `POST /api/architect/discover`
+
+```http
+POST /api/architect/discover
+Authorization: Bearer <ARCHITECT_API_TOKEN>
+Content-Type: application/json
+
+{
+  "vertical_id": "pathfinder-default",          // optional
+  "trigger": "manual",                          // 'manual' | 'adjacency_threshold' | 'periodic'
+  "context": { "note": "AdjacencyMapper saw 23% of leads referencing Travis County" }   // optional
+}
+```
+
+**Success (200)** returns `{ session_id, proposals: ArchitectProposalRow[], rejected: [{candidate, reason}], summary, cost_usd, duration_ms, status }`.
+
+Each proposal lands in `pathfinder.architect_proposals` with `type='source_discovery'`. The Architect Inbox shows them under the **Sources** filter pill.
+
+### Conservatism gates (re-validated server-side)
+
+- `reference_rate >= 0.15` (jurisdiction referenced in 15%+ of qualified leads)
+- `lift_per_day >= 2`
+- `source_url` is a real `http(s)://` URL (catalog-grounded, not invented)
+- Dedupe: same `source_type + jurisdiction` proposed at most once per session
+- Max 5 proposals per session
+
+### Tools
+
+| Tool | Purpose |
+|---|---|
+| `queryRecentSignals(window_days)` | Load qualified `pathfinder.projects` rows (`verified=true`) — Pathfinder's Phase-2 stand-in for the spec's `signals` table. Also returns the currently-watched source-type set. |
+| `analyzeSourceMentions(signals, currently_watched_source_types)` | Regex-mine signal titles + summaries for jurisdiction tokens (TX-Travis, CA-LA, FL-Miami-Dade, etc.). Returns rows with `reference_rate`, `meets_15pct_gate`, `is_currently_watched`. |
+| `searchOpenDataPortals(jurisdiction)` | Look up known open-data portal URLs from `PORTAL_HINTS` in `signal-store.ts`. Empty result → candidate must be skipped (no real source to onboard). |
+| `estimateImpact(...)` | Lift estimate via `min(reference_rate × current_qualified, catalog_volume × catalog_rate)` with confidence (low/medium/high) gated on sample-size sufficiency. |
+| `createSourceProposal(...)` | Stage one source_discovery proposal; orchestrator persists after finalize. |
+| `finalizeDiscoveryRun(...)` | Terminate the session. |
+
+### Drift from spec §5
+
+- **No `signals` table**: Pathfinder uses `pathfinder.projects with verified=true` as the qualified-signal surface. Adapter at `services/architect/tools/signal-store.ts`.
+- **`PORTAL_HINTS` is a TS catalog, not a live web search**: spec implies `searchOpenDataPortals` would actually crawl open-data registries. For Phase 2 we ship a static catalog of ~8 jurisdictions; Stream E's Source Onboarder owns deeper portal discovery long-term.
+- **AdjacencyMapper threshold subscriber not yet wired**: Stream A owns AdjacencyMapper at A2. Until A2 lands, only the cron + manual triggers fire. Drift is documented in `architect-discovery-cron.ts` header.
+
+---
+
 ## Open work
 
 - Gate D1: ✓ runtime, decomposition session, API endpoint, eval scaffold (30 cases), mocked tests.
 - Gate D2: ✓ tuning session, weekly Inngest cron, manual API endpoint, eval scaffold (20 cases), mocked tests.
-- Gate D3: pending — discovery session, AdjacencyMapper trigger, 20 cases.
+- Gate D3: ✓ discovery session, weekly Inngest cron, manual API endpoint, eval scaffold (20 cases), mocked tests. AdjacencyMapper subscriber pending Stream A's A2.
