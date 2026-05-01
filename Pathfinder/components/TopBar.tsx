@@ -367,6 +367,36 @@ export function TopBar({
         zIndex: 5,
       }}
     >
+      {/* CONFIDENTIAL watermark — absolute-positioned center stamp so it
+          doesn't disturb the flex layout. pointer-events: none so clicks
+          pass through to whatever sits beneath (nothing today, but future-
+          proof). Static; no operator gate — the Pathfinder demo is shown
+          only to the customer + warm-intro prospects, and the stamp
+          deters opportunistic screenshot-and-share. */}
+      <div
+        aria-hidden="true"
+        className="pf-mono"
+        style={{
+          position: 'absolute',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          fontSize: 12,
+          fontWeight: 700,
+          letterSpacing: '0.28em',
+          color: PF.inkDim,
+          textTransform: 'uppercase',
+          pointerEvents: 'none',
+          userSelect: 'none',
+          whiteSpace: 'nowrap',
+          padding: '4px 10px',
+          border: `1px solid ${PF.ruleSoft}`,
+          borderRadius: 3,
+        }}
+      >
+        Confidential
+      </div>
+
       {/* Brand mark + wordmark */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         {/* SVG mark — basePath-aware (we serve under /pathfinder) so the
