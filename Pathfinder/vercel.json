@@ -1,11 +1,11 @@
 {
   "crons": [
-    { "path": "/api/cron/ingestor", "schedule": "0 */6 * * *" },
-    { "path": "/api/cron/verifier", "schedule": "0,30 * * * *" },
-    { "path": "/api/cron/ranker", "schedule": "0,30 * * * *" },
-    { "path": "/api/cron/outreach", "schedule": "15,45 * * * *" },
-    { "path": "/api/cron/briefing", "schedule": "0 6 * * 5" },
-    { "path": "/api/cron/slack-alerts", "schedule": "*/10 * * * *" },
-    { "path": "/api/cron/cost-alert", "schedule": "0 13 * * *" }
+    { "path": "/pathfinder/api/cron/ingestor", "schedule": "0 */6 * * *" },
+    { "path": "/pathfinder/api/cron/verifier", "schedule": "0,30 * * * *" },
+    { "path": "/pathfinder/api/cron/ranker", "schedule": "0,30 * * * *" },
+    { "path": "/pathfinder/api/cron/outreach", "schedule": "15,45 * * * *" },
+    { "path": "/pathfinder/api/cron/briefing", "schedule": "0 6 * * 5" },
+    { "path": "/pathfinder/api/cron/slack-alerts", "schedule": "*/10 * * * *" },
+    { "path": "/pathfinder/api/cron/cost-alert", "schedule": "0 13 * * *" }
   ]
 }
