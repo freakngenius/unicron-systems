@@ -1,0 +1,50 @@
+{
+  "goals": [
+    {
+      "id": "ca-permits",
+      "goal": "California permit coverage",
+      "scope_constraints": { "geography": ["CA"], "source_types": ["permits"] },
+      "expected": {
+        "min_candidates_from_registry": 3,
+        "min_estimated_lift": 4
+      }
+    },
+    {
+      "id": "tx-permits-rfp",
+      "goal": "Texas commercial permits and RFPs",
+      "scope_constraints": { "geography": ["TX"], "source_types": ["permits", "rfp"] },
+      "expected": {
+        "min_candidates_from_registry": 1,
+        "min_estimated_lift": 2
+      }
+    },
+    {
+      "id": "federal-procurement",
+      "goal": "Federal procurement (match Dodge for federal)",
+      "scope_constraints": { "geography": ["federal"], "source_types": ["rfp", "awards"] },
+      "expected": {
+        "min_candidates_from_registry": 2,
+        "min_estimated_lift": 7
+      }
+    },
+    {
+      "id": "ny-permits",
+      "goal": "New York City building permit feed",
+      "scope_constraints": { "geography": ["NY"], "source_types": ["permits"] },
+      "expected": {
+        "min_candidates_from_registry": 1,
+        "min_estimated_lift": 5
+      }
+    },
+    {
+      "id": "fl-pa-licenses",
+      "goal": "Florida public adjuster licenses",
+      "scope_constraints": { "geography": ["FL"], "source_types": ["licenses"] },
+      "expected": {
+        "min_candidates_from_registry": 0,
+        "min_estimated_lift": 0,
+        "note": "Pure long-tail goal; registry has nothing — relies on Sonar discovery."
+      }
+    }
+  ]
+}

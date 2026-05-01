@@ -1,0 +1,185 @@
+{
+  "cases": [
+    {
+      "id": "tier1-socrata-001",
+      "input": { "url": "https://data.cityofnewyork.us/resource/ipu4-2q9a.json" },
+      "expected": { "outcome": "live", "adapter_kind": "socrata", "tier": 1 },
+      "label": "NYC DOB job application filings"
+    },
+    {
+      "id": "tier1-socrata-002",
+      "input": { "url": "https://data.sfgov.org/resource/i98e-djp9.json" },
+      "expected": { "outcome": "live", "adapter_kind": "socrata", "tier": 1 },
+      "label": "SF building permits"
+    },
+    {
+      "id": "tier1-socrata-003",
+      "input": { "url": "https://data.austintexas.gov/resource/3syk-w9eu.json" },
+      "expected": { "outcome": "live", "adapter_kind": "socrata", "tier": 1 },
+      "label": "Austin issued construction permits"
+    },
+    {
+      "id": "tier1-socrata-004",
+      "input": { "url": "https://data.lacity.org/resource/yv23-pmwf.json" },
+      "expected": { "outcome": "live", "adapter_kind": "socrata", "tier": 1 },
+      "label": "LA building permits"
+    },
+    {
+      "id": "tier1-socrata-005",
+      "input": { "url": "https://data.cityofchicago.org/resource/ydr8-5enu.json" },
+      "expected": { "outcome": "live", "adapter_kind": "socrata", "tier": 1 },
+      "label": "Chicago building permits"
+    },
+    {
+      "id": "tier1-socrata-006",
+      "input": { "url": "https://data.seattle.gov/resource/76t5-zqzr.json" },
+      "expected": { "outcome": "live", "adapter_kind": "socrata", "tier": 1 },
+      "label": "Seattle building permits"
+    },
+    {
+      "id": "tier1-socrata-007",
+      "input": { "url": "https://data.cms.gov/resource/example.json" },
+      "expected": { "outcome": "live", "adapter_kind": "socrata", "tier": 1 },
+      "label": "Federal CMS Socrata dataset"
+    },
+    {
+      "id": "tier1-socrata-008",
+      "input": { "url": "https://opendata.maryland.gov/resource/example.json" },
+      "expected": { "outcome": "live", "adapter_kind": "socrata", "tier": 1 },
+      "label": "Maryland open data"
+    },
+    {
+      "id": "tier1-rest-001",
+      "input": { "url": "https://api.usaspending.gov/api/v2/search/spending_by_award/" },
+      "expected": { "outcome": "live", "adapter_kind": "rest", "tier": 1 },
+      "label": "USAspending REST API",
+      "note": "Existing inlined ingestor; eval validates the new adapter library reaches parity."
+    },
+    {
+      "id": "tier1-rest-002",
+      "input": { "url": "https://api.sam.gov/opportunities/v2/search?api_key=DEMO_KEY", "api_key_env": "SAM_GOV_API_KEY" },
+      "expected": { "outcome": "live", "adapter_kind": "rest", "tier": 1 },
+      "label": "SAM.gov opportunities REST"
+    },
+    {
+      "id": "tier1-rest-003",
+      "input": { "url": "https://api.openfda.gov/drug/event.json?limit=10" },
+      "expected": { "outcome": "live", "adapter_kind": "rest", "tier": 1 },
+      "label": "openFDA REST"
+    },
+    {
+      "id": "tier1-rest-004",
+      "input": { "url": "https://api.census.gov/data/2020/dec/responserate.json" },
+      "expected": { "outcome": "live", "adapter_kind": "rest", "tier": 1 },
+      "label": "Census REST"
+    },
+    {
+      "id": "tier1-rest-005",
+      "input": { "url": "https://api.fec.gov/v1/elections/" },
+      "expected": { "outcome": "live", "adapter_kind": "rest", "tier": 1 },
+      "label": "FEC REST"
+    },
+    {
+      "id": "tier1-rest-006",
+      "input": { "url": "https://api.beta.bls.gov/publicAPI/v2/timeseries/data/" },
+      "expected": { "outcome": "live", "adapter_kind": "rest", "tier": 1 },
+      "label": "BLS REST"
+    },
+    {
+      "id": "tier1-rss-001",
+      "input": { "url": "https://www.govinfo.gov/rss/cfr.xml" },
+      "expected": { "outcome": "live", "adapter_kind": "rss", "tier": 1 },
+      "label": "GovInfo CFR RSS"
+    },
+    {
+      "id": "tier1-rss-002",
+      "input": { "url": "https://www.federalregister.gov/articles.rss" },
+      "expected": { "outcome": "live", "adapter_kind": "rss", "tier": 1 },
+      "label": "Federal Register RSS"
+    },
+    {
+      "id": "tier1-rss-003",
+      "input": { "url": "https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&type=8-K&output=atom" },
+      "expected": { "outcome": "live", "adapter_kind": "rss", "tier": 1 },
+      "label": "SEC EDGAR Atom feed"
+    },
+    {
+      "id": "tier1-rss-004",
+      "input": { "url": "https://news.google.com/rss/search?q=construction+permits+texas" },
+      "expected": { "outcome": "live", "adapter_kind": "rss", "tier": 1 },
+      "label": "Google News RSS"
+    },
+    {
+      "id": "tier1-rss-005",
+      "input": { "url": "https://www.fhwa.dot.gov/cmaq/feed.atom" },
+      "expected": { "outcome": "live", "adapter_kind": "rss", "tier": 1 },
+      "label": "FHWA CMAQ Atom"
+    },
+    {
+      "id": "tier1-rss-006",
+      "input": { "url": "https://www.energy.gov/articles.atom" },
+      "expected": { "outcome": "live", "adapter_kind": "rss", "tier": 1 },
+      "label": "DOE articles Atom"
+    },
+    {
+      "id": "tier1-jsondump-001",
+      "input": { "url": "https://api.github.com/repos/openownership/data-standard/releases" },
+      "expected": { "outcome": "live", "adapter_kind": "json-dump", "tier": 1 },
+      "label": "GitHub releases JSON array"
+    },
+    {
+      "id": "tier1-jsondump-002",
+      "input": { "url": "https://datausa.io/api/data?drilldowns=Nation&measures=Population" },
+      "expected": { "outcome": "live", "adapter_kind": "json-dump", "tier": 1 },
+      "label": "DataUSA JSON dump"
+    },
+    {
+      "id": "tier1-jsondump-003",
+      "input": { "url": "https://download.companieshouse.gov.uk/en_basic.html" },
+      "expected": { "outcome": "live", "adapter_kind": "json-dump", "tier": 1 },
+      "label": "Companies House bulk JSON"
+    },
+    {
+      "id": "tier1-jsondump-004",
+      "input": { "url": "https://data.example.org/static/dump.jsonl" },
+      "expected": { "outcome": "live", "adapter_kind": "json-dump", "tier": 1 },
+      "label": "Generic JSONL dump"
+    },
+    {
+      "id": "tier2-jsrender-001",
+      "input": { "url": "https://www1.nyc.gov/site/buildings/index.page" },
+      "expected": { "outcome": "human-assist", "blocked_reason": "js_rendering", "tier": 2 },
+      "label": "NYC Buildings JS-rendered SPA"
+    },
+    {
+      "id": "tier2-auth-001",
+      "input": { "url": "https://app.dodge.com/api/projects" },
+      "expected": { "outcome": "human-assist", "blocked_reason": "auth_required", "tier": 2 },
+      "label": "Dodge auth-walled API"
+    },
+    {
+      "id": "tier2-pdf-001",
+      "input": { "url": "https://recorder.travis.tx.gov/dailyfiles.pdf" },
+      "expected": { "outcome": "human-assist", "blocked_reason": "pdf_inconsistent", "tier": 2 },
+      "label": "Travis County daily filings PDF"
+    },
+    {
+      "id": "tier2-pdf-002",
+      "input": { "url": "https://www.example-county.gov/recorder/2024-04-15.pdf" },
+      "expected": { "outcome": "human-assist", "blocked_reason": "pdf_inconsistent", "tier": 2 },
+      "label": "County recorder PDF"
+    },
+    {
+      "id": "tier3-paid-001",
+      "input": { "url": "https://construct-pro.com/leads" },
+      "expected": { "outcome": "declined", "blocked_reason": "paid_only", "tier": 3 },
+      "label": "Paid-only lead service"
+    },
+    {
+      "id": "tier3-paid-002",
+      "input": { "url": "https://reedconstructiondata.com/login" },
+      "expected": { "outcome": "human-assist", "blocked_reason": "auth_required", "tier": 2 },
+      "label": "Reed login wall"
+    }
+  ]
+}
