@@ -121,8 +121,12 @@ export const config = {
   // `/api/slack/events` and `/api/slack/actions` are excluded because Slack signs both
   // payloads with the signing secret (see lib/slack/bot.ts verifySlackSignature).
   // Note that `/api/slack/install/start` is NOT excluded — it's operator-only, gated.
+  // `/api/inngest` is excluded because Inngest signs every PUT (function discovery)
+  // and POST (event dispatch) with INNGEST_SIGNING_KEY; the `serve()` adapter from
+  // `inngest/next` verifies the signature internally. Same pattern as the Slack
+  // webhooks.
   matcher: [
     '/',
-    '/((?!_next/|favicon\\.ico|api/cron/|api/notifications/|api/slack/install/callback|api/slack/events|api/slack/actions).*)',
+    '/((?!_next/|favicon\\.ico|api/cron/|api/notifications/|api/slack/install/callback|api/slack/events|api/slack/actions|api/inngest).*)',
   ],
 };
