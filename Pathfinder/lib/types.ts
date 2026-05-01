@@ -378,6 +378,77 @@ export interface LlmCallRow {
 }
 
 
+// Deals + deal activities (Stream B Gate B1, migration 0050_deals.sql).
+// One row per project that has progressed past raw lead. Distinct from
+// lead_actions (HubSpot mirror); deals is the in-Pathfinder Kanban surface.
+// See Phase2-worktrees/unicron-stream-b-pathfinder/STREAM-README.md.
+
+export type DealPipelineStage =
+  | 'NEW'
+  | 'CONTACTED'
+  | 'REPLIED'
+  | 'MEETING'
+  | 'PROPOSAL'
+  | 'WON'
+  | 'LOST';
+
+export const DEAL_PIPELINE_STAGES: readonly DealPipelineStage[] = [
+  'NEW',
+  'CONTACTED',
+  'REPLIED',
+  'MEETING',
+  'PROPOSAL',
+  'WON',
+  'LOST',
+] as const;
+
+export type DealActivityType =
+  | 'stage_change'
+  | 'email_sent'
+  | 'reply_received'
+  | 'meeting_booked'
+  | 'manual_note';
+
+export interface Deal {
+  id: string;
+  project_id: string;
+  owner_email: string | null;
+  pipeline_stage: DealPipelineStage;
+  value_usd: number | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DealActivity {
+  id: string;
+  deal_id: string;
+  activity_type: DealActivityType;
+  from_stage: DealPipelineStage | null;
+  to_stage: DealPipelineStage | null;
+  payload: Record<string, unknown>;
+  actor_email: string | null;
+  created_at: string;
+}
+
+// Joined shape returned by /api/deals — deals are useless without the
+// project they reference, so the API hydrates project metadata. Avoids
+// N+1 lookups in the Kanban card render path.
+export interface DealWithProject extends Deal {
+  project: Pick<
+    Project,
+    | 'id'
+    | 'title'
+    | 'project_value'
+    | 'score'
+    | 'verified'
+    | 'nearest_branch_id'
+    | 'distance_miles'
+    | 'source'
+    | 'project_stage'
+  >;
+}
+
 // Database type bag for the typed Supabase client.
 export interface PathfinderDatabase {
   pathfinder: {
@@ -438,6 +509,27 @@ export interface PathfinderDatabase {
           cache_hit?: boolean;
         };
         Update: Partial<LlmCallRow>;
+        Relationships: [];
+      };
+      deals: {
+        Row: Deal;
+        Insert: Omit<Deal, 'id' | 'created_at' | 'updated_at' | 'pipeline_stage'> & {
+          id?: string;
+          created_at?: string;
+          updated_at?: string;
+          pipeline_stage?: DealPipelineStage;
+        };
+        Update: Partial<Deal>;
+        Relationships: [];
+      };
+      deal_activities: {
+        Row: DealActivity;
+        Insert: Omit<DealActivity, 'id' | 'created_at' | 'payload'> & {
+          id?: string;
+          created_at?: string;
+          payload?: Record<string, unknown>;
+        };
+        Update: Partial<DealActivity>;
         Relationships: [];
       };
     };
