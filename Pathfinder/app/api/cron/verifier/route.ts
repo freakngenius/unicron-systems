@@ -126,7 +126,7 @@ async function writeLog(
 // route.ts files may export.
 // ---------------------------------------------------------------------------
 
-import { anthropic as anthropicClient } from '@/lib/anthropic';
+import { anthropic as anthropicClient, setAgentContext } from '@/lib/anthropic';
 
 // ---------------------------------------------------------------------------
 // Anchor extraction (Check 1, deterministic step)
@@ -763,6 +763,11 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: runInsertRes.error?.message ?? 'failed to open agent_runs row' }, { status: 500 });
   }
   const runId = runInsertRes.data.id;
+
+  // Phase 1 G2: tag every Anthropic call this run makes (via the wrapped
+  // legacy `anthropicClient()` factory) with agent_name='verifier' +
+  // this run_id, so pathfinder.llm_calls captures full attribution.
+  setAgentContext({ agentName: 'verifier', agentRunId: runId, surface: 'cron' });
 
   await writeLog(admin, 'verify_start', {
     message: `verification cycle · ${queue.length} ranked projects pending`,

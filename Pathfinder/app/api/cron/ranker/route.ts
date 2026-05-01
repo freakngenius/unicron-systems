@@ -133,7 +133,7 @@ async function writeLog(
 // route.ts files may export.
 // ---------------------------------------------------------------------------
 
-import { anthropic } from '@/lib/anthropic';
+import { anthropic, setAgentContext } from '@/lib/anthropic';
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -515,6 +515,13 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: runInsertRes.error?.message ?? 'failed to open agent_runs row' }, { status: 500 });
   }
   const runId = runInsertRes.data.id;
+
+  // Phase 1 G2: tag every Anthropic call this run makes (via the
+  // wrapped legacy `anthropic()` factory) with agent_name='ranker' +
+  // this run_id, so pathfinder.llm_calls captures full attribution
+  // even though the handler hasn't migrated to the explicit gateway
+  // entry points (run / runStream).
+  setAgentContext({ agentName: 'ranker', agentRunId: runId, surface: 'cron' });
 
   await writeLog(admin, 'ingest_start', {
     message: `cycle_start · ${queue.length} unranked`,
