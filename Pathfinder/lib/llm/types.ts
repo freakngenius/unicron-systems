@@ -7,7 +7,7 @@ export type LLMModel =
   | 'sonar-pro'
   | 'sonar';
 
-export type LLMSurface = 'cron' | 'chat' | 'architect' | 'manual' | 'test' | 'dev';
+export type LLMSurface = 'cron' | 'chat' | 'architect' | 'manual' | 'test';
 
 export interface LLMMessage {
   role: 'system' | 'user' | 'assistant';
