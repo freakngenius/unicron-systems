@@ -6,6 +6,8 @@ import { SystemProvider } from './context/SystemContext';
 import { Onboarding } from './components/onboarding/Onboarding';
 import { LiveSystem } from './components/live/LiveSystem';
 import { ArchitectInbox } from './components/inbox/ArchitectInbox';
+import { SignInGate } from './components/auth/SignInGate';
+import { useAuth } from './lib/auth';
 
 function Shell() {
   const [tab, setTab] = useState<TabId>('onboarding');
@@ -45,12 +47,22 @@ function Shell() {
   );
 }
 
-export default function App() {
+function AuthedShell() {
+  const auth = useAuth();
+  const operatorKey = auth.status === 'signed-in' ? auth.user.id : null;
   return (
-    <SettingsProvider>
+    <SettingsProvider operatorKey={operatorKey}>
       <SystemProvider>
         <Shell />
       </SystemProvider>
     </SettingsProvider>
+  );
+}
+
+export default function App() {
+  return (
+    <SignInGate>
+      <AuthedShell />
+    </SignInGate>
   );
 }

@@ -1,0 +1,116 @@
+# unicron-platform — Stream C notes
+
+This file is the stream-scoped equivalent of `MEMORY/decisions.md` and
+`MEMORY/spec-references.md` for the Phase 2 Stream C work. The workspace-level
+`MEMORY/` directory at the repo root is untracked and shared across streams,
+so per-stream notes land here and get promoted in the PR description.
+
+## Decisions
+
+### 2026-05-01 — Stream C imports unicron-platform baseline as committed code
+
+**Choice:** Copy the canonical `unicron-platform/` (Vite + React 19 operator UI
+at the workspace root, untracked, ~1.8 MB sans node_modules) into the
+`stream/c-platform` worktree and commit it.
+
+**Why:** The Phase 2 spawn note says "stay in this worktree" and "do not modify
+code in main, in other worktrees, in `_demo-snapshot-2026-04-30/`...". The
+existing `unicron-platform/` lives in the main worktree at workspace root.
+For Stream C to deliver code via PR, the source must live inside the
+worktree. Stream C is the only stream that touches the operator UI per
+`00 - PARALLEL BUILD MAP.md`, so this single-stream import does not collide.
+
+**Alternatives considered:**
+- Operate on the workspace-root copy directly — violates the no-touch rule on
+  main; also there is no clean way to commit those changes via this branch.
+- Pick a new path like `apps/platform/` per the parallel build map — risks
+  divergence from the audit (`MEMORY/audit-unicron-platform.md`) and from the
+  `_demo-snapshot-2026-04-30/` rollback artifact.
+
+**Drift:** none — verbatim copy of the canonical demo snapshot.
+
+### 2026-05-01 — Anon Supabase client, no service role in browser
+
+**Choice:** `src/lib/supabase.ts` exposes a single anon-keyed client. Service
+role keys never reach the bundle. RLS on `pathfinder.*` allows
+`anon, authenticated` SELECT on the read-public tables, which is sufficient
+for the operator UI's read-only consumption of cron-driven activity.
+
+**Spec reference:** STREAM-README Gate C1 — "Use the **anon** Supabase client
+for reads (RLS allows `anon, authenticated` SELECT on the read-public
+tables); never use service-role keys in browser code."
+
+### 2026-05-01 — Settings persistence: localStorage + `unicron.settings`
+
+**Choice:** `SettingsContext` hydrates from localStorage (instant), then
+overwrites from `unicron.settings` (debounced 800 ms write-through). When
+auth is off, the sentinel operator key `'anon-operator'` is used so a single
+shared row is used in local dev.
+
+**Spec reference:** STREAM-README Gate C1 — "Settings drawer wires to real
+Settings table (create one in `unicron.*` schema if it doesn't exist; don't
+pollute `pathfinder.*`)."
+
+**Alternatives considered:**
+- Unauthenticated localStorage-only — fails the spec ("wires to real Settings
+  table").
+- Strict-remote-only — flashes default settings on every reload while the
+  network round-trip lands. Pragmatic to keep the localStorage cache.
+
+### 2026-05-01 — Magic-link auth gated by `VITE_AUTH_REQUIRED`
+
+**Choice:** `SignInGate` wraps the app shell. When `VITE_AUTH_REQUIRED=true`
+it requires a Supabase magic-link session before rendering. When unset or
+"false" it renders straight through (anon reads continue to work because
+RLS permits them).
+
+**Why:** STREAM-README requires "Authentication flow wires to real Supabase
+auth." The flag gives us a single config flip to enforce sign-in for staging
+or prod without blocking local dev where reads work anonymously.
+
+**Spec reference:** STREAM-README Gate C1.
+
+### 2026-05-01 — Migration range: Stream C reserves 0090-0099
+
+**Choice:** `0090_unicron_settings.sql` lives in
+`Pathfinder/supabase/migrations/`. Stream C reserves the 0090-0099 range.
+
+**Why:** `00 - PARALLEL BUILD MAP.md` lists migration ranges for each stream
+(B 0050-0069, D 0070-0079, E 0080+). Stream C was unclaimed; 0090+ keeps
+clear of E's open-ended range without forcing a renumber elsewhere.
+
+## Spec references
+
+- `unicron-platform/src/lib/supabase.ts` — implements STREAM-README Gate C1
+  Supabase client section. Drift: none.
+- `unicron-platform/src/lib/env.ts` — env validation; documents the four
+  Stream C env vars (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`,
+  `VITE_AUTH_REQUIRED`, plus the C3 feature flags). Drift: none.
+- `unicron-platform/src/lib/activity.ts` — implements STREAM-README Gate C1
+  activity feed (real `pathfinder.agent_log` reads + Realtime). Drift: none.
+- `unicron-platform/src/lib/settings.ts` — implements STREAM-README Gate C1
+  settings persistence to `unicron.settings`. Drift: none.
+- `unicron-platform/src/lib/auth.ts` — implements STREAM-README Gate C1 auth
+  flow. Drift: none.
+- `unicron-platform/src/components/live/ActivityFeed.tsx` — replaces mock with
+  `useActivityFeed`. Drift: minor — the static "Architect" status card now
+  derives `status`/`last update` from the feed and shows `proposals: —`
+  until Gate C3 wires Stream D's Architect API.
+- `unicron-platform/src/components/SettingsContext.tsx` — wires localStorage
+  + `unicron.settings` persistence behind the existing `useSettings` API.
+  Drift: none — public API unchanged, private persistence added.
+- `unicron-platform/src/components/auth/SignInGate.tsx` — sign-in wrapper.
+  New file; no prior contract.
+- `Pathfinder/supabase/migrations/0090_unicron_settings.sql` — creates the
+  `unicron` schema + `unicron.settings` table. Drift: none.
+
+## Post-deploy checklist
+
+1. After `0090_unicron_settings.sql` is applied, add `unicron` to the
+   project's "Exposed schemas" in Supabase dashboard
+   (Settings → API → Exposed schemas), so the JS client can issue
+   `supabase.schema('unicron').from('settings')` queries against PostgREST.
+2. Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` in the Vercel
+   project env (or wherever the operator UI deploys).
+3. Optional: set `VITE_AUTH_REQUIRED=true` in non-local environments to
+   enforce magic-link sign-in.

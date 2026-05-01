@@ -4,9 +4,11 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
+import { loadLocal, loadRemote, saveLocal, saveRemote } from '../lib/settings';
 
 export type ArchitectNotifications = 'all' | 'sources' | 'off';
 
@@ -47,9 +49,25 @@ type SettingsContextValue = {
 
 const SettingsContext = createContext<SettingsContextValue | null>(null);
 
-export function SettingsProvider({ children }: { children: ReactNode }) {
-  const [settings, setSettings] = useState<Settings>(defaults);
+type ProviderProps = {
+  children: ReactNode;
+  /**
+   * Optional Supabase auth user_id. When provided, settings are scoped to
+   * that operator. When null/undefined, the sentinel anonymous key is used
+   * so the same row is shared in local dev.
+   */
+  operatorKey?: string | null;
+};
+
+const REMOTE_DEBOUNCE_MS = 800;
+
+export function SettingsProvider({ children, operatorKey = null }: ProviderProps) {
+  const [settings, setSettings] = useState<Settings>(() => {
+    const cached = loadLocal();
+    return cached ? { ...defaults, ...(cached as Partial<Settings>) } : defaults;
+  });
   const [toast, setToast] = useState<Toast | null>(null);
+  const remoteWriteTimer = useRef<number | null>(null);
 
   const showToast = useCallback((text: string) => {
     setToast({ id: Date.now(), text });
@@ -57,8 +75,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!toast) return;
-    const t = setTimeout(() => setToast(null), 2000);
-    return () => clearTimeout(t);
+    const t = window.setTimeout(() => setToast(null), 2000);
+    return () => window.clearTimeout(t);
   }, [toast]);
 
   useEffect(() => {
@@ -67,10 +85,50 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     else root.classList.remove('reduced-motion');
   }, [settings.reducedMotion]);
 
+  // On mount: hydrate from Supabase, replacing the localStorage snapshot.
+  useEffect(() => {
+    let cancelled = false;
+    loadRemote(operatorKey).then((remote) => {
+      if (cancelled || !remote) return;
+      setSettings((curr) => ({ ...curr, ...(remote as Partial<Settings>) }));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [operatorKey]);
+
+  // On settings change: cache locally immediately, schedule a debounced
+  // remote upsert. Skip the very first effect tick to avoid an unnecessary
+  // upsert when nothing changed since hydration.
+  const skipFirst = useRef(true);
+  useEffect(() => {
+    saveLocal(settings as unknown as Record<string, unknown>);
+    if (skipFirst.current) {
+      skipFirst.current = false;
+      return;
+    }
+    if (remoteWriteTimer.current) {
+      window.clearTimeout(remoteWriteTimer.current);
+    }
+    remoteWriteTimer.current = window.setTimeout(() => {
+      saveRemote(operatorKey, settings as unknown as Record<string, unknown>);
+    }, REMOTE_DEBOUNCE_MS);
+    return () => {
+      if (remoteWriteTimer.current) {
+        window.clearTimeout(remoteWriteTimer.current);
+        remoteWriteTimer.current = null;
+      }
+    };
+  }, [settings, operatorKey]);
+
   const update = useCallback(
     <K extends keyof Settings>(key: K, value: Settings[K]) => {
       setSettings((prev) => {
-        if (key === 'showInternalCostMetrics' && value === true && prev.showInternalCostMetrics === false) {
+        if (
+          key === 'showInternalCostMetrics' &&
+          value === true &&
+          prev.showInternalCostMetrics === false
+        ) {
           showToast('internal cost metrics visible');
         }
         return { ...prev, [key]: value };
