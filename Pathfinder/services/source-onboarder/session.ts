@@ -3,15 +3,33 @@
 // Persistent session row + reasoning_log writer. Each Source Onboarder run
 // gets a single architect_sessions row. Steps are appended to reasoning_log
 // jsonb so the operator UI can stream them.
+//
+// Coexistence with Stream D (architect_sessions migration 0070):
+//   Stream D's columns session_type, trigger, input_payload are NOT NULL.
+//   Stream E populates them with values that match Stream D's CHECK
+//   constraints — session_type='discovery' (closest semantic match: Stream E
+//   discovers data sources), trigger='operator_action' by default
+//   (overridable for cron/inngest dispatch), and input_payload mirrors the
+//   Stream-E-native `input` jsonb. agent_role disambiguates onboarder vs
+//   coverage-expansion at the row level. Migration 0082 widens the status
+//   CHECK to accept Stream E's vocabulary.
 
 import { supabaseAdmin } from '@/lib/supabase';
 import type { OnboarderSession, ReasoningStep } from './types';
+
+// Stream D vocabulary — must match values allowed by 0070's CHECK constraints.
+// session_type CHECK: ('decomposition','tuning','discovery')
+// trigger CHECK:      ('manual','cron','adjacency_threshold','operator_action','periodic')
+const STREAM_D_SESSION_TYPE = 'discovery' as const;
+type StreamDTrigger = 'manual' | 'cron' | 'adjacency_threshold' | 'operator_action' | 'periodic';
 
 export async function createSession(args: {
   goal: string;
   input: Record<string, unknown>;
   agentRole: 'source-onboarder' | 'coverage-expansion';
   createdByUserEmail?: string | null;
+  /** Maps to Stream D's `trigger` column. Default 'operator_action'. */
+  trigger?: StreamDTrigger;
 }): Promise<OnboarderSession> {
   const sb = supabaseAdmin() as unknown as {
     from: (t: string) => {
@@ -26,6 +44,11 @@ export async function createSession(args: {
     .from('architect_sessions')
     .insert([
       {
+        // Stream D required columns (NOT NULL, CHECK-constrained).
+        session_type: STREAM_D_SESSION_TYPE,
+        trigger: args.trigger ?? 'operator_action',
+        input_payload: args.input,
+        // Stream E additive columns (added by migration 0082).
         agent_role: args.agentRole,
         goal: args.goal,
         input: args.input,

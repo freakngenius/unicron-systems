@@ -101,13 +101,13 @@ export function DistanceCell({ raw }: { raw: string }) {
 // ── ID cell (mono, truncated, click-to-copy) ─────────────────────────────
 
 export function IdCell({ raw }: { raw: string }) {
-  if (isEmpty(raw)) return <MutedDash />;
   const value = raw.trim().replace(/^`|`$/g, '');
   const onClick = React.useCallback(() => {
     if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
       void navigator.clipboard.writeText(value);
     }
   }, [value]);
+  if (isEmpty(raw)) return <MutedDash />;
 
   return (
     <button

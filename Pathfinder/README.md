@@ -36,6 +36,8 @@ Optional: run the Inngest dev server alongside to exercise the event bus:
 npx inngest-cli@latest dev
 ```
 
+**Troubleshooting:** if `pnpm typecheck` fails with `TS7031` errors on `react-markdown` component overrides (typically in `components/chat/markdown/MarkdownRenderer.tsx`), run `pnpm install` from `Pathfinder/` — stale `node_modules` can leave the `Components` type unresolved, collapsing it to `any` and cascading into "implicit any" errors on every destructured prop.
+
 ## Scripts
 
 ```bash
