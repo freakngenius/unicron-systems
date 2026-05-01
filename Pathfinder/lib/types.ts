@@ -356,6 +356,28 @@ export interface SlackMessageRow {
 }
 
 
+// LLM gateway cost telemetry. One row per call to Anthropic or Perplexity
+// via lib/llm/run.ts. Replaces (over time) the agent_runs.model_calls JSONB
+// rollup; /api/cost-summary reads both for one cycle. Migration 0014.
+export type LlmCallSurface = 'cron' | 'chat' | 'architect' | 'manual' | 'test';
+
+export interface LlmCallRow {
+  id: string;
+  agent_run_id: number | null;
+  agent_name: string | null;
+  session_id: string | null;
+  surface: LlmCallSurface;
+  model: string;
+  input_tokens: number | null;
+  output_tokens: number | null;
+  cached_input_tokens: number;
+  cost_usd: number | null;
+  latency_ms: number | null;
+  cache_hit: boolean;
+  created_at: string;
+}
+
+
 // Database type bag for the typed Supabase client.
 export interface PathfinderDatabase {
   pathfinder: {
@@ -407,6 +429,17 @@ export interface PathfinderDatabase {
       slack_workspaces: { Row: SlackWorkspace; Insert: Omit<SlackWorkspace, 'installed_at'> & { installed_at?: string }; Update: Partial<SlackWorkspace>; Relationships: [] };
       slack_branch_routes: { Row: SlackBranchRoute; Insert: Omit<SlackBranchRoute, 'created_at' | 'updated_at'> & { created_at?: string; updated_at?: string }; Update: Partial<SlackBranchRoute>; Relationships: [] };
       slack_messages: { Row: SlackMessageRow; Insert: Omit<SlackMessageRow, 'id' | 'posted_at'> & { id?: number; posted_at?: string }; Update: Partial<SlackMessageRow>; Relationships: [] };
+      llm_calls: {
+        Row: LlmCallRow;
+        Insert: Omit<LlmCallRow, 'id' | 'created_at' | 'cached_input_tokens' | 'cache_hit'> & {
+          id?: string;
+          created_at?: string;
+          cached_input_tokens?: number;
+          cache_hit?: boolean;
+        };
+        Update: Partial<LlmCallRow>;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;
