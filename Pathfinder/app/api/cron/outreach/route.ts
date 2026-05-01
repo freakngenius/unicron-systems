@@ -27,6 +27,7 @@ import {
   type OutreachContact,
   type OutreachDraftInsertRow,
 } from '@/lib/outreach';
+import { inngest } from '@/lib/inngest/client';
 import type { Branch, Customer, Project } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
@@ -454,6 +455,31 @@ export async function GET(req: Request) {
         project_id: project.id,
       });
       continue;
+    }
+
+    // Phase 2 Stream A Gate A1: emit decision.synthesized so the
+    // delivery dispatcher Inngest function (currently scaffold) and
+    // future delivery channels (briefing, hubspot pre-stamp) can fan
+    // out without going through the cron poll. draft_id left null —
+    // persistInsertRows doesn't return inserted IDs and the contract
+    // permits null for the G1 delivery scaffold. Fire-and-forget; the
+    // outreach cycle continues on emit failure.
+    try {
+      await inngest.send({
+        name: 'pathfinder/decision.synthesized',
+        data: {
+          project_id: project.id,
+          draft_id: null,
+          synthesized_at: new Date().toISOString(),
+        },
+      });
+    } catch (err) {
+      await writeLog(admin, 'error', {
+        message: `inngest emit failed (non-fatal) · ${project.id} · synthesized`,
+        reason: 'inngest_emit_failed',
+        project_id: project.id,
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
 
     if (result.warnings.length === 0) {
