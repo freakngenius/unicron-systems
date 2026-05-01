@@ -125,8 +125,14 @@ export const config = {
   // and POST (event dispatch) with INNGEST_SIGNING_KEY; the `serve()` adapter from
   // `inngest/next` verifies the signature internally. Same pattern as the Slack
   // webhooks.
+  // `/api/architect/` is excluded because Stream C's operator UI lives on a
+  // separate origin (unicron-platform). The architect routes enforce their
+  // own bearer-token auth via ARCHITECT_API_TOKEN — basic auth would block
+  // the cross-origin operator UI fetches.
+  // (The earlier `/api/dev/` exemption was removed in PR #32 alongside the
+  // wrapper-probe route cleanup.)
   matcher: [
     '/',
-    '/((?!_next/|favicon\\.ico|api/cron/|api/notifications/|api/slack/install/callback|api/slack/events|api/slack/actions|api/inngest).*)',
+    '/((?!_next/|favicon\\.ico|api/cron/|api/notifications/|api/slack/install/callback|api/slack/events|api/slack/actions|api/inngest|api/architect/).*)',
   ],
 };
