@@ -1,0 +1,127 @@
+[
+  {
+    "id": "enricher-001-multi-state-restoration",
+    "input": {
+      "project_id": "synthetic:rest-001",
+      "title": "Water restoration services for federal facility, Atlanta GA",
+      "summary": "Multi-year IDIQ contract for emergency restoration response.",
+      "source": "sam.gov"
+    },
+    "expected_output_shape": {
+      "brief_min_chars": 200,
+      "must_contain_any_of": ["restoration", "facility", "Atlanta"],
+      "citations_min": 1,
+      "model": "sonar"
+    },
+    "scoring_rubric": {
+      "structure": "4 paragraphs max, ≤2 sentences each",
+      "fact_grounding": "every claim must map to a Sonar citation",
+      "give_up_path": "INSUFFICIENT_PUBLIC_RECORD acceptable when no public record found"
+    }
+  },
+  {
+    "id": "enricher-002-fence-rental-georgia",
+    "input": {
+      "project_id": "synthetic:fence-002",
+      "title": "Temporary fence rental — Georgia DOT highway expansion",
+      "summary": "I-285 widening project requires perimeter fencing for staging areas.",
+      "source": "usaspending"
+    },
+    "expected_output_shape": {
+      "brief_min_chars": 200,
+      "must_contain_any_of": ["fence", "rental", "DOT", "Georgia"],
+      "citations_min": 1
+    },
+    "scoring_rubric": {
+      "vertical_match": "buyer is a multi-branch field-services or specialty trades company",
+      "structure": "≤8 sentences total"
+    }
+  },
+  {
+    "id": "enricher-003-pest-control-multistate",
+    "input": {
+      "project_id": "synthetic:pest-003",
+      "title": "Commercial pest control services contract — northeast region",
+      "summary": "5-state commercial portfolio, 800+ sites, multi-year RFP.",
+      "source": "sam.gov"
+    },
+    "expected_output_shape": {
+      "brief_min_chars": 200,
+      "must_contain_any_of": ["pest", "commercial", "multi-state", "branches"],
+      "citations_min": 1
+    },
+    "scoring_rubric": {
+      "shape_alignment": "buyer org has multi-branch field-sales structure",
+      "fact_grounding": "claims cite open-web sources"
+    }
+  },
+  {
+    "id": "enricher-004-traffic-control-pdx",
+    "input": {
+      "project_id": "synthetic:traffic-004",
+      "title": "Traffic control services — Portland Oregon municipal contract",
+      "summary": "MUTCD-compliant flagging + signage for street closures.",
+      "source": "sam.gov"
+    },
+    "expected_output_shape": {
+      "brief_min_chars": 200,
+      "must_contain_any_of": ["traffic", "control", "Portland", "Oregon"],
+      "citations_min": 1
+    },
+    "scoring_rubric": {
+      "vertical_match": "specialty trades / multi-state field services",
+      "freshness": "news within 60 days when present"
+    }
+  },
+  {
+    "id": "enricher-005-modular-office-rental",
+    "input": {
+      "project_id": "synthetic:modular-005",
+      "title": "Modular jobsite office rental — Hawaii naval base reconstruction",
+      "summary": "18-month lease for 12 office trailers + sanitary units.",
+      "source": "usaspending"
+    },
+    "expected_output_shape": {
+      "brief_min_chars": 200,
+      "must_contain_any_of": ["modular", "rental", "naval", "Hawaii"],
+      "citations_min": 1
+    },
+    "scoring_rubric": {
+      "shape_alignment": "specialty rental / equipment company w/ multi-region presence"
+    }
+  },
+  {
+    "id": "enricher-006-give-up-obscure",
+    "input": {
+      "project_id": "synthetic:obscure-006",
+      "title": "Indefinite-quantity supply contract — REDACTED",
+      "summary": "Limited public detail; classified end-use.",
+      "source": "sam.gov"
+    },
+    "expected_output_shape": {
+      "alt_paths": ["INSUFFICIENT_PUBLIC_RECORD"],
+      "citations_min": 0
+    },
+    "scoring_rubric": {
+      "give_up_path": "must return INSUFFICIENT_PUBLIC_RECORD when no buyer org context surfaces"
+    }
+  },
+  {
+    "id": "enricher-007-restoration-franchise-fl",
+    "input": {
+      "project_id": "synthetic:rest-007",
+      "title": "Mold remediation IDIQ — Florida hospital network",
+      "summary": "Statewide hospital portfolio, post-storm remediation playbook.",
+      "source": "usaspending"
+    },
+    "expected_output_shape": {
+      "brief_min_chars": 250,
+      "must_contain_any_of": ["mold", "remediation", "Florida", "hospital"],
+      "citations_min": 2
+    },
+    "scoring_rubric": {
+      "vertical_match": "restoration franchise w/ multi-branch / multi-state ops",
+      "freshness": "must surface news within 60 days when available"
+    }
+  }
+]

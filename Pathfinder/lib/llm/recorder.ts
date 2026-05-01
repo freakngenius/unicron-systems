@@ -34,7 +34,25 @@ export interface RecordCallInput {
 
 export function recordLLMCall(input: RecordCallInput): void {
   void writeRow(input).catch((err) => {
+    const message = err instanceof Error ? err.message : String(err);
     console.error('[llm.recorder] failed to record llm_call', err);
+    // Surface telemetry-write failures to Axiom so operator dashboards
+    // catch silent-rejection bugs (e.g. RLS, CHECK-constraint, schema
+    // drift). The Phase 1 G1+G2 RLS regression sat hidden for days
+    // behind the .catch(console.error) — rerouting through Axiom turns
+    // the next such regression into a visible alert. Fail-open: Axiom
+    // is itself fire-and-forget so a recorder rejection never bubbles.
+    logAxiom({
+      level: 'error',
+      surface: 'llm-gateway',
+      message: `recorder write failed: ${message}`,
+      error: message,
+      model: input.model,
+      llm_surface: input.surface,
+      agent_run_id: input.agentRunId ?? null,
+      agent_name: input.agentName ?? null,
+      session_id: input.sessionId ?? null,
+    });
   });
   // Mirror to Axiom for trace inspection. logAxiom is no-op when AXIOM_TOKEN
   // is unset, so this is free in environments that haven't enabled Axiom yet.

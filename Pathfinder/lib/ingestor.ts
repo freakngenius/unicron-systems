@@ -10,6 +10,7 @@
 // the news-source decision lands and Perplexity contest support responds.
 
 import { supabaseAdmin } from '@/lib/supabase';
+import { inngest } from '@/lib/inngest/client';
 
 // ────────────────────────────────────────────────────────────────────────
 // Service-role admin client (lazy)
@@ -481,6 +482,35 @@ export async function runIngestorCycle(): Promise<IngestorCycleStats> {
         deduped,
       },
     });
+
+    // Phase 2 Stream A Gate A1: emit `pathfinder/raw_event.created` per
+    // newly-inserted project. Cron remains canonical for ranking; this
+    // event lights up the downstream Inngest subscriber graph
+    // (qualifier-rank scaffold, future Enricher / Adjacency / Competitive
+    // research-tier agents in A2). Fire-and-forget — failure must not
+    // bubble back into the ingest cycle. inngest.send accepts a batch.
+    try {
+      await inngest.send(
+        fresh.map((r) => ({
+          name: 'pathfinder/raw_event.created' as const,
+          data: {
+            project_id: r.id,
+            source: r.source,
+            ingested_at: new Date().toISOString(),
+          },
+        })),
+      );
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : String(err);
+      await writeIngestorLog({
+        eventType: 'error',
+        data: {
+          message: `inngest emit failed (non-fatal) · ${fresh.length} events`,
+          reason: 'inngest_emit_failed',
+          error: reason,
+        },
+      });
+    }
   }
 
   return stats;
