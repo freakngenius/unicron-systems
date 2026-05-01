@@ -212,8 +212,58 @@ Catalog: 15 source types (federal contracting, county/municipal permits, FEMA, S
 
 ---
 
+## Tuning session (Gate D2)
+
+### Trigger
+
+Two paths:
+1. **Weekly Inngest cron** — `pathfinder-architect-tuning-weekly` registered at `Pathfinder/lib/inngest/functions/architect-tuning-cron.ts`. Schedule: `0 2 * * 0` UTC (Sunday 02:00 UTC).
+2. **Manual** — `POST /api/architect/tune` with the same bearer-token auth.
+
+### `POST /api/architect/tune`
+
+```http
+POST /api/architect/tune
+Authorization: Bearer <ARCHITECT_API_TOKEN>
+Content-Type: application/json
+
+{
+  "vertical_id": "pathfinder-default",      // optional
+  "feedback_window_days": 7                 // optional; default 7, max 90
+}
+```
+
+**Success (200)** returns `{ session_id, proposals: ArchitectProposalRow[], rejected: [{cluster_key, reason}], summary, cost_usd, duration_ms, status }`.
+
+Each proposal lands in `pathfinder.architect_proposals` with `type='tuning_suggestion'`. Stream C's Inbox shows them under the **Tuning** filter pill.
+
+### Feedback sources
+
+- `pathfinder.lead_actions` — accept/dismiss/snooze with optional reason.
+- `pathfinder.outreach_edits` — Stream B Gate B2 contract; treated as empty when the table doesn't exist live yet.
+- `pathfinder.slack_messages.resolved_action` — accept/dismiss/snooze from Slack buttons.
+
+The feedback adapter normalizes all three into a single `Feedback[]` shape with `polarity ∈ {positive, negative, neutral}` and `pipeline_trace[]` (the agents that touched the lead). `analyzeRejectionPatterns` clusters the negatives by reason; `runShadowTest` is a model-introspective estimator (see Tuning shadow-test caveat below).
+
+### Tuning shadow-test caveat
+
+Spec §4 step 5 calls for a real shadow test — applying the candidate prompt to the same sample and comparing outputs. Phase 2 ships a model-introspective estimator instead: the model itself estimates `wins / losses / side_effects` based on the cluster examples + the prompt diff, and the orchestrator gates on the spec's >50%-win-rate / <10%-side-effect bar.
+
+The proposal's `details.shadow_test.method` is set to `'model_introspective_estimate'` so the operator UI can flag this as estimated. A real per-sample re-run is on the Phase 2.5 roadmap (requires per-agent infrastructure to swap prompts and re-run downstream scoring).
+
+### Conservatism gates (re-validated server-side)
+
+- `cluster_count >= 3`
+- `shadow_test.win_rate > 0.5`
+- `shadow_test.side_effect_rate < 0.1`
+- Max 5 proposals per session (overflow goes to `rejected`).
+
+Failing any gate moves the proposal from `proposals` to `rejected` with a structured reason.
+
+---
+
 ## Open work
 
-- Gate D1: ✓ runtime, decomposition session, API endpoint, eval scaffold, 30 cases, mocked tests.
-- Gate D2: pending — tuning session, weekly Inngest cron, 20 cases.
+- Gate D1: ✓ runtime, decomposition session, API endpoint, eval scaffold (30 cases), mocked tests.
+- Gate D2: ✓ tuning session, weekly Inngest cron, manual API endpoint, eval scaffold (20 cases), mocked tests.
 - Gate D3: pending — discovery session, AdjacencyMapper trigger, 20 cases.

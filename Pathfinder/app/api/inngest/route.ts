@@ -12,12 +12,16 @@ import {
   outreach,
   delivery,
   slackAlertOnVerified,
+  architectTuningCron,
 } from '@/lib/inngest/functions';
 
 export const { GET, POST, PUT } = serve({
   client: inngest,
-  functions: [qualifierRank, verifier, outreach, delivery, slackAlertOnVerified],
+  functions: [qualifierRank, verifier, outreach, delivery, slackAlertOnVerified, architectTuningCron],
 });
 
 export const dynamic = 'force-dynamic';
+// Tuning sessions cap at 30 min per spec §9, but Inngest steps run
+// independently — the serve() route only handles dispatch, not the
+// session itself. 60s is enough for Inngest function discovery + step ack.
 export const maxDuration = 60;
