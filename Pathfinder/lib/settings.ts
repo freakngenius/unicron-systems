@@ -24,6 +24,12 @@ export type SortMode = 'score' | 'distance' | 'posted' | 'recent';
 export type TimeRange = '6h' | '24h' | '7d' | '30d';
 
 export interface PathfinderSettings {
+  /** Model-routing bar visibility. When true, AgentStatusRow renders the
+   *  ModelRoutingStrip (model names + call counts + EXPAND). When false
+   *  (default), the strip is hidden entirely and AgentStatusRow shrinks
+   *  to just the four agent cells. Operator-gated; customers never see
+   *  the toggle so it stays false for them. */
+  showModelBar: boolean;
   /** Lead-cost toggle. When true, ModelRoutingStrip shows cost columns +
    *  the per-lead footer. When false (default), they're hidden. Operators
    *  can flip this; customers don't see the toggle so it stays false. */
@@ -46,6 +52,7 @@ export interface PathfinderSettings {
 }
 
 export const DEFAULT_SETTINGS: PathfinderSettings = {
+  showModelBar: false,
   showLeadCost: false,
   defaultTimeRange: '7d',
   defaultBranchId: null,
