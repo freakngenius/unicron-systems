@@ -27,6 +27,7 @@ import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { nearestBranch, scoreProject, SCORE_TOLERANCE as SCORE_TOLERANCE_FALLBACK } from '@/lib/scoring';
 import { fetchActiveScoringConfig } from '@/lib/scoring-config-server';
+import { inngest } from '@/lib/inngest/client';
 import type { Branch, Customer, Project } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
@@ -889,6 +890,56 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: 'supabase_write_failed' }, { status: 500 });
     }
     verdicts.push(verdict);
+
+    // Phase 1 G1 Task B3/B4 hybrid: emit pathfinder/signal.verified for
+    // each newly-verified project so Inngest functions (currently
+    // slack-alert-on-verified, future Phase 2 enrichment + Architect
+    // tuning subscribers) can react with retry semantics. Failure to
+    // emit is non-fatal — the cron continues; missed events are
+    // recoverable on next cycle (verifier_pass_count is idempotent).
+    if (verdict.verified === true) {
+      try {
+        await inngest.send({
+          name: 'pathfinder/signal.verified',
+          data: {
+            project_id: project.id,
+            score: project.score ?? 0,
+            verifier_pass_count: verdict.verifier_pass_count,
+            verified_at: new Date().toISOString(),
+          },
+        });
+      } catch (err) {
+        const reason = err instanceof Error ? err.message : String(err);
+        await writeLog(admin, 'error', {
+          message: `inngest emit failed (non-fatal) · ${project.id}`,
+          reason: 'inngest_emit_failed',
+          project_id: project.id,
+          error: reason,
+        });
+      }
+    } else if (verdict.verifier_pass_count >= 2 && verdict.verified === false) {
+      // Two-strike escalation also surfaces as an event for the future
+      // Architect Inbox subscriber to consume.
+      try {
+        await inngest.send({
+          name: 'pathfinder/signal.escalated',
+          data: {
+            project_id: project.id,
+            pass_count: verdict.verifier_pass_count,
+            escalated_at: new Date().toISOString(),
+            flags: verdict.failures ?? [],
+          },
+        });
+      } catch (err) {
+        const reason = err instanceof Error ? err.message : String(err);
+        await writeLog(admin, 'error', {
+          message: `inngest emit failed (non-fatal) · ${project.id}`,
+          reason: 'inngest_emit_failed',
+          project_id: project.id,
+          error: reason,
+        });
+      }
+    }
   }
 
   // 7. Cycle close
