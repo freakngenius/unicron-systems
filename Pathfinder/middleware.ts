@@ -128,8 +128,12 @@ export const config = {
   // `/api/dev/` is excluded so the synthetic Phase 1 G2 wrapper-probe (and any
   // future /api/dev/* probes) can be hit with just the CRON_SECRET bearer the
   // route enforces internally. Removed alongside any /api/dev route in cleanup.
+  // `/api/architect/` is excluded because Stream C's operator UI lives on a
+  // separate origin (unicron-platform). The architect routes enforce their
+  // own bearer-token auth via ARCHITECT_API_TOKEN — basic auth would block
+  // the cross-origin operator UI fetches.
   matcher: [
     '/',
-    '/((?!_next/|favicon\\.ico|api/cron/|api/notifications/|api/slack/install/callback|api/slack/events|api/slack/actions|api/inngest|api/dev/).*)',
+    '/((?!_next/|favicon\\.ico|api/cron/|api/notifications/|api/slack/install/callback|api/slack/events|api/slack/actions|api/inngest|api/dev/|api/architect/).*)',
   ],
 };
