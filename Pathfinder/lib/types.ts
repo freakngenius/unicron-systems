@@ -449,6 +449,58 @@ export interface DealWithProject extends Deal {
   >;
 }
 
+// Email integrations + outreach edits (Stream B Gate B2, migration
+// 0051_outreach_edits.sql). One email_integrations row per
+// (actor_email, provider, account_email); one outreach_edits row per send.
+
+export type EmailProvider = 'gmail' | 'outlook';
+
+export interface EmailIntegration {
+  id: string;
+  actor_email: string;
+  provider: EmailProvider;
+  account_email: string;
+  // Sensitive: never selected by the anon client. Server reads via
+  // supabaseAdmin only.
+  access_token: string | null;
+  refresh_token: string | null;
+  token_expires_at: string | null;
+  scope: string | null;
+  provider_meta: Record<string, unknown>;
+  connected_at: string;
+  disconnected_at: string | null;
+}
+
+// Connection-status row served by GET /api/email/status. Token columns
+// stripped — anon-safe.
+export interface EmailIntegrationStatus {
+  actor_email: string;
+  provider: EmailProvider;
+  account_email: string;
+  connected_at: string;
+  disconnected_at: string | null;
+}
+
+export interface OutreachEdit {
+  id: string;
+  outreach_draft_id: number | null;
+  project_id: string;
+  actor_email: string;
+  provider: EmailProvider;
+  draft_subject: string | null;
+  draft_body: string;
+  sent_subject: string | null;
+  sent_body: string;
+  recipient_email: string;
+  provider_message_id: string | null;
+  provider_thread_id: string | null;
+  send_error: string | null;
+  edit_distance: number | null;
+  edit_summary: Record<string, unknown> | null;
+  sent_at: string | null;
+  created_at: string;
+}
+
 // Database type bag for the typed Supabase client.
 export interface PathfinderDatabase {
   pathfinder: {
@@ -530,6 +582,25 @@ export interface PathfinderDatabase {
           payload?: Record<string, unknown>;
         };
         Update: Partial<DealActivity>;
+        Relationships: [];
+      };
+      email_integrations: {
+        Row: EmailIntegration;
+        Insert: Omit<EmailIntegration, 'id' | 'connected_at' | 'provider_meta'> & {
+          id?: string;
+          connected_at?: string;
+          provider_meta?: Record<string, unknown>;
+        };
+        Update: Partial<EmailIntegration>;
+        Relationships: [];
+      };
+      outreach_edits: {
+        Row: OutreachEdit;
+        Insert: Omit<OutreachEdit, 'id' | 'created_at'> & {
+          id?: string;
+          created_at?: string;
+        };
+        Update: Partial<OutreachEdit>;
         Relationships: [];
       };
     };
