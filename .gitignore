@@ -41,6 +41,11 @@ yarn-error.log*
 # local images source
 /Images
 
+# demo snapshots — read-only file-system rollback artifacts (see _demo-snapshot-*/README.md)
+# Each snapshot is captured by a corresponding git tag (e.g. demo-snapshot-2026-04-30); the
+# tag is the canonical record, the on-disk copy is the rollback artifact.
+/_demo-snapshot-*/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
