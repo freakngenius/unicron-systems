@@ -7,3 +7,4 @@ export { verifier } from './verifier';
 export { outreach } from './outreach';
 export { delivery } from './delivery';
 export { slackAlertOnVerified } from './slack-alert-on-verified';
+export { sourceOnboarder } from './source-onboarder';

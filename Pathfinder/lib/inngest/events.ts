@@ -108,4 +108,24 @@ export type PathfinderEvents = {
       reference_id: string | null;
     };
   };
+
+  /**
+   * Operator (or Coverage Expansion Agent) requested onboarding of a new
+   * source. Subscribed by the Source Onboarder Inngest function (Phase 2
+   * Stream E). Returned payload is a SourceOnboarderResult.
+   */
+  'pathfinder/source.onboard.requested': {
+    name: 'pathfinder/source.onboard.requested';
+    data: {
+      kind: 'url' | 'docs_link' | 'rss' | 'file' | 'description';
+      url?: string;
+      description?: string;
+      hint?: 'socrata' | 'rest' | 'rss' | 'json-dump';
+      jurisdiction?: string;
+      poll_frequency_seconds?: number;
+      api_key_env?: string;
+      created_by_user_email?: string;
+      request_id?: string;
+    };
+  };
 };

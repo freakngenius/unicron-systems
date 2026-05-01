@@ -85,16 +85,86 @@ Tests: ticket lifecycle, resume-from-checkpoint behavior.
 - **Phase 1 G1 LLM gateway** (`lib/llm/`) is read-only contract. Source Onboarder uses gateway calls for source classification + adapter generation. Use `run` / `runStream`, not the bare SDK.
 - Migrations: use `0080+` to avoid collision with B (0050+) and D (0070+).
 
-## API contract draft (publish early, refine in Gate E1)
+## API contract — published 2026-05-01 (Gate E1)
 
-```
-POST /api/sources/onboard
-Request: { url: string, hint?: 'socrata'|'rest'|'rss'|'json-dump' }
-Response: { source_id: string, adapter_kind: string, schema: {...}, status: 'live'|'queued'|'human-assist', first_event_at?: string }
-Stream C consumes: source_id + status for the Add Source flow.
+### POST /api/sources/onboard
+
+**Request body** (`application/json`):
+
+```ts
+{
+  url?: string;                                  // candidate URL (required if no description)
+  description?: string;                          // natural-language description (alternative to url)
+  hint?: 'socrata' | 'rest' | 'rss' | 'json-dump'; // override classification
+  jurisdiction?: string;                         // e.g. 'CA', 'TX-Travis', 'federal'
+  poll_frequency_seconds?: number;               // default 1800
+  api_key_env?: string;                          // env var name holding the source's API key (if any)
+  created_by_user_email?: string;
+}
 ```
 
-Refine in Gate E1; publish final shape there.
+**Query flags:**
+- `?sync=1` — runs the agent inline; response carries the full result. Use for the
+  live demo path (Stream C "Add Source" flow). Bounded by `maxDuration=300s`;
+  the agent has its own 30-min internal cap.
+- (default async) — emits `pathfinder/source.onboard.requested` Inngest event;
+  response carries `request_id`. Stream C polls `GET /api/sources/sessions/<id>`
+  with the `session_id` returned later.
+
+**Sync response:**
+
+```ts
+{
+  ok: boolean;
+  status: 'live' | 'queued' | 'human-assist' | 'declined';
+  source_id?: string;          // present iff status === 'live'
+  adapter_kind?: 'socrata' | 'rest' | 'rss' | 'json-dump';
+  schema?: object;             // inferred field map
+  first_event_at?: string;     // ISO 8601 of the first observed event
+  ticket_id?: string;          // present iff status === 'human-assist'
+  reason?: string;             // present when not 'live'
+  session_id: string;          // architect_sessions.id — poll for reasoning_log
+  cost_usd: number;
+  duration_ms: number;
+}
+```
+
+**Async response:**
+
+```ts
+{ status: 'queued', request_id: string }
+```
+
+### GET /api/sources/sessions/:id
+
+Returns the `architect_sessions` row for a Source Onboarder run:
+
+```ts
+{
+  id: string;
+  agent_role: 'source-onboarder' | 'coverage-expansion' | 'architect';
+  goal: string;
+  status: 'running' | 'succeeded' | 'failed' | 'needs_assist' | 'timed_out';
+  reasoning_log: ReasoningStep[];          // append-only step trace
+  outcome: object | null;                  // populated on completion
+  total_cost_usd: number;
+  total_llm_calls: number;
+  total_tool_calls: number;
+  started_at: string;
+  completed_at: string | null;
+}
+```
+
+**Polling cadence:** Stream C should poll this endpoint at 1–2 Hz while
+`status === 'running'`. Each poll returns the full reasoning_log; clients
+should diff by index. Phase 2.5 will swap polling for SSE if the volume
+justifies it.
+
+### Inngest event: `pathfinder/source.onboard.requested`
+
+Same data shape as the POST body. The Coverage Expansion Agent (E2) will
+emit these events directly to dispatch the Source Onboarder against
+candidates.
 
 ## Out of scope (defer)
 
