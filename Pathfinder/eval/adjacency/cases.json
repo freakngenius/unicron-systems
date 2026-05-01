@@ -1,0 +1,101 @@
+[
+  {
+    "id": "adjacency-001-fence-rental-tx",
+    "input": {
+      "project_id": "synthetic:fence-001",
+      "title": "Temporary fence rental — Texas DOT highway expansion",
+      "summary": "Multi-year IDIQ for perimeter + barricade fencing.",
+      "geo_hint": "Houston, TX",
+      "customer_names": ["Zedcor Security"]
+    },
+    "expected_output_shape": {
+      "candidates_min": 3,
+      "candidates_max": 5,
+      "must_have_field": ["company_name", "rationale"]
+    },
+    "scoring_rubric": {
+      "vertical_match": "specialty trades / multi-state field services",
+      "geographic_relevance": "candidate located in or serving TX/Gulf",
+      "exclusion": "active customer 'Zedcor Security' must not appear"
+    }
+  },
+  {
+    "id": "adjacency-002-restoration-fl-portfolio",
+    "input": {
+      "project_id": "synthetic:rest-002",
+      "title": "Mold remediation IDIQ — Florida hospital network",
+      "summary": "Statewide hospital portfolio.",
+      "geo_hint": "Florida",
+      "customer_names": []
+    },
+    "expected_output_shape": {
+      "candidates_min": 2,
+      "must_have_field": ["company_name", "rationale"]
+    },
+    "scoring_rubric": {
+      "vertical_match": "restoration franchise (mold/water/fire) with multi-branch / multi-state ops"
+    }
+  },
+  {
+    "id": "adjacency-003-traffic-control-pdx",
+    "input": {
+      "project_id": "synthetic:traffic-003",
+      "title": "Traffic control services — Portland Oregon municipal contract",
+      "geo_hint": "Portland, OR"
+    },
+    "expected_output_shape": {
+      "candidates_min": 2,
+      "candidates_max": 5
+    },
+    "scoring_rubric": {
+      "vertical_match": "specialty trades — flagging, traffic control, signage",
+      "geographic_relevance": "candidate located in or serving PNW"
+    }
+  },
+  {
+    "id": "adjacency-004-modular-office-hi",
+    "input": {
+      "project_id": "synthetic:modular-004",
+      "title": "Modular jobsite office rental — Hawaii naval base reconstruction",
+      "geo_hint": "Honolulu, HI"
+    },
+    "expected_output_shape": {
+      "candidates_min": 1,
+      "candidates_max": 5
+    },
+    "scoring_rubric": {
+      "shape_alignment": "mobile-office / equipment rental w/ multi-region presence; HI presence preferred but not required"
+    }
+  },
+  {
+    "id": "adjacency-005-pest-control-ne",
+    "input": {
+      "project_id": "synthetic:pest-005",
+      "title": "Commercial pest control — northeast region multi-state",
+      "geo_hint": "MA, CT, NJ, NY"
+    },
+    "expected_output_shape": {
+      "candidates_min": 3,
+      "candidates_max": 5
+    },
+    "scoring_rubric": {
+      "vertical_match": "pest control with commercial division",
+      "exclusion": "no consumer-only pest brands"
+    }
+  },
+  {
+    "id": "adjacency-006-empty-niche",
+    "input": {
+      "project_id": "synthetic:niche-006",
+      "title": "Highly specialized REDACTED supply contract",
+      "summary": "Limited public detail."
+    },
+    "expected_output_shape": {
+      "candidates_min": 0,
+      "candidates_max": 3
+    },
+    "scoring_rubric": {
+      "give_up_path": "empty candidates array acceptable when no shape-aligned companies surface"
+    }
+  }
+]
