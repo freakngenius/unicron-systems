@@ -6,20 +6,19 @@ import { SourceTabFeed } from './sub/SourceTabFeed';
 import { SourceTabFile } from './sub/SourceTabFile';
 import { SourceTabDescribe } from './sub/SourceTabDescribe';
 import { ArchitectAnalysis } from './sub/ArchitectAnalysis';
-import {
-  useSystem,
-  type AgentDef,
-  type DataSource,
-} from '../../../context/SystemContext';
+import { useSystem } from '../../../context/SystemContext';
+import { analyze as runAnalyze, deploy as runDeploy } from '../../../lib/sourceOnboarderClient';
+import type {
+  AnalysisResponse,
+  SourceTabKind,
+} from '../../../lib/contracts/sourceOnboarder';
 
 type Props = {
   open: boolean;
   onClose: () => void;
 };
 
-type Tab = 'url' | 'api' | 'feed' | 'file' | 'describe';
-
-const tabs: { id: Tab; label: string }[] = [
+const tabs: { id: SourceTabKind; label: string }[] = [
   { id: 'url', label: 'URL' },
   { id: 'api', label: 'API' },
   { id: 'feed', label: 'RSS / FEED' },
@@ -27,64 +26,62 @@ const tabs: { id: Tab; label: string }[] = [
   { id: 'describe', label: 'DESCRIBE IT' },
 ];
 
+// TODO[stream-e-contract,src/components/live/panels/AddSourcePanel.tsx:62]:
+// When VITE_SOURCE_ONBOARDER_ENABLED=true, runDeploy() will hit Stream E's
+// /deploy endpoint and the response carries the canonical {source, watcher}
+// pair. Until E ships, the mock client returns the analysis's proposed
+// source + watcher as a stand-in. Both paths use addAgent + addDataSource
+// to keep SystemContext in sync.
+
 export function AddSourcePanel({ open, onClose }: Props) {
   const { addAgent, addDataSource } = useSystem();
-  const [tab, setTab] = useState<Tab>('url');
+  const [tab, setTab] = useState<SourceTabKind>('url');
   const [analyzing, setAnalyzing] = useState(false);
-  const [analyzed, setAnalyzed] = useState(false);
+  const [analysis, setAnalysis] = useState<AnalysisResponse | null>(null);
   const [deploying, setDeploying] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  // Reset on open.
   useEffect(() => {
     if (!open) return;
     setTab('url');
     setAnalyzing(false);
-    setAnalyzed(false);
+    setAnalysis(null);
     setDeploying(false);
+    setError(null);
   }, [open]);
 
-  const analyze = () => {
+  const onAnalyze = async () => {
     setAnalyzing(true);
-    window.setTimeout(() => {
+    setError(null);
+    try {
+      const res = await runAnalyze({ tab, input: '' });
+      setAnalysis(res);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
       setAnalyzing(false);
-      setAnalyzed(true);
-    }, 1200);
+    }
   };
 
-  const handleDeployWatcher = () => {
-    if (deploying) return;
+  const handleDeployWatcher = async () => {
+    if (deploying || !analysis) return;
     setDeploying(true);
-    const stamp = Date.now();
-    const watcherId = `a-permit-sacto-${stamp}`;
-    const sourceId = `src-sacto-${stamp}`;
-    const watcher: AgentDef = {
-      id: watcherId,
-      layer: 2,
-      role: 'PermitWatcher',
-      instruction:
-        'Poll Sacramento County permit feed; normalize new filings into structured events.',
-      outputTo: ['a-qualifier'],
-      dwellMs: 5000,
-      passRate: 0.34,
-      enabled: true,
-    };
-    const source: DataSource = {
-      id: sourceId,
-      type: 'permits',
-      label: 'Sacramento County permits',
-      jurisdiction: 'Sacramento County',
-      pollFrequencyMs: 60 * 60 * 1000,
-      enabled: true,
-      watcherRole: 'PermitWatcher',
-      weight: 0.18,
-    };
-    addAgent(watcher);
-    addDataSource(source);
-    window.setTimeout(() => {
+    setError(null);
+    try {
+      const res = await runDeploy({ analysisId: analysis.analysisId });
+      addAgent(res.watcher);
+      addDataSource(res.source);
+      window.setTimeout(() => {
+        setDeploying(false);
+        onClose();
+      }, 250);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e));
       setDeploying(false);
-      onClose();
-    }, 250);
+    }
   };
+
+  const analyzed = Boolean(analysis);
 
   return (
     <PanelShell
@@ -148,7 +145,7 @@ export function AddSourcePanel({ open, onClose }: Props) {
       <div className="mt-2">
         <button
           type="button"
-          onClick={analyze}
+          onClick={onAnalyze}
           disabled={analyzing}
           className={[
             'bg-white text-bg-base mono text-[12px] tracking-[0.12em] uppercase py-3 px-6 rounded-md transition-colors',
@@ -159,6 +156,12 @@ export function AddSourcePanel({ open, onClose }: Props) {
         </button>
       </div>
 
+      {error && (
+        <div className="mt-4 mono text-[11px] text-accent-magenta border border-accent-magenta/40 rounded-md p-3">
+          source-onboarder error: {error}
+        </div>
+      )}
+
       {analyzing && (
         <div className="mt-6 flex items-center gap-2 mono text-[11px] uppercase tracking-[0.22em] text-accent-gold">
           <span className="w-1.5 h-1.5 rounded-full bg-accent-gold animate-pulseDot" />
@@ -166,7 +169,7 @@ export function AddSourcePanel({ open, onClose }: Props) {
         </div>
       )}
 
-      {analyzed && <ArchitectAnalysis />}
+      {analysis && <ArchitectAnalysis />}
     </PanelShell>
   );
 }

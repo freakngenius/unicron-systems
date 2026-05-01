@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import type { DotColor, Proposal } from '../../data/mocks';
+import type { DotColor } from '../../data/mocks';
+import type { Proposal, ProposalCategory } from '../../lib/contracts/architect';
 
 const dotClass: Record<DotColor, string> = {
   cyan: 'bg-accent-cyan',
@@ -7,6 +8,12 @@ const dotClass: Record<DotColor, string> = {
   magenta: 'bg-accent-magenta',
   violet: 'bg-accent-violet',
   white: 'bg-text-primary',
+};
+
+const colorByCategory: Record<ProposalCategory, DotColor> = {
+  sources: 'cyan',
+  agents: 'gold',
+  tuning: 'magenta',
 };
 
 type Props = {
@@ -28,6 +35,8 @@ export function ProposalCard({ proposal, onApprove, onDismiss }: Props) {
     window.setTimeout(() => onApprove(proposal), 250);
   };
 
+  const color = colorByCategory[proposal.category];
+
   return (
     <article
       className={[
@@ -36,7 +45,7 @@ export function ProposalCard({ proposal, onApprove, onDismiss }: Props) {
       ].join(' ')}
     >
       <div className="flex items-center gap-2.5 mb-4">
-        <span className={['w-1.5 h-1.5 rounded-full', dotClass[proposal.typeColor]].join(' ')} />
+        <span className={['w-1.5 h-1.5 rounded-full', dotClass[color]].join(' ')} />
         <span className="mono text-[10.5px] uppercase tracking-[0.18em] text-accent-gold/85">
           {proposal.type}
         </span>

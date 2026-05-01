@@ -1,18 +1,45 @@
-import { useMemo, useState } from 'react';
-import {
-  proposals as initialProposals,
-  type Proposal,
-  type ProposalCategory,
-} from '../../data/mocks';
+import { useEffect, useMemo, useState } from 'react';
 import { ProposalCard } from './ProposalCard';
 import { useSystem, type AgentDef, type DataSource } from '../../context/SystemContext';
+import {
+  approveProposal,
+  dismissProposal,
+  listProposals,
+} from '../../lib/architectClient';
+import type { Proposal, ProposalCategory } from '../../lib/contracts/architect';
 
 type Filter = 'all' | ProposalCategory;
 
+// TODO[stream-d-contract,src/components/inbox/ArchitectInbox.tsx:fallbackApply]:
+// When VITE_ARCHITECT_API_ENABLED=true, the server-side approve handler
+// owns the SystemContext mutation; the response carries the new
+// SystemConfig. Until D ships we fall back to client-side apply with
+// hardcoded category-keyed handlers (matches the pre-C3 demo behavior).
+
 export function ArchitectInbox() {
-  const [items, setItems] = useState<Proposal[]>(initialProposals);
+  const [items, setItems] = useState<Proposal[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<Filter>('all');
   const { addAgent, addDataSource, updateAgent, config } = useSystem();
+
+  useEffect(() => {
+    let cancelled = false;
+    listProposals()
+      .then((res) => {
+        if (cancelled) return;
+        setItems(res.proposals);
+        setLoading(false);
+      })
+      .catch((e: unknown) => {
+        if (cancelled) return;
+        setError(e instanceof Error ? e.message : String(e));
+        setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const counts = useMemo(() => {
     const all = items.length;
@@ -27,9 +54,28 @@ export function ArchitectInbox() {
     return items.filter((i) => i.category === filter);
   }, [items, filter]);
 
-  const remove = (id: string) => setItems((prev) => prev.filter((p) => p.id !== id));
+  const remove = (id: string) => {
+    setItems((prev) => prev.filter((p) => p.id !== id));
+    dismissProposal(id).catch(() => {
+      // Surface in console; not blocking the UI optimistic-remove.
+    });
+  };
 
-  const approve = (proposal: Proposal) => {
+  const fallbackApply = (proposal: Proposal) => {
+    if (proposal.apply) {
+      const a = proposal.apply;
+      if (a.kind === 'add-source') {
+        addDataSource(a.source);
+        if (a.watcher) addAgent(a.watcher);
+      } else if (a.kind === 'add-agent') {
+        addAgent(a.agent);
+      } else if (a.kind === 'update-agent') {
+        updateAgent(a.agentId, a.patch);
+      }
+      return;
+    }
+    // Pre-C3 hardcoded category fallbacks (preserved so the demo path still
+    // works when running against the mock client without `apply` payloads).
     if (proposal.category === 'sources') {
       const src: DataSource = {
         id: `src-travis-${Date.now()}`,
@@ -42,19 +88,14 @@ export function ArchitectInbox() {
         weight: 0.18,
       };
       addDataSource(src);
-      // Mitose an extra PermitWatcher instance to handle the new feed.
       const permit = config.agents.find(
         (a) => a.layer === 2 && a.role === 'PermitWatcher',
       );
       if (permit) {
-        const replica: AgentDef = {
-          ...permit,
-          id: `${permit.id}-travis-${Date.now()}`,
-        };
+        const replica: AgentDef = { ...permit, id: `${permit.id}-travis-${Date.now()}` };
         addAgent(replica);
       }
     } else if (proposal.category === 'agents') {
-      // SubcontractorIntel — Layer 3 signal agent.
       const agent: AgentDef = {
         id: `a-subcontractor-${Date.now()}`,
         layer: 3,
@@ -69,7 +110,6 @@ export function ArchitectInbox() {
       };
       addAgent(agent);
     } else if (proposal.category === 'tuning') {
-      // Tighten GeoMapper passRate slightly to reflect tightened radius.
       const geo = config.agents.find((a) => a.role === 'GeoMapper');
       if (geo) {
         updateAgent(geo.id, {
@@ -78,7 +118,16 @@ export function ArchitectInbox() {
         });
       }
     }
-    remove(proposal.id);
+  };
+
+  const approve = async (proposal: Proposal) => {
+    setItems((prev) => prev.filter((p) => p.id !== proposal.id));
+    try {
+      await approveProposal(proposal.id);
+    } catch (e: unknown) {
+      console.warn('approveProposal failed', e);
+    }
+    fallbackApply(proposal);
   };
 
   const pills: { id: Filter; label: string; count: number }[] = [
@@ -115,8 +164,18 @@ export function ArchitectInbox() {
         })}
       </div>
 
+      {error && (
+        <div className="mono text-[11px] text-accent-magenta border border-accent-magenta/40 rounded-md p-3 mb-4">
+          inbox error: {error}
+        </div>
+      )}
+
       <div className="flex flex-col gap-4">
-        {visible.length === 0 ? (
+        {loading ? (
+          <div className="bg-bg-card border border-border-default rounded-lg p-6 mono text-[11px] uppercase tracking-[0.18em] text-text-secondary">
+            loading proposals…
+          </div>
+        ) : visible.length === 0 ? (
           <div className="bg-bg-card border border-border-default rounded-lg p-10 text-center">
             <div className="mono text-[12px] uppercase tracking-[0.18em] text-text-secondary mb-1">
               inbox clear

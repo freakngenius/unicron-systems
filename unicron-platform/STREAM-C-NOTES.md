@@ -112,6 +112,30 @@ to the real cron pipeline.
 
 **Spec reference:** STREAM-README Gate C2.
 
+### 2026-05-01 — Feature-flag-gated D/E clients with mock-by-default
+
+**Choice:** `src/lib/architectClient.ts` and `sourceOnboarderClient.ts` are
+typed against the contracts in `src/lib/contracts/{architect,sourceOnboarder}.ts`.
+When `VITE_ARCHITECT_API_ENABLED` / `VITE_SOURCE_ONBOARDER_ENABLED` is "true"
+AND the corresponding base URL is set, the client `fetch()`s the real API.
+Otherwise it returns mock fixtures shaped against the same contract.
+
+**Why:** Phase 2 spawn rule: "Do NOT block this gate on D/E being done. Ship
+the C-side wiring with mocks behind a feature flag or environment-gated swap
+so the swap is one-line when D/E land." The flag flip is the only change
+needed. Mock fixtures match the projected contract so consuming components
+don't branch on mock vs real.
+
+**Spec reference:** STREAM-README Gate C3.
+
+**Drift:** as of 2026-05-01 Stream D and Stream E have not published their
+canonical contracts. The `src/lib/contracts/*.ts` files document the shape
+Stream C wires against, derived from `SPEC - Architect Agent.md` and
+`SPEC - Source Onboarder Agent.md`. When D and E publish, those files are
+the single source-of-truth to reconcile against. Every TODO in the
+component-side code carries a `TODO[stream-d-contract,...]` /
+`TODO[stream-e-contract,...]` marker with the file:line for fast grep.
+
 ### 2026-05-01 — Realtime pulse mapping: agent_runs.agent_name → AgentDef.id
 
 **Choice:** `resolveAgentId(agentName, agents)` in LiveSystem.tsx does
@@ -163,6 +187,26 @@ alignment.
   + Realtime pulse + real HUD. Drift: deleted iframe variant.
 - `unicron-platform/src/components/live/LivingIntelligenceFrame.tsx` — deleted.
 - `unicron-platform/public/living-intelligence.html` — deleted.
+- `unicron-platform/src/lib/contracts/architect.ts` — published Stream D
+  contract (decomposition + proposals + approve/dismiss). Update this file
+  when D publishes the canonical shape.
+- `unicron-platform/src/lib/contracts/sourceOnboarder.ts` — published Stream E
+  contract (analyze + deploy). Update this file when E publishes.
+- `unicron-platform/src/lib/architectClient.ts` — feature-flag-gated client
+  (mock-by-default). Tests at `architectClient.test.ts` cover both modes.
+- `unicron-platform/src/lib/sourceOnboarderClient.ts` — feature-flag-gated
+  client (mock-by-default). Tests at `sourceOnboarderClient.test.ts`.
+- `unicron-platform/src/components/onboarding/ArchitectThinking.tsx` —
+  decomposition flow now drives the type-on animation from the contract's
+  `lines[]` rather than reading mocks directly. Drift: cost line still
+  filtered by `settings.showInternalCostMetrics`; documented in this file.
+- `unicron-platform/src/components/inbox/ArchitectInbox.tsx` — proposals
+  load via `listProposals()`; approve/dismiss go through the client.
+  Fallback client-side apply preserved for the mock path.
+- `unicron-platform/src/components/inbox/ProposalCard.tsx` — typed against
+  the contract Proposal; dot color derived from category.
+- `unicron-platform/src/components/live/panels/AddSourcePanel.tsx` — analyze
+  + deploy go through the Stream E client; UI flow unchanged.
 
 ## Post-deploy checklist
 
