@@ -31,6 +31,7 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { supabaseAdmin } from '@/lib/supabase';
 import { scoreProject } from '@/lib/scoring';
+import { inngest } from '@/lib/inngest/client';
 import type { Branch, Customer, Project } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
@@ -628,6 +629,27 @@ export async function GET(req: Request) {
         components: { branch_fit: 0, stage_fit: 0, value: 0, adjacency: 0 },
         demoted: true,
       });
+      // Phase 2 Stream A Gate A1: emit signal.rejected for downstream
+      // observability + tuning subscribers (Pulse, cost-of-rejection
+      // dashboards). Fire-and-forget; non-fatal.
+      try {
+        await inngest.send({
+          name: 'pathfinder/signal.rejected',
+          data: {
+            project_id: project.id,
+            score: 0,
+            rejected_at: new Date().toISOString(),
+            reason: 'classifier_demote',
+          },
+        });
+      } catch (err) {
+        await writeLog(admin, 'error', {
+          message: `inngest emit failed (non-fatal) · ${project.id} · rejected`,
+          reason: 'inngest_emit_failed',
+          project_id: project.id,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
       filtered++;
       continue;
     }
@@ -750,6 +772,28 @@ export async function GET(req: Request) {
       components: stageComponentScores,
       demoted: false,
     });
+    // Phase 2 Stream A Gate A1: emit signal.qualified for downstream
+    // research-tier subscribers (Verifier already cron-canonical, future
+    // A2 Enricher / AdjacencyMapper / CompetitiveIntel). Cron remains
+    // canonical for Verifier in G1+A1; this event lets new Inngest
+    // functions land without rewiring the cron chain. Fire-and-forget.
+    try {
+      await inngest.send({
+        name: 'pathfinder/signal.qualified',
+        data: {
+          project_id: project.id,
+          score: composite_score,
+          qualified_at: new Date().toISOString(),
+        },
+      });
+    } catch (err) {
+      await writeLog(admin, 'error', {
+        message: `inngest emit failed (non-fatal) · ${project.id} · qualified`,
+        reason: 'inngest_emit_failed',
+        project_id: project.id,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
     ranked++;
   }
 
