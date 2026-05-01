@@ -13,11 +13,22 @@ import {
   delivery,
   slackAlertOnVerified,
   sourceOnboarder,
+  coverageExpansionEstimate,
+  coverageExpansionRun,
 } from '@/lib/inngest/functions';
 
 export const { GET, POST, PUT } = serve({
   client: inngest,
-  functions: [qualifierRank, verifier, outreach, delivery, slackAlertOnVerified, sourceOnboarder],
+  functions: [
+    qualifierRank,
+    verifier,
+    outreach,
+    delivery,
+    slackAlertOnVerified,
+    sourceOnboarder,
+    coverageExpansionEstimate,
+    coverageExpansionRun,
+  ],
 });
 
 export const dynamic = 'force-dynamic';

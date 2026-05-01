@@ -128,4 +128,22 @@ export type PathfinderEvents = {
       request_id?: string;
     };
   };
+
+  /**
+   * Operator created a coverage goal; pre-flight estimate should run.
+   * Subscribed by coverage-expansion-estimate (Phase 2 Stream E, Gate E2).
+   */
+  'pathfinder/coverage.estimate.requested': {
+    name: 'pathfinder/coverage.estimate.requested';
+    data: { goal_id: string };
+  };
+
+  /**
+   * Operator approved a coverage estimate; dispatch loop should start.
+   * Subscribed by coverage-expansion-run.
+   */
+  'pathfinder/coverage.run.requested': {
+    name: 'pathfinder/coverage.run.requested';
+    data: { goal_id: string };
+  };
 };

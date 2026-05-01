@@ -8,3 +8,4 @@ export { outreach } from './outreach';
 export { delivery } from './delivery';
 export { slackAlertOnVerified } from './slack-alert-on-verified';
 export { sourceOnboarder } from './source-onboarder';
+export { coverageExpansionEstimate, coverageExpansionRun } from './coverage-expansion';

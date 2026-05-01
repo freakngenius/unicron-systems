@@ -162,9 +162,85 @@ justifies it.
 
 ### Inngest event: `pathfinder/source.onboard.requested`
 
-Same data shape as the POST body. The Coverage Expansion Agent (E2) will
-emit these events directly to dispatch the Source Onboarder against
-candidates.
+Same data shape as the POST body. The Coverage Expansion Agent (E2) emits
+these events directly to dispatch the Source Onboarder against candidates.
+
+---
+
+## Gate E2 API contract — published 2026-05-01
+
+### POST /api/coverage/goals
+
+Creates a draft coverage goal and queues the pre-flight estimate.
+
+```ts
+// Request
+{
+  goal: string;                                // e.g. "California permit coverage"
+  vertical_id?: string;
+  scope_constraints?: {
+    geography?: string[];                      // ['CA', 'OR', 'WA']
+    source_types?: string[];                   // ['permits', 'rfp']
+    max_sources?: number;
+    estimated_qualified_lift_floor?: number;
+  };
+  budget_usd?: number;                         // default 50
+  timeout_hours?: number;                      // default 24
+  created_by_user_email?: string;
+}
+
+// Response
+{ goal_id: string; status: 'estimating' }
+```
+
+### GET /api/coverage/goals
+Returns `{ goals: CoverageGoalRow[] }` for the operator UI Coverage tab.
+
+### GET /api/coverage/goals/[id]
+Returns `{ goal: CoverageGoalRow, candidates: CoverageGoalCandidate[] }`.
+Stream C polls this for goal-detail page progress.
+
+### POST /api/coverage/goals/[id]/run
+Operator approves the estimate. Transitions status `draft` → `running` and
+emits `pathfinder/coverage.run.requested`. Inngest handler dispatches
+Source Onboarder against ranked candidates (max 5 concurrent).
+
+### Inngest events
+- `pathfinder/coverage.estimate.requested` `{ goal_id }`
+- `pathfinder/coverage.run.requested` `{ goal_id }`
+
+---
+
+## Gate E3 API contract — Tier 2 human-assist queue
+
+### GET /api/architect/inbox?category=source-discovery&status=open
+Lists tickets. `category=source-discovery` is Stream E's default; Stream D
+uses `category=architect-proposal`. `status` defaults to `open`.
+
+### POST /api/architect/inbox/[id]/resolve
+
+Three resolution modes:
+
+```ts
+{
+  resolution: 'manual' | 'resume' | 'dismiss';
+  resolved_by_user_email?: string;
+  resolution_note?: string;
+
+  // resume-only
+  resume_url?: string;                  // overrides original candidate_url
+  resume_api_key_env?: string;
+  resume_hint?: 'socrata' | 'rest' | 'rss' | 'json-dump';
+  resume_jurisdiction?: string;
+}
+```
+
+- `manual` — operator handled out-of-band; ticket → resolved.
+- `dismiss` — ticket → dismissed.
+- `resume` — operator supplied missing piece; Source Onboarder is
+  re-dispatched with the supplemental input; ticket → in_progress until
+  the resume run completes. Returns `{ status: 'in_progress', request_id }`
+  for the UI to follow.
 
 ## Out of scope (defer)
 
