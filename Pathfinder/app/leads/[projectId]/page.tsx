@@ -8,6 +8,7 @@ import { notFound } from 'next/navigation';
 
 import { LeadDetail } from '@/components/lead/LeadDetail';
 import { supabase } from '@/lib/supabase';
+import { buildTimelineForProject, type TimelineEvent } from '@/lib/timeline';
 import type {
   OutreachDraft,
   OutreachEdit,
@@ -23,8 +24,9 @@ async function fetchData(projectId: string): Promise<{
   latestEmailDraft: OutreachDraft | null;
   contacts: ProjectContact[];
   recentEdits: OutreachEdit[];
+  timelineEvents: TimelineEvent[];
 }> {
-  const [projectRes, draftRes, contactsRes, editsRes] = await Promise.all([
+  const [projectRes, draftRes, contactsRes, editsRes, timelineEvents] = await Promise.all([
     supabase.from('projects').select('*').eq('id', projectId).maybeSingle(),
     supabase
       .from('outreach_drafts')
@@ -44,6 +46,7 @@ async function fetchData(projectId: string): Promise<{
       .eq('project_id', projectId)
       .order('created_at', { ascending: false })
       .limit(20),
+    buildTimelineForProject(projectId).catch(() => [] as TimelineEvent[]),
   ]);
 
   return {
@@ -51,6 +54,7 @@ async function fetchData(projectId: string): Promise<{
     latestEmailDraft: ((draftRes.data ?? [])[0] as OutreachDraft | undefined) ?? null,
     contacts: ((contactsRes.data ?? []) as ProjectContact[]) ?? [],
     recentEdits: ((editsRes.data ?? []) as OutreachEdit[]) ?? [],
+    timelineEvents,
   };
 }
 
@@ -59,9 +63,8 @@ export default async function LeadDetailPage({
 }: {
   params: { projectId: string };
 }) {
-  const { project, latestEmailDraft, contacts, recentEdits } = await fetchData(
-    params.projectId,
-  );
+  const { project, latestEmailDraft, contacts, recentEdits, timelineEvents } =
+    await fetchData(params.projectId);
   if (!project) notFound();
 
   return (
@@ -70,6 +73,7 @@ export default async function LeadDetailPage({
       latestEmailDraft={latestEmailDraft}
       contacts={contacts}
       recentEdits={recentEdits}
+      timelineEvents={timelineEvents}
     />
   );
 }

@@ -10,7 +10,9 @@
 
 import * as React from 'react';
 
+import { Timeline } from '@/components/lead/Timeline';
 import { hexAlpha, PF_TINTS } from '@/lib/agent-tints';
+import type { TimelineEvent } from '@/lib/timeline';
 import type {
   EmailIntegrationStatus,
   EmailProvider,
@@ -25,6 +27,7 @@ interface LeadDetailProps {
   latestEmailDraft: OutreachDraft | null;
   contacts: ProjectContact[];
   recentEdits: OutreachEdit[];
+  timelineEvents?: TimelineEvent[];
 }
 
 export function LeadDetail({
@@ -32,6 +35,7 @@ export function LeadDetail({
   latestEmailDraft,
   contacts,
   recentEdits,
+  timelineEvents,
 }: LeadDetailProps) {
   return (
     <main
@@ -82,6 +86,9 @@ export function LeadDetail({
           contacts={contacts}
         />
         <Sidebar project={project} contacts={contacts} recentEdits={recentEdits} />
+      </div>
+      <div style={{ marginTop: 16 }}>
+        <Timeline projectId={project.id} initialEvents={timelineEvents} />
       </div>
     </main>
   );

@@ -34,6 +34,7 @@ interface SendBody {
   sent_subject?: unknown;
   sent_body?: unknown;
   outreach_draft_id?: unknown;
+  deal_id?: unknown;
 }
 
 export async function POST(req: NextRequest) {
@@ -76,6 +77,7 @@ export async function POST(req: NextRequest) {
   try {
     const result = await sendOutreach({
       projectId: body.project_id,
+      dealId: typeof body.deal_id === 'string' ? body.deal_id : null,
       outreachDraftId,
       actorEmail: body.actor_email,
       provider: body.provider,

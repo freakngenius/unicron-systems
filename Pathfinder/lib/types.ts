@@ -501,6 +501,28 @@ export interface OutreachEdit {
   created_at: string;
 }
 
+// Email threads (Stream B Gate B3, migration 0052_email_threads.sql).
+// One row per (provider, provider_thread_id). Seeded on outbound send
+// (lib/email/outreach-send.ts) and updated when an inbound reply lands
+// on a tracked thread (lib/email/webhooks).
+
+export interface EmailThread {
+  id: string;
+  provider: EmailProvider;
+  provider_thread_id: string;
+  project_id: string;
+  deal_id: string | null;
+  actor_email: string;
+  subject: string | null;
+  recipient_email: string;
+  last_outbound_at: string | null;
+  last_inbound_at: string | null;
+  replied_at: string | null;
+  message_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
 // Database type bag for the typed Supabase client.
 export interface PathfinderDatabase {
   pathfinder: {
@@ -601,6 +623,17 @@ export interface PathfinderDatabase {
           created_at?: string;
         };
         Update: Partial<OutreachEdit>;
+        Relationships: [];
+      };
+      email_threads: {
+        Row: EmailThread;
+        Insert: Omit<EmailThread, 'id' | 'created_at' | 'updated_at' | 'message_count'> & {
+          id?: string;
+          created_at?: string;
+          updated_at?: string;
+          message_count?: number;
+        };
+        Update: Partial<EmailThread>;
         Relationships: [];
       };
     };

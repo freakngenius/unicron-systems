@@ -12,11 +12,16 @@
 import { captureEdit } from '@/lib/email/edits';
 import { getActiveIntegration } from '@/lib/email/integrations';
 import { sendEmail } from '@/lib/email/send';
+import { recordOutboundThread } from '@/lib/email/threads';
 import { supabaseAdmin } from '@/lib/supabase';
 import type { EmailProvider, OutreachEdit } from '@/lib/types';
 
 export interface SendOutreachInput {
   projectId: string;
+  // Optional FK to the Kanban deal; when set, recordOutboundThread links
+  // the email_threads row to the deal so reply-detection can flip the
+  // pipeline stage on first inbound reply.
+  dealId?: string | null;
   outreachDraftId?: number | null;
   actorEmail: string;
   provider: EmailProvider;
@@ -77,6 +82,25 @@ export async function sendOutreach(input: SendOutreachInput): Promise<SendOutrea
     providerThreadId,
     sendError,
   });
+
+  // Seed pathfinder.email_threads on successful send so reply-detection
+  // (Gate B3) can match inbound replies. Best-effort — a thread-record
+  // failure shouldn't unwind the send. The send already happened.
+  if (!sendError && providerThreadId) {
+    try {
+      await recordOutboundThread({
+        provider: input.provider,
+        providerThreadId,
+        projectId: input.projectId,
+        dealId: input.dealId ?? null,
+        actorEmail: input.actorEmail,
+        subject: input.sentSubject ?? null,
+        recipientEmail: input.recipientEmail,
+      });
+    } catch {
+      // swallow; the send already succeeded and the edit was recorded
+    }
+  }
 
   return sendError
     ? { ok: false, edit: editRow, error: sendError }
