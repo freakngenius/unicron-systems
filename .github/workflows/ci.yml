@@ -1,0 +1,130 @@
+name: CI
+
+# Phase 1 G2 Task 4. Runs on every PR to main.
+# Mirrors the local pre-commit hook (Phase D) — typecheck + lint + test.
+# Spec-references-check ensures every modified file under Pathfinder/lib/,
+# Pathfinder/services/, or workspace-root lib/ has an entry in
+# MEMORY/spec-references.md so drift stays visible.
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pathfinder-checks:
+    runs-on: ubuntu-latest
+    name: Pathfinder lint + typecheck + test
+    defaults:
+      run:
+        working-directory: Pathfinder
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Need history for spec-references-check git diff against base.
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+          cache-dependency-path: Pathfinder/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm run lint
+
+      - name: Typecheck
+        run: pnpm run typecheck
+
+      - name: Test (unit + integration with mocked LLMs)
+        run: pnpm run test
+        env:
+          # Tests that touch live Supabase pull these from secrets when set;
+          # purely-pure tests don't need them.
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+  spec-references-check:
+    runs-on: ubuntu-latest
+    name: spec-references.md updated for changed lib code
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Compare changed files vs MEMORY/spec-references.md
+        run: |
+          set -euo pipefail
+          BASE="${{ github.event.pull_request.base.sha }}"
+          HEAD="${{ github.event.pull_request.head.sha }}"
+          echo "Diffing $BASE..$HEAD"
+
+          # Files in Pathfinder/lib/, Pathfinder/services/, or workspace-root
+          # lib/ that changed in this PR.
+          CHANGED=$(git diff --name-only "$BASE" "$HEAD" | grep -E '^(Pathfinder/(lib|services)/|lib/)' || true)
+          if [ -z "$CHANGED" ]; then
+            echo "No lib/services changes — skipping spec-references-check."
+            exit 0
+          fi
+
+          echo "Changed lib/services files:"
+          echo "$CHANGED"
+
+          # Read MEMORY/spec-references.md once.
+          if [ ! -f MEMORY/spec-references.md ]; then
+            echo "::warning::MEMORY/spec-references.md is missing — cannot enforce drift map. Skipping."
+            exit 0
+          fi
+          REF=$(cat MEMORY/spec-references.md)
+
+          MISSING=()
+          while IFS= read -r f; do
+            [ -z "$f" ] && continue
+            if ! echo "$REF" | grep -F -q "$f"; then
+              MISSING+=("$f")
+            fi
+          done <<<"$CHANGED"
+
+          if [ ${#MISSING[@]} -gt 0 ]; then
+            echo "::error::The following changed files are not referenced in MEMORY/spec-references.md:"
+            printf '  - %s\n' "${MISSING[@]}"
+            echo ""
+            echo "Add a section per file mapping it to the spec section it implements."
+            echo "Template lives at the top of MEMORY/spec-references.md."
+            exit 1
+          fi
+
+          echo "All changed lib/services files have spec-references entries."
+
+  eval-scaffolding-check:
+    runs-on: ubuntu-latest
+    name: eval/ scaffolding present
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify eval/ structure exists
+        run: |
+          set -euo pipefail
+          if [ ! -d eval ]; then
+            echo "::warning::eval/ directory does not exist yet — will be required after Phase 2 agent specs."
+            mkdir -p eval
+          fi
+          # Required: at minimum a README pointing at agent eval-set conventions.
+          if [ ! -f eval/README.md ]; then
+            echo "::warning::eval/README.md not found. Phase 2 will populate per-agent eval sets here."
+          fi
+          echo "eval/ scaffolding present (or warned about)."

@@ -1,0 +1,20 @@
+#!/usr/bin/env sh
+# Phase 1 G2 Task 5 — local pre-commit hook mirroring CI.
+# Runs only the Pathfinder checks because Pathfinder is the active app.
+# If the workspace-root app or unicron-platform/ resume active development
+# in Phase 2, extend this to cover them too.
+#
+# Skipped if no Pathfinder/ files are staged.
+
+set -e
+
+STAGED_PATHFINDER=$(git diff --cached --name-only --diff-filter=ACMR | grep -E '^Pathfinder/' || true)
+if [ -z "$STAGED_PATHFINDER" ]; then
+  exit 0
+fi
+
+cd Pathfinder
+echo "→ pnpm typecheck"
+pnpm run typecheck
+echo "→ pnpm lint (staged files only via lint-staged)"
+pnpm exec lint-staged --diff-filter=ACMR

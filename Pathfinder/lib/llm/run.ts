@@ -19,7 +19,14 @@ import { costUsd } from './pricing';
 import { recordLLMCall } from './recorder';
 
 const DEFAULT_MAX_TOKENS = 1024;
-const SONAR_ENDPOINT = 'https://api.perplexity.ai/chat/completions';
+const SONAR_ENDPOINT_DIRECT = 'https://api.perplexity.ai/chat/completions';
+// Helicone gateway endpoints (env-gated; no-op when HELICONE_API_KEY unset).
+// Helicone routes the same Anthropic / Perplexity API surface through its
+// observability layer for trace inspection + per-call attribution.
+// Anthropic: clients SDK with baseURL override + Helicone-Auth header.
+// Perplexity: Helicone proxies the OpenAI-compatible endpoint.
+const HELICONE_ANTHROPIC_BASE_URL = 'https://anthropic.helicone.ai';
+const HELICONE_PERPLEXITY_ENDPOINT = 'https://oai.helicone.ai/v1/chat/completions';
 
 type AnthropicLike = Pick<Anthropic, 'messages'>;
 let _anthropicOverride: AnthropicLike | null = null;
@@ -27,6 +34,9 @@ let _anthropicClient: Anthropic | null = null;
 
 export function setAnthropicClientForTesting(stub: AnthropicLike | null): void {
   _anthropicOverride = stub;
+  // Reset cached client so the next anthropicClient() call rebuilds with
+  // (or without) Helicone routing if env changed mid-test.
+  _anthropicClient = null;
 }
 
 function anthropicClient(): Anthropic {
@@ -34,8 +44,43 @@ function anthropicClient(): Anthropic {
   if (_anthropicClient) return _anthropicClient;
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error('ANTHROPIC_API_KEY is not set');
-  _anthropicClient = new Anthropic({ apiKey });
+  const heliconeKey = process.env.HELICONE_API_KEY;
+  if (heliconeKey) {
+    _anthropicClient = new Anthropic({
+      apiKey,
+      baseURL: HELICONE_ANTHROPIC_BASE_URL,
+      defaultHeaders: {
+        'Helicone-Auth': `Bearer ${heliconeKey}`,
+      },
+    });
+  } else {
+    _anthropicClient = new Anthropic({ apiKey });
+  }
   return _anthropicClient;
+}
+
+function sonarEndpoint(): string {
+  return process.env.HELICONE_API_KEY
+    ? HELICONE_PERPLEXITY_ENDPOINT
+    : SONAR_ENDPOINT_DIRECT;
+}
+
+function sonarHeaders(apiKey: string, accept?: string): Record<string, string> {
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${apiKey}`,
+    'Content-Type': 'application/json',
+  };
+  if (accept) headers.Accept = accept;
+  // When routing through Helicone, the gateway needs its own auth header
+  // alongside the upstream Perplexity Authorization header.
+  const heliconeKey = process.env.HELICONE_API_KEY;
+  if (heliconeKey) {
+    headers['Helicone-Auth'] = `Bearer ${heliconeKey}`;
+    // Tell Helicone which target API to forward to (its OAI-compatible
+    // generic gateway needs a hint).
+    headers['Helicone-Target-URL'] = SONAR_ENDPOINT_DIRECT;
+  }
+  return headers;
 }
 
 interface SonarFetchOverride {
@@ -154,12 +199,9 @@ async function runSonar(req: LLMRequest): Promise<LLMResponse> {
   const apiKey = process.env.PERPLEXITY_API_KEY;
   if (!apiKey) throw new Error('PERPLEXITY_API_KEY is not set');
   const startedAt = Date.now();
-  const res = await sonarFetch()(SONAR_ENDPOINT, {
+  const res = await sonarFetch()(sonarEndpoint(), {
     method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
+    headers: sonarHeaders(apiKey),
     body: JSON.stringify(buildSonarBody(req, false)),
   });
   if (!res.ok) {
@@ -251,13 +293,9 @@ async function* streamSonar(req: LLMRequest): AsyncGenerator<LLMStreamEvent, voi
   const apiKey = process.env.PERPLEXITY_API_KEY;
   if (!apiKey) throw new Error('PERPLEXITY_API_KEY is not set');
   const startedAt = Date.now();
-  const res = await sonarFetch()(SONAR_ENDPOINT, {
+  const res = await sonarFetch()(sonarEndpoint(), {
     method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-      Accept: 'text/event-stream',
-    },
+    headers: sonarHeaders(apiKey, 'text/event-stream'),
     body: JSON.stringify(buildSonarBody(req, true)),
   });
   if (!res.ok || !res.body) {

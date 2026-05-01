@@ -1,5 +1,7 @@
-// LLM call recorder — Phase 1 G1 Task A2.
-// Writes per-call rows to pathfinder.llm_calls (migration 0014).
+// LLM call recorder — Phase 1 G1 Task A2 + G2 Task 3 Axiom hook.
+// Writes per-call rows to pathfinder.llm_calls (migration 0014). Also
+// fires an Axiom event per call for trace inspection alongside the
+// supabase row (env-gated by AXIOM_TOKEN; no-op when unset).
 //
 // Used by both run() (one-shot) and runStream() (streaming) entry points,
 // plus directly by lib/anthropic.ts and lib/chat/sonar.ts streaming wrappers
@@ -13,6 +15,7 @@
 // transitively import the recorder via lib/llm/run.ts. Dynamic import
 // pushes the env check to first actual write.
 
+import { logAxiom } from '../observability/axiom';
 import type { LLMSurface } from './types';
 
 export interface RecordCallInput {
@@ -32,6 +35,24 @@ export interface RecordCallInput {
 export function recordLLMCall(input: RecordCallInput): void {
   void writeRow(input).catch((err) => {
     console.error('[llm.recorder] failed to record llm_call', err);
+  });
+  // Mirror to Axiom for trace inspection. logAxiom is no-op when AXIOM_TOKEN
+  // is unset, so this is free in environments that haven't enabled Axiom yet.
+  logAxiom({
+    level: 'info',
+    surface: 'llm-gateway',
+    message: `${input.model} ${input.surface}`,
+    model: input.model,
+    llm_surface: input.surface,
+    agent_run_id: input.agentRunId ?? null,
+    agent_name: input.agentName ?? null,
+    session_id: input.sessionId ?? null,
+    input_tokens: input.inputTokens,
+    output_tokens: input.outputTokens,
+    cached_input_tokens: input.cachedInputTokens ?? 0,
+    cost_usd: input.costUsd,
+    latency_ms: input.latencyMs,
+    cache_hit: input.cacheHit ?? false,
   });
 }
 
