@@ -9,7 +9,11 @@ const mockInsert = vi.fn().mockResolvedValue({ error: null });
 const mockFrom = vi.fn(() => ({ insert: mockInsert }));
 
 vi.mock('@/lib/supabase', () => ({
+  // Recorder uses supabaseAdmin() (service role) — anon RLS rejects writes
+  // to pathfinder.llm_calls. Mock both so this file documents the contract
+  // and any accidental revert to anon would still resolve the mock.
   supabase: { from: mockFrom },
+  supabaseAdmin: () => ({ from: mockFrom }),
 }));
 
 import { recordLLMCall } from '@/lib/llm/recorder';

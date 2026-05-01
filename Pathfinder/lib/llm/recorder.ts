@@ -60,13 +60,25 @@ async function writeRow(input: RecordCallInput): Promise<void> {
   // Lazy import: only load lib/supabase.ts on first actual write so test
   // files that transitively pull in this module via lib/llm/run.ts don't
   // explode at module-load when env vars aren't set.
-  const { supabase } = await import('../supabase');
+  //
+  // **Service role required.** RLS on pathfinder.llm_calls is
+  //   policy llm_calls_write: cmd=ALL, roles={service_role}, with_check=true
+  //   policy llm_calls_read:  cmd=SELECT, roles={anon, authenticated}, qual=true
+  // The anon `supabase` client RLS-rejects every insert silently — the
+  // postgrest error returned by .insert() is caught by the outer
+  // recordLLMCall fire-and-forget and only console.error'd, so writes
+  // appear to succeed (no caller failure) while the table stays empty.
+  // This was the actual cause of pathfinder.llm_calls staying at 0 rows
+  // through Phase 1 G1 + G2 despite both gateway and wrapped-anthropic()
+  // paths firing recordLLMCall. Switch to supabaseAdmin() (service role)
+  // so the policy admits the insert.
+  const { supabaseAdmin } = await import('../supabase');
   // Loose-typed cast follows the convention in lib/briefing.ts +
   // lib/scoring-config-server.ts: supabase-js generated types collide with
   // pathfinder's hand-written PathfinderDatabase narrowing under
   // PostgrestVersion: 12. The Insert type still validates at the row level
   // when callers go through this function (RecordCallInput is the contract).
-  const sb = supabase as unknown as {
+  const sb = supabaseAdmin() as unknown as {
     from: (t: string) => {
       insert: (row: Record<string, unknown>) => Promise<{ error: { message: string } | null }>;
     };
