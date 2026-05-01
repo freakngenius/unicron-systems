@@ -156,6 +156,29 @@ function isoDateNDaysAgo(n: number): string {
 
 type CandidateOutcome = 'posted' | 'no_route' | 'snoozed' | 'already_posted';
 
+/**
+ * Public per-project entry point — used by the Inngest function
+ * `slack-alert-on-verified` (Phase 1 G1 Task B2). Wraps `processCandidate`
+ * with a try/catch + audit so transient failures don't tear down the
+ * Inngest run before its retry kicks in.
+ */
+export async function runSlackAlertsForProject(
+  project: Project,
+): Promise<{ outcome: CandidateOutcome | 'error'; reason?: string }> {
+  try {
+    const outcome = await processCandidate(project);
+    return { outcome };
+  } catch (e) {
+    const reason = e instanceof Error ? e.message : String(e);
+    await auditSlack('alert_failed', {
+      message: 'alert dispatch threw (per-project entry)',
+      project_id: project.id,
+      reason,
+    });
+    return { outcome: 'error', reason };
+  }
+}
+
 async function processCandidate(project: Project): Promise<CandidateOutcome> {
   // 1. Check snooze suppression first (cheapest skip).
   if (await isProjectSnoozed(project.id)) {
