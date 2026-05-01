@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { LivingIntelligenceFrame } from './LivingIntelligenceFrame';
+import { useMemo, useState } from 'react';
+import { Visualizer } from '../visualizer/Visualizer';
 import { useSettings } from '../SettingsContext';
 import { useSystem } from '../../context/SystemContext';
 import { ActivityFeed } from './ActivityFeed';
@@ -7,29 +7,50 @@ import { ActionBar, type ActivePanel } from './ActionBar';
 import { AddAgentPanel } from './panels/AddAgentPanel';
 import { AddSourcePanel } from './panels/AddSourcePanel';
 import { EditNodePanel } from './panels/EditNodePanel';
+import { useAgentRuns } from '../../lib/agentRuns';
+import { useRealHud } from '../../lib/hud';
+import type { AgentDef } from '../../context/SystemContext';
 
 type Props = {
   onArchitectClick: () => void;
   onGoToOnboarding: () => void;
 };
 
+const COST_SUMMARY_URL = import.meta.env.VITE_COST_SUMMARY_URL as string | undefined;
+
+/** Resolve an `agent_runs.agent_name` (e.g. 'ranker') to the matching
+ *  SystemConfig agent id (e.g. 'a-ranker') so the visualizer can pulse the
+ *  right node. Falls back to null when no role matches. */
+function resolveAgentId(agentName: string, agents: AgentDef[]): string | null {
+  const needle = agentName.toLowerCase();
+  const direct = agents.find((a) => a.role.toLowerCase() === needle);
+  if (direct) return direct.id;
+  const fuzzy = agents.find(
+    (a) => a.role.toLowerCase().includes(needle) || needle.includes(a.role.toLowerCase()),
+  );
+  return fuzzy?.id ?? null;
+}
+
 export function LiveSystem({ onArchitectClick, onGoToOnboarding }: Props) {
   const { settings } = useSettings();
   const { config } = useSystem();
   const [activePanel, setActivePanel] = useState<ActivePanel>(null);
-  // selectedAgentId stays null because the canvas now lives in an iframe; the
-  // Edit Node panel falls back to a default agent when nothing is selected.
-  const selectedAgentId: string | null = null;
+  const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
+
+  const { lastPulse } = useAgentRuns();
+  const { hud } = useRealHud(COST_SUMMARY_URL);
+
+  const pulseSignal = useMemo(() => {
+    if (!lastPulse) return null;
+    const agentId = resolveAgentId(lastPulse.agentName, config.agents);
+    return agentId ? { agentId, key: lastPulse.key } : null;
+  }, [lastPulse, config.agents]);
+
   const togglePanel = (id: NonNullable<ActivePanel>) => {
     setActivePanel((curr) => (curr === id ? null : id));
   };
 
   const close = () => setActivePanel(null);
-
-  const handleAgentUpdated = (_agentId: string) => {
-    // Live pulse on the iframe will be added once postMessage carries config diffs.
-    // For now the system config update lands silently.
-  };
 
   if (config.status === 'unconfigured') {
     return (
@@ -60,9 +81,18 @@ export function LiveSystem({ onArchitectClick, onGoToOnboarding }: Props) {
 
       <div className="grid grid-cols-1 lg:grid-cols-[7fr_3fr] min-h-[calc(100vh-56px)]">
         <section className="relative border-r border-border-default min-h-[60vh]">
-          <LivingIntelligenceFrame
+          <Visualizer
+            config={config}
             showInternalCostMetrics={settings.showInternalCostMetrics}
             reducedMotion={settings.reducedMotion}
+            density="full"
+            showHud
+            pulseSignal={pulseSignal}
+            hudOverride={hud}
+            onNodeClick={(agentId) => {
+              setSelectedAgentId(agentId);
+              setActivePanel('edit-node');
+            }}
           />
         </section>
 
@@ -83,7 +113,9 @@ export function LiveSystem({ onArchitectClick, onGoToOnboarding }: Props) {
         open={activePanel === 'edit-node'}
         onClose={close}
         selectedAgentId={selectedAgentId}
-        onAgentUpdated={handleAgentUpdated}
+        onAgentUpdated={() => {
+          /* Visualizer reflects updated config via the `config` prop. */
+        }}
       />
     </div>
   );

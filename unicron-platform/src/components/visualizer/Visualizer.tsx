@@ -14,6 +14,12 @@ type Props = {
   showHud?: boolean;
   /** Set to {agentId, key} to briefly pulse all instances of that agent. */
   pulseSignal?: { agentId: string; key: number } | null;
+  /**
+   * When provided, the bottom HUD strip reads from this snapshot instead of
+   * the simulation's internal HUD. Used by Live System to bind the HUD to
+   * real Supabase aggregates while leaving the canvas simulation alone.
+   */
+  hudOverride?: HudSnapshot | null;
   /** Optional override for canvas height. Component otherwise fills its container. */
   className?: string;
 };
@@ -33,6 +39,7 @@ export function Visualizer({
   density = 'full',
   showHud,
   pulseSignal,
+  hudOverride,
   className,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -89,22 +96,23 @@ export function Visualizer({
   }, [pulseSignal?.agentId, pulseSignal?.key]);
 
   const renderHud = showHud ?? density === 'full';
+  const liveHud = hudOverride ?? hud;
 
   return (
     <div className={['relative w-full h-full', className ?? ''].join(' ')}>
       <canvas ref={canvasRef} className="absolute inset-0 w-full h-full block" />
       {renderHud && (
         <div className="absolute inset-x-0 bottom-0 h-8 bg-bg-base/70 backdrop-blur border-t border-border-default flex items-center px-5 gap-7 mono text-[10.5px] text-text-secondary pointer-events-none z-[2]">
-          <HudCell label="signals.processed" value={hud.signalsProcessed.toLocaleString()} minCh={6} />
-          <HudCell label="signals.rejected" value={hud.signalsRejected.toLocaleString()} minCh={6} />
-          <HudCell label="decisions.made" value={hud.decisionsMade.toLocaleString()} minCh={5} />
-          <HudCell label="value.surfaced" value={formatValue(hud.valueSurfaced)} minCh={7} />
-          <HudCell label="nodes.active" value={hud.activeNodes.toLocaleString()} minCh={3} />
-          <HudCell label="reports.delivered" value={hud.reportsDelivered.toLocaleString()} minCh={4} />
+          <HudCell label="signals.processed" value={liveHud.signalsProcessed.toLocaleString()} minCh={6} />
+          <HudCell label="signals.rejected" value={liveHud.signalsRejected.toLocaleString()} minCh={6} />
+          <HudCell label="decisions.made" value={liveHud.decisionsMade.toLocaleString()} minCh={5} />
+          <HudCell label="value.surfaced" value={formatValue(liveHud.valueSurfaced)} minCh={7} />
+          <HudCell label="nodes.active" value={liveHud.activeNodes.toLocaleString()} minCh={3} />
+          <HudCell label="reports.delivered" value={liveHud.reportsDelivered.toLocaleString()} minCh={4} />
           {showInternalCostMetrics && (
             <HudCell
               label="cost.per.report"
-              value={`$${hud.costPerReport.toFixed(3)}`}
+              value={`$${liveHud.costPerReport.toFixed(3)}`}
               minCh={6}
               gold
             />

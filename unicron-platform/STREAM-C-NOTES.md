@@ -79,6 +79,52 @@ or prod without blocking local dev where reads work anonymously.
 (B 0050-0069, D 0070-0079, E 0080+). Stream C was unclaimed; 0090+ keeps
 clear of E's open-ended range without forcing a renumber elsewhere.
 
+### 2026-05-01 — Retire iframe Pixi, keep Canvas-2D React port
+
+**Choice:** Delete `src/components/live/LivingIntelligenceFrame.tsx` and
+`public/living-intelligence.html`. Live System now renders the same
+`<Visualizer />` (Canvas-2D React port) that Onboarding already uses,
+driven by `SystemConfig`.
+
+**Why:** Phase 2 spawn note + audit §3 + §6: two visualizers coexist, only
+the React one is driven by `SystemConfig`, the iframe doesn't postMessage
+clicks back. Killing the iframe collapses the duplication and unblocks
+`onNodeClick → EditNodePanel` selection.
+
+**Spec reference:** STREAM-README Gate C2 — "Pick the Canvas-2D React port.
+Retire the iframe Pixi version (commit deletion with explicit reasoning in
+commit message)."
+
+### 2026-05-01 — HUD overlay strategy: real data wins, sim HUD as fallback
+
+**Choice:** `<Visualizer hudOverride={...} />`. When the override snapshot
+is provided, it takes precedence; otherwise the simulation's internal HUD
+(driven by SimEngine events) renders. `useRealHud` hook aggregates over
+`pathfinder.agent_runs` + `agent_log` and polls the `/api/cost-summary`
+endpoint for `cost.per.report`.
+
+**Why:** STREAM-README "HUD counters tick from real cost data via the
+existing `app/api/cost-summary/` endpoint Pathfinder publishes (read-only
+contract). Counters will read 0 until Stream A's Gate A0 work resumes
+ingestion; coordinate timing." Override leaves the canvas simulation alone
+(it's still useful for onboarding visual reference) while binding the HUD
+to the real cron pipeline.
+
+**Spec reference:** STREAM-README Gate C2.
+
+### 2026-05-01 — Realtime pulse mapping: agent_runs.agent_name → AgentDef.id
+
+**Choice:** `resolveAgentId(agentName, agents)` in LiveSystem.tsx does
+case-insensitive exact match → fuzzy substring match → null. When the
+mapping fails, no pulse fires; the visualizer simulation continues as-is.
+
+**Why:** `pathfinder.agent_runs.agent_name` enumerates ten cron agents
+(`ingestor`, `ranker`, `adjacent`, `verifier`, ...). `SystemConfig.agents`
+uses operator-defined ids like `a-ranker` whose `role` reads `Ranker`.
+The mapping is loose by design — Stream A may add new agents that don't
+have a SystemConfig analogue, and Stream C doesn't gate on perfect
+alignment.
+
 ## Spec references
 
 - `unicron-platform/src/lib/supabase.ts` — implements STREAM-README Gate C1
@@ -103,6 +149,20 @@ clear of E's open-ended range without forcing a renumber elsewhere.
   New file; no prior contract.
 - `Pathfinder/supabase/migrations/0090_unicron_settings.sql` — creates the
   `unicron` schema + `unicron.settings` table. Drift: none.
+- `unicron-platform/src/lib/agentRuns.ts` — implements STREAM-README Gate C2
+  Realtime subscription on `pathfinder.agent_runs`. Drift: none.
+- `unicron-platform/src/lib/hud.ts` — implements STREAM-README Gate C2 HUD
+  aggregation. Drift: cost-summary endpoint URL is env-configurable
+  (`VITE_COST_SUMMARY_URL`) since the operator UI deploys to a different
+  origin than Pathfinder.
+- `unicron-platform/src/components/visualizer/Visualizer.tsx` — added
+  `hudOverride` prop so Live System can bind the HUD to real Supabase
+  aggregates without disturbing the canvas simulation. Drift: none.
+- `unicron-platform/src/components/live/LiveSystem.tsx` — replaced
+  `<LivingIntelligenceFrame />` with `<Visualizer />` driven by SystemConfig
+  + Realtime pulse + real HUD. Drift: deleted iframe variant.
+- `unicron-platform/src/components/live/LivingIntelligenceFrame.tsx` — deleted.
+- `unicron-platform/public/living-intelligence.html` — deleted.
 
 ## Post-deploy checklist
 
