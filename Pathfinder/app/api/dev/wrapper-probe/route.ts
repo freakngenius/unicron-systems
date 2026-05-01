@@ -61,7 +61,11 @@ export async function GET(req: Request) {
   // search for any wrapper-probe row created at or after this instant.
   const tFloor = new Date().toISOString();
 
-  setAgentContext({ agentName: 'wrapper-probe', surface: 'dev' });
+  // 'test' (not 'dev') because pathfinder.llm_calls.surface has a CHECK
+  // constraint llm_calls_surface_check restricting values to
+  // ('cron','chat','architect','manual','test'). The probe is a synthetic
+  // call from a test harness, so 'test' is the correct existing taxonomy.
+  setAgentContext({ agentName: 'wrapper-probe', surface: 'test' });
 
   const t0 = Date.now();
   try {
