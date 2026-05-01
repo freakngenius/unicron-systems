@@ -27,14 +27,29 @@ import {
   type OutreachContact,
   type OutreachDraftInsertRow,
 } from '@/lib/outreach';
+import { inngest } from '@/lib/inngest/client';
 import type { Branch, Customer, Project } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 export const maxDuration = 60;
 
-const QUEUE_LIMIT = 15;
-const CYCLE_TIMEOUT_MS = 12 * 60 * 1_000;
+// CYCLE_TIMEOUT_MS must stay safely under maxDuration (Vercel kills the
+// function instance at the maxDuration ceiling). Mirrors the Ranker
+// pattern at app/api/cron/ranker/route.ts:50 (CYCLE_BUDGET_MS = 50_000)
+// — 10s buffer under the 60s ceiling so the in-flight per-project step
+// can finish AND the cleanup writes (markRunFailed, write_success log)
+// land before the function dies. Prior value was 12 minutes which
+// caused agent_runs rows to leak `status='running'` whenever Vercel
+// killed the instance at 60s before internal cleanup fired (Phase 1
+// Finding A in MEMORY/audit-pathfinder.md).
+//
+// QUEUE_LIMIT trimmed to 5 so a 50s budget covers a full cycle: each
+// outreach draft is one Anthropic call (~5–10s) plus DB writes. 5×10s
+// = 50s leaves ~10s for cleanup. Twice-per-hour cron × 5 = 240/day
+// capacity, well above realistic verified-high-priority arrival rate.
+const QUEUE_LIMIT = 5;
+const CYCLE_TIMEOUT_MS = 50_000;
 
 // ────────────────────────────────────────────────────────────────────
 // Auth — bearer CRON_SECRET, with ?secret=… escape hatch for local dev.
@@ -440,6 +455,31 @@ export async function GET(req: Request) {
         project_id: project.id,
       });
       continue;
+    }
+
+    // Phase 2 Stream A Gate A1: emit decision.synthesized so the
+    // delivery dispatcher Inngest function (currently scaffold) and
+    // future delivery channels (briefing, hubspot pre-stamp) can fan
+    // out without going through the cron poll. draft_id left null —
+    // persistInsertRows doesn't return inserted IDs and the contract
+    // permits null for the G1 delivery scaffold. Fire-and-forget; the
+    // outreach cycle continues on emit failure.
+    try {
+      await inngest.send({
+        name: 'pathfinder/decision.synthesized',
+        data: {
+          project_id: project.id,
+          draft_id: null,
+          synthesized_at: new Date().toISOString(),
+        },
+      });
+    } catch (err) {
+      await writeLog(admin, 'error', {
+        message: `inngest emit failed (non-fatal) · ${project.id} · synthesized`,
+        reason: 'inngest_emit_failed',
+        project_id: project.id,
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
 
     if (result.warnings.length === 0) {

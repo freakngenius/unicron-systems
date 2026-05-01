@@ -14,6 +14,9 @@ import {
   slackAlertOnVerified,
   architectTuningCron,
   architectDiscoveryCron,
+  sourceOnboarder,
+  coverageExpansionEstimate,
+  coverageExpansionRun,
 } from '@/lib/inngest/functions';
 
 export const { GET, POST, PUT } = serve({
@@ -26,6 +29,9 @@ export const { GET, POST, PUT } = serve({
     slackAlertOnVerified,
     architectTuningCron,
     architectDiscoveryCron,
+    sourceOnboarder,
+    coverageExpansionEstimate,
+    coverageExpansionRun,
   ],
 });
 

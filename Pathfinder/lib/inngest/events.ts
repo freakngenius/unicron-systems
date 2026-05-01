@@ -108,4 +108,42 @@ export type PathfinderEvents = {
       reference_id: string | null;
     };
   };
+
+  /**
+   * Operator (or Coverage Expansion Agent) requested onboarding of a new
+   * source. Subscribed by the Source Onboarder Inngest function (Phase 2
+   * Stream E). Returned payload is a SourceOnboarderResult.
+   */
+  'pathfinder/source.onboard.requested': {
+    name: 'pathfinder/source.onboard.requested';
+    data: {
+      kind: 'url' | 'docs_link' | 'rss' | 'file' | 'description';
+      url?: string;
+      description?: string;
+      hint?: 'socrata' | 'rest' | 'rss' | 'json-dump';
+      jurisdiction?: string;
+      poll_frequency_seconds?: number;
+      api_key_env?: string;
+      created_by_user_email?: string;
+      request_id?: string;
+    };
+  };
+
+  /**
+   * Operator created a coverage goal; pre-flight estimate should run.
+   * Subscribed by coverage-expansion-estimate (Phase 2 Stream E, Gate E2).
+   */
+  'pathfinder/coverage.estimate.requested': {
+    name: 'pathfinder/coverage.estimate.requested';
+    data: { goal_id: string };
+  };
+
+  /**
+   * Operator approved a coverage estimate; dispatch loop should start.
+   * Subscribed by coverage-expansion-run.
+   */
+  'pathfinder/coverage.run.requested': {
+    name: 'pathfinder/coverage.run.requested';
+    data: { goal_id: string };
+  };
 };

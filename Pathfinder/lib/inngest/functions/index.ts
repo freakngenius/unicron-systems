@@ -11,3 +11,6 @@ export { slackAlertOnVerified } from './slack-alert-on-verified';
 // Inngest serve() handler; coordinate with Stream A on registration.
 export { architectTuningCron } from './architect-tuning-cron';
 export { architectDiscoveryCron } from './architect-discovery-cron';
+// Phase 2 Stream E — Source Onboarder + Coverage Expansion.
+export { sourceOnboarder } from './source-onboarder';
+export { coverageExpansionEstimate, coverageExpansionRun } from './coverage-expansion';
