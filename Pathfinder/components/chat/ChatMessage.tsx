@@ -11,6 +11,7 @@
 
 import * as React from 'react';
 import type { ChatMessage as ChatMessageRow, ChatSourceCitation } from '@/lib/types';
+import { MarkdownRenderer } from './markdown';
 
 const PF = {
   ink: '#0a0a0a',
@@ -73,6 +74,16 @@ function TextBubble({ message }: { message: ChatMessageRow }) {
   const sources = (message.payload?.sources as ChatSourceCitation[] | undefined) ?? [];
   const tables = (message.payload?.tables as string[] | undefined) ?? [];
   const degraded = message.payload?.degraded === true;
+  // Streaming hint: assistant rows that have an empty payload + recent
+  // created_at are still in flight. We use a coarse signal — the SSE
+  // pipeline updates `content` continuously and only writes
+  // `payload.sources` at completion. When sources is missing for an
+  // assistant message we treat the row as still streaming.
+  const streaming =
+    !isUser &&
+    sources.length === 0 &&
+    !message.payload?.bundle &&
+    !message.payload?.actions;
 
   return (
     <div
@@ -88,15 +99,20 @@ function TextBubble({ message }: { message: ChatMessageRow }) {
         {isUser ? 'You' : 'Pathfinder'}
         {degraded && <span style={{ marginLeft: 6, color: PF.warm }}>· degraded</span>}
       </div>
-      <div
-        className="pf-body"
-        style={{
-          whiteSpace: 'pre-wrap',
-          wordBreak: 'break-word',
-        }}
-      >
-        {message.content}
-      </div>
+      {isUser ? (
+        <div
+          className="pf-body"
+          style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
+        >
+          {message.content}
+        </div>
+      ) : (
+        <MarkdownRenderer
+          content={message.content}
+          streaming={streaming}
+          sources={sources}
+        />
+      )}
       {(sources.length > 0 || tables.length > 0) && (
         <ProvenanceFooter sources={sources} tables={tables} />
       )}

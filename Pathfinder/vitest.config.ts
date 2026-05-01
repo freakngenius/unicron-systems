@@ -18,7 +18,9 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
-    include: ['tests/**/*.test.ts', '__tests__/**/*.test.ts'],
+    // Per-file environment can be set with `// @vitest-environment jsdom`
+    // in test files that need DOM (e.g. the chat renderer suite).
+    include: ['tests/**/*.test.{ts,tsx}', '__tests__/**/*.test.{ts,tsx}'],
     reporters: ['default'],
   },
 });
