@@ -395,3 +395,43 @@ Stream P1 total cost-to-date: **$0.12** of $8 cap. All cost on Haiku coord-extra
 
 #### Pathfinder/tests/onboarding-connectors/wizard-state.test.tsx
 **Implements:** SPEC § 7.3 acceptance — 13 tests. Step navigation (welcome → ... → done), Connect-href shape, Coming-soon graceful-degrade, skip-state localStorage round-trip + rehydrate, malformed-localStorage tolerance, URL-fragment sync, hashchange handling, quick-pick visibility per connector state, done-summary CTA target.
+
+---
+
+## Connector Sprint Phase 3 — C-3A HubSpot OAuth + bulk sync foundation
+
+**State:** branch `connectors/c3a-hubspot-oauth`, based at `1cd250a` (Phase 1 complete). Mirrors the C-1A Slack OAuth pattern for HubSpot. C-3A scope: OAuth + bulk read sync only. Real-time webhooks ship in C-3B; stage→pipeline mapping ships in C-3C.
+
+### Migration
+
+#### Pathfinder/supabase/migrations/0108_hubspot_sync_state.sql
+**Implements:** SPEC - Connectors §4.3 — HubSpot bidirectional sync (read-only side).
+**Tables:** `pathfinder.hubspot_deals_raw`, `hubspot_contacts_raw`, `hubspot_engagements_raw` (composite PK on `(connector_id, hs_object_id)`); `hubspot_sync_state` (one row per HubSpot connector). All RLS-enabled with read-by-org-match and service-role-only writes. Additive — no existing tables touched. Applied via Supabase MCP 2026-05-01.
+
+### OAuth + token exchange
+
+#### Pathfinder/lib/connectors/hubspot/oauth.ts
+**Implements:** SPEC §5.3 (OAuth state) + §5.4 (scope minimization) for HubSpot. Exports `buildAuthorizeUrl(state)`, `exchangeCode(code)`, `refreshToken(refresh)`, `callbackUrl()`. Uses `getProvider('hubspot')` from `lib/connectors/providers.ts` so scopes stay single-sourced. Best-effort introspection of hub_id + hub_domain via `/oauth/v1/access-tokens/{token}`. Tokens are NEVER logged — error messages only carry HTTP status + truncated body. Refresh path uses `grant_type=refresh_token`.
+
+#### Pathfinder/lib/connectors/providers.ts (modified)
+**Drift:** flipped `hubspot.exchangeImplemented` from `false` to `true`. Scopes unchanged (already minimized to deal/contact read+write + schemas.deals.read).
+
+#### Pathfinder/app/api/connectors/[type]/callback/route.ts (modified)
+**Drift:** previously Slack-only happy path; the HubSpot branch returned 501. Refactored the exchange step into a per-provider switch with a unified `ProviderExchangeResult` so storeToken + connector-update logic stays provider-agnostic. HubSpot branch maps `hub_id` → `account_external_id` and `hub_domain` → `account_name`. Computes absolute `expires_at` from `expires_in` seconds.
+
+### Bulk sync
+
+#### Pathfinder/lib/connectors/hubspot/bulk-sync.ts
+**Implements:** SPEC §4.3 read-only ingest. `previewSync(connectorId)` calls `/crm/v3/objects/{deals,contacts,engagements}/search` with `limit=1` to read `total` (no writes). `runBulkSync(connectorId, opts)` paginates via `paging.next.after`, batch-upserts into `hubspot_*_raw` with ON CONFLICT `(connector_id, hs_object_id) DO UPDATE`, updates `hubspot_sync_state` after each phase, audits per batch via `recordAudit({direction: 'inbound', event_type: 'sync.bulk_batch'})`. Soft rate-limit via 100ms minimum interval; single-retry on 429 honoring `Retry-After`. Engagements gated on `opts.includeEngagements`.
+
+#### Pathfinder/app/api/connectors/instances/[connectorId]/hubspot/sync/route.ts
+**Implements:** Operator-gated endpoint. POST kicks off `runBulkSync` synchronously (`maxDuration=300`); GET returns the `hubspot_sync_state` row. Cross-checks `connector.customer_org_id === resolveOrgId(req)` before any work. Rejects when connector is not HubSpot or status != 'connected'.
+
+### Tests
+
+| File | Tests | Covers |
+|---|---|---|
+| `tests/connectors/hubspot-oauth.test.ts` | 13 | buildAuthorizeUrl host/scope/redirect/state; exchangeCode body shape, error mapping, expires_in; refreshToken grant_type; introspection failure tolerance |
+| `tests/connectors/hubspot-bulk-sync.test.ts` | 10 | previewSync read-only behavior; pagination via `after`; ON CONFLICT upsert correctness on re-run; sync_state running flags + final counts; maxObjects truncation; 429 retry; error path writes last_error |
+
+23 new tests; full suite remains 782/782 green; lint clean; build clean.
