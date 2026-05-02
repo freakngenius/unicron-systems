@@ -27,22 +27,31 @@ export async function GET(request: Request): Promise<NextResponse> {
   try {
     const admin = supabaseAdmin();
     // `org_geo_config` was added by the Demo Polish P1 migration (0104).
-    // It's not in the generated Supabase Database types yet, so cast the
-    // result row through `unknown` rather than widening the schema type.
-    const { data, error } = await admin
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .from('org_geo_config' as any)
+    // It's not in the generated Supabase Database types yet, so we untype
+    // the client briefly to read the row, then cast through `unknown` to
+    // a local shape.
+    const untyped = admin as unknown as {
+      from: (table: string) => {
+        select: (cols: string) => {
+          eq: (col: string, val: string) => {
+            maybeSingle: () => Promise<{ data: unknown; error: { message: string } | null }>;
+          };
+        };
+      };
+    };
+    const { data, error } = await untyped
+      .from('org_geo_config')
       .select('org_id, max_supported_distance_miles, allowed_countries')
       .eq('org_id', orgId)
       .maybeSingle();
 
-    const row = data as
+    const row = (data as
       | {
           org_id?: string | null;
           max_supported_distance_miles?: number | string | null;
           allowed_countries?: string[] | null;
         }
-      | null;
+      | null);
 
     if (error || !row) {
       const fallback: OrgGeoConfigResponse = {
