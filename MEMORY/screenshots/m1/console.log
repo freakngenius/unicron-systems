@@ -1,0 +1,6 @@
+[error] Failed to load resource: the server responded with a status of 404 ()
+[warning] settings.loadRemote failed Could not find the table 'unicron.settings' in the schema cache
+[error] Failed to load resource: the server responded with a status of 404 ()
+[warning] settings.loadRemote failed Could not find the table 'unicron.settings' in the schema cache
+[error] Failed to load resource: the server responded with a status of 404 ()
+[warning] settings.saveRemote failed Could not find the table 'unicron.settings' in the schema cache

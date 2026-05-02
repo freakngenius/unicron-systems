@@ -25,7 +25,11 @@ import {
   coverageDispatchesMock,
   coverageMockLiveEvents,
 } from '../../data/mocks';
-import type { AgentDispatch } from '../../lib/contracts/agentConsole';
+import type {
+  AgentDispatch,
+  AgentDispatchEvent,
+  AgentDispatchEventType,
+} from '../../lib/contracts/agentConsole';
 import type { CoverageGoalDetail } from '../../lib/contracts/coverage';
 
 interface Props {
@@ -79,10 +83,18 @@ const BASELINE_LEAD_COUNT = 142;
 export function CoverageExpansionModal({ onClose, bridge = REAL_BRIDGE }: Props) {
   const [phase, setPhase] = useState<Phase>({ kind: 'idle' });
   const [committing, setCommitting] = useState(false);
+  const [mockEvents, setMockEvents] = useState<AgentDispatchEvent[]>([]);
   // Used by the mock-mode timer to cancel pending appends on unmount.
   const cancelMockRef = useRef<(() => void) | null>(null);
 
   useEffect(() => () => cancelMockRef.current?.(), []);
+
+  // Runtime mock-mode: VITE_COVERAGE_API_ENABLED=false AND no test bridge override.
+  // When true, the dispatch row insert + live event subscription bypass Supabase
+  // entirely. Tests inject `bridge` explicitly so they continue to assert the
+  // bridge calls; runtime callers without `bridge` get a fully synthetic flow
+  // that works without Supabase auth.
+  const isMockRuntime = MOCK_MODE && bridge === REAL_BRIDGE;
 
   const status =
     phase.kind === 'idle'
@@ -106,6 +118,7 @@ export function CoverageExpansionModal({ onClose, bridge = REAL_BRIDGE }: Props)
 
   const handleSubmit = async (values: CoverageInputFormValues) => {
     setPhase({ kind: 'dispatching' });
+    setMockEvents([]);
     try {
       const goalRequest = {
         vertical_id: values.vertical_id,
@@ -115,26 +128,34 @@ export function CoverageExpansionModal({ onClose, bridge = REAL_BRIDGE }: Props)
       };
       const goalResponse = await bridge.createCoverageGoal(goalRequest);
 
-      const dispatch = await bridge.createDispatch({
-        agent_name: coverageExpansionAgent.name,
-        customer_org_id: ORG_ID,
-        input_payload: {
-          ...goalRequest,
-          summary: summarizeForTile(values),
-        },
-      });
+      const dispatch = isMockRuntime
+        ? synthesizeDispatch(goalRequest, values)
+        : await bridge.createDispatch({
+            agent_name: coverageExpansionAgent.name,
+            customer_org_id: ORG_ID,
+            input_payload: {
+              ...goalRequest,
+              summary: summarizeForTile(values),
+            },
+          });
 
       setPhase({ kind: 'running', dispatch, goalId: goalResponse.goal_id });
 
       if (MOCK_MODE) {
-        cancelMockRef.current = streamMockEvents(bridge, dispatch.id, async () => {
-          const detail = await bridge.getCoverageGoal(goalResponse.goal_id);
-          setPhase({
-            kind: 'awaiting_review',
-            dispatch: { ...dispatch, status: 'awaiting_review' },
-            detail,
-          });
-        });
+        cancelMockRef.current = streamMockEvents(
+          bridge,
+          dispatch.id,
+          isMockRuntime,
+          (e) => setMockEvents((prev) => [...prev, e]),
+          async () => {
+            const detail = await bridge.getCoverageGoal(goalResponse.goal_id);
+            setPhase({
+              kind: 'awaiting_review',
+              dispatch: { ...dispatch, status: 'awaiting_review' },
+              detail,
+            });
+          },
+        );
       }
     } catch (e) {
       setPhase({ kind: 'failed', error: e instanceof Error ? e.message : String(e) });
@@ -147,18 +168,31 @@ export function CoverageExpansionModal({ onClose, bridge = REAL_BRIDGE }: Props)
     try {
       // TODO(Phase 1F): also write pathfinder.agent_verifications row.
       // Tracked at MEMORY/operator-todos/2026-05-02-pathfinder-needs-verification-bridge.md.
-      const verified = await bridge.verifyDispatch({
-        id: phase.dispatch.id,
-        verified_by_user_id: 'operator-mock',
-        result_payload: {
-          goal_id: phase.detail.goal.id,
-          summary: summarizeResult(phase.detail),
-          total_sources_onboarded: phase.detail.goal.total_sources_onboarded,
-          total_sources_assist_queued: phase.detail.goal.total_sources_assist_queued,
-          total_estimated_lift: phase.detail.goal.total_estimated_lift,
-        },
-      });
-      await bridge.runCoverageGoal(phase.detail.goal.id);
+      const verified = isMockRuntime
+        ? {
+            ...phase.dispatch,
+            status: 'verified' as const,
+            verified_by_user_id: 'operator-mock',
+            verified_at: new Date().toISOString(),
+            result_payload: {
+              goal_id: phase.detail.goal.id,
+              summary: summarizeResult(phase.detail),
+            },
+          }
+        : await bridge.verifyDispatch({
+            id: phase.dispatch.id,
+            verified_by_user_id: 'operator-mock',
+            result_payload: {
+              goal_id: phase.detail.goal.id,
+              summary: summarizeResult(phase.detail),
+              total_sources_onboarded: phase.detail.goal.total_sources_onboarded,
+              total_sources_assist_queued: phase.detail.goal.total_sources_assist_queued,
+              total_estimated_lift: phase.detail.goal.total_estimated_lift,
+            },
+          });
+      if (!isMockRuntime) {
+        await bridge.runCoverageGoal(phase.detail.goal.id);
+      }
       setPhase({ kind: 'verified', dispatch: verified, detail: phase.detail });
     } catch (e) {
       setPhase({ kind: 'failed', error: e instanceof Error ? e.message : String(e) });
@@ -171,11 +205,19 @@ export function CoverageExpansionModal({ onClose, bridge = REAL_BRIDGE }: Props)
     if (phase.kind !== 'awaiting_review') return;
     setCommitting(true);
     try {
-      const rejected = await bridge.rejectDispatch({
-        id: phase.dispatch.id,
-        verified_by_user_id: 'operator-mock',
-        rejection_reason: reason,
-      });
+      const rejected = isMockRuntime
+        ? {
+            ...phase.dispatch,
+            status: 'rejected' as const,
+            verified_by_user_id: 'operator-mock',
+            verified_at: new Date().toISOString(),
+            rejection_reason: reason,
+          }
+        : await bridge.rejectDispatch({
+            id: phase.dispatch.id,
+            verified_by_user_id: 'operator-mock',
+            rejection_reason: reason,
+          });
       setPhase({ kind: 'rejected', dispatch: rejected, detail: phase.detail });
     } catch (e) {
       setPhase({ kind: 'failed', error: e instanceof Error ? e.message : String(e) });
@@ -221,7 +263,11 @@ export function CoverageExpansionModal({ onClose, bridge = REAL_BRIDGE }: Props)
               LIVE EXECUTION
             </span>
             {phase.kind === 'running' ? (
-              <AgentLiveExecution dispatchId={phase.dispatch.id} />
+              isMockRuntime ? (
+                <MockLiveExecutionView events={mockEvents} />
+              ) : (
+                <AgentLiveExecution dispatchId={phase.dispatch.id} />
+              )
             ) : (
               <p className="mono text-[11px] uppercase tracking-[0.18em] text-text-primary/40">
                 DISPATCHING…
@@ -288,12 +334,17 @@ export function CoverageExpansionModal({ onClose, bridge = REAL_BRIDGE }: Props)
 }
 
 /**
- * Walk the mock event timeline forward, calling `appendEvent` for each entry.
- * Returns a cancel function that aborts pending entries on unmount.
+ * Walk the mock event timeline forward. In runtime mock mode, push synthetic
+ * events to the local renderer; otherwise call `bridge.appendEvent` so tests
+ * can assert the call shape (and a real Supabase client receives them in
+ * non-runtime-mock cases). Returns a cancel function that aborts pending
+ * entries on unmount.
  */
 function streamMockEvents(
   bridge: DispatchBridge,
   dispatchId: string,
+  isMockRuntime: boolean,
+  onLocalEvent: (event: AgentDispatchEvent) => void,
   onComplete: () => void | Promise<void>,
 ): () => void {
   let cancelled = false;
@@ -310,11 +361,21 @@ function streamMockEvents(
     timers.push(
       setTimeout(() => {
         if (cancelled) return;
-        void bridge.appendEvent({
-          dispatch_id: dispatchId,
-          event_type: entry.event_type,
-          payload: entry.payload,
-        });
+        if (isMockRuntime) {
+          onLocalEvent({
+            id: cryptoRandomId(),
+            dispatch_id: dispatchId,
+            event_type: entry.event_type,
+            payload: entry.payload,
+            created_at: new Date().toISOString(),
+          });
+        } else {
+          void bridge.appendEvent({
+            dispatch_id: dispatchId,
+            event_type: entry.event_type,
+            payload: entry.payload,
+          });
+        }
         tick();
       }, entry.delayMs),
     );
@@ -324,6 +385,110 @@ function streamMockEvents(
     cancelled = true;
     timers.forEach(clearTimeout);
   };
+}
+
+function cryptoRandomId(): string {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+    return crypto.randomUUID();
+  }
+  return `evt-${Math.random().toString(36).slice(2)}-${Date.now()}`;
+}
+
+function synthesizeDispatch(
+  goalRequest: { goal_text: string; vertical_id?: string | null; scope_constraints?: unknown; budget_usd?: number },
+  values: CoverageInputFormValues,
+): AgentDispatch {
+  const now = new Date().toISOString();
+  return {
+    id: cryptoRandomId(),
+    agent_name: coverageExpansionAgent.name,
+    customer_org_id: ORG_ID,
+    dispatched_by_user_id: null,
+    input_payload: {
+      ...goalRequest,
+      summary: summarizeForTile(values),
+    },
+    status: 'running',
+    result_payload: null,
+    rejection_reason: null,
+    verified_by_user_id: null,
+    verified_at: null,
+    cost_usd: null,
+    duration_ms: null,
+    agent_run_id: null,
+    parent_dispatch_id: null,
+    created_at: now,
+    updated_at: now,
+  };
+}
+
+function MockLiveExecutionView({ events }: { events: AgentDispatchEvent[] }) {
+  const TYPE_LABEL: Record<AgentDispatchEventType, string> = {
+    reasoning: 'REASONING',
+    tool_call: 'TOOL CALL',
+    tool_result: 'TOOL RESULT',
+    partial_output: 'PARTIAL OUTPUT',
+    decision: 'DECISION',
+    error: 'ERROR',
+  };
+  const TYPE_TONE: Record<AgentDispatchEventType, string> = {
+    reasoning: 'text-text-primary/60',
+    tool_call: 'text-accent-gold',
+    tool_result: 'text-emerald-400',
+    partial_output: 'text-text-primary/80',
+    decision: 'text-text-primary',
+    error: 'text-rose-400',
+  };
+  return (
+    <div
+      className="flex flex-col gap-2 font-mono text-[12px]"
+      data-testid="agent-live-execution"
+    >
+      {events.length === 0 ? (
+        <div className="mono text-[11px] uppercase tracking-[0.18em] text-text-primary/40">
+          NO EVENTS YET
+        </div>
+      ) : (
+        events.map((event) => (
+          <div
+            key={event.id}
+            data-testid="agent-live-execution-event"
+            data-event-type={event.event_type}
+            className="flex flex-col gap-1 border-l border-border-default pl-3"
+          >
+            <div className="flex items-baseline gap-3">
+              <span
+                className={[
+                  'mono text-[10px] uppercase tracking-[0.18em]',
+                  TYPE_TONE[event.event_type],
+                ].join(' ')}
+              >
+                {TYPE_LABEL[event.event_type]}
+              </span>
+              <span className="mono text-[10px] text-text-primary/30">
+                {new Date(event.created_at).toLocaleTimeString()}
+              </span>
+            </div>
+            <pre className="whitespace-pre-wrap text-[12px] text-text-primary/80">
+              {formatPayload(event.payload)}
+            </pre>
+          </div>
+        ))
+      )}
+    </div>
+  );
+}
+
+function formatPayload(payload: Record<string, unknown>): string {
+  if (typeof payload === 'object' && payload !== null && 'text' in payload) {
+    const text = (payload as { text?: unknown }).text;
+    if (typeof text === 'string') return text;
+  }
+  try {
+    return JSON.stringify(payload, null, 2);
+  } catch {
+    return String(payload);
+  }
 }
 
 function RejectControls({
