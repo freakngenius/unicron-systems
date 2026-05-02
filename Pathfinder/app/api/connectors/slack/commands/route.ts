@@ -168,12 +168,12 @@ async function audit(
   summary: Record<string, unknown>,
 ): Promise<void> {
   await recordAudit({
-    connectorId,
-    customerOrgId: orgId,
-    eventType,
+    connector_id: connectorId,
+    customer_org_id: orgId,
+    event_type: eventType,
     direction: 'inbound',
     status,
-    payloadSummary: summary,
+    payload_summary: summary,
   });
 }
 

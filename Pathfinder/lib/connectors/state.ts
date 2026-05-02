@@ -14,7 +14,7 @@
 
 import crypto from 'node:crypto';
 
-import type { ConnectorType } from '@/lib/connectors/providers';
+import type { ConnectorType } from '@/lib/connectors/types';
 
 const STATE_TTL_MS = 5 * 60 * 1000;
 

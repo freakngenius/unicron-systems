@@ -238,3 +238,45 @@ Stream P1 total cost-to-date: **$0.12** of $8 cap. All cost on Haiku coord-extra
 
 #### Pathfinder/app/api/cron/connector-token-refresh/route.ts
 **Implements:** SPEC - Connectors (Slack, Teams, HubSpot).md § 3.5. Nightly cron that refreshes any token with `expires_at < now() + interval '24 hours'` via the provider's refresh endpoint. Writes agent_runs telemetry via the existing `openAgentRun` / `closeAgentRun` helpers. Schedule appended to `Pathfinder/vercel.json`.
+
+---
+
+## Connector Sprint Phase 1 — C-1B Slack OAuth + slash + Block Kit + reaction feedback
+
+**State:** PR #63 (`connectors/c1b-slack`) — rebased onto `2e2e5b2` (C-1A merged) at orchestrator-resolved sha. Slack-specific layer + slack OAuth-callback implementation + lead_feedback table for reaction → ranker pipeline.
+
+#### Pathfinder/supabase/migrations/0107_lead_feedback.sql
+**Implements:** SPEC - Connectors (Slack, Teams, HubSpot).md § 4.1 (reaction-feedback capture). `lead_feedback` table with RLS + partial unique index `(connector_id, project_id, user_external_id, message_ts) WHERE thumb IS NOT NULL` so duplicate reaction events idempotently no-op.
+
+#### Pathfinder/lib/connectors/state.ts
+**Implements:** SPEC § 5.3 (OAuth state validation). Slack-specific `buildState` / `verifyState` pair distinct from C-1A's `oauth-state.ts`. **Drift note:** the two-state-helper situation is intentional during Phase 1 — C-1B's slack callback uses `verifyState`; future connectors (Teams Phase 2, HubSpot Phase 3) will consume C-1A's `validateState` from `oauth-state.ts`. Consolidation is a Phase 4 cleanup task.
+
+#### Pathfinder/lib/connectors/registry.ts
+**Implements:** SPEC § 3.1 (connectors-row lifecycle helpers). `upsertConnector(args)` and `markConnectorError(connectorId, message)` wrap the table-level writes the slack callback does on install + failure paths.
+
+#### Pathfinder/lib/connectors/feedback.ts
+**Implements:** SPEC § 4.1 reaction-feedback writes + `/pathfinder feedback` slash command. `recordReactionFeedback` and `recordCommandFeedback` insert into `lead_feedback` with proper de-dupe semantics.
+
+#### Pathfinder/lib/connectors/slack/signature.ts
+**Implements:** SPEC § 4.1 + § 5 security boundary. `verifySlackSignature(req)` performs Slack's HMAC-SHA256 signing-secret + timestamp-window validation. Default-deny when `SLACK_SIGNING_SECRET` is unset.
+
+#### Pathfinder/lib/connectors/slack/oauth.ts
+**Implements:** SPEC § 3.2 + § 4.1. Slack-specific `buildAuthorizeUrl`, `callbackUrl`, `exchangeCode`. Layers on top of the canonical `getProvider('slack')` from C-1A (scope-list + authorize URL stay single-sourced).
+
+#### Pathfinder/lib/connectors/slack/formatters.ts
+**Implements:** SPEC § 4.1 Block Kit message shapes. `formatLead`, `formatRejection`, `formatFeedbackPrompt` produce JSON shaped for Slack `chat.postMessage`.
+
+#### Pathfinder/lib/connectors/slack/commands.ts
+**Implements:** SPEC § 4.1. Pure parser for `/pathfinder` slash command text (`leads`, `rejected`, `feedback`, `help`).
+
+#### Pathfinder/lib/connectors/slack/chat-bridge.ts
+**Implements:** SPEC § 4.1. Routes inbound `app_mention` and `message.im` events to the existing chat handler. v1 ships an acknowledge-only bridge; full LLM bridging deferred.
+
+#### Pathfinder/lib/connectors/providers.ts (modified)
+**Drift note:** Added `reactions:read` scope to the slack provider entry so PR #63's slack-oauth test (and the dispatch-prompt acceptance criterion) passes. C-1A's original list was missing it.
+
+#### Pathfinder/middleware.ts (modified)
+**Drift note:** Exempts `/api/connectors/slack/{callback,commands,events}` from basic-auth (they need to be reachable by Slack's servers). The `/auth` start route remains gated so only operators can initiate the install.
+
+#### Pathfinder/app/api/connectors/slack/{auth,callback,commands,events}/route.ts (4 new routes)
+**Implements:** SPEC § 4.1. Slack-specific auth start + OAuth callback + slash command dispatch + events handler (mention + DM + reaction). All consume C-1A's `lib/connectors/{tokens,audit,dispatcher}` core.

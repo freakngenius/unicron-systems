@@ -114,13 +114,13 @@ export async function POST(req: Request) {
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     await recordAudit({
-      connectorId: connector.id,
-      customerOrgId: orgId,
-      eventType: `event.${ev.type}.error`,
+      connector_id: connector.id,
+      customer_org_id: orgId,
+      event_type: `event.${ev.type}.error`,
       direction: 'inbound',
       status: 'failed',
-      payloadSummary: { event_type: ev.type },
-      errorMessage: message,
+      payload_summary: { event_type: ev.type },
+      error_message: message,
     });
     // Always ack 200 — Slack retries non-2xx for 5 minutes.
   }
@@ -144,12 +144,12 @@ async function handleAppMention(
   await postSlackReply(connectorId, ev.channel, ev.thread_ts ?? ev.ts ?? null, clipReply(result.reply));
 
   await recordAudit({
-    connectorId,
-    customerOrgId: orgId,
-    eventType: 'event.app_mention',
+    connector_id: connectorId,
+    customer_org_id: orgId,
+    event_type: 'event.app_mention',
     direction: 'inbound',
     status: 'received',
-    payloadSummary: { channel: ev.channel, routed: result.routed },
+    payload_summary: { channel: ev.channel, routed: result.routed },
   });
 }
 
@@ -165,12 +165,12 @@ async function handleDM(
   await postSlackReply(connectorId, ev.channel, ev.thread_ts ?? null, clipReply(result.reply));
 
   await recordAudit({
-    connectorId,
-    customerOrgId: orgId,
-    eventType: 'event.message_im',
+    connector_id: connectorId,
+    customer_org_id: orgId,
+    event_type: 'event.message_im',
     direction: 'inbound',
     status: 'received',
-    payloadSummary: { channel: ev.channel, routed: result.routed },
+    payload_summary: { channel: ev.channel, routed: result.routed },
   });
 }
 
@@ -187,12 +187,12 @@ async function handleReaction(
   // get captured as agent feedback.
   if (!botUserId || ev.item_user !== botUserId) {
     await recordAudit({
-      connectorId,
-      customerOrgId: orgId,
-      eventType: 'event.reaction_added.skipped',
+      connector_id: connectorId,
+      customer_org_id: orgId,
+      event_type: 'event.reaction_added.skipped',
       direction: 'inbound',
       status: 'received',
-      payloadSummary: {
+      payload_summary: {
         reason: 'item_user_not_bot',
         item_user: ev.item_user ?? null,
       },
@@ -218,12 +218,12 @@ async function handleReaction(
   const projectId = await resolveProjectIdForMessageTs(connectorId, ev.item.channel ?? null, ev.item.ts);
   if (!projectId) {
     await recordAudit({
-      connectorId,
-      customerOrgId: orgId,
-      eventType: 'event.reaction_added.unmapped',
+      connector_id: connectorId,
+      customer_org_id: orgId,
+      event_type: 'event.reaction_added.unmapped',
       direction: 'inbound',
       status: 'received',
-      payloadSummary: { ts: ev.item.ts, channel: ev.item.channel ?? null },
+      payload_summary: { ts: ev.item.ts, channel: ev.item.channel ?? null },
     });
     return;
   }
@@ -238,12 +238,12 @@ async function handleReaction(
   });
 
   await recordAudit({
-    connectorId,
-    customerOrgId: orgId,
-    eventType: 'event.reaction_added',
+    connector_id: connectorId,
+    customer_org_id: orgId,
+    event_type: 'event.reaction_added',
     direction: 'inbound',
     status: 'received',
-    payloadSummary: { project_id: projectId, thumb, ts: ev.item.ts },
+    payload_summary: { project_id: projectId, thumb, ts: ev.item.ts },
   });
 }
 
@@ -264,7 +264,7 @@ async function postSlackReply(
   await fetch('https://slack.com/api/chat.postMessage', {
     method: 'POST',
     headers: {
-      authorization: `Bearer ${token.accessToken}`,
+      authorization: `Bearer ${token.access}`,
       'content-type': 'application/json; charset=utf-8',
     },
     body: JSON.stringify(body),

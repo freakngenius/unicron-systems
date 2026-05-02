@@ -7,7 +7,22 @@
 // is migrated into pathfinder.connectors in C-1F.
 
 import { publicUrl } from '@/lib/public-url';
-import { SLACK_PROVIDER } from '@/lib/connectors/providers';
+import { getProvider } from '@/lib/connectors/providers';
+
+// Local view of the Slack provider config in the shape this file expects
+// (env-var names + user-scope split + tokenUrl alias). Layered on top of
+// the canonical `getProvider('slack')` from C-1A so the underlying
+// scope-list + authorize URL stay single-sourced.
+const SLACK_PROVIDER = {
+  clientIdEnv: 'SLACK_CLIENT_ID' as const,
+  clientSecretEnv: 'SLACK_CLIENT_SECRET' as const,
+  authorizeUrl: getProvider('slack').authorizeUrl,
+  tokenUrl: getProvider('slack').tokenExchangeUrl,
+  scopes: getProvider('slack').scopes,
+  // C-1A's provider config is bot-only for Phase 1; user_scope stays
+  // empty until per-rep DM threading ships in Phase 2 (see SPEC § 4.1).
+  userScopes: [] as string[],
+};
 
 export interface SlackOAuthV2Response {
   ok: boolean;

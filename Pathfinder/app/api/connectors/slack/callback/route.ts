@@ -93,28 +93,27 @@ export async function GET(req: Request) {
   });
 
   try {
-    await storeToken({
-      connectorId: connector.id,
-      accessToken,
-      scope: oauth.scope ?? null,
+    await storeToken(connector.id, {
+      access: accessToken,
       // Slack bot tokens are long-lived and don't carry a refresh token
       // by default. v1 leaves expires_at null; rotation happens by
       // re-installing the app. (Token-rotation feature can be enabled
       // per-app and would set expires_at + refresh_token; not in v1.)
-      refreshToken: oauth.authed_user?.access_token ?? null,
+      refresh: oauth.authed_user?.access_token ?? null,
       expiresAt: null,
+      scope: oauth.scope ?? null,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     await markConnectorError(connector.id, message);
     await recordAudit({
-      connectorId: connector.id,
-      customerOrgId: orgId,
-      eventType: 'oauth.token_persist_failed',
+      connector_id: connector.id,
+      customer_org_id: orgId,
+      event_type: 'oauth.token_persist_failed',
       direction: 'oauth',
       status: 'failed',
-      payloadSummary: { team_id: teamId },
-      errorMessage: message,
+      payload_summary: { team_id: teamId },
+      error_message: message,
     });
     return NextResponse.redirect(settingsUrl(`slack=error&reason=${encodeURIComponent(message)}`), {
       status: 302,
@@ -122,12 +121,12 @@ export async function GET(req: Request) {
   }
 
   await recordAudit({
-    connectorId: connector.id,
-    customerOrgId: orgId,
-    eventType: 'oauth.installed',
+    connector_id: connector.id,
+    customer_org_id: orgId,
+    event_type: 'oauth.installed',
     direction: 'oauth',
     status: 'succeeded',
-    payloadSummary: {
+    payload_summary: {
       team_id: teamId,
       team_name: teamName,
       bot_user_id: oauth.bot_user_id ?? null,

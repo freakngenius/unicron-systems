@@ -5,7 +5,7 @@
 
 import { supabaseAdmin } from '@/lib/supabase';
 
-import type { ConnectorType } from '@/lib/connectors/providers';
+import type { ConnectorType } from '@/lib/connectors/types';
 
 export interface ConnectorRow {
   id: string;
