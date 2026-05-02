@@ -144,15 +144,23 @@ The cross-pollination matches surface — Brasfield & Gorrie (2), Big-D Construc
 
 > "We diagnosed it. Federal procurement, in those three metros specifically, doesn't generate enough security-adjacent construction in a 30-day window to populate five top-tier leads per branch. Houston has what 30 years of TxDOT, Harris County, GSA federal courthouse, and METRO contracts produces. Nashville's pipeline is thinner because Tennessee doesn't have the same federal facility density."
 
-**[IF Coverage Expansion was dispatched Sunday]:**
+**The coverage-expansion run** (dispatched 2026-05-02; results in `MEMORY/demo-prep/2026-05-04-coverage-expansion-results.md`):
 
-> "We ran our Source Onboarder against those three metros over the weekend. It identified [N] additional ingest sources for Pittsburgh — city permit feeds, PA eMarketplace, Allegheny County — and similar lists for Nashville and LA. Here's what those would have surfaced if they'd been live in this window."
+> "We ran our coverage-expansion agent against your three newest branches over the weekend. It identified eight additional ingest sources for Nashville — Tennessee state procurement, Nashville building permits via Socrata, TDOT, the Nashville airport authority. It identified PennDOT for Pittsburgh. And LA Building Permits as a clean Tier 1 add for Los Angeles."
 
-Show the Coverage Expansion results doc (`MEMORY/demo-prep/2026-05-04-coverage-expansion-results.md`) in a quick screen swap. Read 2-3 representative additional leads it would have ingested.
+**Pause. Land the punch:**
 
-> "Your three newest branches need additional ingest sources beyond federal data. We can have those wired in two weeks. That's the Phase 1.5 conversation."
+> "The discovery for all three metros took thirteen seconds total. Wiring those sources live takes a couple of days per source. The discovery work — what would normally take Dodge's field-research team weeks — is already done."
 
-**[IF NOT dispatched — skip the Coverage Expansion section, jump straight to roadmap]:**
+**Honesty beat (if asked or if you want to lead with rigor):**
+
+> "Sonar discovery worked best in Nashville. Pittsburgh and LA returned fewer candidates — Sonar prompt tuning and richer registry seeding for those metros are part of the Phase 1.5 work."
+
+Optional: quick screen swap to show the results doc and read one representative candidate per metro (Nashville: `data.nashville.gov` permits feed; Pittsburgh: PennDOT projects hub; LA: LA Building Permits Socrata).
+
+> "Your three newest branches need additional ingest sources beyond federal data. The system already knows which ones. Two weeks to wire them live. That's the Phase 1.5 conversation."
+
+**Roadmap pivot:**
 
 **Roadmap slide** (`Presentation/zedcor-roadmap-slide.md`):
 
