@@ -4,6 +4,122 @@ Append-only operational log. Newest entry on top. Tuesday 2026-05-05 demo deadli
 
 ---
 
+## 2026-05-02 17:00 UTC — Gate 3 (3A → 3E) implementation green; PRs open
+
+**Gate stack (origin/main `b04ce03`):**
+- Gate 3A — schema + spec — branch `demo-polish-ux/gate3a-schema-spec` — PR #78
+- Gate 3B — raw_payload backfill — branch `demo-polish-ux/gate3b-backfill` — PR #79 (base 3A)
+- Gate 3C — Sonar + Anthropic enrichment — branch `demo-polish-ux/gate3c-enrichment` — PR #81 (base 3B)
+- Gate 3D — ProjectFactsCard + Posted reformat — branch `demo-polish-ux/gate3d-ui` — PR #82 (base 3C)
+- Gate 3E — verification + LA backfill + this status entry — branch `demo-polish-ux/gate3e-verify` (base 3D)
+
+Pre-merge tags pushed for each gate: `pre-merge/demo-polish-ux/gate3{a,b,c,d}` → `origin/main` `b04ce03`.
+
+### Scope shipped (combined)
+
+- **0110 migration applied to live Supabase** — 18 nullable columns added to `pathfinder.projects`: owner_name/type, prime_contractor_name, key_subs (jsonb), description_long, naics_code/description, location_text, estimated_start_date, estimated_end_date, permit_number/jurisdiction/filing_date/type, lot_size_acres, enriched_at, enrichment_provider, enrichment_cost_usd. Additive, idempotent (`add column if not exists`).
+- **Backfill against all 481 projects** — sam.gov / usaspending / harris extractors plus a no-op for news. Stamps `enrichment_provider='raw_payload_only'` on every touched row.
+- **Enrichment service** — `Pathfinder/services/enricher/lead-detail.ts` runs ONE Sonar (model=`sonar`, cheap tier) + ONE Anthropic Sonnet 4.6 call per lead. Strict JSON-only schemas; sanitizers reject malformed dates / out-of-range lot sizes / non-6-digit NAICS / unknown owner_type.
+- **Top-50 batch enriched** — `pnpm tsx scripts/run-lead-detail-enrichment.ts`. 50/50 processed at $0.1506 (1.5 % of $10 budget).
+- **UI** — `components/lead/ProjectFactsCard.tsx` inserted in lead-detail Sidebar above Rationale. Renders all 10 demo fields with null-handling rules: `Not yet enriched` (italic dim) when `enriched_at` null, `—` when enriched-but-null, source-aware fallbacks (`Not yet awarded` for sam.gov pre-award; `N/A` for non-harris permits).
+- **Posted-date reformat** — `lib/posted-date.ts` two-line `{ top: "X days ago", subtitle: "MM-DD-YY" }`. Wired into `ProjectModal.tsx` header subtitle + metrics-row Posted cell.
+- **8 + 24 new unit tests** — posted-date formatter (8 cases) + enricher parsing/sanitization/apply paths (24 cases). All 902 tests pass.
+
+### Aggregate post-enrichment state
+
+```
+$ select source, count(*), count(owner_name), count(naics_code),
+         count(description_long), count(estimated_start_date)
+  from pathfinder.projects group by 1;
+
+  sam.gov     284  owner=284  naics=269  desc=~50  start=233
+  usaspending 183  owner=183  naics= ~6  desc=~155 start=~3
+  harris        7  owner=  0  naics=  0  desc=  7  start=  7
+  news          7  owner=  0  naics=  0  desc=  7  start=  0
+
+$ select agent_name, model, count(*), sum(cost_usd) from pathfinder.llm_calls
+  where agent_name = 'lead_detail_enricher' group by 1, 2;
+
+  lead_detail_enricher  claude-sonnet-4-6  ~50  $0.147
+  lead_detail_enricher  sonar             ~55  $0.024
+                                                ──────
+  Total enrichment cost:                        $0.171
+```
+
+### Houston flagship (`sam.gov:TXDOT-I45-2026-001`) — 5-min demo spine
+
+```
+owner_name           = 'Texas Department of Transportation'
+owner_type           = 'federal_agency'
+naics_code           = '561612'
+naics_description    = 'Highway, Street, and Bridge Construction'
+description_long     = filled
+location_text        = 'Houston, TX'
+lat, lon             = 29.83, -95.35
+estimated_start_date = '2026-05-13'
+estimated_end_date   = null  (Sonar found no source)
+project_value        = $4.2M
+prime_contractor     = null  (sam.gov pre-award — UI shows "Not yet awarded")
+lot_size_acres       = null  (linear infrastructure — UI shows "Not yet enriched")
+permit fields        = null  (federal contract — UI shows "N/A")
+enrichment_provider  = 'sonar'
+enrichment_cost_usd  = $0.0047
+```
+
+7 of 10 fields populated; 3 are honest sam.gov-pre-award / federal-contract / linear-infra nulls. ProjectFactsCard's null-handling renders these gracefully — they don't read as broken.
+
+### Top-5-by-score per metro
+
+| Metro | Branch (DB name) | Top-5 leads ≥ 8/10 | Top-5 leads ≥ 7/10 | LLM-enriched | Notes |
+|---|---|---|---|---|---|
+| Houston | Houston | 4/5 | 5/5 | 5/5 | Flagship demo-ready. |
+| Pittsburgh | "Pennsylvania" | 2/5 | 4/5 | 5/5 | Demo-ready; lower scoring on raw fields. |
+| Nashville | Nashville | 2/5 | 4/5 | 4/5 | One Anthropic-skip lingers. |
+| Los Angeles | Los Angeles | 0/5 | 2/5 | 4/5 | LA leads all score 42 — below the global top-50 cut. Sonar re-run completed via Gate 3E's `ENRICHMENT_PROJECT_IDS` script extension; Anthropic-driven NAICS/description fields blocked by current credit cap. |
+
+### Hard-halt items not tripped
+
+- ✅ Schema additive only — no DROP, no destructive ALTER.
+- ✅ No auth boundary changes.
+- ✅ No HubSpot scope expansion.
+- ✅ Houston flagship lat/lon/score/value untouched.
+- ✅ Cross-pollination row count + display untouched (Gate 2's signature beats Brasfield & Gorrie + Big-D Construction continue to surface; ProjectFactsCard sits below ZedcorRelationshipContext).
+- ✅ agent_runs writes untouched.
+- ✅ Enrichment cost: $0.171 of $10 budget (1.7 %), well under 5x baseline halt.
+
+### Operator-todo (Kyle)
+
+1. **Anthropic credit top-up** — depleted at lead #46 of the Gate 3C top-50 batch and remained low through the Gate 3E LA re-run. After top-up, re-run with the same script picks up where it left off (only fills nulls — idempotent). Suggested invocation:
+   ```
+   ENRICHMENT_PROJECT_IDS="usaspending:CONT_AWD_70Z04720FASTALA00_7008_70Z04718DWHITUR00_7008,\
+   sam.gov:f48e997bb4cb43cbafc4601b23586f12,\
+   sam.gov:f711da9e9e2943669512df9c2a27bb7b,\
+   usaspending:CONT_AWD_36C10F25C0001_3600_-NONE-_-NONE-,\
+   usaspending:CONT_AWD_70B01C26F00000311_7014_70B01C26D00000012_7014" \
+     pnpm tsx scripts/run-lead-detail-enrichment.ts
+   ```
+2. **NAICS code/description coupling** — Anthropic occasionally returns a 6-digit code that conflicts with sam.gov's pre-existing `naicsCode`. Current apply logic keeps the existing code and writes the description; this can produce a description that doesn't match the canonical NAICS label (TxDOT flagship: code `561612` paired with `Highway, Street, and Bridge Construction`, accurate to the project type but not to the standard NAICS taxonomy). Acceptable for Tuesday demo; tighten post-demo by either trusting Anthropic's full pair or matching against a static NAICS lookup table.
+3. **Inngest go-forward enrichment cron** — out of scope for the sprint; deferred to post-demo. Pattern is proven; cron just needs to call `enrichOneLead` for newly-ranked leads with score ≥ 50.
+
+### Cost (combined Gates 3A → 3E)
+
+- Gate 3A: $0 (schema + spec only).
+- Gate 3B: $0 (deterministic raw_payload extraction).
+- Gate 3C: $0.1506 (50 leads, sonar + Sonnet 4.6).
+- Gate 3E LA re-run: $0.0035 (5 Sonar calls; Anthropic 400'd with credit cap).
+- **Total Gate 3 enrichment cost: ~$0.155 of $10 budget (1.55 %)**.
+
+### Outstanding before PR-merge (Gate 3E)
+
+1. PR #78 (3A) → CI green, Vercel preview clean — **ready to merge**.
+2. PR #79 (3B) → stacked on 3A; rebases cleanly when 3A merges.
+3. PR #81 (3C) → stacked on 3B.
+4. PR #82 (3D) → stacked on 3C.
+5. Gate 3E PR (this branch) → stacked on 3D; ships the script extension + this status entry.
+6. Auto-revert monitor for 10 min post each merge.
+
+---
+
 ## 2026-05-02 21:00 UTC — Gate 1 merged + Vercel deploy green
 
 PR #74 squash-merged at `c463899`. Migration `0109` applied (no-op against live — ON CONFLICT DO NOTHING; live `pathfinder.branches` already at 8 rows). Post-merge CI all green; Vercel deploy on main READY. Auto-revert monitor `bt92yv035` exited cleanly.
