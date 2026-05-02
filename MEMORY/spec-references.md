@@ -113,7 +113,7 @@ The 2026-05-08 smoke is the first real-LLM exercise; expected cost $1.50–$5 ac
 #### Pathfinder/lib/demo-branches.ts
 **Implements:** Demo Polish UX Sprint Gate 1C — restricts the dashboard's branch surface to the four Tuesday demo branches (Houston / LA / Nashville / Pittsburgh).
 **Last verified against spec:** 2026-05-02 (sprint launch).
-**Drift:** none. `DEMO_BRANCH_IDS` matches migration `0109_demo_polish_ux_demo_branches.sql` (`hou-002` from existing seed; `lax-006` / `nas-007` / `pit-008` newly inserted). `pickDemoBranches` preserves narrative order regardless of the server-fetch order.
+**Drift:** none. `DEMO_BRANCH_IDS` matches the live `pathfinder.branches` rows on Supabase project `anfihcusvekpovcchpoh` (`hou-002` from the original 5-row seed; `lax-008` / `nsh-006` / `pit-007` added by an earlier session that already ran a GeoMapper backfill against them — verified 2026-05-02 via `execute_sql`: pit-007=27 leads, hou-002=21, lax-008=7, nsh-006=6). `pickDemoBranches` preserves narrative order regardless of the server-fetch order.
 **Tests:** none yet — the helper is a pure two-line filter and is exercised end-to-end via the Dashboard's `pickDemoBranches(initialBranchesRaw)` call. If the helper grows beyond filter+order, add `Pathfinder/tests/demo-branches.test.ts`.
 
 ---

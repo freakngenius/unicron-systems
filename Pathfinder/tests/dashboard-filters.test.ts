@@ -139,10 +139,10 @@ describe('applyBranchFilter', () => {
   it('narrows to projects whose nearest_branch_id matches', () => {
     const projects = [
       p({ id: 'a', nearest_branch_id: 'hou-002' }),
-      p({ id: 'b', nearest_branch_id: 'nas-007' }),
+      p({ id: 'b', nearest_branch_id: 'nsh-006' }),
       p({ id: 'c', nearest_branch_id: null }),
     ];
-    const out = applyBranchFilter(projects, 'nas-007');
+    const out = applyBranchFilter(projects, 'nsh-006');
     expect(out.map((x) => x.id)).toEqual(['b']);
   });
 });
@@ -152,13 +152,13 @@ describe('groupCountsByBranch', () => {
     const projects = [
       p({ id: 'a', nearest_branch_id: 'hou-002', score: 92 }),
       p({ id: 'b', nearest_branch_id: 'hou-002', score: 60 }),
-      p({ id: 'c', nearest_branch_id: 'nas-007', score: 85 }),
+      p({ id: 'c', nearest_branch_id: 'nsh-006', score: 85 }),
     ];
-    const out = groupCountsByBranch(projects, ['hou-002', 'nas-007', 'lax-006'], 80);
+    const out = groupCountsByBranch(projects, ['hou-002', 'nsh-006', 'lax-008'], 80);
     expect(out).toEqual({
       'hou-002': { count: 2, hi: 1 },
-      'nas-007': { count: 1, hi: 1 },
-      'lax-006': { count: 0, hi: 0 },
+      'nsh-006': { count: 1, hi: 1 },
+      'lax-008': { count: 0, hi: 0 },
     });
   });
 

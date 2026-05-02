@@ -7,10 +7,15 @@
 // computed before the demo refocus. They are simply hidden from the UI so
 // the operator-facing surface mirrors the demo narrative.
 //
-// IDs match supabase migration 0109_demo_polish_ux_demo_branches.sql plus
-// the existing hou-002 row from public/seed-data/branches.json.
+// IDs match the live `pathfinder.branches` row set on Supabase project
+// `anfihcusvekpovcchpoh` as of 2026-05-02 (verified via execute_sql before
+// this branch landed). The live rows for LA / Nashville / Pittsburgh were
+// added by an earlier session under different IDs (`lax-008`, `nsh-006`,
+// `pit-007`) than the ones the demo prompt used as examples; aligning here
+// to the live IDs because the GeoMapper backfill has already run against
+// them and projects are already attached.
 
-export const DEMO_BRANCH_IDS = ['hou-002', 'lax-006', 'nas-007', 'pit-008'] as const;
+export const DEMO_BRANCH_IDS = ['hou-002', 'lax-008', 'nsh-006', 'pit-007'] as const;
 
 const DEMO_BRANCH_ID_SET: ReadonlySet<string> = new Set(DEMO_BRANCH_IDS);
 
