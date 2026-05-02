@@ -48,5 +48,35 @@
     "coverage_radius_miles": 300,
     "opened_date": "2023-04-18",
     "region": "WA"
+  },
+  {
+    "id": "nsh-006",
+    "name": "Nashville",
+    "code": "NSH",
+    "lat": 36.1627,
+    "lon": -86.7816,
+    "coverage_radius_miles": 300,
+    "opened_date": "2026-04-01",
+    "region": "TN"
+  },
+  {
+    "id": "pit-007",
+    "name": "Pittsburgh",
+    "code": "PIT",
+    "lat": 40.4406,
+    "lon": -79.9959,
+    "coverage_radius_miles": 300,
+    "opened_date": "2026-04-01",
+    "region": "PA"
+  },
+  {
+    "id": "lax-008",
+    "name": "Los Angeles",
+    "code": "LAX",
+    "lat": 34.0522,
+    "lon": -118.2437,
+    "coverage_radius_miles": 300,
+    "opened_date": "2026-04-01",
+    "region": "CA"
   }
 ]

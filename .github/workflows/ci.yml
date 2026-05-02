@@ -94,7 +94,14 @@ jobs:
           MISSING=()
           while IFS= read -r f; do
             [ -z "$f" ] && continue
-            if ! echo "$REF" | grep -F -q "$f"; then
+            # Use a here-string instead of `echo "$REF" | grep` — with
+            # `set -o pipefail`, a `grep -q` early-exit closes the pipe
+            # before echo finishes writing a large $REF, echo dies with
+            # EPIPE (exit 141), and pipefail propagates that as a
+            # pipeline failure. The negation in `if !` then flips that
+            # into a "missing" verdict for files that DO appear in REF.
+            # Here-strings avoid the pipe entirely.
+            if ! grep -F -q -- "$f" <<<"$REF"; then
               MISSING+=("$f")
             fi
           done <<<"$CHANGED"
