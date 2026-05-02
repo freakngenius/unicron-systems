@@ -90,6 +90,29 @@ export interface OutreachContact {
   contact: string | null; // email address, phone, or LinkedIn handle
 }
 
+/** Cross-pollination context — Demo Polish § 5.3. When the lead's
+ *  project_owner / prime_contractor matches an existing Zedcor customer
+ *  via `pathfinder.lead_cross_pollination`, the matching rows are passed
+ *  to the Drafter so it can lead the email opening with the relationship
+ *  reference instead of a cold "I see your team is working on X" hook.
+ *
+ *  Shape mirrors the row written by the cross-pollination engine
+ *  (`lib/cross-pollination/engine.ts`) — only the fields the prompt
+ *  actually uses are required. Caller should pass the top match (by
+ *  recency, per spec § 8) first; subsequent entries are reserved for
+ *  multi-match cases. */
+export interface CrossPollinationContext {
+  customer_canonical: string;
+  match_layer: 'exact' | 'fuzzy' | 'parent_company' | string;
+  match_confidence: number;
+  matched_field: string;
+  primary_branch_name: string | null;
+  branch_count: number;
+  active_site_count: number;
+  most_recent_site_date: string | null;
+  national_account: boolean;
+}
+
 export interface OutreachBundle {
   email: { subject: string; body: string };
   linkedin: { body: string };
@@ -111,6 +134,12 @@ export interface DraftOutreachArgs {
    *  an existing draft via "make it tighter", "open with a question",
    *  etc. Cron-driven first-time drafting passes null. */
   iteration?: { priorBundle: OutreachBundle; instruction: string } | null;
+  /** Demo Polish § 5.3 — when populated, the drafter is instructed to
+   *  open the email with a relationship reference and to weave the
+   *  active branch / site count into the why-now sentence. Caller
+   *  passes top-3 by recency (per § 5.5 / § 8 leaning). Empty/undefined
+   *  falls back to the standard cold-outreach template. */
+  crossPollination?: CrossPollinationContext[] | null;
 }
 
 /** Outcome of one draftOutreachWithRetry call. `warnings` is empty on a
@@ -333,12 +362,23 @@ function stringOrNull(v: unknown): string | null {
   return t.length > 0 ? t : null;
 }
 
+/** Title-case a normalized canonical customer name for display in
+ *  prompts and downstream copy. Mirrors the formatter in
+ *  ZedcorRelationshipContext so the prompt the model sees and the badge
+ *  the operator sees use the same casing. */
+export function titleCaseCustomer(canonical: string): string {
+  return canonical
+    .split(/\s+/)
+    .map((w) => (w.length === 0 ? w : w[0].toUpperCase() + w.slice(1)))
+    .join(' ');
+}
+
 // ────────────────────────────────────────────────────────────────────────
 // Prompt builder & parser — pure functions, exposed for tests
 // ────────────────────────────────────────────────────────────────────────
 
 export function buildOutreachUserPrompt(args: DraftOutreachArgs): string {
-  const { project, branch, warmCustomer, contact, iteration } = args;
+  const { project, branch, warmCustomer, contact, iteration, crossPollination } = args;
 
   const lines: string[] = [];
   lines.push('PROJECT CONTEXT');
@@ -370,6 +410,57 @@ export function buildOutreachUserPrompt(args: DraftOutreachArgs): string {
     lines.push('Use this as the warm-intro path in the email opening if it lands cleanly.');
   } else {
     lines.push('none — do not claim any prior Zedcor relationship in any channel');
+  }
+
+  // Demo Polish § 5.3 — RELATIONSHIP CONTEXT block. When the cross-
+  // pollination engine has matched this lead's project_owner /
+  // prime_contractor / parent_company against an existing Zedcor
+  // customer, the engine output flows here and we instruct the model to
+  // open with the relationship reference. The check here is "engine
+  // confirmed match," not the looser warmCustomer hint above — both can
+  // populate, but the engine block is the canonical source.
+  if (crossPollination && crossPollination.length > 0) {
+    const top = crossPollination[0];
+    const customerName = titleCaseCustomer(top.customer_canonical);
+    const branchPhrase = top.primary_branch_name
+      ? `${top.primary_branch_name} branch`
+      : 'an existing branch';
+    lines.push('');
+    lines.push('RELATIONSHIP CONTEXT (use this — Zedcor already serves this entity)');
+    lines.push(`matched customer: ${customerName}`);
+    lines.push(`match strength: ${top.match_layer} (confidence ${top.match_confidence.toFixed(2)})`);
+    lines.push(`matched field on this lead: ${top.matched_field}`);
+    lines.push(
+      `current Zedcor footprint: ${top.active_site_count} active site${top.active_site_count === 1 ? '' : 's'} across ${top.branch_count} branch${top.branch_count === 1 ? '' : 'es'}`,
+    );
+    lines.push(`primary servicing branch: ${branchPhrase}`);
+    if (top.most_recent_site_date) {
+      lines.push(`most recent site activity: ${top.most_recent_site_date}`);
+    }
+    if (top.national_account) {
+      lines.push('national account — coordinate with HQ on outreach.');
+    }
+    if (crossPollination.length > 1) {
+      const others = crossPollination
+        .slice(1)
+        .map(
+          (m) =>
+            `${titleCaseCustomer(m.customer_canonical)} (${m.matched_field}, ${m.match_layer} ${m.match_confidence.toFixed(2)})`,
+        )
+        .join('; ');
+      lines.push(`additional matches: ${others}`);
+    }
+    lines.push('');
+    lines.push(
+      'Email opening sentence MUST reference this existing relationship explicitly. Example shape (do not copy verbatim, adapt to the project): "I see your team is working on <project detail>. Zedcor has been supporting <matched customer> at <primary branch> on multiple sites — that overlap is the reason for the note." Then transition to the why-now and the 20-minute call CTA.',
+    );
+    lines.push(
+      'Do NOT describe the relationship as a brand-new partnership; the customer is already active. Stay specific to what the structured data shows. Do NOT name additional sites, dollar values, or contacts that are not in the context above.',
+    );
+  } else {
+    lines.push('');
+    lines.push('RELATIONSHIP CONTEXT');
+    lines.push('none — this is a cold lead. Open the email with a specific project detail (value, contractor, RFP window) instead of a relationship claim.');
   }
 
   lines.push('');

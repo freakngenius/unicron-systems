@@ -65,6 +65,18 @@ export type IterationIntent =
   | 'add_time_slot'
   | 'audience_pivot';
 
+export interface CrossPollinationDraftContext {
+  customer_canonical: string;
+  match_layer: string;
+  match_confidence: number;
+  matched_field: string;
+  primary_branch_name: string | null;
+  branch_count: number;
+  active_site_count: number;
+  most_recent_site_date: string | null;
+  national_account: boolean;
+}
+
 export interface DraftInput {
   project: Project;
   branch: Branch | null;
@@ -77,6 +89,10 @@ export interface DraftInput {
   audienceOverride?: string;
   // Previous draft for iteration paths (fresh leaves this null).
   previousDraft?: OutreachBundle;
+  // Demo Polish § 5.3 — engine-confirmed cross-pollination matches. When
+  // populated, the prompt tells the model to open with the relationship
+  // reference. Top-3 by recency.
+  crossPollination?: CrossPollinationDraftContext[] | null;
 }
 
 export interface OutreachBundle {
@@ -265,6 +281,37 @@ function userPrompt(input: DraftInput, retryReasons: string[]): string {
   if (input.userInstruction) {
     blocks.push(`USER ADDITIONAL INSTRUCTION: ${input.userInstruction}`);
   }
+  // Demo Polish § 5.3 — relationship-context block (chat path).
+  if (input.crossPollination && input.crossPollination.length > 0) {
+    const top = input.crossPollination[0];
+    const customerName = top.customer_canonical
+      .split(/\s+/)
+      .map((w) => (w.length === 0 ? w : w[0].toUpperCase() + w.slice(1)))
+      .join(' ');
+    const branchPhrase = top.primary_branch_name
+      ? `${top.primary_branch_name} branch`
+      : 'an existing branch';
+    const lines = [
+      'RELATIONSHIP CONTEXT (engine-confirmed; use this to open the email):',
+      `- matched customer: ${customerName}`,
+      `- match: ${top.match_layer} (confidence ${top.match_confidence.toFixed(2)})`,
+      `- matched field on this lead: ${top.matched_field}`,
+      `- footprint: ${top.active_site_count} active site${top.active_site_count === 1 ? '' : 's'} across ${top.branch_count} branch${top.branch_count === 1 ? '' : 'es'}`,
+      `- primary servicing branch: ${branchPhrase}`,
+    ];
+    if (top.most_recent_site_date) lines.push(`- most recent site activity: ${top.most_recent_site_date}`);
+    if (top.national_account) lines.push('- national account: coordinate with HQ');
+    if (input.crossPollination.length > 1) {
+      const others = input.crossPollination
+        .slice(1)
+        .map((m) => `${m.customer_canonical} (${m.matched_field}, ${m.match_layer} ${m.match_confidence.toFixed(2)})`)
+        .join('; ');
+      lines.push(`- additional matches: ${others}`);
+    }
+    lines.push('');
+    lines.push('Open the email with a sentence that names the matched customer + servicing branch, e.g. "I see your team is working on <project detail>. Zedcor has been supporting <matched customer> at <primary branch> on multiple sites." Then transition to the why-now and the 20-minute call CTA. Do NOT invent any sites, contacts, or contract values not in the data above.');
+    blocks.push(lines.join('\n'));
+  }
   if (input.previousDraft && input.intent !== 'fresh') {
     blocks.push(
       `PREVIOUS DRAFT (you are iterating on this):\n${JSON.stringify(
@@ -365,6 +412,16 @@ function buildAllowedNames(input: DraftInput): Set<string> {
   if (input.project.summary) names.push(...input.project.summary.split(/\s+/));
   if (input.branch?.name) names.push(...input.branch.name.split(/\s+/));
   if (input.warmCustomer?.name) names.push(...input.warmCustomer.name.split(/\s+/));
+  // Demo Polish § 5.3 — engine-confirmed matched customer + branch names
+  // need to pass the hallucination guard. Without this the model is
+  // forced into vague phrasing ("an existing customer") instead of the
+  // concrete relationship reference the spec calls for.
+  if (input.crossPollination) {
+    for (const m of input.crossPollination) {
+      names.push(...m.customer_canonical.split(/\s+/));
+      if (m.primary_branch_name) names.push(...m.primary_branch_name.split(/\s+/));
+    }
+  }
   // Common geographies and stage labels Zedcor mentions.
   const safelist = ['VA', 'USA', 'US', 'TX', 'FL', 'CA', 'AZ', 'GA', 'OK', 'CO', 'KS', 'NM', 'LA'];
   return new Set([...names, ...safelist].map((s) => s.toLowerCase().replace(/[^a-z0-9]/g, '')));
