@@ -177,3 +177,17 @@ Stream P1 total cost-to-date: **$0.12** of $8 cap. All cost on Haiku coord-extra
 **Implements:** SPEC - Demo Polish & Geography Filters.md §5.3 (chat-side parallel for `/api/chat` outreach drafting; Sonar-driven path).
 **Last verified against spec:** 2026-05-02.
 **Drift:** **none.** Mirrors the cron-side context block. Hallucination-guard allowed-name set extended to include the matched customer canonical and primary-branch name so the engine-confirmed names pass without false positives.
+
+---
+
+## Z-F finish — pipeline volume
+
+#### Pathfinder/lib/org-config-client.ts
+**Implements:** Z-F finish — closes the P2 follow-up TODO. Browser hook that reads `pathfinder.org_geo_config` via `/api/org-config`, falling back to spec defaults (250mi, USA + CAN) on error. Replaces the hardcoded 250mi constant in `components/ProjectList.tsx` so the lead-list distance threshold tracks the table.
+**Last verified against spec:** 2026-05-02.
+**Drift:** **none.**
+
+#### Pathfinder/scripts/reclassify-demoted.ts
+**Implements:** Z-F finish — re-runs the loosened Haiku triage classifier against the existing pile of 239 projects demoted with `rationale='Filtered as non-opportunity by classifier'` and `rejection_reason IS NULL`. For projects that flip to "yes" under the new prompt, resets `score=NULL + rationale=NULL + ranked_at=NULL` so the next ranker cron cycle re-scores via Sonnet. Cost-capped at $5 against `pathfinder.llm_calls.cost_usd`.
+**Last verified against spec:** 2026-05-02. Idempotent — only touches `score=0 AND rationale ilike '%non-opportunity%' AND rejection_reason IS NULL`.
+**Drift:** **none.**
