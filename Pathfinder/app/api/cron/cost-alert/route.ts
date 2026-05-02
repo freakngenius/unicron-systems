@@ -17,6 +17,7 @@
 // Set to 0 to alert on every run (useful for first-cycle smoke test).
 
 import { NextResponse } from 'next/server';
+import { closeAgentRun, openAgentRun } from '@/lib/agent-runs';
 import { supabaseAdmin } from '@/lib/supabase';
 import { sendEmail, sendSlack } from '@/lib/notifications';
 import { trackEvent } from '@/lib/observability/axiom';
@@ -47,6 +48,7 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }
 
+  const run = await openAgentRun('cost-alert');
   const threshold = Number(process.env.COST_ALERT_THRESHOLD_USD ?? DEFAULT_THRESHOLD_USD);
   const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
 
@@ -58,6 +60,7 @@ export async function GET(req: Request) {
     .limit(50000);
 
   if (error) {
+    await closeAgentRun(run, { status: 'failed', error_message: error.message });
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
@@ -89,6 +92,11 @@ export async function GET(req: Request) {
   });
 
   if (total < threshold) {
+    await closeAgentRun(run, {
+      status: 'success',
+      records_processed: rows.length,
+      records_new: 0,
+    });
     return NextResponse.json({
       ok: true,
       alerted: false,
@@ -161,6 +169,12 @@ export async function GET(req: Request) {
       text: body,
     });
   }
+
+  await closeAgentRun(run, {
+    status: 'success',
+    records_processed: rows.length,
+    records_new: 1,
+  });
 
   return NextResponse.json({
     ok: true,
