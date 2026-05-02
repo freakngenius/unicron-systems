@@ -93,7 +93,7 @@ describe('DisconnectConfirm', () => {
     );
     fireEvent.click(screen.getByTestId('disconnect-confirm-submit'));
     await waitFor(() => expect(onComplete).toHaveBeenCalled());
-    expect(calls[0].url).toContain('/api/connectors/conn-1/disconnect');
+    expect(calls[0].url).toContain('/api/connectors/instances/conn-1/disconnect');
     expect(calls[0].init?.method).toBe('POST');
     expect(calls[0].init?.headers).toMatchObject({
       'x-operator-email': 'kyle@freakngenius.com',

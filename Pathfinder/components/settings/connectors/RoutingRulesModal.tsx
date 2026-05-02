@@ -70,7 +70,7 @@ export function RoutingRulesModal(props: RoutingRulesModalProps) {
     async function load() {
       setLoading(true);
       try {
-        const res = await fetch(`${API_BASE}/connectors/${connectorId}/rules`, {
+        const res = await fetch(`${API_BASE}/connectors/instances/${connectorId}/rules`, {
           headers: operatorHeaders(),
           cache: 'no-store',
         });
@@ -127,7 +127,7 @@ export function RoutingRulesModal(props: RoutingRulesModalProps) {
     setErrors([]);
     setSubmitting(true);
     try {
-      const res = await fetch(`${API_BASE}/connectors/${connectorId}/rules`, {
+      const res = await fetch(`${API_BASE}/connectors/instances/${connectorId}/rules`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...operatorHeaders() },
         body: JSON.stringify(payload),
@@ -152,7 +152,7 @@ export function RoutingRulesModal(props: RoutingRulesModalProps) {
   };
 
   const onDelete = async (ruleId: string) => {
-    const res = await fetch(`${API_BASE}/connectors/${connectorId}/rules/${ruleId}`, {
+    const res = await fetch(`${API_BASE}/connectors/instances/${connectorId}/rules/${ruleId}`, {
       method: 'DELETE',
       headers: operatorHeaders(),
     });
@@ -165,7 +165,7 @@ export function RoutingRulesModal(props: RoutingRulesModalProps) {
     setTestingId(rule.id);
     setTestResult(null);
     try {
-      const res = await fetch(`${API_BASE}/connectors/${connectorId}/rules/${rule.id}/test`, {
+      const res = await fetch(`${API_BASE}/connectors/instances/${connectorId}/rules/${rule.id}/test`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...operatorHeaders() },
       });

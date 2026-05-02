@@ -36,7 +36,7 @@ export function DisconnectConfirm(props: DisconnectConfirmProps) {
       const email = getUserEmail();
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (email) headers['x-operator-email'] = email;
-      const res = await fetch(`${API_BASE}/connectors/${connectorId}/disconnect`, {
+      const res = await fetch(`${API_BASE}/connectors/instances/${connectorId}/disconnect`, {
         method: 'POST',
         headers,
       });
