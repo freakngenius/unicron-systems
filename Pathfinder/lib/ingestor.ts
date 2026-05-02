@@ -11,6 +11,7 @@
 
 import { supabaseAdmin } from '@/lib/supabase';
 import { inngest } from '@/lib/inngest/client';
+import { extractStateFromPayload } from '@/lib/zedcor/state-centroids';
 
 // ────────────────────────────────────────────────────────────────────────
 // Service-role admin client (lazy)
@@ -38,8 +39,13 @@ export interface IngestorRecord {
   project_stage: string | null;
   posted_date: string | null; // ISO date
   raw_payload: Record<string, unknown>;
-  // lat / lon left null for this iteration — geocoding deferred. The
-  // Verifier handles null-coord projects via its 2-of-4 exception.
+  // Z-F: lat/lon now seeded at ingest time using state-centroid lookup
+  // against the place-of-performance state code in raw_payload. This is
+  // a deterministic free fallback so the Ranker can compute branch
+  // proximity + the radius map shows the new lead. Replaceable by a
+  // street-level geocoder later. Null when the payload exposes no state.
+  lat: number | null;
+  lon: number | null;
 }
 
 export interface IngestorCycleStats {
@@ -175,6 +181,8 @@ export async function fetchUsaspendingRecent(): Promise<{ records: IngestorRecor
       if (!source_id) continue;
       const value = numericOr(r['Award Amount'], null);
       const title = composeUsaspendingTitle(r);
+      const rawPayload = r as unknown as Record<string, unknown>;
+      const centroid = extractStateFromPayload(rawPayload);
       records.push({
         id: `usaspending:${source_id}`,
         source: 'usaspending',
@@ -184,7 +192,9 @@ export async function fetchUsaspendingRecent(): Promise<{ records: IngestorRecor
         project_value: value,
         project_stage: 'awarded', // USAspending records are obligated awards
         posted_date: r['Period of Performance Start Date'] ?? null,
-        raw_payload: r as unknown as Record<string, unknown>,
+        raw_payload: rawPayload,
+        lat: centroid?.lat ?? null,
+        lon: centroid?.lon ?? null,
       });
     }
     return { records, raw_count: results.length, latency_ms: Date.now() - start };
@@ -283,6 +293,8 @@ export async function fetchSamGovRecent(): Promise<{ records: IngestorRecord[]; 
     for (const o of opps) {
       if (!o.noticeId) continue;
       const value = numericOr(o.awardAmount ?? o.baseAndAllOptionsValue ?? null, null);
+      const rawPayload = o as unknown as Record<string, unknown>;
+      const centroid = extractStateFromPayload(rawPayload);
       records.push({
         id: `sam.gov:${o.noticeId}`,
         source: 'sam.gov',
@@ -292,7 +304,9 @@ export async function fetchSamGovRecent(): Promise<{ records: IngestorRecord[]; 
         project_value: value,
         project_stage: classifySamStage(o.type),
         posted_date: normalizeIsoDate(o.postedDate),
-        raw_payload: o as unknown as Record<string, unknown>,
+        raw_payload: rawPayload,
+        lat: centroid?.lat ?? null,
+        lon: centroid?.lon ?? null,
       });
     }
     return { records, raw_count: opps.length, latency_ms: Date.now() - start };
@@ -359,6 +373,8 @@ export async function insertNewProjects(records: IngestorRecord[]): Promise<{ in
       project_stage: r.project_stage,
       posted_date: r.posted_date,
       raw_payload: r.raw_payload,
+      lat: r.lat,
+      lon: r.lon,
     }));
     const { error } = await sb.from('projects').insert(rows);
     if (error) return { inserted: 0, error: error.message };

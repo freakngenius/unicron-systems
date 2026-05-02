@@ -11,6 +11,10 @@
 import * as React from 'react';
 
 import { Timeline } from '@/components/lead/Timeline';
+import {
+  ZedcorRelationshipContext,
+  type CrossPollinationMatchRow,
+} from '@/components/zedcor/ZedcorRelationshipContext';
 import { hexAlpha, PF_TINTS } from '@/lib/agent-tints';
 import type { TimelineEvent } from '@/lib/timeline';
 import type {
@@ -22,12 +26,23 @@ import type {
   ProjectContact,
 } from '@/lib/types';
 
+interface ZedcorBranchInfo {
+  id: string;
+  branch_name: string;
+  state: string;
+}
+
 interface LeadDetailProps {
   project: Project;
   latestEmailDraft: OutreachDraft | null;
   contacts: ProjectContact[];
   recentEdits: OutreachEdit[];
   timelineEvents?: TimelineEvent[];
+  // Z-F integrator — cross-pollination match rows from
+  // pathfinder.lead_cross_pollination, plus the resolved
+  // nearest_zedcor_branch row (if any) for the header.
+  crossPollMatches?: CrossPollinationMatchRow[];
+  zedcorBranch?: ZedcorBranchInfo | null;
 }
 
 export function LeadDetail({
@@ -36,7 +51,20 @@ export function LeadDetail({
   contacts,
   recentEdits,
   timelineEvents,
+  crossPollMatches = [],
+  zedcorBranch = null,
 }: LeadDetailProps) {
+  // Z-F integrator — header now also surfaces the nearest Zedcor branch +
+  // distance and a "Warm intro" badge when we have cross-poll matches.
+  const warmIntro = crossPollMatches.length > 0;
+  const zedcorLine = zedcorBranch
+    ? `${zedcorBranch.branch_name} branch${
+        project.zedcor_distance_miles != null
+          ? ` · ${project.zedcor_distance_miles.toFixed(1)} mi`
+          : ''
+      }`
+    : null;
+
   return (
     <main
       style={{
@@ -65,10 +93,44 @@ export function LeadDetail({
             letterSpacing: '0.04em',
             marginTop: 4,
             textTransform: 'uppercase',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            flexWrap: 'wrap',
           }}
         >
-          {project.source} · score {project.score ?? '—'}
-          {project.distance_miles != null ? ` · ${project.distance_miles.toFixed(1)} mi` : ''}
+          <span>
+            {project.source} · score {project.score ?? '—'}
+            {project.distance_miles != null
+              ? ` · ${project.distance_miles.toFixed(1)} mi`
+              : ''}
+          </span>
+          {zedcorLine && (
+            <span
+              style={{
+                color: PF_TINTS.inkSub,
+                paddingLeft: 8,
+                borderLeft: `1px solid ${PF_TINTS.ruleHair}`,
+              }}
+            >
+              {zedcorLine}
+            </span>
+          )}
+          {warmIntro && (
+            <span
+              style={{
+                background: hexAlpha('#a3e635', 0.18),
+                border: `1px solid ${hexAlpha('#a3e635', 0.6)}`,
+                color: PF_TINTS.ink,
+                padding: '2px 8px',
+                borderRadius: 3,
+                font: `600 10px ${PF_TINTS.mono}`,
+                letterSpacing: '0.06em',
+              }}
+            >
+              WARM INTRO
+            </span>
+          )}
         </div>
       </header>
 
@@ -85,7 +147,13 @@ export function LeadDetail({
           draft={latestEmailDraft}
           contacts={contacts}
         />
-        <Sidebar project={project} contacts={contacts} recentEdits={recentEdits} />
+        <Sidebar
+          project={project}
+          contacts={contacts}
+          recentEdits={recentEdits}
+          crossPollMatches={crossPollMatches}
+          zedcorBranch={zedcorBranch}
+        />
       </div>
       <div style={{ marginTop: 16 }}>
         <Timeline projectId={project.id} initialEvents={timelineEvents} />
@@ -452,11 +520,23 @@ interface SidebarProps {
   project: Project;
   contacts: ProjectContact[];
   recentEdits: OutreachEdit[];
+  crossPollMatches: CrossPollinationMatchRow[];
+  zedcorBranch: ZedcorBranchInfo | null;
 }
 
-function Sidebar({ project, contacts, recentEdits }: SidebarProps) {
+function Sidebar({
+  project,
+  contacts,
+  recentEdits,
+  crossPollMatches,
+  zedcorBranch,
+}: SidebarProps) {
   return (
     <aside style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <ZedcorRelationshipContext
+        matches={crossPollMatches}
+        targetRegion={zedcorBranch?.state ?? null}
+      />
       <SidebarCard title="Rationale">
         <div
           style={{
