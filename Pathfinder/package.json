@@ -28,8 +28,7 @@
     "react-dom": "^18.3.1",
     "react-markdown": "^9.1.0",
     "remark-gfm": "^4.0.1",
-    "resend": "^6.12.2",
-    "shiki": "^1.29.2"
+    "resend": "^6.12.2"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^6.9.1",

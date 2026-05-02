@@ -13,14 +13,9 @@ import { MarkdownRenderer } from '@/components/chat/markdown';
 // rules globally in tests.
 void React;
 
-// Stub out the lazy shiki loader so the test doesn't pull a 1 MB
-// highlighter module into the runner.
-vi.mock('shiki', () => ({
-  createHighlighter: async () => ({
-    codeToHtml: (code: string, opts: { lang: string }) =>
-      `<pre data-lang="${opts.lang}"><code>${code}</code></pre>`,
-  }),
-}));
+// Shiki was removed in fix/chat-renderer-strip-shiki — the renderer now
+// emits plain `<pre><code>` blocks. Mock retained as a no-op so any
+// transitively-loaded highlighter import resolves harmlessly.
 
 const FIXTURE = fs.readFileSync(
   path.resolve(__dirname, 'fixtures/zedcor-leads.md'),
