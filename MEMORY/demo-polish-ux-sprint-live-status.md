@@ -4,6 +4,153 @@ Append-only operational log. Newest entry on top. Tuesday 2026-05-05 demo deadli
 
 ---
 
+## 2026-05-02 18:30 UTC — Gate 4 (4A → 4B-3) + Gate 5 dry-run plan green; PRs open
+
+**State mismatch flag:** the Gate 4 prompt assumed Gate 3 PRs (#78, #79,
+#81, #82, #83) were already merged to `main`. They are NOT — all 9 PRs
+in the sprint stack remain OPEN at HEAD `b04ce03`. Gate 4 work was built
+stacked on the Gate 3 stack so each Gate 4 PR rebases cleanly onto
+`main` once Kyle merges Gate 3 in order. Surfaced for Kyle in Gate 5's
+dry-run README pre-conditions.
+
+**Gate stack (origin/main `b04ce03`):**
+- Gate 4A — Slack + Resend status probes — branch `demo-polish-ux/gate4a-probes` — PR #85 (base 3E)
+- Gate 4B-1 — HubSpot webhooks + outbound push — branch `demo-polish-ux/gate4b1-hubspot-webhooks` — PR #86 (base 4A)
+- Gate 4B-2 — HubSpot field/stage mapping UI — branch `demo-polish-ux/gate4b2-hubspot-mapping` — PR #88 (base 4B-1)
+- Gate 4B-3 — HubSpot nightly reconciliation — branch `demo-polish-ux/gate4b3-hubspot-recon` — PR #90 (base 4B-2)
+- Gate 5 — Demo dry-run checklist — branch `demo-polish-ux/gate5-dryrun` (base 4B-3)
+
+Pre-merge tags pushed for each gate: `pre-merge/demo-polish-ux/gate4{a,b1,b2,b3}` → `origin/main` `b04ce03`.
+
+### Scope shipped (combined Gate 4 + Gate 5)
+
+**Gate 4A — connection-status probes**
+- `lib/probes.ts` + `lib/probe-cache.ts` (5-min TTL).
+- `app/api/probes/{slack,resend}/route.ts` thin GET wrappers.
+- `IntegrationsSection` wired to call both routes; replaces hardcoded
+  `unknown` placeholders.
+- 16 unit tests cover Slack response taxonomy
+  (`no_text`/`invalid_payload`/`no_service`), Resend status codes
+  (200 + N domains / 200 + 0 = degraded / 401 = failed / network = failed).
+
+**Gate 4B-1 — HubSpot bidirectional bridge**
+- Real `verifyV3Signature` on the inbound `app/api/connectors/[type]/webhook`
+  route (replaces the test-only `x-pf-test=1` stub).
+- `lib/connectors/hubspot/inbound.ts` strict v3 event-array parser +
+  family grouping (deal / contact / engagement / unknown).
+- `lib/connectors/hubspot/outbound.ts` `pushDealStageChange()` with
+  decrypted token + audit logging + `redact()` (first-4 + last-4).
+- 12 unit tests cover the parser + groupings + redact.
+- Operator-todo doc at
+  `MEMORY/operator-todos/2026-05-02-hubspot-end-to-end-setup.md`
+  documents Kyle's HubSpot dashboard + Vercel env config.
+
+**Gate 4B-2 — HubSpot mapping UI**
+- `lib/connectors/hubspot/mapping.ts` config types +
+  `DEFAULT_HUBSPOT_MAPPING` (mirrors `lib/hubspot/deal-mapper.ts`).
+- `parseMapping()` is tolerant — drops malformed rows, falls back to
+  defaults rather than throwing.
+- `app/api/connectors/hubspot/mapping/route.ts` GET + POST persist to
+  `connectors.metadata.hubspot_mapping` (jsonb under existing column).
+- `components/settings/connectors/HubspotMappingForm.tsx` 3-section
+  client form with per-row conflict-policy dropdown
+  (`last_write_wins` / `pathfinder_locked` / `hubspot_locked`).
+- Page at `/pathfinder/settings/connectors/hubspot/mapping`.
+- 9 unit tests on parser + validator.
+
+**Gate 4B-3 — Nightly reconciliation cron**
+- `lib/connectors/hubspot/recon.ts` pure `reconcileDeals()` engine.
+  Cross-type tolerance (HubSpot stringifies `amount`).
+- `services/connectors/hubspot-recon.ts` I/O wrapper. Loads connectors
+  + tokens + mapping, pulls `lead_actions` + HubSpot deals search,
+  passes through engine, inserts escalations to
+  `pathfinder.architect_inbox` with `category='hubspot-sync-conflict'`.
+- `lib/inngest/functions/hubspot-recon-cron.ts` cron schedule
+  `TZ=UTC 0 3 * * *`.
+- **Apply mode gated behind `HUBSPOT_RECON_APPLY=1`** — default off so
+  Tuesday demo runs in dry-run mode (escalations visible in inbox,
+  no actual write-back).
+- 10 unit tests cover all 3 policies + null/null match + cross-type
+  coerce + tied-timestamps escalation + escalation row shape.
+
+**Gate 5 — Demo dry-run checklist**
+- `MEMORY/demo-prep/2026-05-04-demo-dry-run-screenshots/README.md`
+  with pre-conditions, 10 demo-spine beats, exact URLs + expected
+  values + SQL probes per beat, and a token-leak final-guard SQL.
+- `.gitkeep` placeholder for the screenshots directory; Kyle drops
+  `beat-NN-*.png` files there during Monday's dry-run pass.
+
+### Verification (cumulative across Gate 4 + Gate 5)
+
+```
+$ pnpm typecheck (Pathfinder/) → 0 errors
+$ pnpm lint (Pathfinder/)      → ✔ no warnings or errors
+$ pnpm test (Pathfinder/)      → 95 files / 949 passed | 24 skipped
+                                 (47 new tests across 4A / 4B-1 / 4B-2 / 4B-3)
+```
+
+### Hard-halt items not tripped
+
+- ✅ Schema unchanged across the entire Gate 4 stack (Gate 4B-2 uses
+  existing `connectors.metadata` jsonb; Gate 4B-3 uses existing
+  `architect_inbox` + `connector_audit_log`).
+- ✅ No auth boundary changes — HubSpot HMAC is route-scoped, doesn't
+  touch `middleware.ts` or basic-auth.
+- ✅ HubSpot scope unchanged from Phase 3A baseline. No Marketing Hub,
+  no custom objects.
+- ✅ Token leak guard:
+  - `pushDealStageChange()` redacts via `redact()` on every audit row.
+  - `runHubspotRecon()` redacts via `redact()` on every audit row.
+  - 12-test inbound suite covers null/short/long inputs to `redact`.
+  - SQL leak monitor query in
+    `MEMORY/operator-todos/2026-05-02-hubspot-end-to-end-setup.md` § 5.
+- ✅ Houston flagship + ProjectFactsCard untouched.
+- ✅ Cross-pollination overlay untouched (Brasfield & Gorrie + Big-D
+  Construction signature beats still surface; ProjectFactsCard sits
+  below ZedcorRelationshipContext).
+- ✅ `agent_runs` writes untouched.
+
+### Operator-todo (Kyle, in priority order)
+
+1. **Merge the Gate 3 stack to main** (PRs #78 → #79 → #81 → #82 → #83)
+   in order. Each PR rebases on its parent so Vercel CI runs cleanly
+   on each merge.
+2. **Merge the Gate 4 stack** (PRs #85 → #86 → #88 → #90).
+3. **HubSpot dashboard config** per
+   `MEMORY/operator-todos/2026-05-02-hubspot-end-to-end-setup.md`:
+   - HubSpot app to production mode + 8 scopes + webhook subscriptions.
+   - Vercel env vars: `HUBSPOT_CLIENT_ID`, `HUBSPOT_CLIENT_SECRET`,
+     `HUBSPOT_APP_SECRET` (existing var name; same value as the
+     prompt's `HUBSPOT_WEBHOOK_SECRET`), pipeline + 5 stage ids.
+   - Click **Connect** on the HubSpot tile in
+     `/pathfinder/settings/connectors`.
+4. **Anthropic credit top-up** (still pending from Gate 3C — final 5
+   leads of the top-50 enrichment + the LA top-5 still need NAICS +
+   description fills, blocked on credit cap).
+5. **Monday demo dry-run** per
+   `MEMORY/demo-prep/2026-05-04-demo-dry-run-screenshots/README.md`.
+   Save the 10 `beat-NN-*.png` screenshots, run the token-leak monitor,
+   sign off in the README footer.
+
+### Cost (Gate 4 + Gate 5)
+
+- Gate 4A — $0 (no LLM calls; HEAD/POST probes only).
+- Gate 4B-1 — $0 (signature verification + dispatcher infrastructure).
+- Gate 4B-2 — $0 (UI + jsonb persistence).
+- Gate 4B-3 — $0 in test mode (cron not yet scheduled; recon is
+  dry-run unless `HUBSPOT_RECON_APPLY=1` flips on).
+- Gate 5 — $0 (documentation only).
+- **Total Gate 4 + 5 LLM cost: $0.**
+
+### Outstanding before PR-merge (Gate 5)
+
+1. PRs #85 / #86 / #88 / #90 / Gate 5 → CI green pending; rebase as
+   upstream gates merge.
+2. Auto-revert monitor 10 min post each merge.
+3. Kyle's HubSpot config + Monday dry-run.
+
+---
+
 ## 2026-05-02 17:00 UTC — Gate 3 (3A → 3E) implementation green; PRs open
 
 **Gate stack (origin/main `b04ce03`):**
