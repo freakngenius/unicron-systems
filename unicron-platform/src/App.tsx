@@ -6,6 +6,7 @@ import { SystemProvider } from './context/SystemContext';
 import { Onboarding } from './components/onboarding/Onboarding';
 import { LiveSystem } from './components/live/LiveSystem';
 import { ArchitectInbox } from './components/inbox/ArchitectInbox';
+import { AgentsView } from './components/agent-console/AgentsView';
 import { SignInGate } from './components/auth/SignInGate';
 import { useAuth } from './lib/auth';
 
@@ -31,6 +32,7 @@ function Shell() {
           />
         )}
         {tab === 'inbox' && <ArchitectInbox />}
+        {tab === 'agents' && <AgentsView />}
       </main>
 
       <SettingsDrawer open={settingsOpen} onClose={() => setSettingsOpen(false)} />
