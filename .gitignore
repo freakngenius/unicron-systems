@@ -58,5 +58,7 @@ next-env.d.ts
 # Cowork session artifacts (per-developer, not part of repo)
 .claude/
 
-# Marketing Site refactor staging — uncommitted Phase 2 work; track post-Tuesday-demo
-/Marketing Site/
+# Orphaned folders pending manual cleanup in Finder (sandbox can't remove)
+/Product/
+/Source/
+/Presentation/

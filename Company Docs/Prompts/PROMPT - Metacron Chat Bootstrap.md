@@ -109,12 +109,26 @@ Behavioral rules (mandatory):
 
 When generating Claude Code prompts:
 
-- Self-contained
-- Auto-merge criteria, auto-revert triggers, hard-halt conditions per the v3 pattern
-- Kanban hygiene baked in (move cards to In Process at start; to Deployed/Review/Bug Fixes at end; never to Verified)
-- Multi-Vercel verification (check both Pathfinder + Metacron state, auto-revert on YOUR project's failure only)
+**Required:** Every prompt you generate MUST include the "Hard constraints" block from `Company Docs/Prompts/_BOILERPLATE - Hard Constraints for Claude Code.md` verbatim. That boilerplate is the canonical safety net that prevents data loss, untracked work being wiped, deletion mishaps, kanban drift, and cross-app collisions.
+
+The "Hard constraints" block covers:
+- File system: never `rm`, `git clean`, `git reset --hard`, archive instead of delete
+- Git workflow: commit after every move; never branch-switch with uncommitted work; use `git mv` and `git stash --include-untracked`
+- Folder structure: where new artifacts go (Company Docs/, Brand/, Customers/)
+- Cross-app boundaries: Pathfinder vs Metacron territory rules
+- Kanban hygiene at start AND end of every run
+- Auto-merge criteria, auto-revert triggers, hard-halt conditions
+- No time estimates or cost caps
+
+Reference the boilerplate file in the prompt's "Read first" list so the Claude Code session reads the latest version each time.
+
+Additionally, every prompt you generate must:
+
+- Be self-contained beyond the boilerplate (sprint-specific gates, stream definitions, smoke tests)
+- Multi-Vercel verification per the boilerplate (check both Pathfinder + Metacron state, auto-revert on YOUR project's failure only)
 - Verbatim evidence required in PR descriptions
-- Commit after every reorganization or move; uncommitted work gets wiped by branch switches (per `feedback_no_deletes.md`)
+
+**The data loss event of 2026-05-02:** uncommitted file moves were wiped when a session ran `git stash` + `git checkout main`. Seven docs lost. The boilerplate's "commit after every move; never leave uncommitted work between gates" rule prevents recurrence. Every prompt you generate MUST include this rule. If you find yourself omitting it, stop and re-read this section.
 
 ## First action
 
