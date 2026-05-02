@@ -33,6 +33,11 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { scoreProject } from '@/lib/scoring';
 import { inngest } from '@/lib/inngest/client';
 import type { Branch, Customer, Project } from '@/lib/types';
+import {
+  findNearestZedcorBranch,
+  type ZedcorBranchPoint,
+} from '@/lib/zedcor/geomapper';
+import { findMatches as findCrossPollinationMatches } from '@/lib/cross-pollination/engine';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -358,6 +363,42 @@ function stripEmDashes(text: string): string {
 // Per-project ranker pipeline
 // ---------------------------------------------------------------------------
 
+// Z-F integrator — pluck the entity-bearing fields the cross-pollination
+// engine wants (project_owner / prime_contractor / key_subs /
+// parent_company) from a Project row. The Ingestor doesn't currently
+// project these into top-level columns, so we extract them from
+// raw_payload using the source-specific shapes seen in production.
+function extractCrossPollinationFields(p: Project): {
+  project_owner: string | null;
+  prime_contractor: string | null;
+  key_subs: string[];
+  parent_company: string | null;
+} {
+  const rp = (p.raw_payload ?? {}) as Record<string, unknown>;
+  // USAspending: 'Recipient Name' is the awardee = prime contractor;
+  // 'Awarding Agency' is the owner / project sponsor.
+  const usPrime = typeof rp['Recipient Name'] === 'string' ? (rp['Recipient Name'] as string) : null;
+  const usOwner = typeof rp['Awarding Agency'] === 'string' ? (rp['Awarding Agency'] as string) : null;
+  // SAM.gov real-world: { agency: 'Metropolitan Water Reclamation District' };
+  // SAM.gov v2 nested: { award: { awardee: { name: '...' } } } when populated.
+  const sgAgency = typeof rp['agency'] === 'string' ? (rp['agency'] as string) : null;
+  let sgAwardee: string | null = null;
+  const award = rp['award'];
+  if (award && typeof award === 'object') {
+    const awardee = (award as { awardee?: unknown }).awardee;
+    if (awardee && typeof awardee === 'object') {
+      const n = (awardee as { name?: unknown }).name;
+      if (typeof n === 'string' && n.trim()) sgAwardee = n;
+    }
+  }
+  return {
+    project_owner: usOwner ?? sgAgency ?? null,
+    prime_contractor: usPrime ?? sgAwardee ?? null,
+    key_subs: [],
+    parent_company: null,
+  };
+}
+
 interface RankerWriteFields {
   score: number;
   rationale: string | null;
@@ -366,7 +407,18 @@ interface RankerWriteFields {
   distance_miles: number | null;
   warm_for_customer_id: string | null;
   ranked_at: string;
+  // Z-F integrator: also persist the Zedcor-org-scoped proximity columns
+  // alongside the multi-tenant nearest_branch_id. Z-C added these columns
+  // but only the backfill script populated them — leaving every freshly
+  // ingested project with NULL Zedcor proximity. This couples the writes
+  // so the radius map + branch-filtered lead lists work for new leads.
+  nearest_zedcor_branch_id: string | null;
+  zedcor_distance_miles: number | null;
 }
+
+// Z-F cross-pollination spec § 4.2 — when at least one warm-intro match
+// exists for a lead, add a +10 score boost (cap at 100).
+const CROSS_POLL_SCORE_BOOST = 10;
 
 async function persistProject(
   admin: Admin,
@@ -530,13 +582,31 @@ export async function GET(req: Request) {
   });
 
   // 5. Load shared lookups
-  const [branchesRes, customersRes] = await Promise.all([
+  const [branchesRes, customersRes, zedcorBranchesRes] = await Promise.all([
     (admin.from('branches') as unknown as {
       select: (cols: string) => Promise<{ data: Branch[] | null; error: { message: string } | null }>;
     }).select('*'),
     (admin.from('customers') as unknown as {
       select: (cols: string) => Promise<{ data: Customer[] | null; error: { message: string } | null }>;
     }).select('*'),
+    // Z-F: load the Zedcor-org-scoped branches once per cycle so we can
+    // compute nearest_zedcor_branch_id alongside the multi-tenant
+    // nearest_branch_id. Filter to lat/lon-bearing rows only (the
+    // findNearestZedcorBranch helper already guards on this but excluding
+    // them here keeps the loop tighter).
+    (admin.from('zedcor_branches') as unknown as {
+      select: (cols: string) => Promise<{
+        data: Array<{
+          id: string;
+          branch_name: string;
+          state: string;
+          lat: number | null;
+          lon: number | null;
+          radius_miles: number | null;
+        }> | null;
+        error: { message: string } | null;
+      }>;
+    }).select('id, branch_name, state, lat, lon, radius_miles'),
   ]);
 
   if (branchesRes.error || customersRes.error) {
@@ -549,6 +619,23 @@ export async function GET(req: Request) {
   const customers = customersRes.data ?? [];
   const branchById = new Map(branches.map((b) => [b.id, b]));
   const customerById = new Map(customers.map((c) => [c.id, c]));
+
+  // Z-F: zedcor branch points used per project for proximity. Tolerate a
+  // missing zedcor_branches table (rare; would mean the Z-A migration
+  // hasn't been applied) by treating it as empty rather than failing the
+  // whole cycle — the multi-tenant ranker still works without Zedcor.
+  const zedcorBranches: ZedcorBranchPoint[] = (zedcorBranchesRes.data ?? [])
+    .filter((b): b is typeof b & { lat: number; lon: number } =>
+      typeof b.lat === 'number' && typeof b.lon === 'number',
+    )
+    .map((b) => ({
+      id: b.id,
+      branch_name: b.branch_name,
+      state: b.state,
+      lat: b.lat,
+      lon: b.lon,
+      radius_miles: typeof b.radius_miles === 'number' ? b.radius_miles : 200,
+    }));
 
   // 6. Per-project loop
   const cycleStart = Date.now();
@@ -610,6 +697,8 @@ export async function GET(req: Request) {
         distance_miles: null,
         warm_for_customer_id: null,
         ranked_at: new Date().toISOString(),
+        nearest_zedcor_branch_id: null,
+        zedcor_distance_miles: null,
       };
       const w = await persistProject(admin, project.id, writeFields);
       if (!w.ok) {
@@ -743,15 +832,81 @@ export async function GET(req: Request) {
       { model_used: SONNET_MODEL, latency_ms: rationaleResult.latency_ms },
     );
 
+    // Z-F integrator — Zedcor branch proximity. When the project has
+    // valid coords + we have at least one zedcor branch, compute the
+    // nearest branch and persist it alongside nearest_branch_id. This
+    // is what the Tuesday demo's branch radius map and the
+    // /pathfinder/zedcor/leads list both read from.
+    let nearest_zedcor_branch_id: string | null = null;
+    let zedcor_distance_miles: number | null = null;
+    if (
+      project.lat != null &&
+      project.lon != null &&
+      zedcorBranches.length > 0
+    ) {
+      const z = findNearestZedcorBranch(
+        { lat: project.lat, lon: project.lon },
+        zedcorBranches,
+      );
+      if (z) {
+        nearest_zedcor_branch_id = z.branch_id;
+        zedcor_distance_miles = z.distance_miles;
+      }
+    }
+
+    // Z-F integrator — cross-pollination. The Z-B engine takes the lead's
+    // entity-bearing fields (project_owner / prime_contractor / key_subs /
+    // parent_company) and writes match rows to lead_cross_pollination.
+    // Spec § 4.2: when at least one match exists, add CROSS_POLL_SCORE_BOOST
+    // to the base score (cap at 100). Best-effort — failure must not bubble
+    // back into the ranker write so a transient cross-poll error doesn't
+    // wipe a lead's score.
+    let crossPollMatchCount = 0;
+    try {
+      const fields = extractCrossPollinationFields(project);
+      if (
+        fields.project_owner ||
+        fields.prime_contractor ||
+        (fields.key_subs && fields.key_subs.length > 0) ||
+        fields.parent_company
+      ) {
+        const matches = await findCrossPollinationMatches({
+          leadId: project.id,
+          fields,
+          // The cross-pollination engine declares the supabase argument as
+          // SupabaseClient<PathfinderDatabase, 'pathfinder'> while the
+          // ranker's existing handler treats `admin` more loosely. The
+          // runtime client is identical (admin.schema = 'pathfinder') so
+          // this cast is shape-equivalent.
+          supabase: admin as unknown as Parameters<typeof findCrossPollinationMatches>[0]['supabase'],
+          writeMatches: true,
+        });
+        crossPollMatchCount = matches.length;
+      }
+    } catch (err) {
+      await writeLog(admin, 'error', {
+        message: `cross-pollination failed (non-fatal) · ${project.id} · ${(err as Error).message}`,
+        reason: 'cross_pollination_failed',
+        project_id: project.id,
+      });
+    }
+
+    const boostedScore =
+      crossPollMatchCount > 0
+        ? Math.min(100, composite_score + CROSS_POLL_SCORE_BOOST)
+        : composite_score;
+
     // Stage 4 — write back
     const writeFields: RankerWriteFields = {
-      score: composite_score,
+      score: boostedScore,
       rationale: rationaleResult.rationale,
       outreach_hook: rationaleResult.outreach_hook || null,
       nearest_branch_id,
       distance_miles,
       warm_for_customer_id,
       ranked_at: new Date().toISOString(),
+      nearest_zedcor_branch_id,
+      zedcor_distance_miles,
     };
     const w = await persistProject(admin, project.id, writeFields);
     if (!w.ok) {
@@ -765,10 +920,15 @@ export async function GET(req: Request) {
     }
 
     await writeLog(admin, 'score_assign', {
-      message: `${project.id} · score ${composite_score}${nearest_branch_code ? ` · branch ${nearest_branch_code}` : ''}`,
+      message: `${project.id} · score ${boostedScore}${nearest_branch_code ? ` · branch ${nearest_branch_code}` : ''}${crossPollMatchCount > 0 ? ` · ${crossPollMatchCount} warm-intro` : ''}`,
       project_id: project.id,
-      score: composite_score,
+      score: boostedScore,
+      base_score: composite_score,
+      cross_poll_match_count: crossPollMatchCount,
+      cross_poll_boost: crossPollMatchCount > 0 ? CROSS_POLL_SCORE_BOOST : 0,
       nearest_branch_code,
+      nearest_zedcor_branch_id,
+      zedcor_distance_miles,
       components: stageComponentScores,
       demoted: false,
     });
@@ -782,7 +942,7 @@ export async function GET(req: Request) {
         name: 'pathfinder/signal.qualified',
         data: {
           project_id: project.id,
-          score: composite_score,
+          score: boostedScore,
           qualified_at: new Date().toISOString(),
         },
       });
