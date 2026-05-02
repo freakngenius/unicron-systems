@@ -131,8 +131,15 @@ export const config = {
   // the cross-origin operator UI fetches.
   // (The earlier `/api/dev/` exemption was removed in PR #32 alongside the
   // wrapper-probe route cleanup.)
+  // `/api/email/oauth/callback` is excluded because Google / Microsoft hit
+  // the redirect URL without basic-auth; auth is via the signed `state`
+  // token + provider code exchange (see lib/email/oauth.ts). Same pattern
+  // as the Slack OAuth callback.
+  // `/api/email/webhooks/` is excluded because Gmail Pub/Sub + Microsoft
+  // Graph subscription pushes arrive without basic-auth. Each handler
+  // verifies its own auth (CRON_SECRET, validation token, clientState).
   matcher: [
     '/',
-    '/((?!_next/|favicon\\.ico|api/cron/|api/notifications/|api/slack/install/callback|api/slack/events|api/slack/actions|api/inngest|api/architect/).*)',
+    '/((?!_next/|favicon\\.ico|api/cron/|api/notifications/|api/slack/install/callback|api/slack/events|api/slack/actions|api/inngest|api/architect/|api/email/oauth/callback|api/email/webhooks/).*)',
   ],
 };

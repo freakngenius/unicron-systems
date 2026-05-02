@@ -378,6 +378,151 @@ export interface LlmCallRow {
 }
 
 
+// Deals + deal activities (Stream B Gate B1, migration 0050_deals.sql).
+// One row per project that has progressed past raw lead. Distinct from
+// lead_actions (HubSpot mirror); deals is the in-Pathfinder Kanban surface.
+// See Phase2-worktrees/unicron-stream-b-pathfinder/STREAM-README.md.
+
+export type DealPipelineStage =
+  | 'NEW'
+  | 'CONTACTED'
+  | 'REPLIED'
+  | 'MEETING'
+  | 'PROPOSAL'
+  | 'WON'
+  | 'LOST';
+
+export const DEAL_PIPELINE_STAGES: readonly DealPipelineStage[] = [
+  'NEW',
+  'CONTACTED',
+  'REPLIED',
+  'MEETING',
+  'PROPOSAL',
+  'WON',
+  'LOST',
+] as const;
+
+export type DealActivityType =
+  | 'stage_change'
+  | 'email_sent'
+  | 'reply_received'
+  | 'meeting_booked'
+  | 'manual_note';
+
+export interface Deal {
+  id: string;
+  project_id: string;
+  owner_email: string | null;
+  pipeline_stage: DealPipelineStage;
+  value_usd: number | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DealActivity {
+  id: string;
+  deal_id: string;
+  activity_type: DealActivityType;
+  from_stage: DealPipelineStage | null;
+  to_stage: DealPipelineStage | null;
+  payload: Record<string, unknown>;
+  actor_email: string | null;
+  created_at: string;
+}
+
+// Joined shape returned by /api/deals — deals are useless without the
+// project they reference, so the API hydrates project metadata. Avoids
+// N+1 lookups in the Kanban card render path.
+export interface DealWithProject extends Deal {
+  project: Pick<
+    Project,
+    | 'id'
+    | 'title'
+    | 'project_value'
+    | 'score'
+    | 'verified'
+    | 'nearest_branch_id'
+    | 'distance_miles'
+    | 'source'
+    | 'project_stage'
+  >;
+}
+
+// Email integrations + outreach edits (Stream B Gate B2, migration
+// 0051_outreach_edits.sql). One email_integrations row per
+// (actor_email, provider, account_email); one outreach_edits row per send.
+
+export type EmailProvider = 'gmail' | 'outlook';
+
+export interface EmailIntegration {
+  id: string;
+  actor_email: string;
+  provider: EmailProvider;
+  account_email: string;
+  // Sensitive: never selected by the anon client. Server reads via
+  // supabaseAdmin only.
+  access_token: string | null;
+  refresh_token: string | null;
+  token_expires_at: string | null;
+  scope: string | null;
+  provider_meta: Record<string, unknown>;
+  connected_at: string;
+  disconnected_at: string | null;
+}
+
+// Connection-status row served by GET /api/email/status. Token columns
+// stripped — anon-safe.
+export interface EmailIntegrationStatus {
+  actor_email: string;
+  provider: EmailProvider;
+  account_email: string;
+  connected_at: string;
+  disconnected_at: string | null;
+}
+
+export interface OutreachEdit {
+  id: string;
+  outreach_draft_id: number | null;
+  project_id: string;
+  actor_email: string;
+  provider: EmailProvider;
+  draft_subject: string | null;
+  draft_body: string;
+  sent_subject: string | null;
+  sent_body: string;
+  recipient_email: string;
+  provider_message_id: string | null;
+  provider_thread_id: string | null;
+  send_error: string | null;
+  edit_distance: number | null;
+  edit_summary: Record<string, unknown> | null;
+  sent_at: string | null;
+  created_at: string;
+}
+
+// Email threads (Stream B Gate B3, migration 0052_email_threads.sql).
+// One row per (provider, provider_thread_id). Seeded on outbound send
+// (lib/email/outreach-send.ts) and updated when an inbound reply lands
+// on a tracked thread (lib/email/webhooks).
+
+export interface EmailThread {
+  id: string;
+  provider: EmailProvider;
+  provider_thread_id: string;
+  project_id: string;
+  deal_id: string | null;
+  actor_email: string;
+  subject: string | null;
+  recipient_email: string;
+  last_outbound_at: string | null;
+  last_inbound_at: string | null;
+  replied_at: string | null;
+  message_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
 // Database type bag for the typed Supabase client.
 export interface PathfinderDatabase {
   pathfinder: {
@@ -438,6 +583,57 @@ export interface PathfinderDatabase {
           cache_hit?: boolean;
         };
         Update: Partial<LlmCallRow>;
+        Relationships: [];
+      };
+      deals: {
+        Row: Deal;
+        Insert: Omit<Deal, 'id' | 'created_at' | 'updated_at' | 'pipeline_stage'> & {
+          id?: string;
+          created_at?: string;
+          updated_at?: string;
+          pipeline_stage?: DealPipelineStage;
+        };
+        Update: Partial<Deal>;
+        Relationships: [];
+      };
+      deal_activities: {
+        Row: DealActivity;
+        Insert: Omit<DealActivity, 'id' | 'created_at' | 'payload'> & {
+          id?: string;
+          created_at?: string;
+          payload?: Record<string, unknown>;
+        };
+        Update: Partial<DealActivity>;
+        Relationships: [];
+      };
+      email_integrations: {
+        Row: EmailIntegration;
+        Insert: Omit<EmailIntegration, 'id' | 'connected_at' | 'provider_meta'> & {
+          id?: string;
+          connected_at?: string;
+          provider_meta?: Record<string, unknown>;
+        };
+        Update: Partial<EmailIntegration>;
+        Relationships: [];
+      };
+      outreach_edits: {
+        Row: OutreachEdit;
+        Insert: Omit<OutreachEdit, 'id' | 'created_at'> & {
+          id?: string;
+          created_at?: string;
+        };
+        Update: Partial<OutreachEdit>;
+        Relationships: [];
+      };
+      email_threads: {
+        Row: EmailThread;
+        Insert: Omit<EmailThread, 'id' | 'created_at' | 'updated_at' | 'message_count'> & {
+          id?: string;
+          created_at?: string;
+          updated_at?: string;
+          message_count?: number;
+        };
+        Update: Partial<EmailThread>;
         Relationships: [];
       };
     };
