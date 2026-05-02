@@ -33,7 +33,7 @@ const PROVIDERS: Record<ConnectorType, ProviderConfig> = {
     tokenExchangeUrl: 'https://slack.com/api/oauth.v2.access',
     // SPEC § 5.4: chat:write + channels:read + im:write + app_mentions:read.
     // commands is needed for slash command registration which C-1B handles.
-    scopes: ['chat:write', 'channels:read', 'im:write', 'app_mentions:read', 'commands'],
+    scopes: ['chat:write', 'channels:read', 'im:write', 'app_mentions:read', 'commands', 'reactions:read'],
     scopeSeparator: ',',
     exchangeImplemented: true,
   },
