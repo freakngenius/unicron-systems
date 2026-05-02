@@ -650,3 +650,157 @@ export const coverageMockLiveEvents: ReadonlyArray<{
   { delayMs: 250, event_type: 'decision', payload: { text: 'Estimate ready. Awaiting operator review.' } },
 ];
 
+// ---------------------------------------------------------------------------
+// Source Onboarder (Stream M2) fixtures.
+//
+// Mirrors the wire shape from `Pathfinder/app/api/sources/onboard/route.ts` +
+// `Pathfinder/app/api/architect/inbox/route.ts`. Used by `inboxClient.ts`
+// mock-mode and the SourceOnboarderModal mock-runtime.
+// ---------------------------------------------------------------------------
+
+import type { InboxTicket } from '../lib/contracts/inbox';
+import type { OnboardSyncResponse } from '../lib/contracts/sourceOnboarder';
+
+export const sourceOnboarderDispatchesMock: AgentDispatch[] = [
+  {
+    id: 'disp-onboard-allegheny',
+    agent_name: 'source-onboarder',
+    customer_org_id: 'pathfinder-default',
+    dispatched_by_user_id: null,
+    input_payload: {
+      url: 'https://data.alleghenycounty.us/permits',
+      hint: 'socrata',
+      jurisdiction: 'Allegheny County, PA',
+      summary: 'Allegheny County · socrata · Tier 1 onboarded',
+    },
+    status: 'verified',
+    result_payload: {
+      status: 'live',
+      source_id: 'src-allegheny-permits',
+      adapter_kind: 'socrata',
+      schema: { permit_id: 'string', filing_date: 'date', valuation: 'number', description: 'string' },
+      summary: 'Tier 1 onboarded · adapter socrata · 22 schema fields',
+    },
+    rejection_reason: null,
+    verified_by_user_id: 'mock-operator',
+    verified_at: '2026-04-30T14:08:00.000Z',
+    cost_usd: 1.42,
+    duration_ms: 89_000,
+    agent_run_id: null,
+    parent_dispatch_id: null,
+    created_at: '2026-04-30T14:04:00.000Z',
+    updated_at: '2026-04-30T14:08:00.000Z',
+  },
+  {
+    id: 'disp-onboard-upmc-rss',
+    agent_name: 'source-onboarder',
+    customer_org_id: 'pathfinder-default',
+    dispatched_by_user_id: null,
+    input_payload: {
+      url: 'https://upmcconstruction.example.com/rss',
+      hint: 'rss',
+      jurisdiction: 'Pittsburgh, PA',
+      summary: 'UPMC Construction · rss · Tier 2 escalated',
+    },
+    status: 'awaiting_review',
+    result_payload: {
+      status: 'human-assist',
+      ticket_id: 'ticket-pgh-rss-1',
+      reason: 'Free-text RSS feed; parser hint required to map item.description into structured fields.',
+    },
+    rejection_reason: null,
+    verified_by_user_id: null,
+    verified_at: null,
+    cost_usd: 0.84,
+    duration_ms: 64_000,
+    agent_run_id: null,
+    parent_dispatch_id: null,
+    created_at: '2026-04-30T14:15:00.000Z',
+    updated_at: '2026-04-30T14:16:04.000Z',
+  },
+];
+
+export const inboxTicketsMock: InboxTicket[] = [
+  {
+    id: 'ticket-pgh-rss-1',
+    category: 'source-discovery',
+    candidate_url: 'https://upmcconstruction.example.com/rss',
+    session_id: 'sess-onboard-9a3',
+    source_id: null,
+    reason: 'Free-text RSS feed; parser hint required to map item.description into structured fields.',
+    hint: 'rss',
+    jurisdiction: 'Pittsburgh, PA',
+    status: 'open',
+    resolved_at: null,
+    resolved_by_user_email: null,
+    resolution_note: null,
+    created_at: '2026-04-30T14:15:00.000Z',
+    payload: {
+      sample_rss_title: 'New construction notice — Forbes Avenue medical office expansion',
+    },
+  },
+  {
+    id: 'ticket-austin-auth',
+    category: 'source-discovery',
+    candidate_url: 'https://services.austintexas.gov/permits.json',
+    session_id: 'sess-onboard-9a4',
+    source_id: null,
+    reason: 'Endpoint returns 401 — likely needs Austin Open Data token. Operator: please supply api_key_env.',
+    hint: 'rest',
+    jurisdiction: 'Austin, TX',
+    status: 'open',
+    resolved_at: null,
+    resolved_by_user_email: null,
+    resolution_note: null,
+    created_at: '2026-05-01T18:21:00.000Z',
+    payload: {
+      probe_response_status: 401,
+    },
+  },
+];
+
+export const sourceOnboarderMockOnboardResult: OnboardSyncResponse = {
+  ok: true,
+  status: 'live',
+  source_id: 'src-mock-allegheny-permits',
+  adapter_kind: 'socrata',
+  schema: {
+    permit_id: 'string',
+    filing_date: 'timestamp',
+    valuation: 'number',
+    description: 'string',
+    contractor_name: 'string',
+  },
+  first_event_at: '2026-05-02T17:42:11.000Z',
+  session_id: 'sess-mock-onboard',
+  cost_usd: 1.42,
+  duration_ms: 87_000,
+};
+
+export const sourceOnboarderMockTier2Result: OnboardSyncResponse = {
+  ok: true,
+  status: 'human-assist',
+  ticket_id: 'ticket-pgh-rss-1',
+  reason: 'Free-text RSS feed; parser hint required.',
+  session_id: 'sess-mock-onboard-rss',
+  cost_usd: 0.84,
+  duration_ms: 64_000,
+};
+
+export const sourceOnboarderMockLiveEvents: ReadonlyArray<{
+  delayMs: number;
+  event_type: 'reasoning' | 'tool_call' | 'tool_result' | 'partial_output' | 'decision';
+  payload: Record<string, unknown>;
+}> = [
+  { delayMs: 200, event_type: 'reasoning', payload: { text: 'Fetching robots.txt and probing endpoint shape.' } },
+  { delayMs: 350, event_type: 'tool_call', payload: { tool: 'classify-source', args: { url: 'https://data.alleghenycounty.us/permits' } } },
+  { delayMs: 500, event_type: 'tool_result', payload: { adapter_kind: 'socrata', confidence: 0.94 } },
+  { delayMs: 250, event_type: 'reasoning', payload: { text: 'Identified Socrata-style API; inferring schema mapping.' } },
+  { delayMs: 350, event_type: 'tool_call', payload: { tool: 'infer-schema', args: { adapter: 'socrata' } } },
+  { delayMs: 600, event_type: 'tool_result', payload: { schema_fields: 22 } },
+  { delayMs: 300, event_type: 'partial_output', payload: { adapter_preview: 'export const allegheny = socrata({ host: ..., resource: ... })' } },
+  { delayMs: 250, event_type: 'tool_call', payload: { tool: 'run-test-fetch', args: {} } },
+  { delayMs: 600, event_type: 'tool_result', payload: { test_event_count: 5 } },
+  { delayMs: 250, event_type: 'decision', payload: { text: 'Tier 1 onboard succeeded. Awaiting operator commit.' } },
+];
+
