@@ -7,9 +7,15 @@
 import { coverageExpansionAgent } from './coverageExpansionAgent';
 import { sourceOnboarderAgent } from './sourceOnboarderAgent';
 import { architectAgent } from './architectAgent';
+import { crossPollinationAgent } from './crossPollinationAgent';
 import { getAgent, registerAgent } from '../agentRegistry';
 
-const ALL_AGENTS = [coverageExpansionAgent, sourceOnboarderAgent, architectAgent];
+const ALL_AGENTS = [
+  coverageExpansionAgent,
+  sourceOnboarderAgent,
+  architectAgent,
+  crossPollinationAgent,
+];
 
 for (const agent of ALL_AGENTS) {
   if (!getAgent(agent.name)) registerAgent(agent);

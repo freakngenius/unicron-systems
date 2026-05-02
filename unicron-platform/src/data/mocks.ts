@@ -1034,6 +1034,103 @@ export const architectDiscoveryMock: DiscoveryApiResponse = {
   status: 'completed',
 };
 
+// ---------------------------------------------------------------------------
+// Cross-Pollination Engine (Stream M5) fixtures.
+//
+// Mirrors Pathfinder/supabase/migrations/0101_zedcor_cross_pollination.sql.
+// Used by `crossPollinationClient.ts` mock-mode + the M5 modal.
+// ---------------------------------------------------------------------------
+
+import type { CrossPollinationMatch } from '../lib/contracts/crossPollination';
+
+export const crossPollinationMatchesMock: CrossPollinationMatch[] = [
+  {
+    id: 'xpoll-1',
+    lead_id: 'lead-pgh-3401',
+    customer_org_id: 'zedcor',
+    customer_canonical: 'Brasfield & Gorrie',
+    match_layer: 'exact',
+    match_confidence: 0.97,
+    primary_branch_id: 'branch-pit-007',
+    primary_branch_name: 'Pittsburgh',
+    branch_count: 14,
+    active_site_count: 22,
+    most_recent_site_date: '2026-04-28',
+    national_account: true,
+    matched_at: '2026-05-02T13:00:00.000Z',
+    matched_field: 'prime_contractor',
+    matched_value_raw: 'Brasfield & Gorrie LLC',
+  },
+  {
+    id: 'xpoll-2',
+    lead_id: 'lead-pgh-3401',
+    customer_org_id: 'zedcor',
+    customer_canonical: 'Big-D Construction',
+    match_layer: 'fuzzy',
+    match_confidence: 0.84,
+    primary_branch_id: 'branch-hou-002',
+    primary_branch_name: 'Houston',
+    branch_count: 8,
+    active_site_count: 6,
+    most_recent_site_date: '2026-04-22',
+    national_account: false,
+    matched_at: '2026-05-02T13:00:00.000Z',
+    matched_field: 'project_owner',
+    matched_value_raw: 'BigD Construction',
+  },
+  {
+    id: 'xpoll-3',
+    lead_id: 'lead-pgh-3401',
+    customer_org_id: 'zedcor',
+    customer_canonical: 'Robins & Morton',
+    match_layer: 'parent_company',
+    match_confidence: 0.78,
+    primary_branch_id: 'branch-nsh-006',
+    primary_branch_name: 'Nashville',
+    branch_count: 5,
+    active_site_count: 3,
+    most_recent_site_date: '2026-04-12',
+    national_account: false,
+    matched_at: '2026-05-02T13:00:00.000Z',
+    matched_field: 'parent_company',
+    matched_value_raw: 'Robins Morton Construction',
+  },
+  {
+    id: 'xpoll-4',
+    lead_id: 'lead-hou-2207',
+    customer_org_id: 'zedcor',
+    customer_canonical: 'JE Dunn Construction',
+    match_layer: 'exact',
+    match_confidence: 0.93,
+    primary_branch_id: 'branch-hou-002',
+    primary_branch_name: 'Houston',
+    branch_count: 11,
+    active_site_count: 18,
+    most_recent_site_date: '2026-05-01',
+    national_account: true,
+    matched_at: '2026-05-02T13:00:00.000Z',
+    matched_field: 'prime_contractor',
+    matched_value_raw: 'JE Dunn Construction Group',
+  },
+  {
+    id: 'xpoll-5',
+    lead_id: 'lead-hou-2207',
+    customer_org_id: 'zedcor',
+    customer_canonical: 'Manhattan Construction',
+    match_layer: 'fuzzy',
+    match_confidence: 0.65,
+    primary_branch_id: 'branch-hou-002',
+    primary_branch_name: 'Houston',
+    branch_count: 4,
+    active_site_count: 2,
+    most_recent_site_date: '2026-04-08',
+    national_account: false,
+    matched_at: '2026-05-02T13:00:00.000Z',
+    matched_field: 'key_sub',
+    matched_value_raw: 'Manhattan Construction Co',
+  },
+];
+
 export const sourceOnboarderMockLiveEvents: ReadonlyArray<{
   delayMs: number;
   event_type: 'reasoning' | 'tool_call' | 'tool_result' | 'partial_output' | 'decision';
