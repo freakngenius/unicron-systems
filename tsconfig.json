@@ -32,6 +32,7 @@
     "tests/**/*",
     "**/*.test.ts",
     "**/*.test.tsx",
-    "Pathfinder/**/*"
+    "Pathfinder/**/*",
+    "unicron-platform/**/*"
   ]
 }
