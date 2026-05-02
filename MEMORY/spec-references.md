@@ -191,3 +191,50 @@ Stream P1 total cost-to-date: **$0.12** of $8 cap. All cost on Haiku coord-extra
 **Implements:** Z-F finish — re-runs the loosened Haiku triage classifier against the existing pile of 239 projects demoted with `rationale='Filtered as non-opportunity by classifier'` and `rejection_reason IS NULL`. For projects that flip to "yes" under the new prompt, resets `score=NULL + rationale=NULL + ranked_at=NULL` so the next ranker cron cycle re-scores via Sonnet. Cost-capped at $5 against `pathfinder.llm_calls.cost_usd`.
 **Last verified against spec:** 2026-05-02. Idempotent — only touches `score=0 AND rationale ilike '%non-opportunity%' AND rejection_reason IS NULL`.
 **Drift:** **none.**
+
+---
+
+## Connector Sprint Phase 1 — C-1A Foundation
+
+**State:** PR #62 (`connectors/c1a-framework`) — schema + token storage + OAuth handlers + dispatcher + webhook normalizer + token-refresh cron.
+
+#### Pathfinder/supabase/migrations/0105_connector_framework.sql
+**Implements:** SPEC - Connectors (Slack, Teams, HubSpot).md § 3.1 (schema), § 5.1 (per-org isolation), § 5.2 (token storage), § 5.3 (OAuth state validation).
+**Last verified against spec:** 2026-05-02. Tables: `connectors`, `connector_tokens`, `connector_routing_rules`, `connector_audit_log`. RLS enabled with org-scoped policies; service-role write only. `pgcrypto` extension required for envelope encryption.
+**Drift:** **minor, additive.** SECURITY DEFINER plpgsql wrappers `pathfinder.encrypt_connector_token` / `decrypt_connector_token` mediate `pgp_sym_encrypt` / `pgp_sym_decrypt` so token plaintext never sits in app memory longer than the round-trip.
+
+#### Pathfinder/supabase/migrations/0106_connector_agent_runs.sql
+**Implements:** SPEC - Connectors (Slack, Teams, HubSpot).md § 3.5. Widens `pathfinder.agent_runs.agent_name` check constraint to admit `connector-refresh` so the nightly token-refresh cron can write its run row.
+
+#### Pathfinder/lib/connectors/types.ts
+**Implements:** Type contracts shared across `lib/connectors/*` and the connector API routes.
+
+#### Pathfinder/lib/connectors/providers.ts
+**Implements:** SPEC - Connectors (Slack, Teams, HubSpot).md § 5.4. Per-provider scope-to-feature mapping (`slack`, `teams`, `hubspot`), auth/token endpoint URLs, signing-secret env vars.
+
+#### Pathfinder/lib/connectors/oauth-state.ts
+**Implements:** SPEC - Connectors (Slack, Teams, HubSpot).md § 5.3 (OAuth state validation). HMAC-SHA256 signed state tokens with 10-min expiry + 16-byte hex nonce + connector-type scoping. Reject paths: malformed, bad-signature, expired, replayed, type-mismatch — all five exercised in `tests/connectors/oauth-state.test.ts`.
+
+#### Pathfinder/lib/connectors/tokens.ts
+**Implements:** SPEC - Connectors (Slack, Teams, HubSpot).md § 5.2. `storeToken` / `getToken` / `rotateToken` round-trip via the SQL helpers from migration 0105 — token plaintext never sits in app memory beyond the immediate call. `CONNECTOR_TOKEN_KEY` env var required.
+
+#### Pathfinder/lib/connectors/audit.ts
+**Implements:** SPEC - Connectors (Slack, Teams, HubSpot).md § 3.6 (audit-log writes from the dispatcher). One row per dispatched event with denormalized `customer_org_id` for cross-tenant query guards.
+
+#### Pathfinder/lib/connectors/dispatcher.ts
+**Implements:** SPEC - Connectors (Slack, Teams, HubSpot).md § 3.6. `dispatchEvent(orgId, eventType, payload)` reads active routing rules joined to connectors, applies per-rule filter, calls `sendToConnector` with type-switched implementation. Fail-open semantics — a connector failure NEVER propagates to the calling agent. Per-org isolation enforced via `connectors!inner.customer_org_id=orgId` in the Supabase query.
+
+#### Pathfinder/lib/agent-runs.ts (modified)
+**Drift note:** `AgentName` union widened to include `'connector-refresh'`. Tracks the new nightly cron's runs alongside the existing ranker / verifier / outreach / etc.
+
+#### Pathfinder/app/api/connectors/[type]/auth/route.ts
+**Implements:** SPEC - Connectors (Slack, Teams, HubSpot).md § 3.2 (OAuth flow, step 1). `GET /api/connectors/{type}/auth?org_id={org}` redirects to the provider auth URL with a signed state token.
+
+#### Pathfinder/app/api/connectors/[type]/callback/route.ts
+**Implements:** SPEC - Connectors (Slack, Teams, HubSpot).md § 3.2 (OAuth flow, steps 2–8). Validates state, exchanges code for token via provider's token endpoint, stores via `lib/connectors/tokens.ts`, sets connector status='connected', redirects to `/pathfinder/settings/connectors?connected={type}`. Phase 1 ships the slack-specific exchange via C-1B; teams + hubspot return 501 until Phases 2 + 3.
+
+#### Pathfinder/app/api/connectors/[type]/webhook/route.ts
+**Implements:** SPEC - Connectors (Slack, Teams, HubSpot).md § 3.7. Inbound webhook normalizer. Validates provider signature, normalizes to `InboundEvent`, writes audit log row with `direction='inbound'`. Downstream routing to chat agent / sync engine ships in C-1B (slack) and Phase 3 (hubspot).
+
+#### Pathfinder/app/api/cron/connector-token-refresh/route.ts
+**Implements:** SPEC - Connectors (Slack, Teams, HubSpot).md § 3.5. Nightly cron that refreshes any token with `expires_at < now() + interval '24 hours'` via the provider's refresh endpoint. Writes agent_runs telemetry via the existing `openAgentRun` / `closeAgentRun` helpers. Schedule appended to `Pathfinder/vercel.json`.
