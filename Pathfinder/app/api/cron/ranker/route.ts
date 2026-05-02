@@ -415,6 +415,42 @@ interface RankerWriteFields {
   // so the radius map + branch-filtered lead lists work for new leads.
   nearest_zedcor_branch_id: string | null;
   zedcor_distance_miles: number | null;
+  // Demo Polish P1 — distance gating + geo_unknown cap. The ranker writes
+  // these columns whenever it has the signal; null means "leave alone"
+  // (Supabase's `update` honors that). rejection_reason='no_branch_coverage'
+  // when zedcor_distance_miles > org_geo_config.max_supported_distance_miles.
+  rejection_reason: string | null;
+  rejected_at: string | null;
+  geo_unknown: boolean | null;
+}
+
+// Demo Polish P1 — per-org distance threshold loader. Cached per request
+// (the route instance is short-lived under Vercel cron); fall back to the
+// SPEC default when org_geo_config isn't readable.
+const FALLBACK_MAX_DISTANCE_MILES = 250;
+
+async function loadMaxSupportedDistance(admin: Admin): Promise<number> {
+  try {
+    const res = await (
+      admin.from('org_geo_config') as unknown as {
+        select: (cols: string) => {
+          eq: (col: string, val: string) => {
+            maybeSingle: () => Promise<{
+              data: { max_supported_distance_miles: number | null } | null;
+              error: { message: string } | null;
+            }>;
+          };
+        };
+      }
+    )
+      .select('max_supported_distance_miles')
+      .eq('org_id', 'zedcor')
+      .maybeSingle();
+    const v = res.data?.max_supported_distance_miles;
+    return typeof v === 'number' && v > 0 ? v : FALLBACK_MAX_DISTANCE_MILES;
+  } catch {
+    return FALLBACK_MAX_DISTANCE_MILES;
+  }
 }
 
 // Z-F cross-pollination spec § 4.2 — when at least one warm-intro match
@@ -647,11 +683,17 @@ export async function GET(req: Request) {
       radius_miles: typeof b.radius_miles === 'number' ? b.radius_miles : 200,
     }));
 
+  // Demo Polish P1 — load distance threshold once per cycle.
+  const maxSupportedDistanceMiles = await loadMaxSupportedDistance(admin);
+
   // 6. Per-project loop
   const cycleStart = Date.now();
   let processed = 0;
   let ranked = 0;
   let filtered = 0;
+  // Demo Polish P1 — number of rows the distance gate kicked into
+  // rejection_reason='no_branch_coverage' this cycle.
+  let noBranchCoverage = 0;
 
   for (const project of queue) {
     if (Date.now() - cycleStart > CYCLE_BUDGET_MS) {
@@ -709,6 +751,9 @@ export async function GET(req: Request) {
         ranked_at: new Date().toISOString(),
         nearest_zedcor_branch_id: null,
         zedcor_distance_miles: null,
+        rejection_reason: null,
+        rejected_at: null,
+        geo_unknown: null,
       };
       const w = await persistProject(admin, project.id, writeFields);
       if (!w.ok) {
@@ -901,10 +946,33 @@ export async function GET(req: Request) {
       });
     }
 
-    const boostedScore =
+    let boostedScore =
       crossPollMatchCount > 0
         ? Math.min(100, composite_score + CROSS_POLL_SCORE_BOOST)
         : composite_score;
+
+    // Demo Polish P1 — geo_unknown cap (Layer B). When the project has no
+    // coordinates after ingest + state-centroid fallback, cap the score at
+    // 50 so it never appears in default top-10 views.
+    const isGeoUnknown = project.lat == null || project.lon == null;
+    if (isGeoUnknown) {
+      boostedScore = Math.min(50, boostedScore);
+    }
+
+    // Demo Polish P1 — distance gating (Layer C). When we resolved a
+    // Zedcor branch and the distance exceeds the org threshold, write
+    // rejection_reason='no_branch_coverage'. We still persist the score
+    // so the rejected pile can show "what we considered and dropped".
+    let rejectionReason: string | null = null;
+    let rejectedAt: string | null = null;
+    if (
+      zedcor_distance_miles != null &&
+      zedcor_distance_miles > maxSupportedDistanceMiles
+    ) {
+      rejectionReason = 'no_branch_coverage';
+      rejectedAt = new Date().toISOString();
+      noBranchCoverage += 1;
+    }
 
     // Stage 4 — write back
     const writeFields: RankerWriteFields = {
@@ -917,6 +985,9 @@ export async function GET(req: Request) {
       ranked_at: new Date().toISOString(),
       nearest_zedcor_branch_id,
       zedcor_distance_miles,
+      rejection_reason: rejectionReason,
+      rejected_at: rejectedAt,
+      geo_unknown: isGeoUnknown,
     };
     const w = await persistProject(admin, project.id, writeFields);
     if (!w.ok) {
@@ -969,9 +1040,10 @@ export async function GET(req: Request) {
 
   // 7. Cycle close
   await writeLog(admin, 'write_success', {
-    message: `write · ${ranked} ranked · ${filtered} demoted`,
+    message: `write · ${ranked} ranked · ${filtered} demoted · ${noBranchCoverage} out-of-coverage`,
     ranked,
     demoted: filtered,
+    no_branch_coverage: noBranchCoverage,
   });
 
   const completed_at = new Date().toISOString();
@@ -995,6 +1067,7 @@ export async function GET(req: Request) {
     processed,
     ranked,
     filtered,
+    no_branch_coverage: noBranchCoverage,
     latency_ms: Date.now() - t0,
   });
 }

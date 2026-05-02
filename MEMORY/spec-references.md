@@ -89,7 +89,7 @@ The 2026-05-08 smoke is the first real-LLM exercise; expected cost $1.50–$5 ac
 
 ## Demo Polish Sprint — Stream P2 (lead-list sort + filter UI)
 
-**State:** open PR (demo-polish/p2-list-ui).
+**State:** merged (PR #57, sha `5fc47d6`).
 
 #### Pathfinder/lib/list-filters.ts
 **Implements:** SPEC - Demo Polish & Geography Filters.md § 3.2 + § 3.3 — URL-persisted filter/sort state for `components/ProjectList.tsx`.
@@ -97,3 +97,67 @@ The 2026-05-08 smoke is the first real-LLM exercise; expected cost $1.50–$5 ac
 **Drift:** none. Defaults match § 3.2 (sort=score, dir=desc, range=all, min_score=0). Score floor steps (0..90 by 10) match § 3.2.
 **Tests:** `Pathfinder/tests/list-filters.test.ts` covers parse / serialize round-trip, default elision, snap-to-step clamping, and the canonical `?sort=score&dir=desc&range=within&min_score=80` example.
 **TODO:** the WITHIN / OUTSIDE threshold currently reads from a local 250mi constant (`DEFAULT_MAX_SUPPORTED_DISTANCE_MILES` in `ProjectList.tsx`). Switch to `pathfinder.org_geo_config.max_supported_distance_miles` once Stream P1 lands the table (spec § 2.3).
+
+---
+
+## Demo Polish Sprint — Stream P1 (Geography filtering)
+
+**State:** PR pending. Backfill ran 2026-05-02 against live Supabase; cost $0.12 of $4 cap.
+
+### Migration
+
+#### Pathfinder/supabase/migrations/0104_demo_polish_geography.sql
+**Implements:** `SPEC - Demo Polish & Geography Filters.md` §2.3 (additive schema for geography filtering).
+**Last verified against spec:** 2026-05-02.
+**Drift:** none. Adds `country`, `rejection_reason`, `rejected_at`, `geo_unknown`, `geo_inference_confidence` columns on `pathfinder.projects` plus `pathfinder.org_geo_config` table (defaults: 250mi, USA/CAN). Idempotent.
+**Live state:** applied via Supabase MCP `apply_migration` 2026-05-02 06:23 UTC. Confirmed: 5 new columns present; `org_geo_config` seeded with `org_id='zedcor'`.
+
+### Lib
+
+#### Pathfinder/lib/zedcor/country-detect.ts
+**Implements:** `SPEC - Demo Polish & Geography Filters.md` §2.2 Layer A (ingest country filter).
+**Last verified against spec:** 2026-05-02.
+**Drift:** none. Detects country from sam.gov / USAspending / Harris-seed / news shapes; returns canonical ISO-3 codes (USA, CAN, ROU, ...). Includes a keyword scan for free-form news bodies.
+
+#### Pathfinder/lib/zedcor/city-centroids.ts
+**Implements:** `SPEC - Demo Polish & Geography Filters.md` §2.2 Layer B (coordinate enforcement city-centroid lookup).
+**Last verified against spec:** 2026-05-02.
+**Drift:** none. ~95 city centroids for US + Canadian MSAs the demo touches; falls back to state centroid (lib/zedcor/state-centroids.ts) when no city match.
+
+#### Pathfinder/lib/geography/coord-extractor.ts
+**Implements:** `SPEC - Demo Polish & Geography Filters.md` §2.2 Layer B (Haiku coord-inference fallback).
+**Last verified against spec:** 2026-05-02.
+**Drift:** none. Calls `claude-haiku-4-5` via the wrapped `anthropic()` client (so llm_calls cost telemetry captures every invocation). 12s per-call timeout, ~200 max tokens. Returns `{city, state, country, confidence}` and the caller (backfill or future ingest enhancement) gates on confidence ≥ 0.7.
+
+#### Pathfinder/lib/ingestor.ts
+**Implements:** `SPEC - Demo Polish & Geography Filters.md` §2.2 Layer A — ingest-time country filter.
+**Last verified against spec:** 2026-05-02.
+**Drift:** none. New `applyCountryFilter()` runs after fetch + before dedup, populating `country` and stamping `rejection_reason='out_of_country'` when the detected country isn't on `org_geo_config.allowed_countries`. Out-of-country rows still insert (rejected pile counts them) but are pre-scored to 0 so the ranker queue ignores them. Inngest `raw_event.created` is filtered to only emit for passing rows.
+
+#### Pathfinder/lib/types.ts
+**Implements:** Type bag mirror for migration 0104.
+**Last verified against spec:** 2026-05-02.
+**Drift:** none. Adds optional `country`, `rejection_reason`, `rejected_at`, `geo_unknown`, `geo_inference_confidence` columns to `Project` plus a new `OrgGeoConfig` interface and `org_geo_config` table entry in `PathfinderDatabase`.
+
+### Cron handler
+
+#### Pathfinder/app/api/cron/ranker/route.ts
+**Implements:** `SPEC - Demo Polish & Geography Filters.md` §2.2 Layer C — distance gating, plus Layer B `geo_unknown` score cap.
+**Last verified against spec:** 2026-05-02.
+**Drift:** none. Loads `org_geo_config.max_supported_distance_miles` once per cycle (250mi for Zedcor). After scoring, writes `rejection_reason='no_branch_coverage'` + `rejected_at` when `zedcor_distance_miles > threshold`. Sets `geo_unknown=true` and caps score at 50 when project has null lat/lon.
+
+### Backfill script + page
+
+#### Pathfinder/scripts/backfill-geography.ts
+**Implements:** `SPEC - Demo Polish & Geography Filters.md` §2.5 — one-shot idempotent backfill.
+**Last verified against spec:** 2026-05-02. Ran end-to-end: 431 projects scanned, 409 country-stamped, 14 out_of_country, 27 no_branch_coverage, 17 geo_unknown (down from 136), 110 coords from Haiku + 10 from state centroids, $0.12 cost.
+**Drift:** none. Cost-capped at $4 with a per-iteration `pathfinder.llm_calls` poll; aborts early if exceeded. Idempotent — re-runs do not re-stamp `rejected_at`.
+
+#### Pathfinder/app/rejected/page.tsx
+**Implements:** `SPEC - Demo Polish & Geography Filters.md` §2.5 — surface new rejection_reason buckets in the existing rejected pile UI.
+**Last verified against spec:** 2026-05-02.
+**Drift:** none. `categorize()` consults the explicit `rejection_reason` column first (new buckets `out-of-country`, `no-branch-coverage`); falls back to text-based bucketing for legacy rows. Query unions verified-low-score rows with explicit-rejection rows.
+
+### Cost discipline
+
+Stream P1 total cost-to-date: **$0.12** of $8 cap. All cost on Haiku coord-extraction during the backfill. Tests use the standard Anthropic mock — no live calls in CI.

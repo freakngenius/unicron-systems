@@ -27,6 +27,11 @@ interface RejectedRow {
   source: string | null;
   project_value: number | null;
   ingested_at: string;
+  // Demo Polish P1 — explicit rejection_reason set by the ingestor (Layer A
+  // out_of_country) and the ranker (Layer C no_branch_coverage). When set,
+  // it takes precedence over text-based bucket inference.
+  rejection_reason?: string | null;
+  country?: string | null;
 }
 
 interface ReasonGroup {
@@ -47,6 +52,17 @@ interface ReasonGroup {
  * (Run 2026-05-02 — top buckets: classifier-filter, out-of-coverage,
  * scope mismatch, owner-not-enriched.) */
 function categorize(row: RejectedRow): { key: string; label: string } {
+  // Demo Polish P1 — when an explicit rejection_reason is present, it
+  // wins. New buckets surface automatically: out_of_country (ingest
+  // filter) and no_branch_coverage (ranker distance gate).
+  if (row.rejection_reason === 'out_of_country') {
+    const country = row.country ? ` (${row.country})` : '';
+    return { key: 'out-of-country', label: `Out of country${country}` };
+  }
+  if (row.rejection_reason === 'no_branch_coverage') {
+    return { key: 'no-branch-coverage', label: 'No Zedcor branch within range' };
+  }
+
   const text = `${row.rationale ?? ''}\n${row.verifier_notes ?? ''}`.toLowerCase();
 
   if (text.includes('filtered as non-opportunity') || text.includes('classifier')) {
@@ -97,14 +113,43 @@ async function fetchRejected(): Promise<{
     return { groups: [], total: 0, loadError: (err as Error).message };
   }
 
-  const { data, error } = await admin
-    .from('projects')
-    .select('id, title, rationale, verifier_notes, score, source, project_value, ingested_at')
-    .eq('verified', true)
-    .lt('score', 60)
-    .order('score', { ascending: false, nullsFirst: false })
-    .order('ingested_at', { ascending: false })
-    .limit(500);
+  // Demo Polish P1 — pull two pools and union them:
+  //   (a) verified=true AND score<60 — the original "evaluated and dropped" set
+  //   (b) rejection_reason IS NOT NULL — the new out_of_country /
+  //       no_branch_coverage buckets that may not be verified=true.
+  // The union is computed in-memory by id so a row in both pools shows once.
+  const [verifiedRes, rejectedRes] = await Promise.all([
+    admin
+      .from('projects')
+      .select(
+        'id, title, rationale, verifier_notes, score, source, project_value, ingested_at, rejection_reason, country',
+      )
+      .eq('verified', true)
+      .lt('score', 60)
+      .order('score', { ascending: false, nullsFirst: false })
+      .order('ingested_at', { ascending: false })
+      .limit(500),
+    admin
+      .from('projects')
+      .select(
+        'id, title, rationale, verifier_notes, score, source, project_value, ingested_at, rejection_reason, country',
+      )
+      .not('rejection_reason', 'is', null)
+      .order('rejected_at', { ascending: false, nullsFirst: false })
+      .order('ingested_at', { ascending: false })
+      .limit(500),
+  ]);
+  const error = verifiedRes.error ?? rejectedRes.error;
+  const data = error
+    ? null
+    : Array.from(
+        new Map(
+          [...(verifiedRes.data ?? []), ...(rejectedRes.data ?? [])].map((r) => [
+            (r as RejectedRow).id,
+            r,
+          ]),
+        ).values(),
+      );
 
   if (error) {
     return { groups: [], total: 0, loadError: error.message };

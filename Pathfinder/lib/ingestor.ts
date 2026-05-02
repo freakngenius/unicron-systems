@@ -12,6 +12,7 @@
 import { supabaseAdmin } from '@/lib/supabase';
 import { inngest } from '@/lib/inngest/client';
 import { extractStateFromPayload } from '@/lib/zedcor/state-centroids';
+import { detectCountryFromPayload } from '@/lib/zedcor/country-detect';
 
 // ────────────────────────────────────────────────────────────────────────
 // Service-role admin client (lazy)
@@ -46,6 +47,16 @@ export interface IngestorRecord {
   // street-level geocoder later. Null when the payload exposes no state.
   lat: number | null;
   lon: number | null;
+  // Demo Polish P1 — country detected at ingest from raw_payload.
+  // ISO-3 code (USA / CAN / ROU / ...) when known; null otherwise (the
+  // backfill / Haiku fallback can populate it later for legacy rows).
+  country: string | null;
+  // Demo Polish P1 — set when the ingest country filter rejects a record
+  // before scoring. The Ranker should never see these rows; we still
+  // insert them so the rejected pile counts the volume of foreign noise
+  // we're filtering out.
+  rejection_reason: string | null;
+  rejected_at: string | null;
 }
 
 export interface IngestorCycleStats {
@@ -54,6 +65,75 @@ export interface IngestorCycleStats {
   total_inserted: number;
   total_deduped: number;
   total_errors: number;
+  // Demo Polish P1 — number of records that hit the ingest country filter
+  // (rejection_reason='out_of_country'). Counted across both adapters.
+  total_rejected_out_of_country: number;
+}
+
+// Demo Polish P1 — allowed-country whitelist for the ingest filter. The
+// ingestor reads this once at the start of a cycle (loaded lazily by
+// loadAllowedCountries) so we don't hit the DB per-record. Defaults to
+// USA/CAN when org_geo_config isn't readable (preserves existing behavior).
+const FALLBACK_ALLOWED_COUNTRIES = ['USA', 'CAN'];
+
+let _allowedCountriesCache: { fetched_at: number; values: string[] } | null = null;
+const ALLOWED_COUNTRIES_TTL_MS = 5 * 60_000;
+
+async function loadAllowedCountries(): Promise<string[]> {
+  if (
+    _allowedCountriesCache &&
+    Date.now() - _allowedCountriesCache.fetched_at < ALLOWED_COUNTRIES_TTL_MS
+  ) {
+    return _allowedCountriesCache.values;
+  }
+  try {
+    const sb = admin() as unknown as {
+      from: (t: string) => {
+        select: (cols: string) => {
+          eq: (col: string, val: string) => {
+            maybeSingle: () => Promise<{
+              data: { allowed_countries: string[] | null } | null;
+              error: { message: string } | null;
+            }>;
+          };
+        };
+      };
+    };
+    const { data } = await sb
+      .from('org_geo_config')
+      .select('allowed_countries')
+      .eq('org_id', 'zedcor')
+      .maybeSingle();
+    const values = (data?.allowed_countries ?? []).map((c) => c.toUpperCase());
+    const finalValues = values.length > 0 ? values : FALLBACK_ALLOWED_COUNTRIES;
+    _allowedCountriesCache = { fetched_at: Date.now(), values: finalValues };
+    return finalValues;
+  } catch {
+    return FALLBACK_ALLOWED_COUNTRIES;
+  }
+}
+
+/** Apply Demo Polish P1 Layer A — populate `country` and stamp
+ *  rejection_reason='out_of_country' when the detected country isn't on the
+ *  allowed list. Mutates the record in place for ergonomics. */
+export function applyCountryFilter(
+  record: IngestorRecord,
+  allowed: ReadonlyArray<string>,
+): { rejected: boolean } {
+  const country = detectCountryFromPayload(record.raw_payload);
+  record.country = country;
+  if (!country) {
+    // No country signal — let the row through; the backfill / Haiku
+    // fallback can decide later. Geo-unknown handling lives in the Ranker.
+    return { rejected: false };
+  }
+  const upper = country.toUpperCase();
+  if (allowed.includes(upper)) {
+    return { rejected: false };
+  }
+  record.rejection_reason = 'out_of_country';
+  record.rejected_at = new Date().toISOString();
+  return { rejected: true };
 }
 
 // ────────────────────────────────────────────────────────────────────────
@@ -195,6 +275,9 @@ export async function fetchUsaspendingRecent(): Promise<{ records: IngestorRecor
         raw_payload: rawPayload,
         lat: centroid?.lat ?? null,
         lon: centroid?.lon ?? null,
+        country: null,
+        rejection_reason: null,
+        rejected_at: null,
       });
     }
     return { records, raw_count: results.length, latency_ms: Date.now() - start };
@@ -307,6 +390,9 @@ export async function fetchSamGovRecent(): Promise<{ records: IngestorRecord[]; 
         raw_payload: rawPayload,
         lat: centroid?.lat ?? null,
         lon: centroid?.lon ?? null,
+        country: null,
+        rejection_reason: null,
+        rejected_at: null,
       });
     }
     return { records, raw_count: opps.length, latency_ms: Date.now() - start };
@@ -375,6 +461,15 @@ export async function insertNewProjects(records: IngestorRecord[]): Promise<{ in
       raw_payload: r.raw_payload,
       lat: r.lat,
       lon: r.lon,
+      // Demo Polish P1 — persist country + rejection columns at insert
+      // time. Rejected (foreign-country) rows still go into projects so
+      // the rejected pile counts the volume of foreign noise filtered.
+      country: r.country,
+      rejection_reason: r.rejection_reason,
+      rejected_at: r.rejected_at,
+      // The Ranker pulls `score is null` rows; we explicitly score
+      // out_of_country rejects to 0 so the queue never picks them up.
+      score: r.rejection_reason === 'out_of_country' ? 0 : null,
     }));
     const { error } = await sb.from('projects').insert(rows);
     if (error) return { inserted: 0, error: error.message };
@@ -398,7 +493,11 @@ export async function runIngestorCycle(): Promise<IngestorCycleStats> {
     total_inserted: 0,
     total_deduped: 0,
     total_errors: 0,
+    total_rejected_out_of_country: 0,
   };
+
+  // Demo Polish P1 — load allowed-country whitelist once per cycle.
+  const allowedCountries = await loadAllowedCountries();
 
   // USAspending
   const us = await fetchUsaspendingRecent();
@@ -451,6 +550,16 @@ export async function runIngestorCycle(): Promise<IngestorCycleStats> {
   const allRecords = [...us.records, ...sg.records];
   if (allRecords.length === 0) {
     return stats;
+  }
+
+  // Demo Polish P1 — Layer A country filter. Apply BEFORE dedup so the
+  // country/rejection_reason fields are written for every fresh row,
+  // even ones we'd otherwise treat as duplicates against an older record.
+  for (const r of allRecords) {
+    const result = applyCountryFilter(r, allowedCountries);
+    if (result.rejected) {
+      stats.total_rejected_out_of_country += 1;
+    }
   }
 
   // Dedup against existing
@@ -506,16 +615,21 @@ export async function runIngestorCycle(): Promise<IngestorCycleStats> {
     // research-tier agents in A2). Fire-and-forget — failure must not
     // bubble back into the ingest cycle. inngest.send accepts a batch.
     try {
-      await inngest.send(
-        fresh.map((r) => ({
-          name: 'pathfinder/raw_event.created' as const,
-          data: {
-            project_id: r.id,
-            source: r.source,
-            ingested_at: new Date().toISOString(),
-          },
-        })),
-      );
+      // Demo Polish P1 — only emit downstream events for rows that passed
+      // the country filter. out_of_country rejects skip ranking entirely.
+      const passingFresh = fresh.filter((r) => r.rejection_reason !== 'out_of_country');
+      if (passingFresh.length > 0) {
+        await inngest.send(
+          passingFresh.map((r) => ({
+            name: 'pathfinder/raw_event.created' as const,
+            data: {
+              project_id: r.id,
+              source: r.source,
+              ingested_at: new Date().toISOString(),
+            },
+          })),
+        );
+      }
     } catch (err) {
       const reason = err instanceof Error ? err.message : String(err);
       await writeIngestorLog({
