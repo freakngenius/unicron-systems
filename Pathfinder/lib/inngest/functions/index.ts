@@ -14,3 +14,5 @@ export { architectDiscoveryCron } from './architect-discovery-cron';
 // Phase 2 Stream E — Source Onboarder + Coverage Expansion.
 export { sourceOnboarder } from './source-onboarder';
 export { coverageExpansionEstimate, coverageExpansionRun } from './coverage-expansion';
+// Demo Polish UX Gate 4B-3 — nightly HubSpot reconciliation cron.
+export { hubspotReconCron } from './hubspot-recon-cron';
