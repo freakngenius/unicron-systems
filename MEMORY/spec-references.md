@@ -359,3 +359,39 @@ Stream P1 total cost-to-date: **$0.12** of $8 cap. All cost on Haiku coord-extra
 
 #### Pathfinder/package.json (modified)
 **Drift note:** Added `jszip` (3.10.x) for Teams `.zip` packaging and `js-yaml` (4.1.x, +`@types/js-yaml`) for Slack manifest YAML serialization. Both are small, widely-used libs (combined transitive footprint ~50KB minified) — Vercel function bundle stays well under the 50MB Lambda limit per dispatch halt criteria.
+
+---
+
+## Connector Sprint Phase 4 — C-4A Customer onboarding wizard
+
+**State:** PR pending (`connectors/c4a-onboarding`). UI-only. New `/onboarding/connectors` route + onboarding components + quick-pick rule catalog. No backend mutations — the wizard delegates connect/skip outcomes to the existing `/api/connectors/{type}/auth` endpoints (C-1B for slack; C-2A/C-3A for teams/hubspot when they ship). Routing rule writes deferred to Settings → Connectors (C-1C's `RoutingRulesModal`).
+
+#### Pathfinder/lib/connectors/onboarding-rules.ts
+**Implements:** SPEC - Connectors (Slack, Teams, HubSpot).md § 7.3 — quick-pick step. Static catalog of 2-3 default rules per chat connector (`slack`, `teams`); HubSpot returns `[]` because its push is automatic per § 4.3 / C-3B.
+**Last verified against spec:** 2026-05-02.
+**Drift:** **none.** `getQuickPickRules('slack')` returns the verified-leads / daily-brief / cost-alerts trio called out in the dispatch prompt. Teams mirrors with team-id placeholders (`19:...@thread.tacv2`) instead of `#channel`.
+**Tests:** `Pathfinder/tests/onboarding-connectors/quick-pick-rules.test.ts` — 6 tests covering Slack defaults, Teams parity, HubSpot empty, id uniqueness, event-type shape.
+
+#### Pathfinder/components/onboarding/StepIndicator.tsx
+**Implements:** SPEC § 7.3 — six-step progress pill row. Active = filled ink pill; complete = green; pending = hairline outline. Clickable for already-visited steps.
+
+#### Pathfinder/components/onboarding/WelcomeStep.tsx
+**Implements:** SPEC § 7.3 step 1 — value prop, "what gets connected" cards, ~3-min time estimate.
+
+#### Pathfinder/components/onboarding/ConnectStep.tsx
+**Implements:** SPEC § 7.3 steps 2-4 — reusable per-connector step. Connect button is a real `<a href={authStartHref}>` so the OAuth start round-trip preserves the org_id query param. Renders a "Coming soon" graceful-degrade block when the OAuth route hasn't shipped yet (Teams pre-C-2A, HubSpot pre-C-3A); the wizard's server component decides via env-var presence (`TEAMS_APP_ID`, `HUBSPOT_CLIENT_ID`).
+
+#### Pathfinder/components/onboarding/QuickPickRulesStep.tsx
+**Implements:** SPEC § 7.3 step 5 — checkbox list of default rules per connected chat connector. Inline channel field (text input, free-form for v1) — same approach as `RoutingRulesModal` per the C-1C drift note (autocomplete is best-effort and not on the wizard's critical path). Empty state when no chat connectors are connected.
+
+#### Pathfinder/components/onboarding/Done.tsx
+**Implements:** SPEC § 7.3 step 6 — confirmation summary. Shows connected/skipped/coming-soon counts, the per-connector status, the routing rules the user enabled, and a primary CTA back to `/pathfinder/settings/connectors`.
+
+#### Pathfinder/components/onboarding/Wizard.tsx
+**Implements:** SPEC § 7.3 step orchestration. Client component owning step state (`useState`), URL fragment sync (`#step-N`, 1-indexed), skip-state localStorage persistence (`pathfinder.onboarding.skipped` — JSON array of connector ids; no PII). Listens for `hashchange` so back/forward browser nav drives the wizard.
+
+#### Pathfinder/app/onboarding/connectors/page.tsx
+**Implements:** SPEC § 7.3 server component shell. Reads `pathfinder.connectors` for the current org via `lib/connectors/queries.listConnectors`; tokens never cross the server→client boundary (only `state` + display copy). `comingSoon` flags resolve at runtime from env-var presence, so a Teams/HubSpot OAuth route merging upstream automatically lights up the live Connect button without a wizard code change.
+
+#### Pathfinder/tests/onboarding-connectors/wizard-state.test.tsx
+**Implements:** SPEC § 7.3 acceptance — 13 tests. Step navigation (welcome → ... → done), Connect-href shape, Coming-soon graceful-degrade, skip-state localStorage round-trip + rehydrate, malformed-localStorage tolerance, URL-fragment sync, hashchange handling, quick-pick visibility per connector state, done-summary CTA target.
