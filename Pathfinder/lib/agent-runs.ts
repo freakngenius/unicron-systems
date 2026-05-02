@@ -17,7 +17,13 @@ import { supabaseAdmin } from './supabase';
 // `ranker` and `outreach` use the helper for their empty-queue heartbeat
 // path (Z-D #26); their main success/failure path still inlines the insert
 // because they need fine-grained queue/budget bookkeeping in the row.
-type AgentName = 'slack-alerts' | 'cost-alert' | 'briefing' | 'ranker' | 'outreach';
+type AgentName =
+  | 'slack-alerts'
+  | 'cost-alert'
+  | 'briefing'
+  | 'ranker'
+  | 'outreach'
+  | 'connector-refresh';
 
 interface OpenedRun {
   id: number | null;
