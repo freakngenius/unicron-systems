@@ -87,7 +87,6 @@ The 2026-05-08 smoke is the first real-LLM exercise; expected cost $1.50–$5 ac
 
 ---
 
-<<<<<<< HEAD
 ## Demo Polish Sprint — Stream P2 (lead-list sort + filter UI)
 
 **State:** merged (PR #57, sha `5fc47d6`).
