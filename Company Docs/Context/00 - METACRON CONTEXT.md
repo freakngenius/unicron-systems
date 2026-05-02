@@ -25,10 +25,10 @@ Metacron is the platform that makes Pathfinder (and future customer products) se
 |---|---|---|
 | Audience | Customer reps + execs | Operator team |
 | Stack | Next.js 14.2 (`Pathfinder/`) | Vite + React 19 (`unicron-platform/`) |
-| Vercel project | `pathfinder-ashy` | `unicron-systems` (or new `metacron`) |
+| Vercel project | `pathfinder` | `metacron` (`prj_4LlPkQ30I4CMRm6hUfk7CJERWDAz`) |
 | Auth | Basic-auth (Pathfinder) | Magic-link via Supabase Auth |
 | Database | `pathfinder.*` schema in Supabase | `unicron.*` schema in same Supabase |
-| Domain | unicron.systems/pathfinder/* | metacron.unicron.systems (post-Vercel-setup) |
+| Domain | unicron.systems/pathfinder/* | `metacron.unicron.systems` (DNS live; custom domain not yet attached in Vercel — see § 4 Vercel deploy) |
 
 Both share the same Supabase project and same agent backend. Metacron CONSUMES Pathfinder's data and surfaces it to operators. Pathfinder doesn't know Metacron exists.
 
@@ -98,7 +98,18 @@ CLOSED 2026-05-02. Production self-healed post-PR-#47. The 14-route force-dynami
 
 ### Vercel deploy
 
-A new `metacron` Vercel project may have been created today (2026-05-02) by Kyle via dashboard. Confirm via `mcp__d0db79fd-...__list_projects`. If exists: domain `metacron.unicron.systems`, root directory `unicron-platform`, framework Vite, build `npm run build`, output `dist`, install `npm ci`. If not: setup runbook in `MEMORY/operator-todos/2026-05-02-c2a-teams-operator-setup.md` or sister chat coordination.
+`metacron` Vercel project created 2026-05-02. Verbatim metadata captured in `MEMORY/operator-todos/2026-05-02-metacron-vercel-setup.md`.
+
+- Project ID: `prj_4LlPkQ30I4CMRm6hUfk7CJERWDAz`
+- Team: `team_ox5qAXv7jA6yFUCoOuXQvSfj` (Keka's projects)
+- Framework: Vite. Root Directory: `unicron-platform`. Build: `npm run build`. Install: `npm ci`. Output: `dist`.
+- Production deploy READY: `dpl_5YZZ4soStYdiMFy13BLpejhWranq` at commit `793be48` (PR #72 merge)
+- Working production URLs (immutable + branch alias):
+  - `https://metacron-9hyy2oaml-kekas-projects-89ac4317.vercel.app/`
+  - `https://metacron-git-main-kekas-projects-89ac4317.vercel.app/`
+- Custom domain `metacron.unicron.systems`: DNS configured at Namecheap (CNAME → `cname.vercel-dns.com`), but **not yet attached** to the metacron Vercel project. TLS handshake currently fails. Kyle TODO: Vercel dashboard → metacron → Settings → Domains → Add `metacron.unicron.systems`.
+- 8 production env vars set: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_AUTH_REQUIRED`, `VITE_COST_SUMMARY_URL`, `VITE_ARCHITECT_API_ENABLED`, `VITE_ARCHITECT_API_URL`, `VITE_SOURCE_ONBOARDER_ENABLED`, `VITE_SOURCE_ONBOARDER_URL`.
+- Vercel Deployment Protection (SSO) is enabled by default — anonymous `curl` returns HTTP 401 with `_vercel_sso_nonce` cookie. Logged-in Vercel users hit the live app.
 
 ## 5. Kanban
 
