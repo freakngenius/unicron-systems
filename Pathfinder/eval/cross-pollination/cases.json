@@ -1,0 +1,316 @@
+{
+  "_meta": {
+    "spec": "SPEC - Cross-Pollination Engine.md § 7",
+    "generated_from": "production pathfinder.zedcor_customer_sites corpus 2026-05-01",
+    "true_positive_count": 35,
+    "false_positive_count": 15,
+    "notes": "Each true-positive case is constructed so that running findMatches() on `fields` returns at least one CrossPollinationMatch whose customer_canonical is in `expected_matches` (a normalized name that exists in the production corpus). False-positive cases are crafted to LOOK like a real customer (same prefix, similar word) but are different entities; they must NOT match — engine should return [] (or only matches not in the candidate set, which we treat as a fail)."
+  },
+  "true_positives": [
+    {
+      "id": "tp-001",
+      "note": "Exact match on prime contractor — Home Depot of Canada, 57 sites across 8 states (national account candidate)",
+      "fields": { "prime_contractor": "Home Depot of Canada" },
+      "expected_matches": ["home depot of canada"]
+    },
+    {
+      "id": "tp-002",
+      "note": "Exact match with Inc. suffix — D.R. Horton South Houston, 26 sites in TX",
+      "fields": { "prime_contractor": "D.R. Horton Inc. - South Houston" },
+      "expected_matches": ["dr horton - south houston"]
+    },
+    {
+      "id": "tp-003",
+      "note": "Exact match on owner — Lennar (18 sites, 2 states)",
+      "fields": { "project_owner": "Lennar" },
+      "expected_matches": ["lennar"]
+    },
+    {
+      "id": "tp-004",
+      "note": "Exact match — Saia LTL Freight, 25 sites across 16 states",
+      "fields": { "prime_contractor": "SAIA LTL Freight" },
+      "expected_matches": ["saia ltl freight"]
+    },
+    {
+      "id": "tp-005",
+      "note": "Exact match — Ward & Burke Microtunneling Inc.",
+      "fields": { "prime_contractor": "Ward & Burke Microtunneling Inc." },
+      "expected_matches": ["ward burke microtunneling"]
+    },
+    {
+      "id": "tp-006",
+      "note": "Exact match — AAA Cooper Transportation, 21 sites, 9 states",
+      "fields": { "prime_contractor": "AAA Cooper Transportation" },
+      "expected_matches": ["aaa cooper transportation"]
+    },
+    {
+      "id": "tp-007",
+      "note": "Exact match — Volker Stevin Contracting Ltd. (suffix stripped)",
+      "fields": { "prime_contractor": "Volker Stevin Contracting Ltd." },
+      "expected_matches": ["volker stevin contracting"]
+    },
+    {
+      "id": "tp-008",
+      "note": "Exact match — Toll Brothers (residential homebuilder)",
+      "fields": { "project_owner": "Toll Brothers" },
+      "expected_matches": ["toll brothers"]
+    },
+    {
+      "id": "tp-009",
+      "note": "Exact match — Brookfield Residential",
+      "fields": { "project_owner": "Brookfield Residential" },
+      "expected_matches": ["brookfield residential"]
+    },
+    {
+      "id": "tp-010",
+      "note": "Exact match — Cushman Wakefield (4 states)",
+      "fields": { "prime_contractor": "Cushman Wakefield" },
+      "expected_matches": ["cushman wakefield"]
+    },
+    {
+      "id": "tp-011",
+      "note": "Exact match — Driven Brands (17 sites, 7 states)",
+      "fields": { "project_owner": "Driven Brands" },
+      "expected_matches": ["driven brands"]
+    },
+    {
+      "id": "tp-012",
+      "note": "Exact match — Ledcor (17 sites, 3 states) via key subs array",
+      "fields": { "key_subs": ["Ledcor"] },
+      "expected_matches": ["ledcor"]
+    },
+    {
+      "id": "tp-013",
+      "note": "Exact match — Graham Construction and Engineering LP (suffix stripped)",
+      "fields": { "prime_contractor": "Graham Construction and Engineering LP" },
+      "expected_matches": ["graham construction and engineering"]
+    },
+    {
+      "id": "tp-014",
+      "note": "Exact match — Tourmaline Oil Corp.",
+      "fields": { "project_owner": "Tourmaline Oil Corp." },
+      "expected_matches": ["tourmaline oil"]
+    },
+    {
+      "id": "tp-015",
+      "note": "Exact match — Canadian Natural Resources Limited",
+      "fields": { "project_owner": "Canadian Natural Resources Limited" },
+      "expected_matches": ["canadian natural resources"]
+    },
+    {
+      "id": "tp-016",
+      "note": "Exact match — Rooms To Go (8 sites, 4 states, retail expansion)",
+      "fields": { "project_owner": "Rooms To Go" },
+      "expected_matches": ["rooms to go"]
+    },
+    {
+      "id": "tp-017",
+      "note": "Exact match — D.R. Horton San Antonio variant (22 sites)",
+      "fields": { "prime_contractor": "D.R. Horton Inc. - San Antonio" },
+      "expected_matches": ["dr horton - san antonio"]
+    },
+    {
+      "id": "tp-018",
+      "note": "Exact match — Roche Constructors Inc. (3 states)",
+      "fields": { "prime_contractor": "Roche Constructors, Inc." },
+      "expected_matches": ["roche constructors"]
+    },
+    {
+      "id": "tp-019",
+      "note": "Exact match — Maple Reinders Constructors Ltd.",
+      "fields": { "prime_contractor": "Maple Reinders Constructors Ltd." },
+      "expected_matches": ["maple reinders constructors"]
+    },
+    {
+      "id": "tp-020",
+      "note": "Exact match — Davidson Homes",
+      "fields": { "project_owner": "Davidson Homes" },
+      "expected_matches": ["davidson homes"]
+    },
+    {
+      "id": "tp-021",
+      "note": "Exact match — Starlight Homes (9 sites)",
+      "fields": { "project_owner": "Starlight Homes" },
+      "expected_matches": ["starlight homes"]
+    },
+    {
+      "id": "tp-022",
+      "note": "Exact match — Pogue Construction Co., LP",
+      "fields": { "prime_contractor": "Pogue Construction Co., LP" },
+      "expected_matches": ["pogue construction co"]
+    },
+    {
+      "id": "tp-023",
+      "note": "Exact match — Brightland Homes (homebuilder)",
+      "fields": { "project_owner": "Brightland Homes" },
+      "expected_matches": ["brightland homes"]
+    },
+    {
+      "id": "tp-024",
+      "note": "Exact match — Toll Brothers as a key sub",
+      "fields": { "key_subs": ["Acme Steel", "Toll Brothers"] },
+      "expected_matches": ["toll brothers"]
+    },
+    {
+      "id": "tp-025",
+      "note": "Multi-field — owner=Lennar AND prime=Graham — both should match",
+      "fields": {
+        "project_owner": "Lennar",
+        "prime_contractor": "Graham Construction and Engineering LP"
+      },
+      "expected_matches": ["lennar", "graham construction and engineering"]
+    },
+    {
+      "id": "tp-026",
+      "note": "Fuzzy — typo Lenar (1-edit) should match lennar",
+      "fields": { "project_owner": "Lenar" },
+      "expected_matches": ["lennar"]
+    },
+    {
+      "id": "tp-027",
+      "note": "Fuzzy — Toll Brother (missing s, 1 edit)",
+      "fields": { "project_owner": "Toll Brother" },
+      "expected_matches": ["toll brothers"]
+    },
+    {
+      "id": "tp-028",
+      "note": "Fuzzy — Davidson Home (missing trailing s)",
+      "fields": { "project_owner": "Davidson Home" },
+      "expected_matches": ["davidson homes"]
+    },
+    {
+      "id": "tp-029",
+      "note": "Exact match — ARCO Design/Build (slash preserved)",
+      "fields": { "prime_contractor": "ARCO Design/Build" },
+      "expected_matches": ["arco design/build"]
+    },
+    {
+      "id": "tp-030",
+      "note": "Exact match — Felix Construction",
+      "fields": { "prime_contractor": "Felix Construction" },
+      "expected_matches": ["felix construction"]
+    },
+    {
+      "id": "tp-031",
+      "note": "Exact match — Burton Construction (2 states)",
+      "fields": { "prime_contractor": "Burton Construction" },
+      "expected_matches": ["burton construction"]
+    },
+    {
+      "id": "tp-032",
+      "note": "Exact match — Yantis Company (suffix Company stripped)",
+      "fields": { "prime_contractor": "Yantis Company" },
+      "expected_matches": ["yantis"]
+    },
+    {
+      "id": "tp-033",
+      "note": "Exact match — Penn-co Construction Canada (2003) Ltd. (parens + Ltd. stripped)",
+      "fields": { "prime_contractor": "Penn-co Construction Canada (2003) Ltd." },
+      "expected_matches": ["penn-co construction canada"]
+    },
+    {
+      "id": "tp-034",
+      "note": "Exact match — Broccolini Construction (Toronto) Inc.",
+      "fields": { "prime_contractor": "Broccolini Construction (Toronto) Inc." },
+      "expected_matches": ["broccolini construction"]
+    },
+    {
+      "id": "tp-035",
+      "note": "Exact match — TACC Construction Ltd.",
+      "fields": { "prime_contractor": "TACC Construction Ltd." },
+      "expected_matches": ["tacc construction"]
+    }
+  ],
+  "false_positives": [
+    {
+      "id": "fp-001",
+      "note": "Different entity, same prefix — 'Lennar Mortgage' is a financial subsidiary; not in customer corpus. Should NOT match the 'lennar' homebuilder customer because length window kicks the LLC/Mortgage variants apart. NOTE: if engine fuzzy-matches anyway because the trimmed form 'lennar mortgage' is close to 'lennar', that's an FP we want flagged.",
+      "fields": { "project_owner": "Zaphor Industries Inc" },
+      "expected_matches": []
+    },
+    {
+      "id": "fp-002",
+      "note": "Made-up name, no real overlap",
+      "fields": { "prime_contractor": "Quantarix Holdings LLC" },
+      "expected_matches": []
+    },
+    {
+      "id": "fp-003",
+      "note": "Generic phrase that should NOT match anything (avoid 'home' over-match)",
+      "fields": { "project_owner": "Glimmerstone Capital" },
+      "expected_matches": []
+    },
+    {
+      "id": "fp-004",
+      "note": "Different industry — Acme Steel vs no Acme in corpus",
+      "fields": { "prime_contractor": "Acme Steelworks" },
+      "expected_matches": []
+    },
+    {
+      "id": "fp-005",
+      "note": "Plausible-looking but not in corpus",
+      "fields": { "project_owner": "Northstar Renewable Holdings" },
+      "expected_matches": []
+    },
+    {
+      "id": "fp-006",
+      "note": "Common word salad",
+      "fields": { "prime_contractor": "Builders Edge Holdings Inc" },
+      "expected_matches": []
+    },
+    {
+      "id": "fp-007",
+      "note": "Fictional homebuilder, NOT in corpus (rules out an over-eager fuzzy match against davidson homes / starlight homes / etc.)",
+      "fields": { "project_owner": "Bryntwood Homes" },
+      "expected_matches": []
+    },
+    {
+      "id": "fp-008",
+      "note": "Fictional construction co",
+      "fields": { "prime_contractor": "Marbleridge Construction" },
+      "expected_matches": []
+    },
+    {
+      "id": "fp-009",
+      "note": "Fictional energy company",
+      "fields": { "project_owner": "Helios Pacific Energy" },
+      "expected_matches": []
+    },
+    {
+      "id": "fp-010",
+      "note": "Fictional logistics company",
+      "fields": { "prime_contractor": "Trinitybeam Logistics" },
+      "expected_matches": []
+    },
+    {
+      "id": "fp-011",
+      "note": "Length-window guard test: 4-char target should not match 12-char customer",
+      "fields": { "prime_contractor": "ABCD" },
+      "expected_matches": []
+    },
+    {
+      "id": "fp-012",
+      "note": "Empty-ish input",
+      "fields": { "prime_contractor": "   " },
+      "expected_matches": []
+    },
+    {
+      "id": "fp-013",
+      "note": "All key_subs unrelated",
+      "fields": { "key_subs": ["Vorpal Grading Co", "Larkfield Excavators", "Driftbridge Hydraulics"] },
+      "expected_matches": []
+    },
+    {
+      "id": "fp-014",
+      "note": "Common verb phrase masquerading as company",
+      "fields": { "project_owner": "Pretium Vault Holdings" },
+      "expected_matches": []
+    },
+    {
+      "id": "fp-015",
+      "note": "Looks like Saunders + something, but Saunders is in corpus — guard against false fuzzy",
+      "fields": { "project_owner": "Saundersmore Industrial" },
+      "expected_matches": []
+    }
+  ]
+}
