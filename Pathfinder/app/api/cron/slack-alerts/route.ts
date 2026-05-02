@@ -10,6 +10,7 @@
 
 import { NextResponse } from 'next/server';
 
+import { closeAgentRun, openAgentRun } from '@/lib/agent-runs';
 import { runSlackAlerts } from '@/lib/slack/alerts';
 
 export const dynamic = 'force-dynamic';
@@ -37,11 +38,18 @@ export async function GET(req: Request) {
   if (!isAuthorized(req)) {
     return NextResponse.json({ ok: false, error: 'unauthorized' }, { status: 401 });
   }
+  const run = await openAgentRun('slack-alerts');
   try {
     const result = await runSlackAlerts();
+    await closeAgentRun(run, {
+      status: 'success',
+      records_processed: result.scanned,
+      records_new: result.posted,
+    });
     return NextResponse.json({ ok: true, ...result });
   } catch (e) {
     const reason = e instanceof Error ? e.message : String(e);
+    await closeAgentRun(run, { status: 'failed', error_message: reason });
     return NextResponse.json({ ok: false, error: reason }, { status: 500 });
   }
 }

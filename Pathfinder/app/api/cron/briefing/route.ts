@@ -8,6 +8,7 @@
 
 import { NextResponse } from 'next/server';
 
+import { closeAgentRun, openAgentRun } from '@/lib/agent-runs';
 import { buildOrgBriefing, deliverBriefing, writeBriefingLog } from '@/lib/briefing';
 
 export const dynamic = 'force-dynamic';
@@ -37,6 +38,7 @@ export async function GET(req: Request) {
   }
 
   const start = Date.now();
+  const run = await openAgentRun('briefing');
   await writeBriefingLog('briefing_start', {
     message: 'org-level briefing cycle starting',
   });
@@ -47,6 +49,7 @@ export async function GET(req: Request) {
   } catch (e) {
     const reason = e instanceof Error ? e.message : String(e);
     await writeBriefingLog('error', { message: 'briefing build failed', reason });
+    await closeAgentRun(run, { status: 'failed', error_message: reason });
     return NextResponse.json({ error: 'build_failed', detail: reason }, { status: 500 });
   }
 
@@ -54,6 +57,11 @@ export async function GET(req: Request) {
   await writeBriefingLog('write_success', {
     message: `briefing complete · email=${email.ok ? 'ok' : 'fail'} · slack=${slack.ok ? 'ok' : 'fail'}`,
     briefing_id,
+  });
+  await closeAgentRun(run, {
+    status: 'success',
+    records_processed: 1,
+    records_new: 1,
   });
 
   return NextResponse.json({
