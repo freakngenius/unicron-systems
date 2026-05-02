@@ -17,7 +17,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 
 import { isOperatorRequest, resolveOrgId } from '@/lib/connectors/auth';
 import { getConnectorById } from '@/lib/connectors/queries';
-import { getDecryptedAccessToken } from '@/lib/connectors/tokens';
+import { getToken } from '@/lib/connectors/tokens';
 import { supabaseAdmin } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
@@ -67,23 +67,24 @@ export async function POST(req: NextRequest, { params }: Params) {
 
   const admin = supabaseAdmin();
 
-  // Best-effort provider revoke. We need the plaintext token. C-1A
-  // provides `decryptConnectorToken` in lib/connectors/tokens.ts (when
-  // wired) — try the dynamic import; if missing, skip provider revoke
-  // and surface the gap in the audit log.
+  // Best-effort provider revoke. We need the plaintext token. C-1A's
+  // tokens.ts exports getToken(connectorId) which returns the decrypted
+  // ConnectorTokenPayload (or null if the active token row is missing);
+  // we only need the .access string for Slack auth.revoke.
   let providerResult: ProviderRevokeResult = { ok: true };
   let providerCalled = false;
   if (connector.connector_type === 'slack') {
     try {
-      const accessToken = await getDecryptedAccessToken(connector.id);
+      const tokenPayload = await getToken(connector.id);
+      const accessToken = tokenPayload?.access ?? null;
       if (accessToken) {
         providerCalled = true;
         providerResult = await revokeSlack(accessToken);
       } else {
-        // Stubbed in this branch (C-1C); C-1A's merge replaces the
-        // helper with a real pgcrypto-backed reader. Until then the
-        // local soft-delete is the only safe action.
-        providerResult = { ok: false, error: 'token_helper_unavailable' };
+        // No active token row — already revoked, or the install never
+        // completed. Local soft-delete is still the right action; the
+        // audit log captures the no-token-found state.
+        providerResult = { ok: false, error: 'no_active_token' };
       }
     } catch (err) {
       providerResult = { ok: false, error: err instanceof Error ? err.message : String(err) };
