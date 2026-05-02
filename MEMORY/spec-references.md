@@ -192,6 +192,16 @@ Stream P1 total cost-to-date: **$0.12** of $8 cap. All cost on Haiku coord-extra
 **Last verified against spec:** 2026-05-02. Idempotent — only touches `score=0 AND rationale ilike '%non-opportunity%' AND rejection_reason IS NULL`.
 **Drift:** **none.**
 
+#### Pathfinder/lib/zedcor/google-geocoder.ts
+**Implements:** Z-F finish Option B — replaces state-centroid as the primary coord-resolution path for SAM.gov records carrying `placeOfPerformance.city.name + state.code`. Hits Google Maps Geocoding API (reuses `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`, optional `GOOGLE_GEOCODING_API_KEY` override). In-memory cache per-Lambda invocation. Confidence derived from Google's `location_type`. Falls back to state-centroid silently when the API key is missing, the network errors, or Google returns no result.
+**Last verified against spec:** 2026-05-02. Wired into `lib/ingestor.ts` SAM.gov record builder; USAspending stays on state-centroid (only has FIPS city codes, not city names).
+**Drift:** **none.**
+
+#### Pathfinder/lib/ingestor.ts
+**Implements:** Z-F finish Option B — `USASPENDING_LOOKBACK_DAYS` and `SAMGOV_LOOKBACK_DAYS` widened from 14 to 30 to lift per-target-branch lead volume in Nashville/Pittsburgh/LA. SAM.gov record builder now calls `geocodeLocation` first and falls back to `extractStateFromPayload` only when Google returns no hit.
+**Last verified against spec:** 2026-05-02.
+**Drift:** **none.** Pre-existing P1 country-filter / RLS / dedupe logic unchanged.
+
 ---
 
 ## Connector Sprint Phase 1 — C-1A Foundation

@@ -13,6 +13,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { inngest } from '@/lib/inngest/client';
 import { extractStateFromPayload } from '@/lib/zedcor/state-centroids';
 import { detectCountryFromPayload } from '@/lib/zedcor/country-detect';
+import { geocodeLocation } from '@/lib/zedcor/google-geocoder';
 
 // ────────────────────────────────────────────────────────────────────────
 // Service-role admin client (lazy)
@@ -168,12 +169,17 @@ export async function writeIngestorLog(args: {
 // USAspending connector — POST /api/v2/search/spending_by_award/
 //
 // Public, no auth. Filters: award type codes A/B/C/D (procurement
-// contracts), period of performance start in the last 14 days, NAICS
+// contracts), period of performance start in the last 30 days, NAICS
 // codes for construction (`23`) and architectural/engineering (`5413`).
+//
+// Window widened from 14 to 30 days during Z-F finish Option B to lift
+// per-target-branch lead volume in Nashville/Pittsburgh/LA. The Z-F
+// integrator surfaced that 14-day local volume in those metros was
+// insufficient to produce ≥5 leads ≥90 per branch.
 // ────────────────────────────────────────────────────────────────────────
 
 const USASPENDING_URL = 'https://api.usaspending.gov/api/v2/search/spending_by_award/';
-const USASPENDING_LOOKBACK_DAYS = 14;
+const USASPENDING_LOOKBACK_DAYS = 30;
 const USASPENDING_LIMIT = 100;
 
 interface UsaspendingResult {
@@ -304,12 +310,15 @@ function composeUsaspendingTitle(r: UsaspendingResult): string {
 // SAM.gov connector — GET /opportunities/v2/search
 //
 // Requires SAM_GOV_API_KEY (env var). Filters: NAICS codes 23* / 5413*,
-// posted in the last 14 days, opportunity types Solicitation /
+// posted in the last 30 days, opportunity types Solicitation /
 // Award Notice / Sources Sought / Presolicitation.
+//
+// Window widened from 14 to 30 days during Z-F finish Option B (paired
+// with USAspending widening above) to lift per-target-branch lead volume.
 // ────────────────────────────────────────────────────────────────────────
 
 const SAMGOV_URL = 'https://api.sam.gov/opportunities/v2/search';
-const SAMGOV_LOOKBACK_DAYS = 14;
+const SAMGOV_LOOKBACK_DAYS = 30;
 const SAMGOV_LIMIT = 100;
 
 interface SamgovOpportunity {
@@ -346,7 +355,7 @@ export async function fetchSamGovRecent(): Promise<{ records: IngestorRecord[]; 
   };
   // Drop `ncode` for now — runs 101 + 102 returned 0 records with the
   // 8-code construction/engineering filter, which is suspicious for a
-  // 14-day window. Pulling base 14-day opportunities to verify auth +
+  // short window. Pulling base 30-day opportunities to verify auth +
   // date format are sane; we narrow back down (or filter client-side
   // post-fetch) once we've confirmed records actually flow.
   const params = new URLSearchParams({
@@ -377,7 +386,32 @@ export async function fetchSamGovRecent(): Promise<{ records: IngestorRecord[]; 
       if (!o.noticeId) continue;
       const value = numericOr(o.awardAmount ?? o.baseAndAllOptionsValue ?? null, null);
       const rawPayload = o as unknown as Record<string, unknown>;
-      const centroid = extractStateFromPayload(rawPayload);
+      // Z-F finish Option B: prefer city-level Google geocoding when SAM.gov
+      // gives us placeOfPerformance.city.name + state.code; fall back to the
+      // coarser state-centroid lookup only if the geocoder is unavailable
+      // or returns no result. State-centroid was the bottleneck for big
+      // states (PA centroid 146mi from Pittsburgh; CA centroid 164mi from
+      // LA) during the original Z-F integrator run.
+      const placeCity = o.placeOfPerformance?.city?.name?.trim() ?? null;
+      const placeState = o.placeOfPerformance?.state?.code?.trim() ?? null;
+      let lat: number | null = null;
+      let lon: number | null = null;
+      if (placeCity && placeState) {
+        const geo = await geocodeLocation({
+          city: placeCity,
+          state: placeState,
+          country: 'USA',
+        });
+        if (geo) {
+          lat = geo.lat;
+          lon = geo.lon;
+        }
+      }
+      if (lat === null || lon === null) {
+        const centroid = extractStateFromPayload(rawPayload);
+        lat = centroid?.lat ?? null;
+        lon = centroid?.lon ?? null;
+      }
       records.push({
         id: `sam.gov:${o.noticeId}`,
         source: 'sam.gov',
@@ -388,8 +422,8 @@ export async function fetchSamGovRecent(): Promise<{ records: IngestorRecord[]; 
         project_stage: classifySamStage(o.type),
         posted_date: normalizeIsoDate(o.postedDate),
         raw_payload: rawPayload,
-        lat: centroid?.lat ?? null,
-        lon: centroid?.lon ?? null,
+        lat,
+        lon,
         country: null,
         rejection_reason: null,
         rejected_at: null,
