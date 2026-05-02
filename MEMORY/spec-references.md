@@ -93,10 +93,28 @@ The 2026-05-08 smoke is the first real-LLM exercise; expected cost $1.50–$5 ac
 
 #### Pathfinder/lib/list-filters.ts
 **Implements:** SPEC - Demo Polish & Geography Filters.md § 3.2 + § 3.3 — URL-persisted filter/sort state for `components/ProjectList.tsx`.
-**Last verified against spec:** 2026-05-02.
-**Drift:** none. Defaults match § 3.2 (sort=score, dir=desc, range=all, min_score=0). Score floor steps (0..90 by 10) match § 3.2.
-**Tests:** `Pathfinder/tests/list-filters.test.ts` covers parse / serialize round-trip, default elision, snap-to-step clamping, and the canonical `?sort=score&dir=desc&range=within&min_score=80` example.
-**TODO:** the WITHIN / OUTSIDE threshold currently reads from a local 250mi constant (`DEFAULT_MAX_SUPPORTED_DISTANCE_MILES` in `ProjectList.tsx`). Switch to `pathfinder.org_geo_config.max_supported_distance_miles` once Stream P1 lands the table (spec § 2.3).
+**Last verified against spec:** 2026-05-02 (Demo Polish UX § Gate 1C/1D update).
+**Drift:** **minor, justified.** Defaults widened from spec § 3.2 baseline (sort=score, dir=desc, range=all, min_score=0) to (sort=score, dir=desc, range=within, min_score=50) so the dashboard's first paint already shows the demo-narrative view. Both fields stay freely selectable; `range=all` and `min_score=0` continue to round-trip cleanly through the URL. `snapScoreFloor` returns `null` on non-finite input so the parser substitutes the new default rather than forcing 0.
+**Tests:** `Pathfinder/tests/list-filters.test.ts` covers parse / serialize round-trip, default elision, snap-to-step clamping, the canonical `?sort=score&dir=desc&range=within&min_score=80` example, and explicit-widening (`range=all`, `min_score=0`).
+**TODO:** WITHIN / OUTSIDE threshold reads `pathfinder.org_geo_config.max_supported_distance_miles` via `useOrgGeoConfig` (Stream P1 landed). The local `DEFAULT_MAX_SUPPORTED_DISTANCE_MILES = 250` is the SSR fallback only.
+
+---
+
+## Demo Polish UX Sprint — Gate 1 (map + filter UX core)
+
+**State:** PR #74 open. Implements Gate 1A/1B/1C/1D/1E from the autonomous-mode demo polish sprint prompt.
+
+#### Pathfinder/lib/dashboard-filters.ts
+**Implements:** Demo Polish UX Sprint Gate 1E — single source of truth for the dashboard filter pipeline so the BranchDock per-branch counts, the right-rail "X of Y" counter, the ProjectList input set, the map cluster markers, and the warm-intro polylines all derive from the same filtered set.
+**Last verified against spec:** 2026-05-02 (sprint launch).
+**Drift:** none. Fan-out structure (preBranchFiltered → groupCountsByBranch + applyBranchFilter → withBranchFiltered) matches the prompt's "filter counts must update consistently across the UI" requirement. Per-branch dock counts intentionally do NOT apply the branch-selection narrowing so users can switch branches without zeroing the others.
+**Tests:** `Pathfinder/tests/dashboard-filters.test.ts` (10 cases) covers each filter axis individually, the branch-narrow path, and per-branch counting with hi-priority threshold.
+
+#### Pathfinder/lib/demo-branches.ts
+**Implements:** Demo Polish UX Sprint Gate 1C — restricts the dashboard's branch surface to the four Tuesday demo branches (Houston / LA / Nashville / Pittsburgh).
+**Last verified against spec:** 2026-05-02 (sprint launch).
+**Drift:** none. `DEMO_BRANCH_IDS` matches migration `0109_demo_polish_ux_demo_branches.sql` (`hou-002` from existing seed; `lax-006` / `nas-007` / `pit-008` newly inserted). `pickDemoBranches` preserves narrative order regardless of the server-fetch order.
+**Tests:** none yet — the helper is a pure two-line filter and is exercised end-to-end via the Dashboard's `pickDemoBranches(initialBranchesRaw)` call. If the helper grows beyond filter+order, add `Pathfinder/tests/demo-branches.test.ts`.
 
 ---
 
