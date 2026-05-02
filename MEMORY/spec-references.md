@@ -280,3 +280,48 @@ Stream P1 total cost-to-date: **$0.12** of $8 cap. All cost on Haiku coord-extra
 
 #### Pathfinder/app/api/connectors/slack/{auth,callback,commands,events}/route.ts (4 new routes)
 **Implements:** SPEC § 4.1. Slack-specific auth start + OAuth callback + slash command dispatch + events handler (mention + DM + reaction). All consume C-1A's `lib/connectors/{tokens,audit,dispatcher}` core.
+
+---
+
+## Connector Sprint Phase 1 — C-1C Settings UI replacement + routing rules editor
+
+**State:** PR #64 (`connectors/c1c-ui`) — rebased onto `e827601` (C-1B merged) at orchestrator-resolved sha. Replaces the Phase 0 stub with real OAuth-backed tiles + routing rules editor + disconnect flow. Operator-gated.
+
+#### Pathfinder/lib/connectors/auth.ts
+**Implements:** SPEC § 5.1 (per-org isolation enforcement). `isOperatorRequest(req)` checks the OPERATOR_EMAILS allowlist; `resolveOrgId(req)` extracts the customer org id from the request context (v1 hardcoded to `'zedcor'` until multi-tenant ships).
+
+#### Pathfinder/lib/connectors/queries.ts
+**Implements:** Server-side reader helpers for the Settings page + routing-rules API. `listConnectorsForOrg`, `getConnectorById`, `listRulesForConnector`, recent-activity counters. All filter by org_id at the SQL level.
+
+#### Pathfinder/lib/connectors/events.ts
+**Implements:** Static enum of event types the routing-rules editor offers (`high_priority_lead`, `daily_brief`, `cost_alert`, etc.). Populated as more event types ship; the dispatcher reads its filter from this enum.
+
+#### Pathfinder/lib/connectors/rules-validate.ts
+**Implements:** Pre-write validation of routing rules. Channel-id whitelist (no SSRF), filter_json shape check (stored as jsonb so no SQL injection), quiet-hours window sanity check.
+
+#### Pathfinder/app/api/connectors/list/route.ts
+**Implements:** SPEC § 3.3 — read-only listing of connectors for the Settings page. Returns connector rows + recent-activity counts.
+
+#### Pathfinder/app/api/connectors/[connectorId]/rules/route.ts
+**Implements:** SPEC § 3.6 — POST creates a routing rule, GET lists rules for a connector. Operator-gated via `isOperatorRequest`.
+
+#### Pathfinder/app/api/connectors/[connectorId]/rules/[ruleId]/route.ts
+**Implements:** PATCH updates a rule, DELETE soft-deletes (`is_active=false`). Operator-gated.
+
+#### Pathfinder/app/api/connectors/[connectorId]/rules/[ruleId]/test/route.ts
+**Implements:** Synthetic-event firing path. Calls `dispatchEvent` with a constructed payload to let operators verify routing without waiting for real events.
+
+#### Pathfinder/app/api/connectors/[connectorId]/disconnect/route.ts
+**Implements:** SPEC § 5.5 — disconnect / revoke. Calls Slack's `auth.revoke` best-effort, then soft-deletes connector_tokens (revoked_at = now()) and sets connector status='revoked'. Audit log captures provider-call outcome regardless of local soft-delete.
+
+#### Pathfinder/components/settings/connectors/ConnectorsView.tsx (replaces Phase 0 stub)
+**Implements:** SPEC § 3.3 — connector tile grid with real connector_rows-driven state. Click handlers route to OAuth start (Connect), routing rules modal (Configure), or disconnect-confirm modal.
+
+#### Pathfinder/components/settings/connectors/RoutingRulesModal.tsx
+**Implements:** SPEC § 3.6 — modal with event-type picker, channel input (text for v1; autocomplete from C-1B's channels:read endpoint when available), filter_json textarea, quiet-hours weekday/weekend + time range, "Test rule" button.
+
+#### Pathfinder/components/settings/connectors/DisconnectConfirm.tsx
+**Implements:** SPEC § 5.5 — disconnect confirmation modal with explicit copy ("This will revoke Pathfinder's access… Connected reps will stop receiving alerts. You can reconnect anytime.").
+
+#### Pathfinder/app/settings/connectors/page.tsx (modified)
+**Drift note:** Phase 0 hardcoded `buildTiles()` replaced with a server-side query of `pathfinder.connectors` rows for the current org. Slack tile now reflects the real connector row's status (when present) rather than just the webhook-env-presence stub from Phase 0.

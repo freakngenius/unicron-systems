@@ -1,14 +1,21 @@
 'use client';
 
 // ConnectorsView — client wrapper for the /settings/connectors page.
-// Owns the "coming next phase" modal that intercepts Connect / Configure
-// clicks until Phase 1 wires real OAuth.
+//
+// Responsibilities:
+//   1. Render a tile per connector via `ConnectorTile`.
+//   2. Slack tile: live OAuth handoff for Connect; routing-rules modal
+//      for Configure; disconnect-confirm modal for Disconnect.
+//   3. Teams + HubSpot tiles: keep the Phase 0 "coming soon" modal
+//      (their connectors aren't wired in Phase 1).
 
 import * as React from 'react';
 
 import { PF_TINTS } from '@/lib/agent-tints';
 import { ConnectorTile } from './ConnectorTile';
 import type { ConnectorId, ConnectorTileState } from './ConnectorTile';
+import { RoutingRulesModal } from './RoutingRulesModal';
+import { DisconnectConfirm } from './DisconnectConfirm';
 
 export interface ConnectorsViewTile {
   id: ConnectorId;
@@ -17,7 +24,12 @@ export interface ConnectorsViewTile {
   state: ConnectorTileState;
   accountName?: string;
   stat?: string;
+  errorMessage?: string;
+  connectorId?: string;
   comingPhase?: string;
+  authStartHref?: string;
+  stubModal?: boolean;
+  stubPhase?: string;
 }
 
 const PHASE_DESCRIPTIONS: Record<ConnectorId, { phase: string; whatItDoes: string[] }> = {
@@ -50,8 +62,43 @@ const PHASE_DESCRIPTIONS: Record<ConnectorId, { phase: string; whatItDoes: strin
   },
 };
 
-export function ConnectorsView({ tiles }: { tiles: ConnectorsViewTile[] }) {
-  const [modal, setModal] = React.useState<ConnectorId | null>(null);
+interface OpenModal {
+  kind: 'rules' | 'disconnect' | 'stub';
+  connectorId?: string;
+  tileId: ConnectorId;
+}
+
+export function ConnectorsView({
+  tiles,
+  orgId,
+}: {
+  tiles: ConnectorsViewTile[];
+  orgId: string;
+}) {
+  const [modal, setModal] = React.useState<OpenModal | null>(null);
+
+  const handlePrimary = (tile: ConnectorsViewTile) => {
+    if (tile.stubModal) {
+      setModal({ kind: 'stub', tileId: tile.id });
+      return;
+    }
+    if (tile.state === 'connected' && tile.connectorId) {
+      setModal({ kind: 'rules', connectorId: tile.connectorId, tileId: tile.id });
+      return;
+    }
+    if (tile.authStartHref) {
+      window.location.href = tile.authStartHref;
+      return;
+    }
+    // Fallback to stub modal so the click is never silently swallowed.
+    setModal({ kind: 'stub', tileId: tile.id });
+  };
+
+  const handleSecondary = (tile: ConnectorsViewTile) => {
+    if (tile.connectorId && tile.state === 'connected') {
+      setModal({ kind: 'disconnect', connectorId: tile.connectorId, tileId: tile.id });
+    }
+  };
 
   return (
     <div
@@ -103,6 +150,22 @@ export function ConnectorsView({ tiles }: { tiles: ConnectorsViewTile[] }) {
         >
           / connectors
         </span>
+        <span style={{ flex: 1 }} />
+        <span
+          className="pf-mono"
+          data-testid="connectors-org-pill"
+          style={{
+            fontSize: 9,
+            color: PF_TINTS.inkDim,
+            letterSpacing: '0.10em',
+            textTransform: 'uppercase',
+            padding: '3px 8px',
+            border: `1px solid ${PF_TINTS.ruleSoft}`,
+            borderRadius: 3,
+          }}
+        >
+          org / {orgId}
+        </span>
       </header>
 
       <main style={{ maxWidth: 1100, margin: '0 auto', padding: '32px 24px 64px' }}>
@@ -144,8 +207,13 @@ export function ConnectorsView({ tiles }: { tiles: ConnectorsViewTile[] }) {
               state={tile.state}
               accountName={tile.accountName}
               stat={tile.stat}
-              onPrimaryAction={() => setModal(tile.id)}
-              onSecondaryAction={tile.state === 'connected' ? () => setModal(tile.id) : undefined}
+              errorMessage={tile.errorMessage}
+              onPrimaryAction={() => handlePrimary(tile)}
+              onSecondaryAction={
+                tile.state === 'connected' && tile.connectorId
+                  ? () => handleSecondary(tile)
+                  : undefined
+              }
             />
           ))}
         </div>
@@ -158,13 +226,35 @@ export function ConnectorsView({ tiles }: { tiles: ConnectorsViewTile[] }) {
             maxWidth: 720,
           }}
         >
-          Phase 0 stub: Slack reflects the existing webhook signal. Real OAuth
-          installs (Slack), Microsoft Teams parity, and HubSpot bidirectional
-          sync land in subsequent connector-sprint phases.
+          Slack OAuth, routing rules, and disconnect ship in Phase 1. Microsoft
+          Teams parity arrives in Phase 2; HubSpot bi-directional sync in Phase
+          3.
         </p>
       </main>
 
-      {modal && <ComingSoonModal id={modal} onClose={() => setModal(null)} />}
+      {modal?.kind === 'stub' && (
+        <ComingSoonModal id={modal.tileId} onClose={() => setModal(null)} />
+      )}
+      {modal?.kind === 'rules' && modal.connectorId && (
+        <RoutingRulesModal
+          connectorId={modal.connectorId}
+          connectorType={modal.tileId}
+          onClose={() => setModal(null)}
+        />
+      )}
+      {modal?.kind === 'disconnect' && modal.connectorId && (
+        <DisconnectConfirm
+          connectorId={modal.connectorId}
+          connectorType={modal.tileId}
+          onClose={() => setModal(null)}
+          onComplete={() => {
+            // Refresh the page so the server component re-reads the
+            // connector status. window.location.reload preserves the
+            // basic-auth session cookie + URL hash.
+            window.location.reload();
+          }}
+        />
+      )}
     </div>
   );
 }
