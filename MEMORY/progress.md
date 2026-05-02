@@ -70,6 +70,24 @@ Smoke script preserved at `unicron-platform/scripts/realtime-smoke.mjs` for Phas
 - Result-payload shape for Verify path is currently an opaque `Record<string, unknown>`; Phase 1 streams should agree on a per-agent shape (Coverage Expansion: `{ source_ids: string[], lead_pool_delta: number }` etc.) and document in their own SPEC sections.
 - `pathfinder.agent_verifications` row write happens after the Pathfinder chat ships the table per the operator-todo above.
 
+**Phase 0.5 close-out — merge + multi-Vercel state (2026-05-02T21:10:43Z):**
+
+- PR #75 squash-merged at commit `4f5c3d6bac30c591224feb62a994f3dd10bc2a49`.
+- All three projects post-merge production deploys for `4f5c3d6` are READY:
+  - metacron: `dpl_9ULQkFx1hCvYYZEMUHznpn7KeZ7q`
+  - pathfinder: `dpl_2yqsHGJgjC7uY87p97i3eYEWNbyK`
+  - unicron-systems: `dpl_EHcaZxfJEB1K6ebNxatgyV2Rw8Wz`
+- Metacron-Kanban card "Agent Console foundation (shell + schemas)" (page id `354785c6-7e72-816a-891f-e6c6acb74a83`) moved Review → Deployed. Footer appended: `Implemented at 4f5c3d6bac30c591224feb62a994f3dd10bc2a49 · merged at 2026-05-02T21:10:43Z`.
+
+**Phase 0.5 close-out — follow-ups filed:**
+
+- Bug Fixes Kanban card "Apply 0090_unicron_settings.sql to production Supabase" (page id `354785c6-7e72-813e-af92-c642c8c6f1e8`) — focused fix for the pre-existing `unicron.settings` absence. Apply via Supabase MCP `apply_migration`, smoke-test the Settings drawer, ship as separate PR. Do NOT bundle with Phase 1 work.
+- `MEMORY/operator-todos/2026-05-02-spec-agent-console-typo-agent-run-id-type.md` — SPEC §8 drift on `agent_run_id` type (documented as uuid; reality is bigint). Doc-only fix; bundle into next docs-sweep PR.
+
+**Standing Kyle-action (still pending; carried over from Phase 0):**
+
+- `metacron.unicron.systems` custom domain attach in Vercel dashboard (Settings → Domains → Add Domain). DNS already live at Namecheap. Production URL currently 404s. Phase 0.5 doesn't block on this, but Phase 1 PR descriptions will want a working production URL for the screenshot/curl evidence sections.
+
 ---
 
 ## Stream M0 (Metacron) — 2026-05-02
