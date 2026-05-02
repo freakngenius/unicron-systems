@@ -88,6 +88,26 @@ export interface Project {
   // lead list. Populated by scripts/backfill-zedcor-geo.ts.
   nearest_zedcor_branch_id?: string | null;
   zedcor_distance_miles?: number | null;
+  // Demo Polish P1 (migration 0104) — geography filtering.
+  // `country` is the canonical 3-letter ISO code (USA/CAN/...) inferred at
+  // ingest from raw_payload, or backfilled by scripts/backfill-geography.ts.
+  // `rejection_reason` carries the bucket — 'out_of_country' when a project
+  // fails the ingest country filter, 'no_branch_coverage' when the ranker
+  // determines distance > org_geo_config.max_supported_distance_miles.
+  // `geo_unknown` flags projects we couldn't geolocate even after the Haiku
+  // fallback; their effective_score is capped at 50 by the ranker.
+  country?: string | null;
+  rejection_reason?: string | null;
+  rejected_at?: string | null;
+  geo_unknown?: boolean | null;
+  geo_inference_confidence?: number | null;
+}
+
+export interface OrgGeoConfig {
+  org_id: string;
+  max_supported_distance_miles: number;
+  allowed_countries: string[];
+  updated_at: string;
 }
 
 export interface AgentLogRow {
@@ -641,6 +661,13 @@ export interface PathfinderDatabase {
           message_count?: number;
         };
         Update: Partial<EmailThread>;
+        Relationships: [];
+      };
+      // Demo Polish P1 (migration 0104) — per-org geography config.
+      org_geo_config: {
+        Row: OrgGeoConfig;
+        Insert: Omit<OrgGeoConfig, 'updated_at'> & { updated_at?: string };
+        Update: Partial<OrgGeoConfig>;
         Relationships: [];
       };
     };
