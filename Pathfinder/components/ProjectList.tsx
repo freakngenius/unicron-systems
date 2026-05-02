@@ -5,12 +5,26 @@
 // "29 of 29" not "6 of 29 for this branch". Branch selection is now a
 // camera operation; the right rail stays comprehensive.
 //
-// Sort modes: Score / Distance / Posted / Most Recent.
-// Filters: All / Starred.
+// Sort modes: Score / Distance / Posted / Most Recent (single dropdown +
+// direction toggle ↑ ASC / ↓ DESC).
+// Filters:
+//   - Range: WITHIN / OUTSIDE / ALL — gated against the org-level distance
+//     threshold (default 250mi). TODO: switch to pathfinder.org_geo_config
+//     once Stream P1 lands the table.
+//   - Score floor: 0–90 in steps of 10 ("Score ≥ N").
+//   - Starred: legacy quick-filter (kept; spec § 3.2 only mentioned removing
+//     the Atlanta/Chicago/Phoenix/Seattle preset chip row, which already
+//     wasn't in this code path).
+// Filter + sort state persists in the URL query string
+// (?sort=score&dir=desc&range=within&min_score=80&filter=all) so the view
+// is bookmarkable and reload-stable. See `lib/list-filters.ts` for the
+// shared parse / serialize helpers (with vitest coverage).
+//
 // Each row supports star + hide. Hidden rows disappear from list AND map
 // (filter is applied in dashboard.tsx).
 
 import * as React from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import type { Branch, Project } from '@/lib/types';
 import { CountUpScore, useHeaderHeight, useJustRanked } from './live';
 import { useStarred, useHidden, toggleStar, hideProject } from '@/lib/user-prefs';
@@ -18,7 +32,21 @@ import { stageLabel } from '@/lib/stages';
 import { sourceLabel } from '@/lib/sources';
 import { useScoringConfig } from '@/lib/scoring-config';
 import { useOutreachDraftCounts } from '@/lib/outreach-drafts-client';
+import {
+  parseListFilterState,
+  serializeListFilterState,
+  type ListFilterState,
+  type RangeMode,
+  SCORE_FLOOR_STEPS,
+} from '@/lib/list-filters';
 import { Tooltip } from './Tooltip';
+
+// Default org-level distance threshold (miles). Until Stream P1 lands
+// `pathfinder.org_geo_config.max_supported_distance_miles`, we ship a
+// constant equal to the spec § 2.3 default so behavior matches once the
+// table arrives.
+// TODO: switch to org_geo_config once P1 #<PR> lands.
+const DEFAULT_MAX_SUPPORTED_DISTANCE_MILES = 250;
 
 const PF = {
   bg: '#ffffff',
@@ -60,6 +88,35 @@ const SORT_TOOLTIPS: Record<SortMode, string> = {
   recent: 'Sort by when the Ranker most recently scored or rescored the opportunity — newest first.',
 };
 
+const RANGE_LABELS: Record<RangeMode, string> = {
+  within: 'Within range',
+  outside: 'Outside range',
+  all: 'All',
+};
+
+/** Headline label that mirrors the active range filter (spec § 3.2). */
+function rangeHeadline(range: RangeMode): string {
+  if (range === 'within') return 'WITHIN RANGE';
+  if (range === 'outside') return 'OUTSIDE RANGE';
+  return 'ALL BRANCHES';
+}
+
+/** Best-available distance for range gating. The dashboard's primary
+ * `distance_miles` field is the multi-tenant nearest-branch distance.
+ * `zedcor_distance_miles` (Z-C GeoMapper) is preferred when present; falls
+ * back to `distance_miles`. Projects with neither are treated as "unknown
+ * distance" and excluded from WITHIN/OUTSIDE narrowing (they show only in
+ * `range=all`). */
+function projectDistanceMiles(p: Project): number | null {
+  if (typeof p.zedcor_distance_miles === 'number' && Number.isFinite(p.zedcor_distance_miles)) {
+    return p.zedcor_distance_miles;
+  }
+  if (typeof p.distance_miles === 'number' && Number.isFinite(p.distance_miles)) {
+    return p.distance_miles;
+  }
+  return null;
+}
+
 export interface ProjectListProps {
   branch: Branch | null;
   projects: Project[];
@@ -81,21 +138,63 @@ export function ProjectList({
 }: ProjectListProps) {
   const headerH = useHeaderHeight();
   const branchName = branch?.name ?? 'All branches';
-  const [sortMode, setSortMode] = React.useState<SortMode>('score');
-  const [filterMode, setFilterMode] = React.useState<FilterMode>('all');
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  // Filter + sort state lives in the URL query string so the view is
+  // bookmarkable and reload-stable. We read from useSearchParams and write
+  // back via router.replace (no history entry per chip click).
+  const filterState: ListFilterState = React.useMemo(
+    () => parseListFilterState(searchParams),
+    [searchParams],
+  );
+  const { sort: sortMode, dir: sortDir, range: rangeMode, minScore, filter: filterMode } = filterState;
+
+  const updateFilter = React.useCallback(
+    (patch: Partial<ListFilterState>) => {
+      const next = { ...filterState, ...patch };
+      const qs = serializeListFilterState(next);
+      const url = qs.length > 0 ? `${pathname}?${qs}` : pathname;
+      router.replace(url, { scroll: false });
+    },
+    [filterState, pathname, router],
+  );
+
   const starred = useStarred();
   const hidden = useHidden();
   // Hoisted to ProjectList (not per-row) so 50+ ProjectRow instances share
   // a single fetch instead of N parallel ones on mount.
   const { counts: draftCounts } = useOutreachDraftCounts();
 
+  const maxDistance = DEFAULT_MAX_SUPPORTED_DISTANCE_MILES;
+
   const visibleProjects = React.useMemo(() => {
     let arr = projects.filter((p) => !hidden.has(p.id));
     if (filterMode === 'starred') arr = arr.filter((p) => starred.has(p.id));
+
+    // Range gating against the org-level distance threshold (spec § 3.2).
+    // "Unknown distance" projects only show in range=all so the WITHIN /
+    // OUTSIDE buckets are unambiguous.
+    if (rangeMode !== 'all') {
+      arr = arr.filter((p) => {
+        const d = projectDistanceMiles(p);
+        if (d == null) return false;
+        return rangeMode === 'within' ? d <= maxDistance : d > maxDistance;
+      });
+    }
+
+    if (minScore > 0) {
+      arr = arr.filter((p) => (p.score ?? 0) >= minScore);
+    }
+
     if (sortMode === 'score') {
       arr.sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
     } else if (sortMode === 'distance') {
-      arr.sort((a, b) => (a.distance_miles ?? Infinity) - (b.distance_miles ?? Infinity));
+      arr.sort(
+        (a, b) =>
+          (projectDistanceMiles(a) ?? Infinity) - (projectDistanceMiles(b) ?? Infinity),
+      );
     } else if (sortMode === 'posted') {
       arr.sort((a, b) => {
         const ta = a.posted_date ? Date.parse(a.posted_date) : 0;
@@ -110,16 +209,20 @@ export function ProjectList({
       // same timestamp.
       arr.sort((a, b) => mostRecentMs(b) - mostRecentMs(a));
     }
+    if (sortDir === 'asc') arr.reverse();
     return arr;
-  }, [projects, hidden, starred, filterMode, sortMode]);
+  }, [projects, hidden, starred, filterMode, sortMode, sortDir, rangeMode, minScore, maxDistance]);
 
   const starredCount = React.useMemo(
     () => projects.filter((p) => starred.has(p.id) && !hidden.has(p.id)).length,
     [projects, starred, hidden],
   );
 
+  const headline = crossPoll ? 'Warm-intros' : `${rangeHeadline(rangeMode)} · ${branchName.toUpperCase()}`;
+  const minimizedTitle = crossPoll ? 'Warm-intros' : `${rangeHeadline(rangeMode)} · ${branchName}`;
+
   if (minimized) {
-    const title = crossPoll ? 'Warm-intros' : `${branchName} · Ranked`;
+    const title = minimizedTitle;
     return (
       <button
         type="button"
@@ -180,7 +283,7 @@ export function ProjectList({
     >
       <div style={{ padding: '14px 16px', borderBottom: `1px solid ${PF.ruleSoft}` }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span className="pf-label">{crossPoll ? 'Warm-intros' : `${branchName} · ranked`}</span>
+          <span className="pf-label">{headline}</span>
           <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span className="pf-mono" style={{ fontSize: 11, color: PF.inkDim }}>
               {crossPoll
@@ -205,44 +308,154 @@ export function ProjectList({
             </button>
           </span>
         </div>
-        {/* Filter row: All / Starred */}
-        <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
+        {/* Sort + direction row */}
+        <div
+          style={{
+            display: 'flex',
+            gap: 6,
+            marginTop: 10,
+            flexWrap: 'wrap',
+            alignItems: 'center',
+          }}
+        >
+          <Tooltip text={SORT_TOOLTIPS[sortMode]} placement="bottom">
+            <select
+              aria-label="Sort by"
+              value={sortMode}
+              onChange={(e) => updateFilter({ sort: e.target.value as SortMode })}
+              style={{
+                appearance: 'none',
+                background: PF.bg,
+                color: PF.ink,
+                border: `1px solid ${PF.ruleSoft}`,
+                borderRadius: 3,
+                padding: '4px 22px 4px 8px',
+                font: `500 11px ${PF.mono}`,
+                letterSpacing: '0.04em',
+                cursor: 'pointer',
+                backgroundImage:
+                  "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'><path d='M2 4l3 3 3-3' stroke='%236b7280' stroke-width='1.4' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>\")",
+                backgroundRepeat: 'no-repeat',
+                backgroundPosition: 'right 6px center',
+              }}
+            >
+              {(Object.keys(SORT_LABELS) as SortMode[]).map((m) => (
+                <option key={m} value={m}>
+                  Sort: {SORT_LABELS[m]}
+                </option>
+              ))}
+            </select>
+          </Tooltip>
           <button
             type="button"
-            className={`pf-pill ${filterMode === 'all' ? 'pf-pill-active' : ''}`}
-            onClick={() => setFilterMode('all')}
+            className="pf-pill"
+            aria-label={sortDir === 'desc' ? 'Sort direction: descending' : 'Sort direction: ascending'}
+            title={sortDir === 'desc' ? 'Descending — click to flip' : 'Ascending — click to flip'}
+            onClick={() => updateFilter({ dir: sortDir === 'desc' ? 'asc' : 'desc' })}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}
           >
-            All
+            <span style={{ font: `600 11px ${PF.mono}` }}>
+              {sortDir === 'desc' ? '↓ DESC' : '↑ ASC'}
+            </span>
           </button>
           <button
             type="button"
             className={`pf-pill ${filterMode === 'starred' ? 'pf-pill-active' : ''}`}
-            onClick={() => setFilterMode('starred')}
+            onClick={() => updateFilter({ filter: filterMode === 'starred' ? 'all' : 'starred' })}
             title="Show only opportunities you starred"
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginLeft: 'auto' }}
           >
             <StarIcon filled={filterMode === 'starred'} size={10} />
-            Starred {starredCount > 0 ? `· ${starredCount}` : ''}
+            Starred{starredCount > 0 ? ` · ${starredCount}` : ''}
           </button>
         </div>
-        {/* Sort row */}
-        <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
-          {(Object.keys(SORT_LABELS) as SortMode[]).map((m) => (
-            <Tooltip key={m} text={SORT_TOOLTIPS[m]} placement="bottom">
-              <button
-                type="button"
-                className={`pf-pill ${sortMode === m ? 'pf-pill-active' : ''}`}
-                onClick={() => setSortMode(m)}
-              >
-                {SORT_LABELS[m]}
-              </button>
-            </Tooltip>
-          ))}
+        {/* Range filter row */}
+        <div
+          style={{
+            display: 'flex',
+            gap: 6,
+            marginTop: 6,
+            flexWrap: 'wrap',
+            alignItems: 'center',
+          }}
+        >
+          <Tooltip
+            text={`Within = within ${maxDistance}mi of any branch · Outside = beyond ${maxDistance}mi · All = no distance gate.`}
+            placement="bottom"
+          >
+            <select
+              aria-label="Range filter"
+              value={rangeMode}
+              onChange={(e) => updateFilter({ range: e.target.value as RangeMode })}
+              style={{
+                appearance: 'none',
+                background: PF.bg,
+                color: PF.ink,
+                border: `1px solid ${PF.ruleSoft}`,
+                borderRadius: 3,
+                padding: '4px 22px 4px 8px',
+                font: `500 11px ${PF.mono}`,
+                letterSpacing: '0.04em',
+                cursor: 'pointer',
+                backgroundImage:
+                  "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'><path d='M2 4l3 3 3-3' stroke='%236b7280' stroke-width='1.4' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>\")",
+                backgroundRepeat: 'no-repeat',
+                backgroundPosition: 'right 6px center',
+              }}
+            >
+              {(Object.keys(RANGE_LABELS) as RangeMode[]).map((m) => (
+                <option key={m} value={m}>
+                  Filter: {RANGE_LABELS[m]}
+                </option>
+              ))}
+            </select>
+          </Tooltip>
+        </div>
+        {/* Score floor slider */}
+        <div
+          style={{
+            display: 'flex',
+            gap: 8,
+            marginTop: 8,
+            alignItems: 'center',
+          }}
+        >
+          <span
+            className="pf-mono"
+            style={{
+              fontSize: 10,
+              letterSpacing: '0.06em',
+              textTransform: 'uppercase',
+              color: PF.inkDim,
+              minWidth: 64,
+            }}
+          >
+            Score ≥ {minScore}
+          </span>
+          <input
+            aria-label="Minimum score floor"
+            type="range"
+            min={SCORE_FLOOR_STEPS.min}
+            max={SCORE_FLOOR_STEPS.max}
+            step={SCORE_FLOOR_STEPS.step}
+            value={minScore}
+            onChange={(e) => updateFilter({ minScore: Number(e.target.value) })}
+            style={{
+              flex: 1,
+              accentColor: PF.ink,
+              cursor: 'pointer',
+            }}
+          />
         </div>
       </div>
       <div style={{ overflowY: 'auto', flex: 1 }} className="pf-scrollbar">
         {visibleProjects.length === 0 ? (
-          <EmptyState filterMode={filterMode} hasHidden={hidden.size > 0} />
+          <EmptyState
+            filterMode={filterMode}
+            rangeMode={rangeMode}
+            minScore={minScore}
+            hasHidden={hidden.size > 0}
+          />
         ) : (
           visibleProjects.map((p) => (
             <ProjectRow
@@ -260,8 +473,26 @@ export function ProjectList({
   );
 }
 
-function EmptyState({ filterMode, hasHidden }: { filterMode: FilterMode; hasHidden: boolean }) {
-  if (filterMode === 'starred') {
+function EmptyState({
+  filterMode,
+  rangeMode,
+  minScore,
+  hasHidden,
+}: {
+  filterMode: FilterMode;
+  rangeMode: RangeMode;
+  minScore: number;
+  hasHidden: boolean;
+}) {
+  // Surface the active filter combination so the operator knows what to
+  // adjust (spec \u00a7 3.5).
+  const summaryParts: string[] = [];
+  summaryParts.push(`Range: ${RANGE_LABELS[rangeMode]}`);
+  if (minScore > 0) summaryParts.push(`Score \u2265 ${minScore}`);
+  if (filterMode === 'starred') summaryParts.push('Starred only');
+  const summary = summaryParts.join(' \u00b7 ');
+
+  if (filterMode === 'starred' && rangeMode === 'all' && minScore === 0) {
     return (
       <div
         style={{
@@ -282,6 +513,41 @@ function EmptyState({ filterMode, hasHidden }: { filterMode: FilterMode; hasHidd
       </div>
     );
   }
+
+  // Active filter combo produced zero rows \u2014 guide the operator to widen
+  // the filters instead of staring at an empty list.
+  const isFilteredOut = rangeMode !== 'all' || minScore > 0 || filterMode === 'starred';
+  if (isFilteredOut) {
+    return (
+      <div
+        style={{
+          padding: '32px 20px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 10,
+          alignItems: 'flex-start',
+        }}
+      >
+        <span className="pf-label" style={{ fontSize: 9 }}>
+          No leads match
+        </span>
+        <span className="pf-body" style={{ color: PF.inkDim, fontSize: 12, lineHeight: 1.5 }}>
+          Try widening your range or lowering score floor.
+        </span>
+        <span
+          className="pf-mono"
+          style={{
+            fontSize: 10,
+            letterSpacing: '0.04em',
+            color: PF.inkFaint,
+          }}
+        >
+          {summary}
+        </span>
+      </div>
+    );
+  }
+
   return (
     <div
       style={{

@@ -84,3 +84,16 @@ Verified 2026-05-01 17:49 UTC: 10 unique IDs across the function set; only the t
 Stream D total cost-to-date: **$0** of $25 cap. All tests use mocked Anthropic clients; no real-LLM calls fired by Stream D code in this session or prior.
 
 The 2026-05-08 smoke is the first real-LLM exercise; expected cost $1.50–$5 across the three slices.
+
+---
+
+## Demo Polish Sprint — Stream P2 (lead-list sort + filter UI)
+
+**State:** open PR (demo-polish/p2-list-ui).
+
+#### Pathfinder/lib/list-filters.ts
+**Implements:** SPEC - Demo Polish & Geography Filters.md § 3.2 + § 3.3 — URL-persisted filter/sort state for `components/ProjectList.tsx`.
+**Last verified against spec:** 2026-05-02.
+**Drift:** none. Defaults match § 3.2 (sort=score, dir=desc, range=all, min_score=0). Score floor steps (0..90 by 10) match § 3.2.
+**Tests:** `Pathfinder/tests/list-filters.test.ts` covers parse / serialize round-trip, default elision, snap-to-step clamping, and the canonical `?sort=score&dir=desc&range=within&min_score=80` example.
+**TODO:** the WITHIN / OUTSIDE threshold currently reads from a local 250mi constant (`DEFAULT_MAX_SUPPORTED_DISTANCE_MILES` in `ProjectList.tsx`). Switch to `pathfinder.org_geo_config.max_supported_distance_miles` once Stream P1 lands the table (spec § 2.3).
