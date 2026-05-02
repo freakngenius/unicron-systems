@@ -199,6 +199,13 @@ function metricsFor(id: AgentName, d: AgentCellData): { label: string; value: st
       { label: 'escalated', value: d.escalatedCount ?? 0 },
     ];
   }
+  if (id === 'outreach') {
+    return [
+      { label: 'last cycle', value: fmtAgo(d.lastCycleSec) },
+      { label: 'drafts today', value: d.recordsToday ?? 0 },
+      { label: 'avg lat', value: ((d.latMs ?? 0) / 1000).toFixed(1) + 's' },
+    ];
+  }
   // adjacent
   return [
     { label: 'next run', value: d.nextRunLabel ?? '—' },
@@ -307,6 +314,18 @@ export function deriveCellData(
       lastCycleSec,
       verifiedToday: extras?.recordsToday ?? run.records_processed ?? 0,
       escalatedCount: extras?.escalatedCount ?? 0,
+    };
+  }
+  if (id === 'outreach') {
+    // 24h cumulative drafts produced; falls back to records_new from the
+    // latest cycle. The Outreach cron writes records_new = drafted_clean
+    // + drafted_with_warnings (see app/api/cron/outreach/route.ts), so
+    // this counts every draft regardless of warning status.
+    return {
+      status,
+      lastCycleSec,
+      recordsToday: extras?.recordsToday ?? run.records_new ?? 0,
+      latMs,
     };
   }
   // ranker
