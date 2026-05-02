@@ -550,6 +550,61 @@ export interface EmailThread {
   updated_at: string;
 }
 
+// ─── Connector framework (migration 0105) ───────────────────────────────
+//
+// Schema reference: SPEC - Connectors (Slack, Teams, HubSpot).md § 3.1
+// + supabase/migrations/0105_connector_framework.sql.
+
+export type ConnectorType = 'slack' | 'teams' | 'hubspot';
+
+export type ConnectorStatus =
+  | 'disconnected'
+  | 'pending'
+  | 'connected'
+  | 'error'
+  | 'expired'
+  | 'revoked';
+
+export interface ConnectorRow {
+  id: string;
+  customer_org_id: string;
+  connector_type: ConnectorType;
+  status: ConnectorStatus;
+  account_name: string | null;
+  account_external_id: string | null;
+  connected_at: string | null;
+  disconnected_at: string | null;
+  last_error: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ConnectorRoutingRule {
+  id: string;
+  connector_id: string;
+  event_type: string;
+  channel_id: string;
+  channel_name: string | null;
+  filter_json: Record<string, unknown>;
+  quiet_hours_json: Record<string, unknown> | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ConnectorAuditLogRow {
+  id: number;
+  connector_id: string;
+  customer_org_id: string;
+  event_type: string;
+  direction: 'outbound' | 'inbound' | 'oauth' | 'refresh';
+  status: 'sent' | 'received' | 'failed' | 'succeeded';
+  payload_summary: Record<string, unknown> | null;
+  error_message: string | null;
+  created_at: string;
+}
+
 // Database type bag for the typed Supabase client.
 export interface PathfinderDatabase {
   pathfinder: {
@@ -668,6 +723,41 @@ export interface PathfinderDatabase {
         Row: OrgGeoConfig;
         Insert: Omit<OrgGeoConfig, 'updated_at'> & { updated_at?: string };
         Update: Partial<OrgGeoConfig>;
+        Relationships: [];
+      };
+      // Connector framework (migration 0105) — multi-tenant Slack / Teams /
+      // HubSpot connections + per-event routing rules + audit log.
+      connectors: {
+        Row: ConnectorRow;
+        Insert: Omit<ConnectorRow, 'id' | 'created_at' | 'updated_at' | 'metadata' | 'status'> & {
+          id?: string;
+          created_at?: string;
+          updated_at?: string;
+          metadata?: Record<string, unknown>;
+          status?: ConnectorStatus;
+        };
+        Update: Partial<ConnectorRow>;
+        Relationships: [];
+      };
+      connector_routing_rules: {
+        Row: ConnectorRoutingRule;
+        Insert: Omit<ConnectorRoutingRule, 'id' | 'created_at' | 'updated_at' | 'filter_json' | 'is_active'> & {
+          id?: string;
+          created_at?: string;
+          updated_at?: string;
+          filter_json?: Record<string, unknown>;
+          is_active?: boolean;
+        };
+        Update: Partial<ConnectorRoutingRule>;
+        Relationships: [];
+      };
+      connector_audit_log: {
+        Row: ConnectorAuditLogRow;
+        Insert: Omit<ConnectorAuditLogRow, 'id' | 'created_at'> & {
+          id?: number;
+          created_at?: string;
+        };
+        Update: Partial<ConnectorAuditLogRow>;
         Relationships: [];
       };
     };
