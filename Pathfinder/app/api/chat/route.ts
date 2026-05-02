@@ -255,6 +255,20 @@ interface Hydrated {
   warmCustomer: Customer | null;
   filteredProjects: Project[];
   allBranches: Branch[];
+  // Demo Polish § 5.3 — engine-confirmed cross-pollination matches for
+  // the open project (top-3 by recency). Empty when no project is open
+  // or the engine hasn't matched anything.
+  crossPollination: Array<{
+    customer_canonical: string;
+    match_layer: string;
+    match_confidence: number;
+    matched_field: string;
+    primary_branch_name: string | null;
+    branch_count: number;
+    active_site_count: number;
+    most_recent_site_date: string | null;
+    national_account: boolean;
+  }>;
 }
 
 async function hydrateContext(snapshot: ChatContextSnapshot): Promise<Hydrated> {
@@ -291,7 +305,40 @@ async function hydrateContext(snapshot: ChatContextSnapshot): Promise<Hydrated> 
     warmCustomer = (data ?? null) as Customer | null;
   }
 
-  return { project, branch, warmCustomer, filteredProjects, allBranches };
+  let crossPollination: Hydrated['crossPollination'] = [];
+  if (project?.id) {
+    const { data } = await admin
+      .from('lead_cross_pollination')
+      .select(
+        'customer_canonical, match_layer, match_confidence, matched_field, primary_branch_name, branch_count, active_site_count, most_recent_site_date, national_account',
+      )
+      .eq('lead_id', project.id)
+      .order('most_recent_site_date', { ascending: false, nullsFirst: false })
+      .limit(3);
+    crossPollination = ((data ?? []) as Array<{
+      customer_canonical: string;
+      match_layer: string;
+      match_confidence: number | string;
+      matched_field: string;
+      primary_branch_name: string | null;
+      branch_count: number | null;
+      active_site_count: number | null;
+      most_recent_site_date: string | null;
+      national_account: boolean | null;
+    }>).map((r) => ({
+      customer_canonical: r.customer_canonical,
+      match_layer: r.match_layer,
+      match_confidence: typeof r.match_confidence === 'string' ? parseFloat(r.match_confidence) : r.match_confidence,
+      matched_field: r.matched_field,
+      primary_branch_name: r.primary_branch_name,
+      branch_count: r.branch_count ?? 0,
+      active_site_count: r.active_site_count ?? 0,
+      most_recent_site_date: r.most_recent_site_date,
+      national_account: r.national_account ?? false,
+    }));
+  }
+
+  return { project, branch, warmCustomer, filteredProjects, allBranches, crossPollination };
 }
 
 // ── Provenance footer parsing (Sonar emits `TABLES: ...` at end) ─────────
@@ -503,6 +550,8 @@ export async function POST(req: NextRequest): Promise<Response> {
             warmCustomer: hydrated.warmCustomer,
             intent: classification.outreachIntent ?? 'fresh',
             audienceOverride: classification.audienceOverride,
+            crossPollination:
+              hydrated.crossPollination.length > 0 ? hydrated.crossPollination : null,
           });
 
           // Stream a brief intro so the UI shows progress before the bundle.

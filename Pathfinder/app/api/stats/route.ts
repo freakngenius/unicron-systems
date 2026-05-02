@@ -1,6 +1,12 @@
 // GET /api/stats → { new, total, ranked, err }
 //
-//   - new:    count of high-priority projects (score >= 80) ingested in the last 24h
+//   - new:    count of projects ingested in the last 24h (all sources, all
+//             scores). Demo Polish §4.3 — the prior gating on score ≥
+//             high_priority_threshold meant "New · 24h" displayed 0 for
+//             stretches where the Ranker hadn't yet caught up to fresh
+//             ingest. The header counter is "New Opportunities Ingested,"
+//             not "Verified High-Priority in 24h" — those are different
+//             signals.
 //   - total:  total project count
 //   - ranked: count of projects with score IS NOT NULL
 //   - err:    count of agent_runs with status='failed' in the last 24h
@@ -9,14 +15,12 @@
 
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
-import { fetchActiveScoringConfig } from '@/lib/scoring-config-server';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 export async function GET() {
   const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-  const { high_priority_threshold: HI_THRESHOLD } = await fetchActiveScoringConfig();
 
   // Total projects
   const totalQ = supabase.from('projects').select('id', { count: 'exact', head: true });
@@ -27,12 +31,13 @@ export async function GET() {
     .select('id', { count: 'exact', head: true })
     .not('score', 'is', null);
 
-  // High-priority new (last 24h)
+  // New (last 24h) — every project the ingestor has written, regardless of
+  // score. See header-doc above; this matches the SQL spec'd in
+  // SPEC - Demo Polish & Geography Filters § 4.3.
   const newQ = supabase
     .from('projects')
     .select('id', { count: 'exact', head: true })
-    .gte('ingested_at', dayAgo)
-    .gte('score', HI_THRESHOLD);
+    .gte('ingested_at', dayAgo);
 
   // Failed runs (last 24h)
   const errQ = supabase

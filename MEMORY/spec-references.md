@@ -161,3 +161,19 @@ The 2026-05-08 smoke is the first real-LLM exercise; expected cost $1.50–$5 ac
 ### Cost discipline
 
 Stream P1 total cost-to-date: **$0.12** of $8 cap. All cost on Haiku coord-extraction during the backfill. Tests use the standard Anthropic mock — no live calls in CI.
+
+---
+
+## Demo Polish Sprint — Stream P3 (header + cross-pollination outreach)
+
+**State:** PR #58 open against `main` (2026-05-02).
+
+#### Pathfinder/lib/outreach.ts
+**Implements:** SPEC - Demo Polish & Geography Filters.md §5.3 (Outreach Drafter cross-pollination context) and the pre-existing P0-02 Outreach Drafter contract (Pathfinder-Feature-Specs.md "P0 Feature 2 — Outreach Drafter"; agent-specs/03-computer-outreach.md).
+**Last verified against spec:** 2026-05-02.
+**Drift:** **none.** Additive change: new `CrossPollinationContext` type + optional `crossPollination` field on `DraftOutreachArgs`. When populated the prompt builder emits a RELATIONSHIP CONTEXT block that instructs the model to open with the relationship reference. Cold-lead path unchanged. Verified live by `scripts/regen-cross-poll-outreach.ts` against 3 exact-match leads — drafts open with "Zedcor has been supporting [customer] through our [branch] branch…" as required.
+
+#### Pathfinder/lib/chat/outreach-drafter.ts
+**Implements:** SPEC - Demo Polish & Geography Filters.md §5.3 (chat-side parallel for `/api/chat` outreach drafting; Sonar-driven path).
+**Last verified against spec:** 2026-05-02.
+**Drift:** **none.** Mirrors the cron-side context block. Hallucination-guard allowed-name set extended to include the matched customer canonical and primary-branch name so the engine-confirmed names pass without false positives.

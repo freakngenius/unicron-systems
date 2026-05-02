@@ -25,6 +25,7 @@ import {
   buildInsertRows,
   draftOutreachWithRetry,
   extractContactFromRawPayload,
+  type CrossPollinationContext,
   type OutreachContact,
   type OutreachDraftInsertRow,
 } from '@/lib/outreach';
@@ -178,6 +179,56 @@ interface CycleStats {
   drafted_clean: number;
   drafted_with_warnings: number;
   failed: number;
+}
+
+/** Fetch up to 3 cross-pollination matches for a lead, ordered by
+ *  most-recent-site-date desc (per Demo Polish § 8 leaning). Returns []
+ *  if the engine hasn't matched anything for this project. */
+async function fetchCrossPollContext(
+  admin: Admin,
+  projectId: string,
+): Promise<CrossPollinationContext[]> {
+  const { data, error } = await (
+    admin.from('lead_cross_pollination') as unknown as {
+      select: (cols: string) => {
+        eq: (col: string, val: string) => {
+          order: (col: string, opts: { ascending: boolean; nullsFirst: boolean }) => {
+            limit: (n: number) => Promise<{ data: CrossPollMatchRow[] | null; error: { message: string } | null }>;
+          };
+        };
+      };
+    }
+  )
+    .select(
+      'customer_canonical, match_layer, match_confidence, matched_field, primary_branch_name, branch_count, active_site_count, most_recent_site_date, national_account',
+    )
+    .eq('lead_id', projectId)
+    .order('most_recent_site_date', { ascending: false, nullsFirst: false })
+    .limit(3);
+  if (error || !data) return [];
+  return (data as CrossPollMatchRow[]).map((r) => ({
+    customer_canonical: r.customer_canonical,
+    match_layer: r.match_layer,
+    match_confidence: typeof r.match_confidence === 'string' ? parseFloat(r.match_confidence) : r.match_confidence,
+    matched_field: r.matched_field,
+    primary_branch_name: r.primary_branch_name ?? null,
+    branch_count: r.branch_count ?? 0,
+    active_site_count: r.active_site_count ?? 0,
+    most_recent_site_date: r.most_recent_site_date ?? null,
+    national_account: r.national_account ?? false,
+  }));
+}
+
+interface CrossPollMatchRow {
+  customer_canonical: string;
+  match_layer: string;
+  match_confidence: number | string;
+  matched_field: string;
+  primary_branch_name: string | null;
+  branch_count: number | null;
+  active_site_count: number | null;
+  most_recent_site_date: string | null;
+  national_account: boolean | null;
 }
 
 async function persistInsertRows(
@@ -403,6 +454,16 @@ export async function GET(req: Request) {
       ? customerById.get(project.warm_for_customer_id) ?? null
       : null;
     const contact: OutreachContact = extractContactFromRawPayload(project.raw_payload);
+    // Demo Polish § 5.3 — pull cross-pollination matches so the drafter
+    // can open with the relationship reference when one exists.
+    const crossPollination = await fetchCrossPollContext(admin, project.id);
+    // Allow the drafter to name the matched customers without tripping
+    // the hallucination guard (the engine has confirmed Zedcor already
+    // works with them).
+    const allowedNamesForLead = [
+      ...allowedCustomerNames,
+      ...crossPollination.map((m) => m.customer_canonical),
+    ];
 
     const stepStart = Date.now();
     let result;
@@ -431,8 +492,9 @@ export async function GET(req: Request) {
             ? { id: warmCustomer.id, name: warmCustomer.name }
             : null,
           contact,
+          crossPollination: crossPollination.length > 0 ? crossPollination : null,
         },
-        { allowedCustomerNames },
+        { allowedCustomerNames: allowedNamesForLead },
       );
     } catch (err) {
       stats.failed++;

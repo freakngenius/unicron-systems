@@ -367,36 +367,6 @@ export function TopBar({
         zIndex: 5,
       }}
     >
-      {/* CONFIDENTIAL watermark — absolute-positioned center stamp so it
-          doesn't disturb the flex layout. pointer-events: none so clicks
-          pass through to whatever sits beneath (nothing today, but future-
-          proof). Static; no operator gate — the Pathfinder demo is shown
-          only to the customer + warm-intro prospects, and the stamp
-          deters opportunistic screenshot-and-share. */}
-      <div
-        aria-hidden="true"
-        className="pf-mono"
-        style={{
-          position: 'absolute',
-          top: '50%',
-          left: '50%',
-          transform: 'translate(-50%, -50%)',
-          fontSize: 12,
-          fontWeight: 700,
-          letterSpacing: '0.28em',
-          color: PF.inkDim,
-          textTransform: 'uppercase',
-          pointerEvents: 'none',
-          userSelect: 'none',
-          whiteSpace: 'nowrap',
-          padding: '4px 10px',
-          border: `1px solid ${PF.ruleSoft}`,
-          borderRadius: 3,
-        }}
-      >
-        Confidential
-      </div>
-
       {/* Brand mark + wordmark */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         {/* SVG mark — basePath-aware (we serve under /pathfinder) so the
@@ -432,6 +402,55 @@ export function TopBar({
           </div>
         </div>
       </div>
+
+      <div style={{ width: 1, height: 24, background: PF.ruleSoft }} />
+
+      {/* Chat — Demo Polish § 4.2 places this immediately after the brand
+          mark, before the CONFIDENTIAL badge and the New-24h counter. Was
+          previously near the right rail next to escalations; relocated so
+          the flagship customer-facing surface (chat) is the first
+          interaction the operator sees after the logo. */}
+      {onChatToggle && (
+        <button
+          type="button"
+          className={`pf-pill ${chatOpen ? 'pf-pill-active' : ''}`}
+          onClick={onChatToggle}
+          title="Open the Intelligence Chat panel — ask, draft outreach, take actions"
+          aria-label={chatOpen ? 'Close Intelligence Chat' : 'Open Intelligence Chat'}
+          aria-pressed={chatOpen}
+        >
+          <ChatBubbleIcon />
+          Chat
+        </button>
+      )}
+
+      {/* CONFIDENTIAL badge — § 4.4. Sits between Chat and the
+          New-Opportunities counter as a small pill so operators see it
+          adjacent to the data it warns about. Tooltip explains the
+          policy; amber border + tinted bg make it visible without
+          alarming. Replaces the prior floating-watermark stamp that
+          was overlapping the Chat button. */}
+      <span
+        className="pf-mono"
+        title="All data on this page is customer-confidential. Do not screenshot or share outside Zedcor."
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 5,
+          font: '700 10px var(--font-jetbrains-mono), ui-monospace, monospace',
+          letterSpacing: '0.12em',
+          textTransform: 'uppercase',
+          color: '#b45309',
+          background: 'rgba(245, 158, 11, 0.10)',
+          border: '1px solid rgba(245, 158, 11, 0.45)',
+          borderRadius: 3,
+          padding: '4px 8px',
+          userSelect: 'none',
+          cursor: 'help',
+        }}
+      >
+        Confidential
+      </span>
 
       <div style={{ width: 1, height: 24, background: PF.ruleSoft }} />
       <SourcesDrawer source={source} setSource={setSource} />
@@ -482,27 +501,13 @@ export function TopBar({
         />
       )}
 
-      {onChatToggle && (
-        <button
-          type="button"
-          className={`pf-pill ${chatOpen ? 'pf-pill-active' : ''}`}
-          onClick={onChatToggle}
-          title="Open the Intelligence Chat panel — ask, draft outreach, take actions"
-          aria-label={chatOpen ? 'Close Intelligence Chat' : 'Open Intelligence Chat'}
-          aria-pressed={chatOpen}
-        >
-          <ChatBubbleIcon />
-          Chat
-        </button>
-      )}
-
       <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 20 }}>
         <LiveStat
           valueKey="new"
           label="New · 24h"
           accent="hi"
           onClick={onStatClick ? () => onStatClick('new') : undefined}
-          title="Click to see opportunities ingested in the last 24 hours"
+          title="New Opportunities Ingested · last 24h. Click to open the list."
         />
         <LiveStat
           valueKey="total"

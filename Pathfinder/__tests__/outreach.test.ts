@@ -422,6 +422,123 @@ describe('buildOutreachUserPrompt', () => {
     expect(prompt).toContain('ITERATION');
     expect(prompt).toContain('make it tighter');
   });
+
+  it('includes RELATIONSHIP CONTEXT block with engine match metadata when crossPollination is provided', () => {
+    const prompt = buildOutreachUserPrompt({
+      project: {
+        id: 'P4',
+        title: 'GSA award to Brasfield Gorrie',
+        summary: null,
+        project_value: 212_000_000,
+        project_stage: null,
+        distance_miles: 65,
+        rationale: null,
+        outreach_hook: null,
+        lat: null,
+        lon: null,
+        raw_payload: null,
+        warm_for_customer_id: null,
+        nearest_branch_id: null,
+      },
+      branch: { id: 'JAX', name: 'Jacksonville', code: 'JAX', region: 'FL' },
+      warmCustomer: null,
+      contact: { name: null, title: null, contact: null },
+      crossPollination: [
+        {
+          customer_canonical: 'brasfield gorrie',
+          match_layer: 'exact',
+          match_confidence: 1.0,
+          matched_field: 'prime_contractor',
+          primary_branch_name: 'Jacksonville',
+          branch_count: 2,
+          active_site_count: 2,
+          most_recent_site_date: '2026-04-15',
+          national_account: false,
+        },
+      ],
+    });
+    expect(prompt).toContain('RELATIONSHIP CONTEXT');
+    expect(prompt).toContain('Brasfield Gorrie');
+    expect(prompt).toContain('exact');
+    expect(prompt).toContain('Jacksonville branch');
+    expect(prompt).toContain('2 active sites');
+    expect(prompt).toContain('Email opening sentence MUST reference this existing relationship');
+  });
+
+  it('falls back to cold-lead language when crossPollination is empty/null', () => {
+    const prompt = buildOutreachUserPrompt({
+      project: {
+        id: 'P5',
+        title: 'X',
+        summary: null,
+        project_value: null,
+        project_stage: null,
+        distance_miles: null,
+        rationale: null,
+        outreach_hook: null,
+        lat: null,
+        lon: null,
+        raw_payload: null,
+        warm_for_customer_id: null,
+        nearest_branch_id: null,
+      },
+      branch: null,
+      warmCustomer: null,
+      contact: { name: null, title: null, contact: null },
+      crossPollination: [],
+    });
+    expect(prompt).toContain('this is a cold lead');
+    expect(prompt).not.toContain('Email opening sentence MUST reference');
+  });
+
+  it('lists additional matches when more than one cross-poll row is supplied', () => {
+    const prompt = buildOutreachUserPrompt({
+      project: {
+        id: 'P6',
+        title: 'multi',
+        summary: null,
+        project_value: null,
+        project_stage: null,
+        distance_miles: null,
+        rationale: null,
+        outreach_hook: null,
+        lat: null,
+        lon: null,
+        raw_payload: null,
+        warm_for_customer_id: null,
+        nearest_branch_id: null,
+      },
+      branch: null,
+      warmCustomer: null,
+      contact: { name: null, title: null, contact: null },
+      crossPollination: [
+        {
+          customer_canonical: 'big-d construction',
+          match_layer: 'exact',
+          match_confidence: 1.0,
+          matched_field: 'prime_contractor',
+          primary_branch_name: 'Phoenix',
+          branch_count: 1,
+          active_site_count: 1,
+          most_recent_site_date: null,
+          national_account: false,
+        },
+        {
+          customer_canonical: 'big d holdings',
+          match_layer: 'parent_company',
+          match_confidence: 0.85,
+          matched_field: 'parent_company',
+          primary_branch_name: null,
+          branch_count: 0,
+          active_site_count: 0,
+          most_recent_site_date: null,
+          national_account: false,
+        },
+      ],
+    });
+    expect(prompt).toContain('additional matches');
+    expect(prompt).toContain('Big D Holdings');
+  });
 });
 
 // ────────────────────────────────────────────────────────────────────
