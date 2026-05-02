@@ -53,7 +53,9 @@ const PROVIDERS: Record<ConnectorType, ProviderConfig> = {
       'offline_access',
     ],
     scopeSeparator: ' ',
-    exchangeImplemented: false,
+    // C-2A flips this true. The callback route's `teams` branch handles the
+    // code-for-token exchange via lib/connectors/teams/oauth.ts.
+    exchangeImplemented: true,
   },
   hubspot: {
     displayName: 'HubSpot',
@@ -106,12 +108,18 @@ export function buildAuthorizeUrl(
   } else if (type === 'teams') {
     const clientId = process.env.TEAMS_APP_ID;
     if (!clientId) throw new Error('TEAMS_APP_ID is not set');
+    const tenant = process.env.TEAMS_TENANT_ID || 'common';
     params.set('client_id', clientId);
     params.set('response_type', 'code');
     params.set('redirect_uri', redirectUri);
     params.set('scope', cfg.scopes.join(cfg.scopeSeparator));
     params.set('state', state);
     params.set('response_mode', 'query');
+    // Per SPEC § 2.2 Step F, TEAMS_TENANT_ID can be 'common' (multi-tenant)
+    // or a specific tenant guid. We swap the path segment instead of relying
+    // on /common so single-tenant deployments don't accidentally accept
+    // signins from other Microsoft tenants.
+    return `${cfg.authorizeUrl.replace('/common/', `/${tenant}/`)}?${params.toString()}`;
   } else if (type === 'hubspot') {
     const clientId = process.env.HUBSPOT_CLIENT_ID;
     if (!clientId) throw new Error('HUBSPOT_CLIENT_ID is not set');

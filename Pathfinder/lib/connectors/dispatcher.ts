@@ -23,6 +23,14 @@
 import { supabaseAdmin } from '@/lib/supabase';
 import { recordAudit } from './audit';
 import { NotImplementedError } from './types';
+import {
+  formatLead as formatTeamsLead,
+  formatRejection as formatTeamsRejection,
+  formatPlainText as formatTeamsPlain,
+  type AdaptiveCard,
+} from './teams/adaptive-cards';
+import { getConversationRefByChannelId } from './teams/conversations';
+import { postActivityWithOverride } from './teams/sender';
 import type {
   ConnectorRoutingRuleRow,
   ConnectorRow,
@@ -84,7 +92,7 @@ export function matchesFilter(
 }
 
 /** Format an event payload for a specific connector type. C-1A is a
- *  pass-through skeleton; C-1B replaces slack with Block Kit, C-2 adds
+ *  pass-through skeleton; C-1B replaces slack with Block Kit, C-2A adds
  *  Adaptive Cards for teams. */
 export function formatForConnector(
   type: ConnectorType,
@@ -94,21 +102,101 @@ export function formatForConnector(
   return { type, eventType, payload };
 }
 
+/** Render an Adaptive Card for a given event payload. Mirrors the
+ *  Slack formatter shape used in C-1B; the dispatcher's teams branch
+ *  calls this to produce the card before invoking sender.postActivity. */
+export function buildTeamsCard(
+  eventType: string,
+  payload: Record<string, unknown>,
+): AdaptiveCard {
+  // Lead-shaped events: we accept either a top-level project payload
+  // (`{ id, title, score, ... }`) or a wrapper `{ project: {...} }`. The
+  // wrapper form is what most agents emit; the flat form keeps the API
+  // friendly to ad-hoc callers.
+  const project = (payload.project ?? payload) as {
+    id?: string;
+    title?: string;
+    score?: number | null;
+    rationale?: string | null;
+    project_value?: number | null;
+    source?: string | null;
+    branch_name?: string | null;
+    dashboardUrl?: string;
+  };
+
+  if (
+    eventType === 'lead.high_score' ||
+    eventType === 'lead.verified' ||
+    eventType === 'lead.warm_intro'
+  ) {
+    return formatTeamsLead({
+      id: project.id ?? 'unknown',
+      title: project.title ?? 'Untitled lead',
+      score: project.score ?? null,
+      rationale: project.rationale ?? null,
+      projectValue: project.project_value ?? null,
+      source: project.source ?? null,
+      branchName: project.branch_name ?? null,
+      dashboardUrl:
+        project.dashboardUrl ??
+        `${process.env.PATHFINDER_PUBLIC_URL ?? 'https://www.unicron.systems/pathfinder'}/projects/${project.id ?? ''}`,
+    });
+  }
+
+  if (eventType === 'lead.rejected') {
+    return formatTeamsRejection({
+      id: project.id ?? 'unknown',
+      title: project.title ?? 'Untitled lead',
+      reason: project.rationale ?? null,
+    });
+  }
+
+  // Default: render as a plain text card.
+  const summary =
+    typeof (payload as { text?: string }).text === 'string'
+      ? ((payload as { text?: string }).text as string)
+      : `Event: ${eventType}`;
+  return formatTeamsPlain(summary);
+}
+
 /** Send a formatted message via the connector. C-1B fills slack;
- *  teams + hubspot throw NotImplementedError until later phases. The
- *  dispatcher catches the throw and records `failed` audit. */
+ *  C-2A fills teams via the Bot Framework REST API; hubspot throws
+ *  NotImplementedError until Phase 3. The dispatcher catches throws
+ *  and records `failed` audit. */
 export async function sendToConnector(
   connector: ConnectorRow,
-  _channelId: string,
-  _formatted: FormattedMessage,
+  channelId: string,
+  formatted: FormattedMessage,
 ): Promise<void> {
   switch (connector.connector_type) {
     case 'slack':
       throw new NotImplementedError(
         'slack send not implemented in C-1A (lands in C-1B). Dispatcher plumbing only.',
       );
-    case 'teams':
-      throw new NotImplementedError('teams send not implemented (C-2).');
+    case 'teams': {
+      // Resolve the Teams conversation reference for this channel id.
+      // The bot must have been added to the conversation previously
+      // (per SPEC § 4.2 Teams-specific gotcha) — we capture the
+      // reference on `conversationUpdate.membersAdded` events in the
+      // webhook route.
+      const ref = await getConversationRefByChannelId(connector.id, channelId);
+      if (!ref) {
+        throw new Error(
+          `teams send: no conversation reference found for channel_id=${channelId}; ` +
+            `the bot must be added to the team/channel/chat first`,
+        );
+      }
+      const card = buildTeamsCard(formatted.eventType, formatted.payload);
+      const result = await postActivityWithOverride({
+        serviceUrl: ref.serviceUrl,
+        conversationId: ref.id,
+        card,
+      });
+      if (!result.ok) {
+        throw new Error(result.errorMessage ?? `teams send failed (status ${result.status})`);
+      }
+      return;
+    }
     case 'hubspot':
       throw new NotImplementedError('hubspot send not implemented (Phase 3).');
     default:

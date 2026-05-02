@@ -17,6 +17,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { recordAudit } from '@/lib/connectors/audit';
 import { validateState } from '@/lib/connectors/oauth-state';
 import { getProvider, isConnectorType } from '@/lib/connectors/providers';
+import { exchangeCode as exchangeTeamsCode } from '@/lib/connectors/teams/oauth';
 import { storeToken } from '@/lib/connectors/tokens';
 import type { ConnectorType } from '@/lib/connectors/types';
 import { exchangeCode as exchangeHubSpotCode } from '@/lib/connectors/hubspot/oauth';
@@ -98,10 +99,19 @@ export async function GET(req: Request, { params }: { params: { type: string } }
       exchangeResult = await exchangeSlackCode(code, redirectUri);
     } else if (type === 'hubspot') {
       exchangeResult = await runHubSpotExchange(code);
+    } else if (type === 'teams') {
+      const teams = await exchangeTeamsCode(code, redirectUri);
+      exchangeResult = {
+        access_token: teams.access_token,
+        refresh_token: teams.refresh_token,
+        expires_at: teams.expires_at,
+        scope: teams.scope,
+        account_name: teams.account_name,
+        account_external_id: teams.account_external_id,
+      };
     } else {
-      // teams falls through to the !exchangeImplemented guard above; if
-      // we reach here a future provider was added without wiring the
-      // exchange branch.
+      // Future providers must be added to the switch above before
+      // `exchangeImplemented: true` flips in providers.ts.
       throw new Error(`exchange for ${type} not wired in callback route`);
     }
   } catch (err) {

@@ -359,6 +359,7 @@ Stream P1 total cost-to-date: **$0.12** of $8 cap. All cost on Haiku coord-extra
 
 #### Pathfinder/package.json (modified)
 **Drift note:** Added `jszip` (3.10.x) for Teams `.zip` packaging and `js-yaml` (4.1.x, +`@types/js-yaml`) for Slack manifest YAML serialization. Both are small, widely-used libs (combined transitive footprint ~50KB minified) — Vercel function bundle stays well under the 50MB Lambda limit per dispatch halt criteria.
+<<<<<<< HEAD
 
 ---
 
@@ -426,12 +427,87 @@ Stream P1 total cost-to-date: **$0.12** of $8 cap. All cost on Haiku coord-extra
 
 #### Pathfinder/app/api/connectors/instances/[connectorId]/hubspot/sync/route.ts
 **Implements:** Operator-gated endpoint. POST kicks off `runBulkSync` synchronously (`maxDuration=300`); GET returns the `hubspot_sync_state` row. Cross-checks `connector.customer_org_id === resolveOrgId(req)` before any work. Rejects when connector is not HubSpot or status != 'connected'.
+=======
+---
+
+## Stream C-2A — Microsoft Teams OAuth + Bot Framework + Adaptive Cards
+
+**State:** PR open on branch `connectors/c2a-teams` (2026-05-02). Operator-side env vars not yet set; see `MEMORY/operator-todos/2026-05-02-c2a-teams-operator-setup.md`.
+
+### Library files
+
+#### Pathfinder/lib/connectors/teams/oauth.ts
+**Implements:** SPEC § 2.2 Step F (env var contract) + § 4.2 (Teams OAuth). `exchangeCode` swaps the Microsoft auth code for access + refresh tokens via `/{tenant}/oauth2/v2.0/token`. `refreshToken` reuses the same endpoint with `grant_type=refresh_token`. `acquireBotAppToken` uses `client_credentials` against `botframework.com` for proactive bot posts.
+**Last verified against spec:** 2026-05-02.
+**Drift:** **none.** Env var names match SPEC § 2.2 Step F verbatim (`TEAMS_APP_ID`, `TEAMS_TENANT_ID`, `TEAMS_CLIENT_SECRET`, `TEAMS_BOT_ID`, `TEAMS_BOT_PASSWORD`).
+
+#### Pathfinder/lib/connectors/teams/adaptive-cards.ts
+**Implements:** SPEC § 4.2 Adaptive Card 1.5 outbound formatter. `formatLead`, `formatRejection`, `formatFeedbackPrompt`, `formatHelp`, `formatPlainText` mirror the Slack Block Kit functions in `lib/connectors/slack/formatters.ts`. `toAttachment` wraps for Bot Framework + asserts <28KB size limit.
+**Last verified against spec:** 2026-05-02.
+**Drift:** **minor, justified.** Lead card has 5 actions vs Slack's 3 (View / Outreach / Dismiss + thumb-up + thumb-down) because Teams reactions aren't first-class so feedback is captured via card actions per SPEC § 8 open-question 1.
+
+#### Pathfinder/lib/connectors/teams/commands.ts
+**Implements:** SPEC § 4.2 inbound `@-mention` parser. Mirrors `lib/connectors/slack/commands.ts` byte-for-byte on the verb logic; only difference is `stripMention` handles `<at>...</at>` Bot Framework markup + flat `@BotName` mobile fallback.
+**Last verified against spec:** 2026-05-02.
+**Drift:** none.
+
+#### Pathfinder/lib/connectors/teams/signature.ts
+**Implements:** SPEC § 5.1 + § 5.3 — Bot Framework JWT verification on the messaging endpoint. Fetches Microsoft's JWKS from `https://login.botframework.com/v1/.well-known/openidconfiguration`, RS256-verifies, validates iss=`https://api.botframework.com`, aud=`TEAMS_BOT_ID`, exp/nbf with ±5 min skew. Test bypass `TEAMS_DISABLE_JWT_VERIFY=1` is hard-disabled when `NODE_ENV=production`.
+**Last verified against spec:** 2026-05-02.
+**Drift:** none.
+
+#### Pathfinder/lib/connectors/teams/sender.ts
+**Implements:** SPEC § 3.6 outbound dispatcher's Teams branch. `postActivity` POSTs to `{serviceUrl}/v3/conversations/{id}/activities` with a Bot Framework app token. Includes a test-override seam (`__setSenderOverrideForTests`) so unit tests can stub transport without monkey-patching fetch globally.
+**Last verified against spec:** 2026-05-02.
+**Drift:** none.
+
+#### Pathfinder/lib/connectors/teams/conversations.ts
+**Implements:** SPEC § 4.2 "Bot must be added to a team or channel before it can post there" — captures Bot Framework conversation references on `conversationUpdate` events. Storage on `connectors.metadata.teams.conversations` (FIFO-capped at 200 entries). Migration 0109 (`teams_conversations` table) reserved but not used in C-2A.
+**Last verified against spec:** 2026-05-02.
+**Drift:** **minor, deliberate.** Stored on jsonb metadata instead of a dedicated table; spec doesn't prescribe one. If a customer outgrows 200 conversations we'll move to a table.
+
+#### Pathfinder/lib/connectors/teams/chat-bridge.ts
+**Implements:** SPEC § 4.2 "DMs work identically" — adapter from inbound chat text → reply string. Mirrors `lib/connectors/slack/chat-bridge.ts`. Same C-1G placeholder reply pending the Sonar streaming bridge.
+**Last verified against spec:** 2026-05-02.
+**Drift:** none.
+
+#### Pathfinder/lib/connectors/feedback.ts (modified)
+**Implements:** added `recordTeamsCardFeedback` writing to `pathfinder.lead_feedback` with `source='teams_card'` (the value already permitted by migration 0107's check constraint). Idempotent on Postgres 23505 dup-key.
+
+#### Pathfinder/lib/connectors/dispatcher.ts (modified)
+**Implements:** SPEC § 3.6 — replaced the `case 'teams'` `NotImplementedError` with a real send path using `sender.postActivityWithOverride` + `buildTeamsCard`. New `buildTeamsCard(eventType, payload)` helper renders lead-, rejection-, and plaintext-shaped events to Adaptive Cards.
+
+#### Pathfinder/lib/connectors/providers.ts (modified)
+**Implements:** flipped `teams.exchangeImplemented = true`; `buildAuthorizeUrl` now substitutes `TEAMS_TENANT_ID` (or `common`) into the Microsoft authority path so single-tenant deployments lock signins to a specific tenant.
+
+### Routes
+
+#### Pathfinder/app/api/connectors/[type]/callback/route.ts (modified)
+**Implements:** added `teams` branch to the per-provider exchange switch. Normalizes the Teams exchange result into the same `SlackExchangeResult` shape so downstream `storeToken` + `markConnectorConnected` calls remain provider-agnostic.
+
+#### Pathfinder/app/api/connectors/teams/webhook/route.ts (new)
+**Implements:** SPEC § 4.2 inbound webhook. JWT-verified. Handles four Activity types:
+- `conversationUpdate` (membersAdded with bot) → upsert conversation reference
+- `message` with `conversationType=personal` → DM handler (chat-bridge)
+- `message` channel/group → @-mention handler (parses command, replies with cards)
+- `invoke` / `messageBack` → Adaptive Card Action.Submit handler (writes `lead_feedback` for thumb actions, dismisses, queues outreach)
+>>>>>>> 263eec4 (feat(connectors): C-2A Microsoft Teams OAuth + Bot Framework + Adaptive Cards)
 
 ### Tests
 
 | File | Tests | Covers |
+<<<<<<< HEAD
 |---|---|---|
 | `tests/connectors/hubspot-oauth.test.ts` | 13 | buildAuthorizeUrl host/scope/redirect/state; exchangeCode body shape, error mapping, expires_in; refreshToken grant_type; introspection failure tolerance |
 | `tests/connectors/hubspot-bulk-sync.test.ts` | 10 | previewSync read-only behavior; pagination via `after`; ON CONFLICT upsert correctness on re-run; sync_state running flags + final counts; maxObjects truncation; 429 retry; error path writes last_error |
 
 23 new tests; full suite remains 782/782 green; lint clean; build clean.
+=======
+|------|-------|--------|
+| tests/connectors/teams-commands.test.ts | 18 | parser verbs, mention stripping, thumb synonyms |
+| tests/connectors/teams-adaptive-cards.test.ts | 10 | card shape, action ids, truncation, attachment wrap, 28KB guard |
+| tests/connectors/teams-oauth.test.ts | 11 | exchangeCode happy + error, refresh, bot app token, id_token tid extraction |
+| tests/connectors/teams-signature.test.ts | 11 | RS256 happy path, every JWT failure mode, prod escape-hatch hard-off |
+
+Total new: 50 tests. All green; full Pathfinder suite remains 809 passing.
+>>>>>>> 263eec4 (feat(connectors): C-2A Microsoft Teams OAuth + Bot Framework + Adaptive Cards)
