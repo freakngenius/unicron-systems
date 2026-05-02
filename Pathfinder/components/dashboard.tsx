@@ -14,7 +14,7 @@
 import * as React from 'react';
 import { useSearchParams } from 'next/navigation';
 import { APIProvider, Map as GoogleMap, useMap } from '@vis.gl/react-google-maps';
-import type { Branch, Customer, Project } from '@/lib/types';
+import type { Branch, CrossPollMatch, Customer, Project } from '@/lib/types';
 import { TopBar, type SourceKey } from './TopBar';
 import { BranchDock, type BranchStats } from './BranchDock';
 import { ProjectList } from './ProjectList';
@@ -41,6 +41,7 @@ import {
   groupCountsByBranch,
 } from '@/lib/dashboard-filters';
 import { pickDemoBranches } from '@/lib/demo-branches';
+import { indexMatchesByLead } from '@/lib/cross-poll-fetch';
 import {
   BranchMarkerGM,
   CustomerMarkerGM,
@@ -73,12 +74,20 @@ export interface DashboardProps {
   initialBranches: Branch[];
   initialCustomers: Customer[];
   initialProjects: Project[];
+  /** Demo Polish UX § Gate 2 — cross-pollination matches the engine has
+   * already written to `pathfinder.lead_cross_pollination`, decorated with
+   * a representative customer-site lat/lon at fetch time. Drives the
+   * cross-pollination filter + warm-intro polyline overlay. Optional so
+   * the dashboard still renders cleanly if the server-side fetch was
+   * skipped or returned an error. */
+  initialCrossPollMatches?: CrossPollMatch[];
 }
 
 export function Dashboard({
   initialBranches: initialBranchesRaw,
   initialCustomers,
   initialProjects,
+  initialCrossPollMatches = [],
 }: DashboardProps) {
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
 
@@ -92,6 +101,19 @@ export function Dashboard({
   const initialBranches = React.useMemo(
     () => pickDemoBranches(initialBranchesRaw),
     [initialBranchesRaw],
+  );
+
+  // Demo Polish UX § Gate 2 — index cross-pollination matches by lead id so
+  // the filter + warm-intro overlay can do O(1) lookups. When a project has
+  // multiple matches, the highest-confidence one wins (`indexMatchesByLead`
+  // handles the dedup).
+  const xpollByLeadId = React.useMemo(
+    () => indexMatchesByLead(initialCrossPollMatches),
+    [initialCrossPollMatches],
+  );
+  const xpollLeadIds = React.useMemo(
+    () => new Set(xpollByLeadId.keys()),
+    [xpollByLeadId],
   );
 
   // ── State ──────────────────────────────────────────────────────────────────
@@ -247,8 +269,9 @@ export function Dashboard({
         hidden,
         state: filterState,
         maxDistance,
+        crossPollLeadIds: xpollLeadIds,
       }),
-    [initialProjects, source, crossPoll, hidden, filterState, maxDistance],
+    [initialProjects, source, crossPoll, hidden, filterState, maxDistance, xpollLeadIds],
   );
 
   const withBranchFiltered = React.useMemo<Project[]>(
@@ -281,23 +304,27 @@ export function Dashboard({
   const totalForHeader = preBranchFiltered.length;
 
   // ── Cross-poll: warm-intro lines (customer → project) ──────────────────────
-  // Pulls from the same withBranchFiltered set so the overlay matches the
-  // right-rail list and the map cluster — every visible filter affects what
-  // the warm-intro polylines show.
+  // Demo Polish UX § Gate 2 — reads from the cross-pollination map (Path B)
+  // instead of the multi-tenant `warm_for_customer_id` lookup. Each line
+  // carries a `tier` (exact / fuzzy) the renderer uses to draw a solid vs
+  // dashed magenta polyline. Pulls from `withBranchFiltered` so the overlay
+  // tracks the same filter set as the right-rail list and map cluster.
   const warmLines = React.useMemo(() => {
-    const byId = new Map(initialCustomers.map((c) => [c.id, c]));
-    return withBranchFiltered
-      .filter((p) => !!p.warm_for_customer_id && p.lat != null && p.lon != null)
-      .map((p) => {
-        const c = byId.get(p.warm_for_customer_id as string);
-        if (!c) return null;
-        return {
-          customer: c,
-          project: p as Project & { lat: number; lon: number },
-        };
-      })
-      .filter(Boolean) as { customer: Customer; project: Project & { lat: number; lon: number } }[];
-  }, [initialCustomers, withBranchFiltered]);
+    const out: {
+      project: Project & { lat: number; lon: number };
+      match: CrossPollMatch & { customer_lat: number; customer_lon: number };
+    }[] = [];
+    for (const p of withBranchFiltered) {
+      if (p.lat == null || p.lon == null) continue;
+      const m = xpollByLeadId.get(p.id);
+      if (!m || m.customer_lat == null || m.customer_lon == null) continue;
+      out.push({
+        project: p as Project & { lat: number; lon: number },
+        match: m as CrossPollMatch & { customer_lat: number; customer_lon: number },
+      });
+    }
+    return out;
+  }, [xpollByLeadId, withBranchFiltered]);
 
   const headerH = useHeaderHeight();
   const selectedBranch = selectedBranchId
@@ -413,23 +440,34 @@ export function Dashboard({
             {/* Default project layer (clustered, color-tiered). */}
             <ProjectClusterLayer markers={projectClusterMarkers} />
 
-            {/* Cross-pollination overlay: customer markers + warm-intro lines + warm pins. */}
+            {/* Cross-pollination overlay: customer markers + warm-intro lines + warm pins.
+                Demo Polish UX § Gate 2 — customer pins are placed at the
+                cross-poll match's representative customer-site lat/lon
+                (one per unique canonical name) and the polylines connect
+                that pin to the project. Solid magenta = exact match,
+                dashed faded magenta = fuzzy. */}
             {crossPoll && (
               <>
-                {initialCustomers
-                  .filter((c) => c.lat != null && c.lon != null)
-                  .map((c) => (
-                    <CustomerMarkerGM key={`c-${c.id}`} lat={c.lat} lng={c.lon} warm />
-                  ))}
+                {Array.from(
+                  new Map(
+                    warmLines.map((l) => [
+                      l.match.customer_canonical,
+                      { lat: l.match.customer_lat, lon: l.match.customer_lon },
+                    ]),
+                  ).entries(),
+                ).map(([canon, c]) => (
+                  <CustomerMarkerGM key={`c-${canon}`} lat={c.lat} lng={c.lon} warm />
+                ))}
                 <WarmIntroLines
                   lines={warmLines.map((l) => ({
-                    from: { lat: l.customer.lat, lng: l.customer.lon },
+                    from: { lat: l.match.customer_lat, lng: l.match.customer_lon },
                     to: { lat: l.project.lat, lng: l.project.lon },
+                    tier: l.match.match_layer,
                   }))}
                 />
                 {warmLines.map((l, i) => (
                   <WarmPinGM
-                    key={`w-${i}`}
+                    key={`w-${l.project.id}`}
                     lat={l.project.lat}
                     lng={l.project.lon}
                     label={`WI-${i + 1}`}

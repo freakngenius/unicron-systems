@@ -4,6 +4,81 @@ Append-only operational log. Newest entry on top. Tuesday 2026-05-05 demo deadli
 
 ---
 
+## 2026-05-02 21:00 UTC — Gate 1 merged + Vercel deploy green
+
+PR #74 squash-merged at `c463899`. Migration `0109` applied (no-op against live — ON CONFLICT DO NOTHING; live `pathfinder.branches` already at 8 rows). Post-merge CI all green; Vercel deploy on main READY. Auto-revert monitor `bt92yv035` exited cleanly.
+
+---
+
+## 2026-05-02 21:20 UTC — Gate 2 implementation green; PR open pending
+
+**Branch:** `demo-polish-ux/gate2-crosspoll`
+**Worktree:** `Pathfinder-worktrees/demo-polish-ux-gate2-crosspoll/`
+**Pre-merge tag:** `pre-merge/demo-polish-ux/gate2` → `origin/main` HEAD `c463899` (post-Gate-1 squash) — to be pushed before PR open.
+
+### Architecture decision
+
+Per Kyle: **Option 2** (Path B) — dashboard reads `pathfinder.lead_cross_pollination` directly instead of denormalizing into the multi-tenant `pathfinder.customers` table.
+
+The two cross-pollination data layers stay separate:
+- **Multi-tenant `customers` (30 rows)** — facility relationships (universities, hospitals, transit agencies). Drives `projects.warm_for_customer_id` via `scoreProject`. Untouched by this gate.
+- **Zedcor `lead_cross_pollination` (12 rows)** — contractor warm-intro signals (Brasfield & Gorrie, Big-D, etc., matched against the 1855 `zedcor_customer_sites`). Now drives the dashboard's cross-pollination filter + warm-intro overlay (Path B).
+
+Conflating risked nudging `scoreProject`'s adjacency math (it reads `customers`); separation keeps each layer's semantics clean and mirrors what the lead detail page (`ZedcorRelationshipContext`) already does.
+
+### Scope shipped this gate
+
+- **`lib/cross-poll-fetch.ts`** (new) — server-side fetcher: pulls `lead_cross_pollination` rows + joins each `customer_canonical` against `zedcor_customer_sites` (active sites preferred; updated_at as tiebreak) for a representative customer lat/lon. `indexMatchesByLead` collapses multi-match leads to the highest-confidence match.
+- **`app/page.tsx`** — fourth parallel fetch alongside branches/customers/projects; passes `initialCrossPollMatches` down to `<Dashboard />`.
+- **`lib/types.ts`** — new `CrossPollMatch` interface.
+- **`lib/dashboard-filters.ts`** — `applyNonBranchFilters` accepts optional `crossPollLeadIds`. In cross-poll mode the filter narrows to that set, **bypasses minScore + range**, and still respects the source filter. Legacy `warm_for_customer_id` fallback retained for SSR / non-Zedcor callers.
+- **`components/dashboard.tsx`** — builds `xpollByLeadId` Map, threads `xpollLeadIds` into the filter pipeline, rewrites `warmLines` to read from match's `customer_lat/lon` instead of multi-tenant `customers`. Customer pins placed at matched site coords (deduped by canonical name). Polylines pass `tier: match.match_layer` for differentiated styling.
+- **`components/map/WarmIntroLines.tsx`** — per-line tier prop. Exact = solid magenta full-opacity stroke. Fuzzy = dashed reduced-opacity (prior styling).
+- **`components/MapLegend.tsx`** — adds two line-tier rows when crossPoll mode is active: "Exact match" + "Fuzzy match".
+
+### Demo signature beats — verified against live data
+
+3 exact-match cross-poll rows in production (`pathfinder.lead_cross_pollination`):
+- Brasfield & Gorrie LLC GSA award (`47PE…0004`) — canon=brasfield gorrie, exact, 1.00, primary_branch=Jacksonville, score=15
+- BIG-D CONSTRUCTION CORP GSA award (`47PJ…0045`) — canon=big-d construction, exact, 1.00, primary_branch=Phoenix, score=15
+- Brasfield & Gorrie LLC GSA award (`47PF…0017`) — canon=brasfield gorrie, exact, 1.00, primary_branch=Jacksonville, score=62
+
+All 3 demo signature exact matches present. Intentional minScore-bypass behavior so they surface despite scores well below the default 50 floor. Total: 3 exact + 9 fuzzy = 12 leads in cross-poll filter view (matches Kyle's PR-body assertion threshold).
+
+### Verification evidence
+
+```
+$ pnpm typecheck (Pathfinder/)        → 0 errors
+$ pnpm lint (Pathfinder/)             → ✔ no warnings or errors
+$ pnpm test (Pathfinder/)             → 89 files / 870 passed | 24 skipped
+$ pnpm vitest run tests/dashboard-filters.test.ts tests/list-filters.test.ts \
+                  tests/cross-poll-fetch.test.ts
+                                       → 31 passed (3 files)
+$ npm run typecheck (repo root)       → 0 errors
+```
+
+### Hard-halt items not tripped
+
+- No schema changes — purely a fetch + UI wiring change against existing tables.
+- No auth boundary changes.
+- No HubSpot scope expansion.
+- No `scoreProject` / ranker changes (intentional — Path B avoids contaminating the customers table that scoring depends on).
+- Houston flagship (TxDOT I-45) is unaffected — its regular-view rendering doesn't depend on cross-poll. Cross-poll filter view doesn't include it (no match exists for that lead).
+- agent_runs writes untouched.
+
+### Outstanding before PR-merge
+
+1. Push pre-merge tag `pre-merge/demo-polish-ux/gate2` → `origin/main` (`c463899`).
+2. Push branch + open PR with the two PR-body assertions Kyle named (Brasfield & Gorrie + Big-D visible; Cross-Pollination filter shows ≥ 12 leads).
+3. CI green; auto-merge.
+4. Auto-revert monitor for 10 min post-merge.
+
+### Cost
+
+Incidental — no LLM calls executed this gate. Server-side Supabase fetches + UI work only.
+
+---
+
 ## 2026-05-02 15:42 UTC — Gate 1 implementation green; PR open pending
 
 **Branch:** `demo-polish-ux/gate1-map-filters`

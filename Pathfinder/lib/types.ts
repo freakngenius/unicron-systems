@@ -250,6 +250,38 @@ export interface ProjectContact {
   surfaced_at: string;
 }
 
+// Cross-pollination — Demo Polish UX § Gate 2.
+//
+// Mirrors a single row from `pathfinder.lead_cross_pollination` augmented with
+// a representative customer-site lat/lon (sourced from
+// `pathfinder.zedcor_customer_sites` at fetch time). The dashboard's
+// cross-pollination filter and warm-intro overlay read from this set
+// directly — the older multi-tenant `projects.warm_for_customer_id` path is
+// kept for facility customer relationships (the 30-row pathfinder.customers
+// table) and is not the source of truth for Zedcor cross-poll signals.
+export interface CrossPollMatch {
+  /** projects.id for the lead this match belongs to. */
+  lead_id: string;
+  /** Tenant scope (always 'zedcor' for the current single-tenant deployment). */
+  customer_org_id: string;
+  /** Normalized customer name as written by the cross-poll engine. */
+  customer_canonical: string;
+  /** 'exact' or 'fuzzy'. Drives the visual tier of the warm-intro polyline. */
+  match_layer: 'exact' | 'fuzzy';
+  /** 0..1 confidence from the engine. Exact matches are always 1.0. */
+  match_confidence: number;
+  /** Branch that owns the customer relationship (e.g. "Jacksonville",
+   *  "Phoenix"). Surfaced verbatim in the warm-intro UI so reps know which
+   *  team to route through. May be null for unattached matches. */
+  primary_branch_name: string | null;
+  /** Number of active sites the customer holds across the Zedcor footprint. */
+  active_site_count: number;
+  /** Representative latitude of the matched customer (from one of their
+   *  zedcor_customer_sites rows — the most recently active when available). */
+  customer_lat: number | null;
+  customer_lon: number | null;
+}
+
 // Intelligence Chat (P0-01) — see docs/PLAN-P0-01-INTELLIGENCE-CHAT.md.
 // Mirrors supabase/migrations/0009_chat.sql.
 

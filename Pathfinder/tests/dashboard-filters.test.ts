@@ -63,7 +63,7 @@ describe('applyNonBranchFilters', () => {
     expect(out.map((x) => x.id)).toEqual(['b']);
   });
 
-  it('crossPoll keeps only warm-for matches', () => {
+  it('crossPoll keeps only warm-for matches (legacy fallback when no xpoll set)', () => {
     const projects = [
       p({ id: 'a', warm_for_customer_id: 'cust-1' }),
       p({ id: 'b' }),
@@ -77,6 +77,68 @@ describe('applyNonBranchFilters', () => {
       maxDistance: 250,
     });
     expect(out.map((x) => x.id)).toEqual(['a']);
+  });
+
+  it('crossPoll with xpoll set ignores warm_for_customer_id and uses match ids', () => {
+    // Demo Polish UX § Gate 2 — the dashboard reads cross-poll matches from
+    // pathfinder.lead_cross_pollination, NOT projects.warm_for_customer_id.
+    // Project `a` has warm_for_customer_id but is NOT in xpoll; project
+    // `b` has no warm_for_customer_id but DOES appear in xpoll. Only `b`
+    // should survive the filter.
+    const projects = [
+      p({ id: 'a', warm_for_customer_id: 'cust-1', score: 90 }),
+      p({ id: 'b', score: 12 }),
+      p({ id: 'c', score: 50 }),
+    ];
+    const out = applyNonBranchFilters({
+      projects,
+      source: 'all',
+      crossPoll: true,
+      hidden: empty,
+      state: { range: 'all', minScore: 0 },
+      maxDistance: 250,
+      crossPollLeadIds: new Set(['b']),
+    });
+    expect(out.map((x) => x.id)).toEqual(['b']);
+  });
+
+  it('crossPoll bypasses minScore and range filters (demo signature beats with score=15 still surface)', () => {
+    // Brasfield & Gorrie + Big-D leads in production sit at score 15-62
+    // — well below the dashboard's default minScore=50. Cross-poll mode
+    // must still surface them, otherwise the demo's signature warm-intro
+    // beats are filtered out by the score floor.
+    const projects = [
+      p({ id: 'bg-low', score: 15, distance_miles: 999 }),
+      p({ id: 'bg-mid', score: 62, distance_miles: 50 }),
+      p({ id: 'unrelated', score: 95, distance_miles: 50 }),
+    ];
+    const out = applyNonBranchFilters({
+      projects,
+      source: 'all',
+      crossPoll: true,
+      hidden: empty,
+      state: { range: 'within', minScore: 50 },
+      maxDistance: 250,
+      crossPollLeadIds: new Set(['bg-low', 'bg-mid']),
+    });
+    expect(out.map((x) => x.id).sort()).toEqual(['bg-low', 'bg-mid']);
+  });
+
+  it('crossPoll still respects the source filter (operator narrowing within warm-intro view)', () => {
+    const projects = [
+      p({ id: 'a', source: 'usaspending' }),
+      p({ id: 'b', source: 'sam.gov' }),
+    ];
+    const out = applyNonBranchFilters({
+      projects,
+      source: 'sam',
+      crossPoll: true,
+      hidden: empty,
+      state: { range: 'all', minScore: 0 },
+      maxDistance: 250,
+      crossPollLeadIds: new Set(['a', 'b']),
+    });
+    expect(out.map((x) => x.id)).toEqual(['b']);
   });
 
   it('range=within drops projects beyond maxDistance + projects with unknown distance', () => {
