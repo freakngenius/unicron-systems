@@ -1,15 +1,32 @@
-// Architect client. When `VITE_ARCHITECT_API_ENABLED=true`, hits the real
-// Stream D HTTP API at `VITE_ARCHITECT_API_URL`. Otherwise returns mock
-// fixtures shaped against the contracts in `./contracts/architect.ts`.
+// Architect client.
 //
-// The swap is a one-line config flip: setting the env flag is the only
-// change needed when Stream D ships. All call sites import from here, so
-// they're agnostic to the backing implementation.
+// When `VITE_ARCHITECT_API_ENABLED=true`, calls Stream D's real HTTP API
+// at `VITE_ARCHITECT_API_URL` for decomposition (and reads
+// `pathfinder.architect_proposals` directly via supabase for the inbox
+// listing — Stream D doesn't ship a list-proposals HTTP endpoint).
+// Otherwise returns mock fixtures shaped to the legacy UI types.
 //
-// **TODO[stream-d-mock]**: Once Stream D's STREAM-README publishes the
-// canonical contract, regenerate the mock fixtures so they match exactly.
+// Auth: when `VITE_ARCHITECT_API_TOKEN` is set, every Architect HTTP
+// call sends `Authorization: Bearer <token>`. Stream D's routes return
+// 503 when the token is unset in production, 401 on mismatch, and pass
+// through unauthenticated in dev.
+//
+// Approve / dismiss: Stream D doesn't ship HTTP endpoints; we write
+// `architect_proposals.status` directly via the supabase anon client.
+// (RLS allows anon SELECT but writes are service-role only — operators
+// approving from the UI need an authenticated supabase session whose
+// JWT carries write permissions, OR a deferred follow-up that adds an
+// `/api/architect/proposals/:id/{approve,dismiss}` endpoint backed by
+// service-role. For Phase 2 single-tenant ops, the supabase anon path
+// will fail closed; the UI shows the optimistic remove + a console
+// warning. This is documented in audit-unicron-platform.md.)
 
 import { getEnv } from './env';
+import { getSupabase } from './supabase';
+import {
+  archProposalRowToLegacy,
+  decompositionApiToLegacy,
+} from './architectAdapters';
 import {
   proposals as mockProposals,
   decompositionLines as mockDecompLines,
@@ -17,12 +34,15 @@ import {
   decompositionCostLine as mockCostLine,
 } from '../data/mocks';
 import {
+  type ArchitectProposalRow,
+  type ApproveProposalResponse,
+  type DecompositionApiRequest,
+  type DecompositionApiResponse,
+  type DecompositionLine,
   type DecompositionRequest,
   type DecompositionResponse,
-  type DecompositionLine,
-  type ListProposalsResponse,
-  type ApproveProposalResponse,
   type DismissProposalResponse,
+  type ListProposalsResponse,
   type Proposal,
 } from './contracts/architect';
 import { __testing as systemTesting } from '../context/SystemContext';
@@ -35,12 +55,22 @@ function realEnabled(): boolean {
   return getEnv().architectApiEnabled && Boolean(architectApiUrl());
 }
 
+function authHeaders(): Record<string, string> {
+  const headers: Record<string, string> = {
+    'content-type': 'application/json',
+    accept: 'application/json',
+  };
+  const token = getEnv().architectApiToken;
+  if (token) headers.authorization = `Bearer ${token}`;
+  return headers;
+}
+
 async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
   const base = architectApiUrl();
   if (!base) throw new Error('VITE_ARCHITECT_API_URL is not configured');
   const url = `${base.replace(/\/$/, '')}${path}`;
   const res = await fetch(url, {
-    headers: { 'content-type': 'application/json', accept: 'application/json' },
+    headers: { ...authHeaders(), ...((init?.headers as Record<string, string>) ?? {}) },
     ...init,
   });
   if (!res.ok) {
@@ -56,13 +86,15 @@ export async function postDecomposition(
   req: DecompositionRequest,
 ): Promise<DecompositionResponse> {
   if (realEnabled()) {
-    return fetchJson<DecompositionResponse>('/decomposition', {
+    const body: DecompositionApiRequest = { buyer_pain_prompt: req.buyerPain };
+    const api = await fetchJson<DecompositionApiResponse>('/decompose', {
       method: 'POST',
-      body: JSON.stringify(req),
+      body: JSON.stringify(body),
     });
+    return decompositionApiToLegacy(api, req.buyerPain);
   }
 
-  // Mock: structurally matches the projected contract; ignores `buyerPain`.
+  // Mock: structurally matches the legacy contract; ignores `buyerPain`.
   const lines: DecompositionLine[] = mockDecompLines.map((text, i) => ({
     index: i,
     text,
@@ -92,7 +124,19 @@ function detectKind(line: string): DecompositionLine['kind'] {
 // ---- Proposals -----------------------------------------------------------
 
 export async function listProposals(): Promise<ListProposalsResponse> {
-  if (realEnabled()) return fetchJson<ListProposalsResponse>('/proposals');
+  if (realEnabled()) {
+    const supabase = getSupabase();
+    const { data, error } = await supabase
+      .schema('pathfinder')
+      .from('architect_proposals')
+      .select('id, session_id, vertical_id, type, headline, body, details, confidence, status, resolved_at, resolved_by_user_email, resolution_notes, source_input_summary, created_at')
+      .eq('status', 'pending')
+      .order('created_at', { ascending: false })
+      .limit(50);
+    if (error) throw new Error(`architect_proposals read failed: ${error.message}`);
+    const rows = (data ?? []) as unknown as ArchitectProposalRow[];
+    return { proposals: rows.map(archProposalRowToLegacy) };
+  }
 
   const proposals: Proposal[] = mockProposals.map((p) => ({
     id: p.id,
@@ -110,12 +154,19 @@ export async function approveProposal(
   id: string,
 ): Promise<ApproveProposalResponse> {
   if (realEnabled()) {
-    return fetchJson<ApproveProposalResponse>(`/proposals/${encodeURIComponent(id)}/approve`, {
-      method: 'POST',
-    });
+    await writeProposalStatus(id, 'approved');
+    // Server-side dispatch (Source Onboarder, agent installs) is not yet
+    // wired — Stream D doesn't ship an approve HTTP endpoint. Operator UI
+    // applies the SystemContext mutation client-side (fallbackApply in
+    // ArchitectInbox.tsx) until the server-side flow lands. The returned
+    // SystemConfig is whatever's in scope; we echo the test default since
+    // there's no canonical "post-apply config" the server returns.
+    return {
+      ok: true as const,
+      systemConfig: systemTesting.buildDefaultArchitecture('approved'),
+    };
   }
-  // Mock: client-side apply is handled by ArchitectInbox.tsx via SystemContext
-  // mutators; the response just acknowledges so the UI can advance.
+  // Mock: client-side apply is handled by ArchitectInbox.tsx via SystemContext.
   return {
     ok: true as const,
     systemConfig: systemTesting.buildDefaultArchitecture('mock'),
@@ -124,11 +175,43 @@ export async function approveProposal(
 
 export async function dismissProposal(
   id: string,
+  reason?: string,
 ): Promise<DismissProposalResponse> {
   if (realEnabled()) {
-    return fetchJson<DismissProposalResponse>(`/proposals/${encodeURIComponent(id)}/dismiss`, {
-      method: 'POST',
-    });
+    await writeProposalStatus(id, 'dismissed', reason);
+    return { ok: true as const };
   }
   return { ok: true as const };
+}
+
+async function writeProposalStatus(
+  id: string,
+  status: 'approved' | 'dismissed',
+  resolution_notes?: string,
+): Promise<void> {
+  const supabase = getSupabase();
+  const env = getEnv();
+  const patch: Record<string, unknown> = {
+    status,
+    resolved_at: new Date().toISOString(),
+    resolved_by_user_email: env.operatorEmail ?? null,
+  };
+  if (resolution_notes) patch.resolution_notes = resolution_notes;
+  const { error } = await supabase
+    .schema('pathfinder')
+    .from('architect_proposals')
+    .update(patch)
+    .eq('id', id);
+  if (error) {
+    // RLS rejection is the most likely failure when the platform's anon
+    // client doesn't have an authenticated session granting write to
+    // architect_proposals. Surface clearly so the operator todo is
+    // actionable: either auth the supabase session or add a server-side
+    // approve endpoint.
+    throw new Error(
+      `architect_proposals.${status} write rejected (likely RLS). ` +
+        `Either authenticate the supabase session or wait for Stream D's ` +
+        `approve endpoint. supabase: ${error.message}`,
+    );
+  }
 }
