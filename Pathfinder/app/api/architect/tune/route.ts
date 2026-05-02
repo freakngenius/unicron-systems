@@ -12,8 +12,9 @@ import type { TuningInput } from '@/services/architect/types';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
-// Tuning caps at 30 min per spec §9.
-export const maxDuration = 1800;
+// Tuning spec §9 wants 30 min; Vercel Pro plan caps at 800. Sessions
+// that need longer must run via Inngest, not Vercel function.
+export const maxDuration = 800;
 
 function authorize(req: NextRequest): { ok: true } | { ok: false; status: number; error: string } {
   const expected = process.env.ARCHITECT_API_TOKEN;
