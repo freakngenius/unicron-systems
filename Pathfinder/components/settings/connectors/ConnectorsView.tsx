@@ -100,6 +100,41 @@ export function ConnectorsView({
     }
   };
 
+  // C-2B: "Generate manifest for IT" — fetch the generated manifest from
+  // the operator-gated endpoint and stream it to the user as a browser
+  // download. Slack returns YAML; Teams returns a .zip. HubSpot has no
+  // tertiary button so we never call this for hubspot.
+  const handleManifestDownload = async (tile: ConnectorsViewTile) => {
+    if (tile.id !== 'slack' && tile.id !== 'teams') return;
+    const operatorEmail =
+      typeof window !== 'undefined' ? window.localStorage.getItem('pf_email') ?? '' : '';
+    const headers: Record<string, string> = {};
+    if (operatorEmail) headers['x-operator-email'] = operatorEmail;
+
+    const url = `/api/connectors/${tile.id}/manifest?org_id=${encodeURIComponent(orgId)}`;
+    const res = await fetch(url, { headers });
+    if (!res.ok) {
+      // Surface a minimal alert; full error UI is overkill for the
+      // operator-only path. The endpoint already logs failures.
+      const body = await res.text().catch(() => '');
+      window.alert(`Manifest download failed (${res.status}). ${body}`);
+      return;
+    }
+    const blob = await res.blob();
+    const filename =
+      tile.id === 'slack'
+        ? `pathfinder-slack-${orgId}.yaml`
+        : `pathfinder-teams-${orgId}.zip`;
+    const objectUrl = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = objectUrl;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(objectUrl);
+  };
+
   return (
     <div
       style={{
@@ -198,24 +233,45 @@ export function ConnectorsView({
             gap: 16,
           }}
         >
-          {tiles.map((tile) => (
-            <ConnectorTile
-              key={tile.id}
-              id={tile.id}
-              name={tile.name}
-              oneLiner={tile.oneLiner}
-              state={tile.state}
-              accountName={tile.accountName}
-              stat={tile.stat}
-              errorMessage={tile.errorMessage}
-              onPrimaryAction={() => handlePrimary(tile)}
-              onSecondaryAction={
-                tile.state === 'connected' && tile.connectorId
-                  ? () => handleSecondary(tile)
-                  : undefined
-              }
-            />
-          ))}
+          {tiles.map((tile) => {
+            // SPEC § 3.4: "Generate manifest for IT" only renders on the
+            // disconnected (or error/expired) Slack + Teams tiles. HubSpot
+            // uses the standard OAuth marketplace and has no manifest;
+            // connected tiles open the routing-rules modal instead.
+            const showManifestButton =
+              (tile.id === 'slack' || tile.id === 'teams') &&
+              tile.state !== 'connected' &&
+              tile.state !== 'pending';
+            return (
+              <ConnectorTile
+                key={tile.id}
+                id={tile.id}
+                name={tile.name}
+                oneLiner={tile.oneLiner}
+                state={tile.state}
+                accountName={tile.accountName}
+                stat={tile.stat}
+                errorMessage={tile.errorMessage}
+                onPrimaryAction={() => handlePrimary(tile)}
+                onSecondaryAction={
+                  tile.state === 'connected' && tile.connectorId
+                    ? () => handleSecondary(tile)
+                    : undefined
+                }
+                tertiaryAction={
+                  showManifestButton
+                    ? {
+                        label: 'Generate manifest for IT',
+                        onClick: () => {
+                          void handleManifestDownload(tile);
+                        },
+                        testId: `connector-tile-${tile.id}-manifest`,
+                      }
+                    : undefined
+                }
+              />
+            );
+          })}
         </div>
 
         <p

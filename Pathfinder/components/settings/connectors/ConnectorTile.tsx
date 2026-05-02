@@ -34,6 +34,12 @@ export interface ConnectorTileProps {
   // until real OAuth lands in Phase 1.
   onPrimaryAction: () => void;
   onSecondaryAction?: () => void;
+  /** Optional tertiary action (secondary call-to-action). Used by C-2B
+   *  for the "Generate manifest for IT" button on disconnected Slack/
+   *  Teams tiles. The button renders as a full-width row below the
+   *  primary footer so the tile layout stays responsive on narrow
+   *  viewports. */
+  tertiaryAction?: { label: string; onClick: () => void; testId?: string };
   comingPhase?: string;
 }
 
@@ -118,7 +124,7 @@ const PRIMARY_ACTION: Record<ConnectorTileState, string> = {
 };
 
 export function ConnectorTile(props: ConnectorTileProps) {
-  const { id, name, oneLiner, state, accountName, stat, errorMessage, onPrimaryAction, onSecondaryAction } = props;
+  const { id, name, oneLiner, state, accountName, stat, errorMessage, onPrimaryAction, onSecondaryAction, tertiaryAction } = props;
   const badge = BADGE_COLORS[state];
   const primaryLabel = PRIMARY_ACTION[state];
 
@@ -220,39 +226,68 @@ export function ConnectorTile(props: ConnectorTileProps) {
         )}
       </div>
 
-      <footer style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-        <button
-          type="button"
-          onClick={onPrimaryAction}
-          data-testid={`connector-tile-${id}-primary`}
-          style={{
-            font: `500 12px ${PF_TINTS.sans}`,
-            color: PF_TINTS.bg,
-            background: PF_TINTS.ink,
-            border: `1px solid ${PF_TINTS.ink}`,
-            borderRadius: 3,
-            padding: '6px 12px',
-            cursor: 'pointer',
-            letterSpacing: '-0.005em',
-          }}
-        >
-          {primaryLabel}
-        </button>
-        {state === 'connected' && onSecondaryAction && (
+      <footer
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 8,
+          alignItems: 'stretch',
+        }}
+      >
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <button
             type="button"
-            onClick={onSecondaryAction}
+            onClick={onPrimaryAction}
+            data-testid={`connector-tile-${id}-primary`}
             style={{
               font: `500 12px ${PF_TINTS.sans}`,
+              color: PF_TINTS.bg,
+              background: PF_TINTS.ink,
+              border: `1px solid ${PF_TINTS.ink}`,
+              borderRadius: 3,
+              padding: '6px 12px',
+              cursor: 'pointer',
+              letterSpacing: '-0.005em',
+            }}
+          >
+            {primaryLabel}
+          </button>
+          {state === 'connected' && onSecondaryAction && (
+            <button
+              type="button"
+              onClick={onSecondaryAction}
+              style={{
+                font: `500 12px ${PF_TINTS.sans}`,
+                color: PF_TINTS.inkSub,
+                background: 'transparent',
+                border: `1px solid ${PF_TINTS.ruleSoft}`,
+                borderRadius: 3,
+                padding: '6px 12px',
+                cursor: 'pointer',
+              }}
+            >
+              Disconnect
+            </button>
+          )}
+        </div>
+        {tertiaryAction && (
+          <button
+            type="button"
+            onClick={tertiaryAction.onClick}
+            data-testid={tertiaryAction.testId ?? `connector-tile-${id}-tertiary`}
+            style={{
+              font: `500 11px ${PF_TINTS.sans}`,
               color: PF_TINTS.inkSub,
               background: 'transparent',
               border: `1px solid ${PF_TINTS.ruleSoft}`,
               borderRadius: 3,
-              padding: '6px 12px',
+              padding: '5px 10px',
               cursor: 'pointer',
+              alignSelf: 'flex-start',
+              letterSpacing: '-0.003em',
             }}
           >
-            Disconnect
+            {tertiaryAction.label}
           </button>
         )}
       </footer>
