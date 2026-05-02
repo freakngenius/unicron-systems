@@ -1,0 +1,206 @@
+[
+  {
+    "source_row_index": 1,
+    "branch_name": "Calgary",
+    "country": "Canada",
+    "state": "AB"
+  },
+  {
+    "source_row_index": 2,
+    "branch_name": "Chilliwack",
+    "country": "Canada",
+    "state": "BC"
+  },
+  {
+    "source_row_index": 3,
+    "branch_name": "Leduc",
+    "country": "Canada",
+    "state": "AB"
+  },
+  {
+    "source_row_index": 4,
+    "branch_name": "Ottawa",
+    "country": "Canada",
+    "state": "ON"
+  },
+  {
+    "source_row_index": 5,
+    "branch_name": "Toronto",
+    "country": "Canada",
+    "state": "ON"
+  },
+  {
+    "source_row_index": 6,
+    "branch_name": "Winnipeg",
+    "country": "Canada",
+    "state": "MB"
+  },
+  {
+    "source_row_index": 7,
+    "branch_name": "Alabama",
+    "country": "USA",
+    "state": "AL"
+  },
+  {
+    "source_row_index": 8,
+    "branch_name": "Albuquerque",
+    "country": "USA",
+    "state": "NM"
+  },
+  {
+    "source_row_index": 9,
+    "branch_name": "Arkansas",
+    "country": "USA",
+    "state": "AR"
+  },
+  {
+    "source_row_index": 10,
+    "branch_name": "Austin",
+    "country": "USA",
+    "state": "TX"
+  },
+  {
+    "source_row_index": 11,
+    "branch_name": "Charlotte",
+    "country": "USA",
+    "state": "NC"
+  },
+  {
+    "source_row_index": 12,
+    "branch_name": "Dallas",
+    "country": "USA",
+    "state": "TX"
+  },
+  {
+    "source_row_index": 13,
+    "branch_name": "Denver",
+    "country": "USA",
+    "state": "CO"
+  },
+  {
+    "source_row_index": 14,
+    "branch_name": "Georgia",
+    "country": "USA",
+    "state": "GA"
+  },
+  {
+    "source_row_index": 15,
+    "branch_name": "Houston",
+    "country": "USA",
+    "state": "TX"
+  },
+  {
+    "source_row_index": 16,
+    "branch_name": "Illinois",
+    "country": "USA",
+    "state": "IL"
+  },
+  {
+    "source_row_index": 17,
+    "branch_name": "Iowa",
+    "country": "USA",
+    "state": "IA"
+  },
+  {
+    "source_row_index": 18,
+    "branch_name": "Jacksonville",
+    "country": "USA",
+    "state": "FL"
+  },
+  {
+    "source_row_index": 19,
+    "branch_name": "Las Vegas",
+    "country": "USA",
+    "state": "NV"
+  },
+  {
+    "source_row_index": 20,
+    "branch_name": "Los Angeles",
+    "country": "USA",
+    "state": "CA"
+  },
+  {
+    "source_row_index": 21,
+    "branch_name": "Midland",
+    "country": "USA",
+    "state": "TX"
+  },
+  {
+    "source_row_index": 22,
+    "branch_name": "Missouri",
+    "country": "USA",
+    "state": "MO"
+  },
+  {
+    "source_row_index": 23,
+    "branch_name": "Nashville",
+    "country": "USA",
+    "state": "TN"
+  },
+  {
+    "source_row_index": 24,
+    "branch_name": "New York",
+    "country": "USA",
+    "state": "NY"
+  },
+  {
+    "source_row_index": 25,
+    "branch_name": "Ohio",
+    "country": "USA",
+    "state": "OH"
+  },
+  {
+    "source_row_index": 26,
+    "branch_name": "Oregon",
+    "country": "USA",
+    "state": "OR"
+  },
+  {
+    "source_row_index": 27,
+    "branch_name": "Pennsylvania",
+    "country": "USA",
+    "state": "PA"
+  },
+  {
+    "source_row_index": 28,
+    "branch_name": "Phoenix",
+    "country": "USA",
+    "state": "AZ"
+  },
+  {
+    "source_row_index": 29,
+    "branch_name": "Sacramento",
+    "country": "USA",
+    "state": "CA"
+  },
+  {
+    "source_row_index": 30,
+    "branch_name": "San Antonio",
+    "country": "USA",
+    "state": "TX"
+  },
+  {
+    "source_row_index": 31,
+    "branch_name": "South Carolina",
+    "country": "USA",
+    "state": "SC"
+  },
+  {
+    "source_row_index": 32,
+    "branch_name": "Tampa",
+    "country": "USA",
+    "state": "FL"
+  },
+  {
+    "source_row_index": 33,
+    "branch_name": "Washington",
+    "country": "USA",
+    "state": "WA"
+  },
+  {
+    "source_row_index": 34,
+    "branch_name": "Wisconsin",
+    "country": "USA",
+    "state": "WI"
+  }
+]

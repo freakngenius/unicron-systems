@@ -11,7 +11,8 @@
     "test": "vitest run",
     "seed": "tsx scripts/seed.ts",
     "backfill": "tsx scripts/backfill.ts",
-    "prepare": "cd .. && husky"
+    "prepare": "cd .. && husky",
+    "seed:zedcor": "tsx scripts/seed-zedcor.ts"
   },
   "lint-staged": {
     "*.{ts,tsx}": "next lint --file"
