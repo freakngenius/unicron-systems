@@ -421,6 +421,7 @@ export function IntelligenceChat({
         disabled={streaming}
         snapshot={snapshot}
         onSubmit={sendMessage}
+        branches={branches}
       />
     </div>
   );
