@@ -4,7 +4,9 @@ dist
 .env.*
 !.env.example
 *.log
-coverage
+# Anchored — bare `coverage` previously matched src/components/agents/coverage/.
+# This rule targets the Istanbul/Jest output dir at the project root only.
+/coverage
 .vscode
 .idea
 .DS_Store
