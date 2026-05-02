@@ -18,6 +18,10 @@ type RuntimeEnv = {
    */
   architectApiEnabled: boolean;
   sourceOnboarderEnabled: boolean;
+  /** Optional Bearer token forwarded with Architect API calls. */
+  architectApiToken?: string;
+  /** Operator email recorded against architect_proposals.resolved_by_user_email when approving / dismissing. */
+  operatorEmail?: string;
 };
 
 let cached: RuntimeEnv | null = null;
@@ -35,12 +39,17 @@ export function getEnv(): RuntimeEnv {
     );
   }
 
+  const architectApiToken = import.meta.env.VITE_ARCHITECT_API_TOKEN as string | undefined;
+  const operatorEmail = import.meta.env.VITE_OPERATOR_EMAIL as string | undefined;
+
   cached = {
     supabaseUrl,
     supabaseAnonKey,
     authRequired: import.meta.env.VITE_AUTH_REQUIRED === 'true',
     architectApiEnabled: import.meta.env.VITE_ARCHITECT_API_ENABLED === 'true',
     sourceOnboarderEnabled: import.meta.env.VITE_SOURCE_ONBOARDER_ENABLED === 'true',
+    architectApiToken: architectApiToken && architectApiToken.length > 0 ? architectApiToken : undefined,
+    operatorEmail: operatorEmail && operatorEmail.length > 0 ? operatorEmail : undefined,
   };
 
   return cached;
