@@ -32,6 +32,7 @@ import { stageLabel } from '@/lib/stages';
 import { sourceLabel } from '@/lib/sources';
 import { useScoringConfig } from '@/lib/scoring-config';
 import { useOutreachDraftCounts } from '@/lib/outreach-drafts-client';
+import { useOrgGeoConfig } from '@/lib/org-config-client';
 import {
   parseListFilterState,
   serializeListFilterState,
@@ -41,11 +42,8 @@ import {
 } from '@/lib/list-filters';
 import { Tooltip } from './Tooltip';
 
-// Default org-level distance threshold (miles). Until Stream P1 lands
-// `pathfinder.org_geo_config.max_supported_distance_miles`, we ship a
-// constant equal to the spec § 2.3 default so behavior matches once the
-// table arrives.
-// TODO: switch to org_geo_config once P1 #<PR> lands.
+// Fallback distance threshold used until /api/org-config resolves on mount.
+// Live value comes from pathfinder.org_geo_config (Z-F finish wires this in).
 const DEFAULT_MAX_SUPPORTED_DISTANCE_MILES = 250;
 
 const PF = {
@@ -167,7 +165,9 @@ export function ProjectList({
   // a single fetch instead of N parallel ones on mount.
   const { counts: draftCounts } = useOutreachDraftCounts();
 
-  const maxDistance = DEFAULT_MAX_SUPPORTED_DISTANCE_MILES;
+  const { config: orgGeoConfig } = useOrgGeoConfig();
+  const maxDistance =
+    orgGeoConfig.max_supported_distance_miles ?? DEFAULT_MAX_SUPPORTED_DISTANCE_MILES;
 
   const visibleProjects = React.useMemo(() => {
     let arr = projects.filter((p) => !hidden.has(p.id));
