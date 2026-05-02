@@ -81,6 +81,13 @@ export interface Project {
   // null = never alerted; non-null = last alert ts. Alerts cron re-fires
   // when the value is null OR older than 7 days.
   slack_alert_sent_at?: string | null;
+  // Z-C feature #6 GeoMapper output (added 0102_zedcor_geomapper).
+  // Distinct from nearest_branch_id/distance_miles above which target the
+  // multi-tenant pathfinder.branches registry; these target the Zedcor-org
+  // pathfinder.zedcor_branches table and power the Tuesday-demo map +
+  // lead list. Populated by scripts/backfill-zedcor-geo.ts.
+  nearest_zedcor_branch_id?: string | null;
+  zedcor_distance_miles?: number | null;
 }
 
 export interface AgentLogRow {
