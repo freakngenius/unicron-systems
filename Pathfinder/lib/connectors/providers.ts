@@ -60,7 +60,8 @@ const PROVIDERS: Record<ConnectorType, ProviderConfig> = {
     authorizeUrl: 'https://app.hubspot.com/oauth/authorize',
     tokenExchangeUrl: 'https://api.hubapi.com/oauth/v1/token',
     // SPEC § 5.4: deal/contact read+write + schemas.deals.read for stage
-    // mapping discovery.
+    // mapping discovery. C-3A is read-only (bulk sync); the .write scopes
+    // are pre-requested so C-3B doesn't require a re-auth.
     scopes: [
       'crm.objects.deals.read',
       'crm.objects.deals.write',
@@ -69,7 +70,7 @@ const PROVIDERS: Record<ConnectorType, ProviderConfig> = {
       'crm.schemas.deals.read',
     ],
     scopeSeparator: ' ',
-    exchangeImplemented: false,
+    exchangeImplemented: true,
   },
 };
 

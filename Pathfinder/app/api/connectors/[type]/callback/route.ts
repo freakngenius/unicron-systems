@@ -19,6 +19,7 @@ import { validateState } from '@/lib/connectors/oauth-state';
 import { getProvider, isConnectorType } from '@/lib/connectors/providers';
 import { storeToken } from '@/lib/connectors/tokens';
 import type { ConnectorType } from '@/lib/connectors/types';
+import { exchangeCode as exchangeHubSpotCode } from '@/lib/connectors/hubspot/oauth';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -86,12 +87,23 @@ export async function GET(req: Request, { params }: { params: { type: string } }
     return NextResponse.json({ error: 'connector_lookup_failed', detail: message }, { status: 500 });
   }
 
-  // Slack exchange. Slack returns a JSON body with access_token + team
-  // info. Other providers hook in here later.
-  let exchangeResult: SlackExchangeResult;
+  // Per-provider token exchange. Each branch maps the provider-specific
+  // response into the unified `ProviderExchangeResult` shape consumed
+  // below — keeps the storeToken + connector-update logic provider
+  // agnostic.
+  let exchangeResult: ProviderExchangeResult;
   try {
     const redirectUri = `${url.origin}/api/connectors/${type}/callback`;
-    exchangeResult = await exchangeSlackCode(code, redirectUri);
+    if (type === 'slack') {
+      exchangeResult = await exchangeSlackCode(code, redirectUri);
+    } else if (type === 'hubspot') {
+      exchangeResult = await runHubSpotExchange(code);
+    } else {
+      // teams falls through to the !exchangeImplemented guard above; if
+      // we reach here a future provider was added without wiring the
+      // exchange branch.
+      throw new Error(`exchange for ${type} not wired in callback route`);
+    }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     await recordAudit({
@@ -224,7 +236,11 @@ async function markConnectorError(connectorId: string, message: string): Promise
     .eq('id', connectorId);
 }
 
-interface SlackExchangeResult {
+/**
+ * Unified shape returned by every per-provider exchange wrapper. The
+ * callback route's persist + audit steps consume this.
+ */
+interface ProviderExchangeResult {
   access_token: string;
   refresh_token: string | null;
   expires_at: Date | null;
@@ -232,6 +248,9 @@ interface SlackExchangeResult {
   account_name: string | null;
   account_external_id: string | null;
 }
+
+// Backward-compat alias — internal Slack helper still uses this name.
+type SlackExchangeResult = ProviderExchangeResult;
 
 interface SlackOAuthV2Response {
   ok: boolean;
@@ -271,5 +290,23 @@ async function exchangeSlackCode(code: string, redirectUri: string): Promise<Sla
     scope: json.scope ?? '',
     account_name: json.team?.name ?? null,
     account_external_id: json.team?.id ?? null,
+  };
+}
+
+/**
+ * Adapter from the HubSpot provider's `HubSpotExchangeResult` to the
+ * route's unified `ProviderExchangeResult`. We compute the absolute
+ * `expires_at` here (HubSpot returns relative `expires_in` in seconds)
+ * so storeToken can persist a timestamptz directly.
+ */
+async function runHubSpotExchange(code: string): Promise<ProviderExchangeResult> {
+  const r = await exchangeHubSpotCode(code);
+  return {
+    access_token: r.access_token,
+    refresh_token: r.refresh_token,
+    expires_at: new Date(Date.now() + r.expires_in * 1000),
+    scope: r.scopes.join(' '),
+    account_name: r.hub_domain,
+    account_external_id: r.hub_id,
   };
 }
