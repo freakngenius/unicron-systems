@@ -5,6 +5,10 @@
 // by score desc + ingested_at desc, joined to their nearest_zedcor_branch.
 
 import { ZedcorLeadList, type LeadListBranch, type LeadListRow } from '@/components/zedcor/ZedcorLeadList';
+import {
+  ScoreDistributionWidget,
+  type BranchScoreDistribution,
+} from '@/components/zedcor/ScoreDistributionWidget';
 import { supabaseAdmin } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
@@ -34,6 +38,76 @@ function num(v: number | string | null | undefined): number | null {
   if (typeof v === 'number') return Number.isFinite(v) ? v : null;
   const n = Number.parseFloat(v);
   return Number.isFinite(n) ? n : null;
+}
+
+// Z-D #12 demo branches per TUESDAY DEMO PLAN.md item 12. "Pittsburgh"
+// is the demo label for the seeded `branch_name='Pennsylvania'` row;
+// see lib/zedcor/branch-centroids.ts for the city-resolution table.
+const DEMO_BRANCHES: { branch_name: string; state: string; label: string }[] = [
+  { branch_name: 'Nashville', state: 'TN', label: 'Nashville, TN' },
+  { branch_name: 'Pennsylvania', state: 'PA', label: 'Pittsburgh, PA' },
+  { branch_name: 'Los Angeles', state: 'CA', label: 'Los Angeles, CA' },
+];
+
+async function fetchScoreDistribution(): Promise<BranchScoreDistribution[]> {
+  let admin;
+  try {
+    admin = supabaseAdmin();
+  } catch {
+    return DEMO_BRANCHES.map((d) => ({ label: d.label, total: 0, gte90: 0, ge80lt90: 0, lt80: 0 }));
+  }
+
+  // 1. Resolve target branch ids.
+  const filter = DEMO_BRANCHES.map((d) => `and(branch_name.eq.${d.branch_name},state.eq.${d.state})`).join(',');
+  const branchesRes = await admin
+    .from('zedcor_branches')
+    .select('id, branch_name, state')
+    .or(filter);
+
+  type ZBranch = { id: string; branch_name: string; state: string };
+  const branchRows = (branchesRes.data ?? []) as ZBranch[];
+  const branchById = new Map(branchRows.map((b) => [b.id, b]));
+  const ids = branchRows.map((b) => b.id);
+
+  // 2. Pull last-7-day projects scoped to those branches in a single read.
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString();
+  type Slim = { score: number | null; nearest_zedcor_branch_id: string | null };
+  let projects: Slim[] = [];
+  if (ids.length > 0) {
+    const projRes = await admin
+      .from('projects')
+      .select('score, nearest_zedcor_branch_id')
+      .in('nearest_zedcor_branch_id', ids)
+      .gte('ingested_at', sevenDaysAgo)
+      .limit(5000);
+    projects = (projRes.data ?? []) as Slim[];
+  }
+
+  return DEMO_BRANCHES.map((d) => {
+    const match = branchRows.find((b) => b.branch_name === d.branch_name && b.state === d.state);
+    if (!match) {
+      return { label: d.label, total: 0, gte90: 0, ge80lt90: 0, lt80: 0 };
+    }
+    const rows = projects.filter((p) => p.nearest_zedcor_branch_id === match.id);
+    let gte90 = 0;
+    let ge80lt90 = 0;
+    let lt80 = 0;
+    for (const r of rows) {
+      const s = r.score;
+      if (s == null) continue;
+      if (s >= 90) gte90++;
+      else if (s >= 80) ge80lt90++;
+      else lt80++;
+    }
+    void branchById; // silence unused; kept for potential future expansion.
+    return {
+      label: d.label,
+      total: rows.length,
+      gte90,
+      ge80lt90,
+      lt80,
+    };
+  });
 }
 
 async function fetchData(): Promise<{
@@ -97,6 +171,16 @@ async function fetchData(): Promise<{
 }
 
 export default async function ZedcorLeadsPage() {
-  const { rows, branches, loadError } = await fetchData();
-  return <ZedcorLeadList initialRows={rows} branches={branches} loadError={loadError} />;
+  const [{ rows, branches, loadError }, distribution] = await Promise.all([
+    fetchData(),
+    fetchScoreDistribution(),
+  ]);
+  return (
+    <>
+      <div style={{ background: '#0e1116', padding: '24px 32px 0' }}>
+        <ScoreDistributionWidget branches={distribution} />
+      </div>
+      <ZedcorLeadList initialRows={rows} branches={branches} loadError={loadError} />
+    </>
+  );
 }

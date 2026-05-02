@@ -41,8 +41,13 @@ export async function GET(req: Request) {
   const run = await openAgentRun('slack-alerts');
   try {
     const result = await runSlackAlerts();
+    // Z-D #26 heartbeat — surface "fired but nothing to do" as a distinct
+    // status so dashboards never look dead between active alerts.
+    const heartbeatStatus = result.scanned === 0 && result.posted === 0
+      ? 'empty_queue'
+      : 'success';
     await closeAgentRun(run, {
-      status: 'success',
+      status: heartbeatStatus,
       records_processed: result.scanned,
       records_new: result.posted,
     });
