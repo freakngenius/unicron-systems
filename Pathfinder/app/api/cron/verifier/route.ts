@@ -28,6 +28,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { nearestBranch, scoreProject, SCORE_TOLERANCE as SCORE_TOLERANCE_FALLBACK } from '@/lib/scoring';
 import { fetchActiveScoringConfig } from '@/lib/scoring-config-server';
 import { inngest } from '@/lib/inngest/client';
+import { checkOwnerAnchors, SAFE_RATIONALE_PLACEHOLDER } from '@/lib/verifier-owner-check';
 import type { Branch, Customer, Project } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
@@ -80,6 +81,8 @@ type EventType =
   | 'check_branch'
   | 'check_score'
   | 'check_customer_refs'
+  | 'check_owner'
+  | 'rationale_rewritten'
   | 'verify_pass'
   | 'verify_fail'
   | 'escalate'
@@ -409,6 +412,12 @@ interface ProjectVerdict {
   failures: string[];
   null_coordinate: boolean;
   primary_failure: string | null;
+  /** Z-D #8 — when the owner / GC anchor check fails AND the verifier has
+   * already iterated once, the rationale is rewritten to a safe placeholder
+   * before persistence. Captured here so persistVerdict can update the
+   * `rationale` column alongside the standard verdict fields, and the cron
+   * top-level loop can emit a `rationale_rewritten` log line. */
+  rewritten_rationale: string | null;
 }
 
 interface CycleStats {
@@ -474,6 +483,7 @@ async function verifyOneProject(args: {
         failures: [],
         null_coordinate,
         primary_failure: reason,
+        rewritten_rationale: null,
       };
     }
     const anchorsByText = new Map(sonnet.result.anchors.map((a) => [a.text, a]));
@@ -581,8 +591,51 @@ async function verifyOneProject(args: {
     failures.push(`customer '${missing[0]}' not in customer table`);
   }
 
-  // ---- Verdict ----
+  // ---- Check 5 (Z-D #8): owner / GC anchor grounding ----
+  // Deterministic — no LLM. Walks owner-shaped cue phrases in the rationale
+  // and asserts each mention resolves to a value present in raw_payload's
+  // owner / awardee / awarding-agency fields. When the verifier has already
+  // iterated once on this project (verifier_pass_count >= 1) and an owner
+  // mention still flags, we rewrite the rationale to a safe placeholder
+  // rather than ship an unfounded narrative. This is the explicit
+  // requirement in TUESDAY DEMO PLAN.md item 6.
   const passCountBefore = project.verifier_pass_count ?? 0;
+  const ownerCheck = checkOwnerAnchors(project.rationale ?? '', project.raw_payload);
+  let rewritten_rationale: string | null = null;
+
+  if (ownerCheck.mentioned.length > 0) {
+    const ownerMessage =
+      ownerCheck.flagged.length === 0
+        ? `owner check · ${project_id} · ${ownerCheck.mentioned.length} mentions · all resolved`
+        : `owner check · ${project_id} · ${ownerCheck.mentioned.length} mentions · ${ownerCheck.flagged.length} flagged`;
+    await writeLog(admin, 'check_owner', {
+      message: ownerMessage,
+      project_id,
+      mentioned: ownerCheck.mentioned,
+      flagged: ownerCheck.flagged,
+      pass_count_before: passCountBefore,
+    });
+    if (ownerCheck.flagged.length > 0) {
+      // First-pass: surface as a failure so the standard verifier loop gives
+      // upstream (Ranker / Perplexity research) one shot to enrich. After
+      // the loop has already iterated once, downgrade to a rationale rewrite
+      // so we don't churn forever and don't ship an unfounded narrative.
+      if (passCountBefore >= 1) {
+        rewritten_rationale = SAFE_RATIONALE_PLACEHOLDER;
+        await writeLog(admin, 'rationale_rewritten', {
+          message: `rationale rewritten · ${project_id} · owner anchor unresolved after retry`,
+          project_id,
+          flagged: ownerCheck.flagged,
+          pass_count_before: passCountBefore,
+          replacement: SAFE_RATIONALE_PLACEHOLDER,
+        });
+      } else {
+        failures.push(`owner anchor unresolved: "${ownerCheck.flagged[0]}"`);
+      }
+    }
+  }
+
+  // ---- Verdict ----
   const passCountAfter = passCountBefore + 1;
 
   if (failures.length === 0) {
@@ -597,6 +650,7 @@ async function verifyOneProject(args: {
       failures: [],
       null_coordinate,
       primary_failure: null,
+      rewritten_rationale,
     };
   }
   // Failure path.
@@ -609,6 +663,7 @@ async function verifyOneProject(args: {
     failures,
     null_coordinate,
     primary_failure: failures[0] ?? null,
+    rewritten_rationale,
   };
 }
 
@@ -617,11 +672,23 @@ async function verifyOneProject(args: {
 // ---------------------------------------------------------------------------
 
 async function persistVerdict(admin: Admin, v: ProjectVerdict): Promise<{ ok: boolean; error?: string }> {
-  const update = {
+  // Z-D #8: when the owner-anchor check rewrote the rationale, persist
+  // the new rationale string alongside the standard verdict columns so
+  // ProjectList / ProjectModal / outreach drafts see the safe placeholder
+  // instead of the unfounded original.
+  const update: {
+    verified: boolean | null;
+    verifier_notes: string | null;
+    verifier_pass_count: number;
+    rationale?: string;
+  } = {
     verified: v.verified,
     verifier_notes: v.verifier_notes,
     verifier_pass_count: v.verifier_pass_count,
   };
+  if (v.rewritten_rationale) {
+    update.rationale = v.rewritten_rationale;
+  }
   for (let attempt = 0; attempt < 2; attempt++) {
     const res = await (
       admin.from('projects') as unknown as {

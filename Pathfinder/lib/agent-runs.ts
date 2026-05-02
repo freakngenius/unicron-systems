@@ -14,7 +14,10 @@
 
 import { supabaseAdmin } from './supabase';
 
-type AgentName = 'slack-alerts' | 'cost-alert' | 'briefing';
+// `ranker` and `outreach` use the helper for their empty-queue heartbeat
+// path (Z-D #26); their main success/failure path still inlines the insert
+// because they need fine-grained queue/budget bookkeeping in the row.
+type AgentName = 'slack-alerts' | 'cost-alert' | 'briefing' | 'ranker' | 'outreach';
 
 interface OpenedRun {
   id: number | null;
@@ -27,12 +30,12 @@ interface AgentRunInsert {
   completed_at: string | null;
   records_processed: number;
   records_new: number;
-  status: 'running' | 'success' | 'failed';
+  status: 'running' | 'success' | 'failed' | 'empty_queue';
   error_message: string | null;
 }
 
 interface AgentRunUpdate {
-  status: 'success' | 'failed';
+  status: 'success' | 'failed' | 'empty_queue';
   completed_at: string;
   records_processed?: number;
   records_new?: number;

@@ -92,8 +92,11 @@ export async function GET(req: Request) {
   });
 
   if (total < threshold) {
+    // Z-D #26 heartbeat — distinguish "no llm calls in last 24h" from
+    // "ran and stayed under threshold" so dashboards reflect the cron
+    // truly firing on a quiet day. `rows.length === 0` is the empty case.
     await closeAgentRun(run, {
-      status: 'success',
+      status: rows.length === 0 ? 'empty_queue' : 'success',
       records_processed: rows.length,
       records_new: 0,
     });

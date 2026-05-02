@@ -29,6 +29,7 @@
 import { NextResponse } from 'next/server';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
+import { closeAgentRun, openAgentRun } from '@/lib/agent-runs';
 import { supabaseAdmin } from '@/lib/supabase';
 import { scoreProject } from '@/lib/scoring';
 import { inngest } from '@/lib/inngest/client';
@@ -477,6 +478,15 @@ export async function GET(req: Request) {
   const queue = queueRes.data ?? [];
 
   if (queue.length === 0) {
+    // Z-D #26 heartbeat — write a pathfinder.agent_runs row so dashboards
+    // can distinguish "cron didn't fire" from "cron fired and found
+    // nothing to do". Fail-open via lib/agent-runs.ts.
+    const heartbeat = await openAgentRun('ranker');
+    await closeAgentRun(heartbeat, {
+      status: 'empty_queue',
+      records_processed: 0,
+      records_new: 0,
+    });
     return NextResponse.json({ processed: 0, reason: 'empty_queue' });
   }
 
