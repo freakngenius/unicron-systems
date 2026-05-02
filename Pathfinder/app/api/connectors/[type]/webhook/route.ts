@@ -16,7 +16,13 @@ import crypto from 'node:crypto';
 import { supabaseAdmin } from '@/lib/supabase';
 import { recordAudit } from '@/lib/connectors/audit';
 import { isConnectorType } from '@/lib/connectors/providers';
+import {
+  groupHubspotEvents,
+  parseHubspotWebhook,
+  summariseEvent,
+} from '@/lib/connectors/hubspot/inbound';
 import type { ConnectorType, InboundEvent } from '@/lib/connectors/types';
+import { verifyV3Signature } from '@/lib/hubspot/webhook-signature';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -56,8 +62,57 @@ export async function POST(req: Request, { params }: { params: { type: string } 
     }
   }
 
+  // HubSpot dispatch: parse the event array, group by family, audit each
+  // event individually. Schema mutations (deals upsert, contacts upsert)
+  // land in Gate 4B-2/3; this gate ships the inbound bridge so the
+  // dashboard can surface webhook activity in connector_audit_log and
+  // the operator can verify HMAC end-to-end with HubSpot.
+  if (type === 'hubspot') {
+    const events = parseHubspotWebhook(rawBody);
+    if (events == null) {
+      return NextResponse.json({ ok: true, ignored: 'malformed_payload' });
+    }
+    const grouped = groupHubspotEvents(events);
+    const first = events[0];
+    if (!first) {
+      return NextResponse.json({ ok: true, ignored: 'empty_events' });
+    }
+    const connectorId = await resolveHubspotConnectorByPortal(String(first.portalId));
+    if (!connectorId) {
+      return NextResponse.json({ ok: true, ignored: 'unknown_portal' });
+    }
+    const orgId = await lookupOrgForConnector(connectorId);
+
+    for (const ev of events) {
+      await recordAudit({
+        connector_id: connectorId,
+        customer_org_id: orgId ?? 'unknown',
+        event_type: `inbound.${ev.subscriptionType}`,
+        direction: 'inbound',
+        status: 'received',
+        payload_summary: {
+          summary: summariseEvent(ev),
+          object_id: ev.objectId,
+          property_name: ev.propertyName ?? null,
+          attempt: ev.attemptNumber,
+        },
+      });
+    }
+
+    return NextResponse.json({
+      ok: true,
+      received: events.length,
+      groups: {
+        deal: grouped.deal.length,
+        contact: grouped.contact.length,
+        engagement: grouped.engagement.length,
+        unknown: grouped.unknown.length,
+      },
+    });
+  }
+
   // Resolve the connector row from the inbound payload. For slack we
-  // pull the team_id; for teams the tenantId; for hubspot the portalId.
+  // pull the team_id; for teams the tenantId.
   // If we can't resolve, we still 200 (so the provider doesn't retry-
   // storm us) but record a failed audit so operators see it.
   const inbound = parseInbound(type, rawBody);
@@ -82,6 +137,37 @@ export async function POST(req: Request, { params }: { params: { type: string } 
 
   // C-1B + Phase 3 will dispatch to chat agent / sync engine here.
   return NextResponse.json({ ok: true });
+}
+
+async function resolveHubspotConnectorByPortal(portalId: string): Promise<string | null> {
+  const sb = supabaseAdmin() as unknown as {
+    from: (t: string) => {
+      select: (cols: string) => {
+        eq: (
+          col: string,
+          v: string,
+        ) => {
+          eq: (
+            col: string,
+            v: string,
+          ) => {
+            maybeSingle: () => Promise<{
+              data: { id: string } | null;
+              error: { message: string } | null;
+            }>;
+          };
+        };
+      };
+    };
+  };
+  const res = await sb
+    .from('connectors')
+    .select('id')
+    .eq('connector_type', 'hubspot')
+    .eq('account_external_id', portalId)
+    .maybeSingle();
+  if (res.error || !res.data) return null;
+  return res.data.id;
 }
 
 async function verifySignature(type: ConnectorType, req: Request, raw: string): Promise<boolean> {
@@ -113,9 +199,27 @@ async function verifySignature(type: ConnectorType, req: Request, raw: string): 
     return process.env.NODE_ENV !== 'production' && req.headers.get('x-pf-test') === '1';
   }
   if (type === 'hubspot') {
-    // HubSpot uses an X-HubSpot-Signature header (HMAC-SHA256 over
-    // method+url+body). Real validation ships in Phase 3.
-    return process.env.NODE_ENV !== 'production' && req.headers.get('x-pf-test') === '1';
+    // HubSpot v3 webhook signature: base64( HMAC-SHA256( method + uri +
+    // body + timestamp ) ) using HUBSPOT_APP_SECRET. Tests can opt in via
+    // x-pf-test=1 in non-production to bypass signing without leaking the
+    // bypass to prod.
+    if (process.env.NODE_ENV !== 'production' && req.headers.get('x-pf-test') === '1') {
+      return true;
+    }
+    const secret = process.env.HUBSPOT_APP_SECRET;
+    if (!secret) return false;
+    const signature = req.headers.get('x-hubspot-signature-v3');
+    const timestamp = req.headers.get('x-hubspot-request-timestamp');
+    if (!signature || !timestamp) return false;
+    const result = verifyV3Signature({
+      method: req.method.toUpperCase(),
+      uri: req.url,
+      body: raw,
+      timestamp,
+      secret,
+      signature,
+    });
+    return result.ok;
   }
   return false;
 }
