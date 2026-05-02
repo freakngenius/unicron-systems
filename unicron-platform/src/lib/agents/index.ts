@@ -6,9 +6,10 @@
 
 import { coverageExpansionAgent } from './coverageExpansionAgent';
 import { sourceOnboarderAgent } from './sourceOnboarderAgent';
+import { architectAgent } from './architectAgent';
 import { getAgent, registerAgent } from '../agentRegistry';
 
-const ALL_AGENTS = [coverageExpansionAgent, sourceOnboarderAgent];
+const ALL_AGENTS = [coverageExpansionAgent, sourceOnboarderAgent, architectAgent];
 
 for (const agent of ALL_AGENTS) {
   if (!getAgent(agent.name)) registerAgent(agent);
