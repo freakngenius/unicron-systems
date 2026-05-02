@@ -1,4 +1,4 @@
-export type TabId = 'onboarding' | 'live' | 'inbox' | 'agents';
+export type TabId = 'onboarding' | 'live' | 'inbox' | 'agents' | 'customers';
 
 type Props = {
   active: TabId;
@@ -11,6 +11,7 @@ const tabs: { id: TabId; label: string }[] = [
   { id: 'live', label: 'LIVE SYSTEM' },
   { id: 'inbox', label: 'ARCHITECT INBOX' },
   { id: 'agents', label: 'AGENTS' },
+  { id: 'customers', label: 'CUSTOMERS' },
 ];
 
 export function Topbar({ active, onTab, onOpenSettings }: Props) {

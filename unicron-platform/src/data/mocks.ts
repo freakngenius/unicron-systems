@@ -365,3 +365,67 @@ adjacent-need indicators (security, fencing, temp
 power). Use Perplexity Sonar Pro for web grounding.
 Output an enriched event ready for routing to GeoMapper
 and AdjacencyMapper.`;
+
+// ---------------------------------------------------------------------------
+// Customers + Health (Stream M3) fixtures.
+// ---------------------------------------------------------------------------
+
+import type {
+  CustomerOrg,
+  OrgHealthRollup,
+} from '../lib/contracts/customers';
+
+export const customersMock: CustomerOrg[] = [
+  {
+    id: 'zedcor',
+    display_name: 'Zedcor Security Solutions',
+    status: 'active',
+    onboarded_at: '2026-04-01T00:00:00.000Z',
+    primary_contact_email: 'ops@zedcor.example.com',
+  },
+];
+
+const ZEDCOR_LEAD_VOLUME_30D = [
+  18, 22, 16, 24, 27, 19, 14, 21, 25, 30, 23, 18, 16, 28, 31, 26, 22, 19, 24,
+  29, 33, 27, 21, 18, 26, 32, 35, 28, 24, 30,
+];
+
+const ZEDCOR_ERROR_VOLUME_30D = [
+  1, 0, 2, 1, 0, 0, 1, 0, 1, 2, 0, 0, 1, 0, 0, 1, 1, 0, 0, 2, 1, 0, 0, 1, 0, 0,
+  1, 0, 1, 1,
+];
+
+export const customerHealthMock: OrgHealthRollup = {
+  org_id: 'zedcor',
+  lead_volume_30d: ZEDCOR_LEAD_VOLUME_30D,
+  lead_volume_7d_total: ZEDCOR_LEAD_VOLUME_30D.slice(-7).reduce((a, b) => a + b, 0),
+  lead_volume_30d_total: ZEDCOR_LEAD_VOLUME_30D.reduce((a, b) => a + b, 0),
+  high_score_rate_7d: 0.34,
+  outreach_delivery_rate_7d: 0.86,
+  error_volume_30d: ZEDCOR_ERROR_VOLUME_30D,
+  error_total_7d: ZEDCOR_ERROR_VOLUME_30D.slice(-7).reduce((a, b) => a + b, 0),
+  error_rate_7d: 0.018,
+  recent_errors: [
+    {
+      agent_name: 'Enricher',
+      message: 'Sonar Pro rate limit reached, retried 3x, abandoned',
+      created_at: '2026-05-02T14:11:00.000Z',
+    },
+    {
+      agent_name: 'OutreachDrafter',
+      message: 'HubSpot push failed: 429 — retry queued',
+      created_at: '2026-05-01T22:08:00.000Z',
+    },
+    {
+      agent_name: 'GeoMapper',
+      message: 'Address geocode failed for project #1834',
+      created_at: '2026-05-01T11:42:00.000Z',
+    },
+  ],
+  active_sources: [
+    { id: 'src-1', type: 'permits', label: 'Allegheny County permits', jurisdiction: 'Allegheny County, PA' },
+    { id: 'src-2', type: 'permits', label: 'Pittsburgh DCP permits', jurisdiction: 'Pittsburgh, PA' },
+    { id: 'src-3', type: 'sam_gov', label: 'SAM.gov NAICS 23', jurisdiction: 'US national' },
+    { id: 'src-4', type: 'news', label: 'Pittsburgh metro construction news', jurisdiction: 'Pittsburgh metro' },
+  ],
+};
