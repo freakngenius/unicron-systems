@@ -56,13 +56,21 @@ export interface NonBranchFilterContext {
   /** Org's max-supported distance threshold (miles). Used by the range
    * filter when `state.range !== 'all'`. */
   maxDistance: number;
+  /** Demo Polish UX § Gate 2 — set of project ids that have a cross-poll
+   * match in `pathfinder.lead_cross_pollination`. When the cross-poll
+   * toggle is ON, only projects in this set survive the cross-poll
+   * filter. The minScore + range filters are intentionally bypassed in
+   * cross-poll mode so the demo's "12 warm-intro candidates" surface
+   * cleanly regardless of the active score floor / range setting (per
+   * Kyle's PR-body assertion: cross-poll filter must show ≥ 12 leads). */
+  crossPollLeadIds?: ReadonlySet<string>;
 }
 
 /** Apply every filter that is NOT branch-selection. The result feeds both
  * the per-branch counts (via groupCountsByBranch below) and the rendered
  * project list (after a final branch-id narrowing). */
 export function applyNonBranchFilters(ctx: NonBranchFilterContext): Project[] {
-  const { projects, source, crossPoll, hidden, state, maxDistance } = ctx;
+  const { projects, source, crossPoll, hidden, state, maxDistance, crossPollLeadIds } = ctx;
   let arr = projects;
 
   if (hidden.size > 0) {
@@ -70,7 +78,22 @@ export function applyNonBranchFilters(ctx: NonBranchFilterContext): Project[] {
   }
 
   if (crossPoll) {
-    arr = arr.filter((p) => !!p.warm_for_customer_id);
+    // Cross-poll mode is its own narrative — every match the engine found
+    // is in scope regardless of score / range. Bypass those two filters
+    // so the demo's signature warm-intro candidates surface cleanly.
+    if (crossPollLeadIds && crossPollLeadIds.size > 0) {
+      arr = arr.filter((p) => crossPollLeadIds.has(p.id));
+    } else {
+      // No xpoll set wired (legacy / SSR fallback) — fall back to the
+      // older `warm_for_customer_id` signal so the toggle still narrows
+      // something rather than rendering empty.
+      arr = arr.filter((p) => !!p.warm_for_customer_id);
+    }
+    if (source !== 'all') {
+      const db = SOURCE_FILTER_TO_DB[source];
+      arr = arr.filter((p) => p.source === db);
+    }
+    return arr;
   }
 
   if (source !== 'all') {

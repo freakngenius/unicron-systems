@@ -104,9 +104,53 @@ export function MapLegend({ crossPoll }: MapLegendProps) {
             label="Warm-intro"
             color={LABEL_MAGENTA}
           />
+          {/* Demo Polish UX § Gate 2 — line tier legend.
+              Mirrors the WarmIntroLines styling so the demo can answer
+              "how does the system know?" with a glance. */}
+          <LegendItem
+            swatch={<LineSwatch tier="exact" />}
+            label="Exact match"
+            color={LABEL_MAGENTA}
+          />
+          <LegendItem
+            swatch={<LineSwatch tier="fuzzy" />}
+            label="Fuzzy match"
+            color={LABEL_MAGENTA}
+          />
         </>
       )}
     </div>
+  );
+}
+
+function LineSwatch({ tier }: { tier: 'exact' | 'fuzzy' }) {
+  // Render a 14×3 swatch that mirrors the polyline style used on the map:
+  // solid stroke for `exact`, dashed reduced-opacity for `fuzzy`.
+  if (tier === 'exact') {
+    return (
+      <span
+        aria-hidden="true"
+        style={{
+          width: 16,
+          height: 2,
+          background: TIER_COLORS.magenta,
+          flexShrink: 0,
+          borderRadius: 1,
+        }}
+      />
+    );
+  }
+  return (
+    <span
+      aria-hidden="true"
+      style={{
+        width: 16,
+        height: 2,
+        flexShrink: 0,
+        backgroundImage: `repeating-linear-gradient(to right, ${TIER_COLORS.magenta} 0 4px, transparent 4px 7px)`,
+        opacity: 0.55,
+      }}
+    />
   );
 }
 

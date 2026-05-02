@@ -105,16 +105,28 @@ The 2026-05-08 smoke is the first real-LLM exercise; expected cost $1.50–$5 ac
 **State:** PR #74 open. Implements Gate 1A/1B/1C/1D/1E from the autonomous-mode demo polish sprint prompt.
 
 #### Pathfinder/lib/dashboard-filters.ts
-**Implements:** Demo Polish UX Sprint Gate 1E — single source of truth for the dashboard filter pipeline so the BranchDock per-branch counts, the right-rail "X of Y" counter, the ProjectList input set, the map cluster markers, and the warm-intro polylines all derive from the same filtered set.
-**Last verified against spec:** 2026-05-02 (sprint launch).
-**Drift:** none. Fan-out structure (preBranchFiltered → groupCountsByBranch + applyBranchFilter → withBranchFiltered) matches the prompt's "filter counts must update consistently across the UI" requirement. Per-branch dock counts intentionally do NOT apply the branch-selection narrowing so users can switch branches without zeroing the others.
-**Tests:** `Pathfinder/tests/dashboard-filters.test.ts` (10 cases) covers each filter axis individually, the branch-narrow path, and per-branch counting with hi-priority threshold.
+**Implements:** Demo Polish UX Sprint Gate 1E + Gate 2 — single source of truth for the dashboard filter pipeline. Gate 1E shipped the fan-out structure (preBranchFiltered → groupCountsByBranch + applyBranchFilter → withBranchFiltered); Gate 2 added the optional `crossPollLeadIds` input so cross-poll mode reads from `pathfinder.lead_cross_pollination` (Path B) instead of the multi-tenant `warm_for_customer_id` lookup, and bypasses the minScore + range filters in cross-poll mode so the demo's signature warm-intro beats (Brasfield & Gorrie, Big-D — production scores 15–62) survive the default `minScore=50` floor.
+**Last verified against spec:** 2026-05-02 (Gate 2).
+**Drift:** none. Per-branch dock counts intentionally do NOT apply the branch-selection narrowing so users can switch branches without zeroing the others. Source filter still applies in cross-poll mode (operator narrowing within the warm-intro view).
+**Tests:** `Pathfinder/tests/dashboard-filters.test.ts` (13 cases — 10 from Gate 1E + 3 from Gate 2) covers each filter axis individually, the branch-narrow path, the legacy `warm_for_customer_id` fallback, the new `crossPollLeadIds` filter, the minScore/range bypass in cross-poll mode, and source-filter persistence in cross-poll mode.
 
 #### Pathfinder/lib/demo-branches.ts
 **Implements:** Demo Polish UX Sprint Gate 1C — restricts the dashboard's branch surface to the four Tuesday demo branches (Houston / LA / Nashville / Pittsburgh).
 **Last verified against spec:** 2026-05-02 (sprint launch).
 **Drift:** none. `DEMO_BRANCH_IDS` matches the live `pathfinder.branches` rows on Supabase project `anfihcusvekpovcchpoh` (`hou-002` from the original 5-row seed; `lax-008` / `nsh-006` / `pit-007` added by an earlier session that already ran a GeoMapper backfill against them — verified 2026-05-02 via `execute_sql`: pit-007=27 leads, hou-002=21, lax-008=7, nsh-006=6). `pickDemoBranches` preserves narrative order regardless of the server-fetch order.
 **Tests:** none yet — the helper is a pure two-line filter and is exercised end-to-end via the Dashboard's `pickDemoBranches(initialBranchesRaw)` call. If the helper grows beyond filter+order, add `Pathfinder/tests/demo-branches.test.ts`.
+
+---
+
+## Demo Polish UX Sprint — Gate 2 (cross-pollination warm-intro propagation)
+
+**State:** PR pending. Implements Gate 2 from the autonomous-mode demo polish sprint prompt — bridges `pathfinder.lead_cross_pollination` (12 production rows) into the dashboard's cross-pollination filter + warm-intro overlay so the Tuesday demo's signature warm-intro beats (Brasfield & Gorrie, Big-D Construction) actually surface in the UI.
+
+#### Pathfinder/lib/cross-poll-fetch.ts
+**Implements:** Demo Polish UX Sprint Gate 2 — server-side fetch of `pathfinder.lead_cross_pollination` joined with `pathfinder.zedcor_customer_sites` for representative customer lat/lon. Path B in the gate-2 plan: dashboard reads cross-pollination directly instead of denormalizing into `pathfinder.customers` (which would have polluted the 30-row facility-customer table that `scoreProject` also reads from).
+**Last verified against spec:** 2026-05-02.
+**Drift:** none. `fetchCrossPollMatches` returns one match per `lead_cross_pollination` row decorated with the most-recently-active customer site's lat/lon (active sites preferred over inactive; updated_at as tiebreak). `indexMatchesByLead` collapses multi-match leads to the highest-confidence (exact > fuzzy).
+**Tests:** `Pathfinder/tests/cross-poll-fetch.test.ts` covers `indexMatchesByLead`'s confidence-precedence and per-lead independence. The Supabase fetch path is exercised end-to-end by `app/page.tsx` against the live database.
 
 ---
 
