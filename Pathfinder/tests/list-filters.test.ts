@@ -41,6 +41,21 @@ describe('parseListFilterState', () => {
     });
   });
 
+  it('uses Demo-Polish defaults (range=within, minScore=50) when query is empty', () => {
+    expect(DEFAULT_LIST_FILTER_STATE.range).toBe('within');
+    expect(DEFAULT_LIST_FILTER_STATE.minScore).toBe(50);
+    expect(parseListFilterState(qs('')).range).toBe('within');
+    expect(parseListFilterState(qs('')).minScore).toBe(50);
+  });
+
+  it('respects an explicit min_score=0 (operator widening to no floor)', () => {
+    expect(parseListFilterState(qs('min_score=0')).minScore).toBe(0);
+  });
+
+  it('respects an explicit range=all (operator widening to all branches)', () => {
+    expect(parseListFilterState(qs('range=all')).range).toBe('all');
+  });
+
   it('parses every valid sort + range combo', () => {
     const parsed = parseListFilterState(
       qs('sort=distance&dir=asc&range=outside&min_score=30&filter=starred'),
@@ -83,9 +98,10 @@ describe('serializeListFilterState', () => {
       minScore: 80,
       filter: 'all',
     };
-    // sort=score, dir=desc are defaults so the serialized form drops them.
+    // sort=score, dir=desc, range=within are defaults so the serialized
+    // form drops them. min_score=80 is non-default so it's emitted.
     const serialized = serializeListFilterState(state);
-    expect(serialized).toBe('range=within&min_score=80');
+    expect(serialized).toBe('min_score=80');
     expect(parseListFilterState(qs(serialized))).toEqual(state);
   });
 
@@ -101,12 +117,21 @@ describe('serializeListFilterState', () => {
     expect(parseListFilterState(qs(serialized))).toEqual(state);
   });
 
-  it('omits min_score=0 from the serialized form', () => {
+  it('omits the default min_score (50) from the serialized form', () => {
     const state: ListFilterState = {
       ...DEFAULT_LIST_FILTER_STATE,
-      range: 'within',
+      range: 'all',
+      minScore: 50,
+    };
+    // range=all is non-default; minScore=50 is the default and drops out.
+    expect(serializeListFilterState(state)).toBe('range=all');
+  });
+
+  it('emits min_score=0 when the operator explicitly widens (non-default)', () => {
+    const state: ListFilterState = {
+      ...DEFAULT_LIST_FILTER_STATE,
       minScore: 0,
     };
-    expect(serializeListFilterState(state)).toBe('range=within');
+    expect(serializeListFilterState(state)).toBe('min_score=0');
   });
 });

@@ -12,6 +12,7 @@
 //     anchored card) inside <APIProvider> so child components can call useMap().
 
 import * as React from 'react';
+import { useSearchParams } from 'next/navigation';
 import { APIProvider, Map as GoogleMap, useMap } from '@vis.gl/react-google-maps';
 import type { Branch, Customer, Project } from '@/lib/types';
 import { TopBar, type SourceKey } from './TopBar';
@@ -32,6 +33,14 @@ import { PATHFINDER_DARK_STYLE } from '@/lib/map-style';
 import { projectTier } from '@/lib/types-map';
 import { useHidden } from '@/lib/user-prefs';
 import { useScoringConfig } from '@/lib/scoring-config';
+import { useOrgGeoConfig } from '@/lib/org-config-client';
+import { parseListFilterState } from '@/lib/list-filters';
+import {
+  applyNonBranchFilters,
+  applyBranchFilter,
+  groupCountsByBranch,
+} from '@/lib/dashboard-filters';
+import { pickDemoBranches } from '@/lib/demo-branches';
 import {
   BranchMarkerGM,
   CustomerMarkerGM,
@@ -66,8 +75,24 @@ export interface DashboardProps {
   initialProjects: Project[];
 }
 
-export function Dashboard({ initialBranches, initialCustomers, initialProjects }: DashboardProps) {
+export function Dashboard({
+  initialBranches: initialBranchesRaw,
+  initialCustomers,
+  initialProjects,
+}: DashboardProps) {
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+
+  // Demo Polish UX § Gate 1C — the dashboard's branch surface is restricted
+  // to {Houston, LA, Nashville, Pittsburgh}. Other branches still exist in
+  // pathfinder.branches (Phoenix / Atlanta / Chicago / Seattle) and still
+  // back projects whose nearest_branch_id was computed before the demo
+  // refocus, but the operator-facing chrome only renders the four demo
+  // cities. `pickDemoBranches` preserves narrative order regardless of the
+  // server-fetch order.
+  const initialBranches = React.useMemo(
+    () => pickDemoBranches(initialBranchesRaw),
+    [initialBranchesRaw],
+  );
 
   // ── State ──────────────────────────────────────────────────────────────────
   const [selectedBranchId, setSelectedBranchId] = React.useState<string | null>(null);
@@ -186,59 +211,83 @@ export function Dashboard({ initialBranches, initialCustomers, initialProjects }
     return () => window.removeEventListener('resize', update);
   }, []);
 
-  // ── Derived: per-branch stats for the BranchDock ───────────────────────────
-  const { high_priority_threshold } = useScoringConfig();
-  const hiThreshold = high_priority_threshold || HI_THRESHOLD_FALLBACK;
-  const branchStats = React.useMemo<Record<string, BranchStats>>(() => {
-    const m: Record<string, BranchStats> = {};
-    for (const b of initialBranches) m[b.id] = { count: 0, hi: 0 };
-    for (const p of initialProjects) {
-      const bid = p.nearest_branch_id;
-      if (!bid || !m[bid]) continue;
-      m[bid].count += 1;
-      if ((p.score ?? 0) >= hiThreshold) m[bid].hi += 1;
-    }
-    return m;
-  }, [initialBranches, initialProjects, hiThreshold]);
-
-  // ── Derived: filtered project list for the right rail ──────────────────────
-  // Branch selection is now a CAMERA operation (auto-fit zoom). The right
-  // rail always shows every project so users always see the full corpus —
-  // selecting a branch doesn't make pins disappear from the list. Source +
-  // cross-poll filters still apply so the user can narrow on demand.
-  const filteredProjects = React.useMemo<Project[]>(() => {
-    let r = initialProjects.slice();
-    if (crossPoll) {
-      r = r.filter((p) => !!p.warm_for_customer_id);
-    }
-    if (source !== 'all') {
-      const db = SOURCE_FILTER_TO_DB[source];
-      r = r.filter((p) => p.source === db);
-    }
-    return r.sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
-  }, [initialProjects, source, crossPoll]);
-
-  // For the "X of Y" header — Y is the un-narrowed corpus (post-crossPoll
-  // since that's a mode, not a filter; pre-source so the user sees how
-  // aggressively their source filter narrowed the universe).
-  const totalForHeader = React.useMemo(() => {
-    if (crossPoll) return initialProjects.filter((p) => !!p.warm_for_customer_id).length;
-    return initialProjects.length;
-  }, [initialProjects, crossPoll]);
-
   // ── User prefs (starred + hidden) — hoisted so every memo below can read it. ──
   const hidden = useHidden();
 
+  // ── Demo Polish UX § Gate 1E — unified filter pipeline ─────────────────────
+  // The BranchDock per-branch counts, the right-rail "X of Y" counter, the
+  // ProjectList rendered rows, and the map cluster all read from the same
+  // pipeline. Earlier code computed each on a different subset of
+  // initialProjects, which drifted whenever a filter changed.
+  //
+  //   - preBranchFiltered: source + crossPoll + hidden + range + minScore.
+  //     This is what the per-branch dock counts and the "Y" of "X of Y"
+  //     reflect. Branch selection is NOT applied here so selecting Nashville
+  //     does not zero out Houston's count in the dock.
+  //   - withBranchFiltered: preBranchFiltered + selected branch. This is what
+  //     the right-rail list and the map cluster render.
+  //
+  // Sort and starred filters still live inside ProjectList because they are
+  // UI-local concerns that don't influence dock or cluster counts.
+  const { high_priority_threshold } = useScoringConfig();
+  const hiThreshold = high_priority_threshold || HI_THRESHOLD_FALLBACK;
+
+  const searchParams = useSearchParams();
+  const filterState = React.useMemo(() => parseListFilterState(searchParams), [searchParams]);
+
+  const { config: orgGeoConfig } = useOrgGeoConfig();
+  const maxDistance = orgGeoConfig.max_supported_distance_miles ?? 250;
+
+  const preBranchFiltered = React.useMemo<Project[]>(
+    () =>
+      applyNonBranchFilters({
+        projects: initialProjects,
+        source,
+        crossPoll,
+        hidden,
+        state: filterState,
+        maxDistance,
+      }),
+    [initialProjects, source, crossPoll, hidden, filterState, maxDistance],
+  );
+
+  const withBranchFiltered = React.useMemo<Project[]>(
+    () => applyBranchFilter(preBranchFiltered, selectedBranchId),
+    [preBranchFiltered, selectedBranchId],
+  );
+
+  const branchStats = React.useMemo<Record<string, BranchStats>>(
+    () =>
+      groupCountsByBranch(
+        preBranchFiltered,
+        initialBranches.map((b) => b.id),
+        hiThreshold,
+      ),
+    [preBranchFiltered, initialBranches, hiThreshold],
+  );
+
+  // The right-rail list pre-sort. ProjectList re-applies sort + starred so
+  // it drives its own UI-local ordering; we hand it a stable score-desc
+  // ordering as the input.
+  const filteredProjects = React.useMemo<Project[]>(
+    () => withBranchFiltered.slice().sort((a, b) => (b.score ?? 0) - (a.score ?? 0)),
+    [withBranchFiltered],
+  );
+
+  // For the "X of Y" header — Y is the pre-branch-filtered corpus so the
+  // operator sees how the active filters (source / range / minScore /
+  // crossPoll) narrowed things, while X reflects the additional branch
+  // narrowing.
+  const totalForHeader = preBranchFiltered.length;
+
   // ── Cross-poll: warm-intro lines (customer → project) ──────────────────────
-  // Honors hidden + source filter so the cross-poll overlay matches the
-  // right-rail list.
+  // Pulls from the same withBranchFiltered set so the overlay matches the
+  // right-rail list and the map cluster — every visible filter affects what
+  // the warm-intro polylines show.
   const warmLines = React.useMemo(() => {
     const byId = new Map(initialCustomers.map((c) => [c.id, c]));
-    const sourceDb = source !== 'all' ? SOURCE_FILTER_TO_DB[source] : null;
-    return initialProjects
+    return withBranchFiltered
       .filter((p) => !!p.warm_for_customer_id && p.lat != null && p.lon != null)
-      .filter((p) => !hidden.has(p.id))
-      .filter((p) => (sourceDb ? p.source === sourceDb : true))
       .map((p) => {
         const c = byId.get(p.warm_for_customer_id as string);
         if (!c) return null;
@@ -248,7 +297,7 @@ export function Dashboard({ initialBranches, initialCustomers, initialProjects }
         };
       })
       .filter(Boolean) as { customer: Customer; project: Project & { lat: number; lon: number } }[];
-  }, [initialCustomers, initialProjects, hidden, source]);
+  }, [initialCustomers, withBranchFiltered]);
 
   const headerH = useHeaderHeight();
   const selectedBranch = selectedBranchId
@@ -269,16 +318,14 @@ export function Dashboard({ initialBranches, initialCustomers, initialProjects }
   const branchDockRight = 16 + (branchMin ? 44 : 240) + 8;
   const projectListLeft = mapDims.w - 16 - (listMin ? 44 : 380) - 8;
 
-  // Project markers fed to the clusterer. Hidden + source-filtered projects
-  // are dropped from the map AND the cluster math so the count badges match
-  // exactly what's visible in the right-rail list.
+  // Project markers fed to the clusterer. Reads from withBranchFiltered so
+  // the cluster count badges, the right-rail list, and the BranchDock
+  // counts (per-branch from preBranchFiltered) all stay aligned with the
+  // active filter set.
   const projectClusterMarkers = React.useMemo<ClusterMarker[]>(() => {
     if (crossPoll) return [];
-    const sourceDb = source !== 'all' ? SOURCE_FILTER_TO_DB[source] : null;
-    return initialProjects
+    return withBranchFiltered
       .filter((p) => p.lat != null && p.lon != null)
-      .filter((p) => !hidden.has(p.id))
-      .filter((p) => (sourceDb ? p.source === sourceDb : true))
       .map((p) => {
         const tier = projectTier({
           score: p.score,
@@ -294,7 +341,7 @@ export function Dashboard({ initialBranches, initialCustomers, initialProjects }
           onClick: () => setOpenProjectId(p.id),
         };
       });
-  }, [initialProjects, crossPoll, hidden, source]);
+  }, [withBranchFiltered, crossPoll]);
 
   // ── Render ─────────────────────────────────────────────────────────────────
   if (!apiKey) {

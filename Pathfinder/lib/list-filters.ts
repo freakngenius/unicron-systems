@@ -6,8 +6,14 @@
 //   "Filter + sort state should persist in the URL query string:
 //    ?sort=score&dir=desc&range=within&min_score=80"
 //
-// Defaults (spec § 3.2):
-//   sort=score, dir=desc, range=all, min_score=0, filter=all
+// Defaults (Demo Polish UX § Gate 1C + 1D):
+//   sort=score, dir=desc, range=within, min_score=50, filter=all
+//
+// Range and minScore defaults were widened from the spec § 3.2 baseline
+// (range=all, min_score=0) so the dashboard's first paint already shows the
+// "leads worth caring about, near a Zedcor branch" view that the Tuesday
+// demo opens with. All four are still freely selectable; the change only
+// affects what URL-omitted ?... resolves to.
 //
 // All fields are validated against an explicit allow-list — any unknown
 // value falls back to the default for that field. Invalid query strings
@@ -40,8 +46,8 @@ export const SCORE_FLOOR_STEPS = {
 export const DEFAULT_LIST_FILTER_STATE: ListFilterState = {
   sort: 'score',
   dir: 'desc',
-  range: 'all',
-  minScore: 0,
+  range: 'within',
+  minScore: 50,
   filter: 'all',
 };
 
@@ -59,9 +65,11 @@ export interface QueryLike {
 }
 
 /** Snap a numeric score floor to the nearest valid step (0, 10, …, 90)
- * and clamp into range. Returns `0` for any non-finite input. */
-function snapScoreFloor(raw: number): number {
-  if (!Number.isFinite(raw)) return 0;
+ * and clamp into range. Returns `null` for any non-finite input so the
+ * caller can substitute the default (instead of forcing 0, which is no
+ * longer the default). */
+function snapScoreFloor(raw: number): number | null {
+  if (!Number.isFinite(raw)) return null;
   const clamped = Math.max(SCORE_FLOOR_STEPS.min, Math.min(SCORE_FLOOR_STEPS.max, raw));
   return Math.round(clamped / SCORE_FLOOR_STEPS.step) * SCORE_FLOOR_STEPS.step;
 }
@@ -94,7 +102,8 @@ export function parseListFilterState(query: QueryLike | null | undefined): ListF
       ? (filterRaw as ListFilterMode)
       : DEFAULT_LIST_FILTER_STATE.filter;
 
-  const minScore = minScoreRaw == null ? 0 : snapScoreFloor(Number(minScoreRaw));
+  const snappedMinScore = minScoreRaw == null ? null : snapScoreFloor(Number(minScoreRaw));
+  const minScore = snappedMinScore == null ? DEFAULT_LIST_FILTER_STATE.minScore : snappedMinScore;
 
   return { sort, dir, range, minScore, filter };
 }
@@ -109,8 +118,9 @@ export function serializeListFilterState(state: ListFilterState): string {
   if (state.range !== DEFAULT_LIST_FILTER_STATE.range) params.set('range', state.range);
   if (state.filter !== DEFAULT_LIST_FILTER_STATE.filter) params.set('filter', state.filter);
   const snappedMin = snapScoreFloor(state.minScore);
-  if (snappedMin !== DEFAULT_LIST_FILTER_STATE.minScore) {
-    params.set('min_score', String(snappedMin));
+  const effectiveMin = snappedMin == null ? DEFAULT_LIST_FILTER_STATE.minScore : snappedMin;
+  if (effectiveMin !== DEFAULT_LIST_FILTER_STATE.minScore) {
+    params.set('min_score', String(effectiveMin));
   }
   return params.toString();
 }
