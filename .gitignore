@@ -1,7 +1,7 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
 # dependencies
-node_modules/
+/node_modules
 /.pnp
 .pnp.*
 .yarn/*
@@ -11,17 +11,17 @@ node_modules/
 !.yarn/versions
 
 # testing
-coverage/
-test-results/
-playwright-report/
-blob-report/
+/coverage
+/test-results
+/playwright-report
+/blob-report
 
 # next.js
-.next/
-out/
+/.next/
+/out/
 
 # production
-build/
+/build
 
 # misc
 .DS_Store
@@ -38,9 +38,8 @@ yarn-error.log*
 # vercel
 .vercel
 
-# local brand assets (raw source files; processed copies live in app public/)
-/Brand/Images
-/Brand/Source
+# local images source
+/Images
 
 # demo snapshots — read-only file-system rollback artifacts (see _demo-snapshot-*/README.md)
 # Each snapshot is captured by a corresponding git tag (e.g. demo-snapshot-2026-04-30); the
@@ -55,10 +54,5 @@ next-env.d.ts
 /Pathfinder-worktrees/
 /Phase2-worktrees/
 
-# Cowork session artifacts (per-developer, not part of repo)
-.claude/
-
-# Orphaned folders pending manual cleanup in Finder (sandbox can't remove)
-/Product/
-/Source/
-/Presentation/
+# raw customer data drops — pre-converted JSON lives in Pathfinder/public/seed-data
+/Zedcor/
