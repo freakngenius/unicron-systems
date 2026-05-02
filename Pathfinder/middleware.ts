@@ -138,8 +138,17 @@ export const config = {
   // `/api/email/webhooks/` is excluded because Gmail Pub/Sub + Microsoft
   // Graph subscription pushes arrive without basic-auth. Each handler
   // verifies its own auth (CRON_SECRET, validation token, clientState).
+  // `/api/connectors/slack/callback` is excluded because Slack hits the
+  // OAuth redirect URL without credentials; auth is via signed-state +
+  // code exchange (see lib/connectors/state.ts).
+  // `/api/connectors/slack/commands` and `/api/connectors/slack/events`
+  // are excluded because Slack signs slash-command and event payloads
+  // with the signing secret (see lib/connectors/slack/signature.ts).
+  // Note that `/api/connectors/slack/auth` is NOT excluded — it's the
+  // operator-side "Connect" click and goes through basic-auth like the
+  // rest of the Settings UI.
   matcher: [
     '/',
-    '/((?!_next/|favicon\\.ico|api/cron/|api/notifications/|api/slack/install/callback|api/slack/events|api/slack/actions|api/inngest|api/architect/|api/email/oauth/callback|api/email/webhooks/).*)',
+    '/((?!_next/|favicon\\.ico|api/cron/|api/notifications/|api/slack/install/callback|api/slack/events|api/slack/actions|api/inngest|api/architect/|api/email/oauth/callback|api/email/webhooks/|api/connectors/slack/callback|api/connectors/slack/commands|api/connectors/slack/events).*)',
   ],
 };
