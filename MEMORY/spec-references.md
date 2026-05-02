@@ -335,3 +335,27 @@ Stream P1 total cost-to-date: **$0.12** of $8 cap. All cost on Haiku coord-extra
 
 #### Pathfinder/app/settings/connectors/page.tsx (modified)
 **Drift note:** Phase 0 hardcoded `buildTiles()` replaced with a server-side query of `pathfinder.connectors` rows for the current org. Slack tile now reflects the real connector row's status (when present) rather than just the webhook-env-presence stub from Phase 0.
+
+---
+
+## Connector Sprint Phase 2 — C-2B per-customer Slack/Teams manifest generation
+
+**State:** PR (`connectors/c2b-manifests`) — built straight off main HEAD `1cd250a` per dispatch prompt. Adds operator-gated manifest endpoint + Settings UI affordance. No runtime / token / OAuth changes; orthogonal to C-2A which adds the Teams runtime layer.
+
+#### Pathfinder/lib/connectors/manifests/slack.ts
+**Implements:** SPEC § 3.4 (Multi-tenant manifest generation) — Slack arm. Generates a per-org Slack app manifest in YAML (the format Slack accepts at `https://api.slack.com/apps?new_app=1&manifest_yaml=...`). `display_information.name`, `bot_user.display_name`, `oauth_config.redirect_urls`, `event_subscriptions.request_url`, and `slash_commands.url` are customized per org + per Pathfinder origin. Bot scopes are sourced from `lib/connectors/providers.ts` so OAuth start and manifest stay in lockstep. Org-id is whitelisted to `[a-z0-9_-]{1,64}` and base URL must be https (localhost exempted for dev).
+
+#### Pathfinder/lib/connectors/manifests/teams.ts
+**Implements:** SPEC § 2.2 Step E + § 3.4 — Teams arm. Generates a `.zip` package containing `manifest.json` (Teams app schema 1.16+), `color.png` (192×192 solid color), and `outline.png` (32×32 solid color). PNG icons are byte-perfect placeholders constructed locally from `node:zlib` deflate; brand assets get swapped in post-pilot. Manifest `id` is a deterministic v4-shaped UUID derived from `orgId` so re-downloads are idempotent. Bot id reads from caller (route handler threads `process.env.TEAMS_BOT_ID`); falls back to `REPLACE_BEFORE_INSTALL` so missing env is a visible defect rather than a silent bad-manifest.
+
+#### Pathfinder/app/api/connectors/[type]/manifest/route.ts
+**Implements:** SPEC § 3.4 + § 5.1 (per-org isolation). `GET ?org_id={org}` returns the generated manifest as a download. Operator-gated via `lib/connectors/auth.ts:isOperatorRequest` — non-operators get 403. `slack` returns `application/x-yaml`; `teams` returns `application/zip` (Buffer wrapped through `Blob` for NextResponse BodyInit compatibility); `hubspot` returns 404 with `manifest_not_supported` since HubSpot uses the standard OAuth marketplace. Origin is computed from `x-forwarded-{host,proto}` so manifest URLs match the public host (`www.unicron.systems/pathfinder`) rather than the underlying Vercel deploy domain. `runtime = 'nodejs'` because JSZip + node:zlib are unavailable on edge.
+
+#### Pathfinder/components/settings/connectors/ConnectorTile.tsx (modified)
+**Drift note:** Added optional `tertiaryAction` prop — `{ label, onClick, testId? }` — that renders a full-width secondary CTA below the primary footer. Reused for the C-2B "Generate manifest for IT" affordance without changing the existing two-button (primary / Disconnect) layout for connected tiles.
+
+#### Pathfinder/components/settings/connectors/ConnectorsView.tsx (modified)
+**Implements:** SPEC § 3.4 customer-facing affordance. Renders the "Generate manifest for IT" button on disconnected/error/expired Slack + Teams tiles only (HubSpot uses the public OAuth marketplace; no manifest needed; no button rendered). Click triggers a `fetch(... )` to `/api/connectors/{type}/manifest?org_id={org}` with the `x-operator-email` header from `localStorage`, then streams the response through `URL.createObjectURL` for a browser download. Failure surfaces a `window.alert` with the response status; full error UI deferred until customer-facing operators ship.
+
+#### Pathfinder/package.json (modified)
+**Drift note:** Added `jszip` (3.10.x) for Teams `.zip` packaging and `js-yaml` (4.1.x, +`@types/js-yaml`) for Slack manifest YAML serialization. Both are small, widely-used libs (combined transitive footprint ~50KB minified) — Vercel function bundle stays well under the 50MB Lambda limit per dispatch halt criteria.
