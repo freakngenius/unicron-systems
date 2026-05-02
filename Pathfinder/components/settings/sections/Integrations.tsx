@@ -8,6 +8,8 @@ import { Card, Phase2Banner, Row } from '../Field';
 interface ProbeResult {
   status: 'ok' | 'degraded' | 'failed' | 'unknown';
   detail: string;
+  checked_at?: string;
+  cached?: boolean;
 }
 
 interface AgentSummaryShape {
@@ -21,6 +23,8 @@ interface AgentSummaryShape {
 export function IntegrationsSection() {
   const [supabase, setSupabase] = React.useState<ProbeResult>({ status: 'unknown', detail: 'checking…' });
   const [agents, setAgents] = React.useState<ProbeResult>({ status: 'unknown', detail: 'checking…' });
+  const [slack, setSlack] = React.useState<ProbeResult>({ status: 'unknown', detail: 'checking…' });
+  const [resend, setResend] = React.useState<ProbeResult>({ status: 'unknown', detail: 'checking…' });
 
   React.useEffect(() => {
     // Supabase health: hit /api/branches and confirm a non-empty array.
@@ -62,6 +66,22 @@ export function IntegrationsSection() {
         }
       })
       .catch(() => setAgents({ status: 'failed', detail: 'no response' }));
+
+    // Slack webhook probe — POSTs an empty payload to detect whether the
+    // webhook URL is registered (Slack rejects with a recognised error
+    // body) vs revoked (404 / no_service). Server caches the result for
+    // 5 minutes; navigating back to /settings re-fetches.
+    void fetch('/pathfinder/api/probes/slack', { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((d: ProbeResult) => setSlack(d))
+      .catch(() => setSlack({ status: 'failed', detail: 'no response' }));
+
+    // Resend probe — GETs /domains with the API key. 401/403 = bad key;
+    // 200 with empty list = degraded (key valid but no verified domains).
+    void fetch('/pathfinder/api/probes/resend', { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((d: ProbeResult) => setResend(d))
+      .catch(() => setResend({ status: 'failed', detail: 'no response' }));
   }, []);
 
   function relativeAgo(iso: string): string {
@@ -92,11 +112,11 @@ export function IntegrationsSection() {
         <Row label="Perplexity Computer" hint="Probed indirectly via the Ingestor's last_run timestamp.">
           <StatusBadge status={agents.status} />
         </Row>
-        <Row label="Slack webhook" hint="Probed when Briefing ships (Layer 3).">
-          <StatusBadge status="unknown" />
+        <Row label="Slack webhook" hint={slack.detail}>
+          <StatusBadge status={slack.status} />
         </Row>
-        <Row label="Resend (email)" hint="Probed when Briefing ships (Layer 3).">
-          <StatusBadge status="unknown" />
+        <Row label="Resend (email)" hint={resend.detail}>
+          <StatusBadge status={resend.status} />
         </Row>
         <Row label="HubSpot" hint="Phase 2 — wires up alongside the pipeline mapping.">
           <StatusBadge status="unknown" />
