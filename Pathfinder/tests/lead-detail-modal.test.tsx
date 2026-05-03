@@ -202,3 +202,46 @@ describe('LeadDetailModal — arrow-key cycling', () => {
     expect(mockPush).toHaveBeenCalledWith('/pathfinder');
   });
 });
+
+// Gate 12A — Modal background regression fix.
+//
+// The lead detail route renders standalone (no map behind), so the
+// backdrop must be dark enough that the body's #ffffff doesn't bleed
+// through and produce a "white background" effect. Until the route is
+// converted to an intercepted/parallel route (Gate 12.5), assert the
+// backdrop ships as a near-opaque dark layer with the specced blur.
+describe('LeadDetailModal — backdrop styling (Gate 12A)', () => {
+  it('renders a dark, semi-transparent backdrop (not solid white) with blur', () => {
+    renderModal();
+    const backdrop = screen.getByTestId('lead-detail-modal-backdrop');
+    const bg = backdrop.style.background || backdrop.style.backgroundColor;
+    // Must be an rgba() dark fill — never a solid white / transparent.
+    expect(bg).toMatch(/rgba\(\s*10\s*,\s*10\s*,\s*10\s*,\s*0?\.\d+\s*\)/);
+    expect(bg).not.toMatch(/#fff/i);
+    expect(bg).not.toMatch(/white/i);
+    // Backdrop must be near-opaque so the underlying body background
+    // (white per globals.css) doesn't read as the modal background.
+    const alphaMatch = bg.match(
+      /rgba\(\s*10\s*,\s*10\s*,\s*10\s*,\s*(0?\.\d+)\s*\)/,
+    );
+    expect(alphaMatch).not.toBeNull();
+    const alpha = Number(alphaMatch![1]);
+    expect(alpha).toBeGreaterThanOrEqual(0.85);
+    expect(alpha).toBeLessThan(1);
+    // Blur preserved per Gate 9A spec (8px, with WebKit fallback).
+    expect(backdrop.style.backdropFilter).toBe('blur(8px)');
+    expect(
+      (backdrop.style as unknown as Record<string, string>)[
+        'WebkitBackdropFilter'
+      ],
+    ).toBe('blur(8px)');
+  });
+
+  it('backdrop covers the viewport (position fixed/absolute, inset 0)', () => {
+    renderModal();
+    const backdrop = screen.getByTestId('lead-detail-modal-backdrop');
+    expect(backdrop.style.position).toBe('absolute');
+    // jsdom serializes `inset: 0` as `'0'` (no unit) on the inline style.
+    expect(['0', '0px']).toContain(backdrop.style.inset);
+  });
+});
