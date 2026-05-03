@@ -101,6 +101,44 @@ export interface Project {
   rejected_at?: string | null;
   geo_unknown?: boolean | null;
   geo_inference_confidence?: number | null;
+  // Demo Polish UX Sprint Gate 3 (migration 0110) — lead detail enrichment.
+  // The 10 demo fields from `00 - TUESDAY DEMO PLAN.md` CRITICAL #8.
+  // Backfilled from raw_payload (Gate 3B), then enriched via Sonar + Anthropic
+  // for top-50 leads by score (Gate 3C). See `SPEC - Lead Detail Enrichment.md`
+  // for the per-field source map.
+  owner_name?: string | null;
+  owner_type?:
+    | 'federal_agency'
+    | 'state_agency'
+    | 'municipality'
+    | 'private_developer'
+    | 'pe_firm'
+    | 'reit'
+    | 'university'
+    | 'nonprofit'
+    | 'other'
+    | null;
+  prime_contractor_name?: string | null;
+  key_subs?: Array<{ name: string; role?: string; source_url?: string }> | null;
+  description_long?: string | null;
+  naics_code?: string | null;
+  naics_description?: string | null;
+  location_text?: string | null;
+  estimated_start_date?: string | null;
+  estimated_end_date?: string | null;
+  permit_number?: string | null;
+  permit_jurisdiction?: string | null;
+  permit_filing_date?: string | null;
+  permit_type?: string | null;
+  lot_size_acres?: number | null;
+  enriched_at?: string | null;
+  enrichment_provider?:
+    | 'raw_payload_only'
+    | 'sonar'
+    | 'anthropic'
+    | 'sonar+anthropic'
+    | null;
+  enrichment_cost_usd?: number | null;
 }
 
 export interface OrgGeoConfig {
