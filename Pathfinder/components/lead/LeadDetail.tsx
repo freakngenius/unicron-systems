@@ -10,7 +10,14 @@
 
 import * as React from 'react';
 
+import { CrossPollinationCard } from '@/components/lead/CrossPollinationCard';
+import { DecisionBar } from '@/components/lead/DecisionBar';
 import { ProjectFactsCard } from '@/components/lead/ProjectFactsCard';
+import { ProjectStory } from '@/components/lead/ProjectStory';
+import { QuickFactsGrid } from '@/components/lead/QuickFactsGrid';
+import { RecommendedAction } from '@/components/lead/RecommendedAction';
+import { ScoreBreakdown } from '@/components/lead/ScoreBreakdown';
+import { SourceCitations } from '@/components/lead/SourceCitations';
 import { Timeline } from '@/components/lead/Timeline';
 import {
   ZedcorRelationshipContext,
@@ -44,6 +51,10 @@ interface LeadDetailProps {
   // nearest_zedcor_branch row (if any) for the header.
   crossPollMatches?: CrossPollinationMatchRow[];
   zedcorBranch?: ZedcorBranchInfo | null;
+  // Demo Polish UX Gate 7A — flag-gated redesign. Default false (existing
+  // layout untouched). Set by the page route from
+  // process.env.LEAD_DETAIL_REDESIGN === '1'.
+  redesignEnabled?: boolean;
 }
 
 export function LeadDetail({
@@ -54,6 +65,7 @@ export function LeadDetail({
   timelineEvents,
   crossPollMatches = [],
   zedcorBranch = null,
+  redesignEnabled = false,
 }: LeadDetailProps) {
   // Z-F integrator — header now also surfaces the nearest Zedcor branch +
   // distance and a "Warm intro" badge when we have cross-poll matches.
@@ -135,31 +147,152 @@ export function LeadDetail({
         </div>
       </header>
 
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'minmax(0, 2fr) minmax(280px, 1fr)',
-          gap: 16,
-          alignItems: 'start',
-        }}
-      >
-        <EmailComposer
+      {redesignEnabled ? (
+        <RedesignedBody
           project={project}
-          draft={latestEmailDraft}
-          contacts={contacts}
-        />
-        <Sidebar
-          project={project}
+          latestEmailDraft={latestEmailDraft}
           contacts={contacts}
           recentEdits={recentEdits}
+          timelineEvents={timelineEvents}
           crossPollMatches={crossPollMatches}
           zedcorBranch={zedcorBranch}
         />
-      </div>
-      <div style={{ marginTop: 16 }}>
-        <Timeline projectId={project.id} initialEvents={timelineEvents} />
-      </div>
+      ) : (
+        <>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'minmax(0, 2fr) minmax(280px, 1fr)',
+              gap: 16,
+              alignItems: 'start',
+            }}
+          >
+            <EmailComposer
+              project={project}
+              draft={latestEmailDraft}
+              contacts={contacts}
+            />
+            <Sidebar
+              project={project}
+              contacts={contacts}
+              recentEdits={recentEdits}
+              crossPollMatches={crossPollMatches}
+              zedcorBranch={zedcorBranch}
+            />
+          </div>
+          <div style={{ marginTop: 16 }}>
+            <Timeline projectId={project.id} initialEvents={timelineEvents} />
+          </div>
+        </>
+      )}
     </main>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────────
+// RedesignedBody — single-column composition behind LEAD_DETAIL_REDESIGN
+// ────────────────────────────────────────────────────────────────────────
+//
+// Renders the new section order from SPEC - Lead Detail Page UX Redesign.md
+// when the flag is on. Section list:
+//
+//   2. Decision Bar           (DecisionBar — stub w/ verdict line)
+//   3. Quick Facts grid       (QuickFactsGrid — full)
+//   4. Cross-Pollination card (CrossPollinationCard — re-uses existing
+//                              ZedcorRelationshipContext to preserve the 12
+//                              Gate-2 matches)
+//   5. Recommended Action     (RecommendedAction — null while parse-rationale
+//                              fallback is the only path; 7B unblocks)
+//   6. Project Story          (ProjectStory — Description + de-emphasized
+//                              monolithic rationale)
+//   7. Score breakdown        (ScoreBreakdown — collapsible stub)
+//   9. Outreach               (existing EmailComposer)
+//  10. Activity Timeline      (existing Timeline)
+//  11. Source citations       (SourceCitations — null when empty)
+
+function RedesignedBody({
+  project,
+  latestEmailDraft,
+  contacts,
+  recentEdits,
+  timelineEvents,
+  crossPollMatches,
+  zedcorBranch,
+}: {
+  project: Project;
+  latestEmailDraft: OutreachDraft | null;
+  contacts: ProjectContact[];
+  recentEdits: OutreachEdit[];
+  timelineEvents?: TimelineEvent[];
+  crossPollMatches: CrossPollinationMatchRow[];
+  zedcorBranch: ZedcorBranchInfo | null;
+}) {
+  return (
+    <div
+      data-testid="lead-detail-redesigned"
+      style={{ display: 'flex', flexDirection: 'column', gap: 16 }}
+    >
+      <DecisionBar project={project} hasCrossPollMatches={crossPollMatches.length > 0} />
+      <QuickFactsGrid project={project} />
+      <CrossPollinationCard matches={crossPollMatches} targetRegion={zedcorBranch?.state ?? null} />
+      <RecommendedAction project={project} />
+      <ProjectStory project={project} />
+      <ScoreBreakdown project={project} />
+      <EmailComposer project={project} draft={latestEmailDraft} contacts={contacts} />
+      {recentEdits.length > 0 && (
+        <RecentSendsBlock recentEdits={recentEdits} />
+      )}
+      <Timeline projectId={project.id} initialEvents={timelineEvents} />
+      <SourceCitations project={project} />
+    </div>
+  );
+}
+
+// Recent sends — extracted for the redesigned layout. The legacy Sidebar
+// rendered this as a small SidebarCard. Kept inline here (single-column)
+// pending Gate 7B's `Sent history` sub-section under the EmailComposer.
+function RecentSendsBlock({ recentEdits }: { recentEdits: OutreachEdit[] }) {
+  return (
+    <section
+      style={{
+        background: PF_TINTS.bg,
+        border: `1px solid ${PF_TINTS.ruleSoft}`,
+        borderRadius: PF_TINTS.r.md,
+        padding: 14,
+      }}
+    >
+      <h3
+        style={{
+          margin: '0 0 8px',
+          font: `600 11px ${PF_TINTS.sans}`,
+          letterSpacing: '0.06em',
+          textTransform: 'uppercase',
+          color: PF_TINTS.inkSub,
+        }}
+      >
+        Recent sends
+      </h3>
+      {recentEdits.slice(0, 5).map((edit) => (
+        <div
+          key={edit.id}
+          style={{
+            padding: '6px 0',
+            borderBottom: `1px solid ${PF_TINTS.ruleHair}`,
+            font: `500 11px ${PF_TINTS.mono}`,
+            color: edit.send_error ? '#b91c1c' : PF_TINTS.inkSub,
+          }}
+          title={edit.sent_subject ?? ''}
+        >
+          {edit.sent_at
+            ? new Date(edit.sent_at).toISOString().slice(0, 16).replace('T', ' ')
+            : 'failed'}
+          {' · '}
+          {edit.provider}
+          {' · '}
+          {edit.send_error ? edit.send_error : `Δ${edit.edit_distance ?? 0}`}
+        </div>
+      ))}
+    </section>
   );
 }
 
