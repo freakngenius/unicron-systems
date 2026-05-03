@@ -676,3 +676,12 @@ Total new: 50 tests. All green; full Pathfinder suite remains 809 passing.
 | File | Tests | Covers |
 |---|---|---|
 | `tests/hubspot-recon.test.ts` | 10 | reconcileDeals (matched, all 3 policies — last_write_wins newer-wins + tied-escalates, pathfinder_locked, hubspot_locked), HubSpot-only / Pathfinder-only deals (skipped, outbound territory), null/null match, null/value conflict, numeric/string cross-coerce, escalationToInboxRow shape. |
+
+---
+
+## Post-demo Gate 4 — recorder ↔ session telemetry linkage
+
+**State:** PR shipped during the post-demo-queue Wednesday recovery sweep.
+
+#### Pathfinder/services/source-onboarder/session.ts (re-verified 2026-05-02)
+**Fix:** `finalizeSession()` aggregates total_cost_usd + total_llm_calls from `pathfinder.llm_calls` keyed by session_id at finalize time, replacing the in-memory tally that was always 0. Falls back to in-memory counters when the recorder query is unavailable. Pairs with new FK migration 0111 + retroactive backfill script.

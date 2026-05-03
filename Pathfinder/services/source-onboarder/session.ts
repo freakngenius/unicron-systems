@@ -88,16 +88,50 @@ export async function finalizeSession(args: {
       update: (cols: Record<string, unknown>) => {
         eq: (col: string, val: string) => Promise<{ error: unknown }>;
       };
+      select: (cols: string) => {
+        eq: (col: string, val: string) => Promise<{
+          data: Array<{ cost_usd: number | null }> | null;
+          error: { message: string } | null;
+        }>;
+      };
     };
   };
+
+  // Post-demo Gate 4 fix: total_cost_usd + total_llm_calls were always
+  // landing as 0 because nothing was incrementing the in-memory
+  // session.costUsd / session.llmCalls counters between createSession
+  // and finalizeSession. Calls go through lib/llm/run.ts → recorder.ts
+  // and write to pathfinder.llm_calls (with session_id set), but the
+  // session struct never sees them.
+  //
+  // Fix: aggregate from llm_calls keyed by session_id at finalize time.
+  // Falls back to the in-memory tally only when the recorder write is
+  // unavailable (test mode without a Supabase admin client).
+  let aggregatedCostUsd: number = args.session.costUsd;
+  let aggregatedLlmCalls: number = args.session.llmCalls;
+  try {
+    const callsRes = await sb
+      .from('llm_calls')
+      .select('cost_usd')
+      .eq('session_id', args.session.id);
+    if (!callsRes.error && callsRes.data) {
+      aggregatedLlmCalls = Math.max(args.session.llmCalls, callsRes.data.length);
+      const dbCost = callsRes.data.reduce((sum, r) => sum + (r.cost_usd ?? 0), 0);
+      aggregatedCostUsd = Math.max(args.session.costUsd, dbCost);
+    }
+  } catch {
+    // Telemetry-aggregation failures must not break finalize; fall
+    // through to the in-memory tally.
+  }
+
   await sb
     .from('architect_sessions')
     .update({
       status: args.status,
       reasoning_log: args.session.steps,
       outcome: args.outcome,
-      total_cost_usd: args.session.costUsd,
-      total_llm_calls: args.session.llmCalls,
+      total_cost_usd: aggregatedCostUsd,
+      total_llm_calls: aggregatedLlmCalls,
       total_tool_calls: args.session.toolCalls,
       completed_at: new Date().toISOString(),
     })
