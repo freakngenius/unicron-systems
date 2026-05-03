@@ -13,6 +13,10 @@
 //                            run before the full batch).
 //   ENRICHMENT_COST_HALT   — override the $10 hard halt (decimal USD).
 //   ENRICHMENT_DRY_RUN=1   — skip persistence; print results only.
+//   ENRICHMENT_PROJECT_IDS — comma-separated project IDs (overrides the
+//                            top-by-score selector; used to back-fill
+//                            specific metro top-5 leads that fell below
+//                            the global top-50 cut).
 
 import 'dotenv/config';
 
@@ -32,6 +36,15 @@ interface ProjectRowSlim extends EnricherInput {
   rejection_reason: string | null;
 }
 
+const SELECT_COLS =
+  'id, source, title, summary, location_text, lat, lon, ' +
+  'owner_name, owner_type, prime_contractor_name, description_long, ' +
+  'naics_code, naics_description, estimated_start_date, ' +
+  'estimated_end_date, permit_number, permit_jurisdiction, ' +
+  'permit_filing_date, permit_type, lot_size_acres, project_value, ' +
+  'enriched_at, enrichment_provider, enrichment_cost_usd, ' +
+  'score, rejection_reason';
+
 async function loadTopLeads(
   admin: ReturnType<typeof supabaseAdmin>,
   limit: number,
@@ -50,21 +63,35 @@ async function loadTopLeads(
       };
     }
   )
-    .select(
-      'id, source, title, summary, location_text, lat, lon, ' +
-        'owner_name, owner_type, prime_contractor_name, description_long, ' +
-        'naics_code, naics_description, estimated_start_date, ' +
-        'estimated_end_date, permit_number, permit_jurisdiction, ' +
-        'permit_filing_date, permit_type, lot_size_acres, project_value, ' +
-        'enriched_at, enrichment_provider, enrichment_cost_usd, ' +
-        'score, rejection_reason',
-    )
+    .select(SELECT_COLS)
     .is('rejection_reason', null)
     .order('score', { ascending: false, nullsFirst: false })
     .limit(limit);
 
   if (res.error) {
     throw new Error(`failed to load top leads: ${res.error.message}`);
+  }
+  return res.data ?? [];
+}
+
+async function loadLeadsByIds(
+  admin: ReturnType<typeof supabaseAdmin>,
+  ids: string[],
+): Promise<ProjectRowSlim[]> {
+  const res = await (
+    admin.from('projects') as unknown as {
+      select: (cols: string) => {
+        in: (col: string, vals: string[]) => Promise<{
+          data: ProjectRowSlim[] | null;
+          error: { message: string } | null;
+        }>;
+      };
+    }
+  )
+    .select(SELECT_COLS)
+    .in('id', ids);
+  if (res.error) {
+    throw new Error(`failed to load leads by id: ${res.error.message}`);
   }
   return res.data ?? [];
 }
@@ -97,10 +124,21 @@ async function main(): Promise<void> {
   );
   const dryRun = process.env.ENRICHMENT_DRY_RUN === '1';
 
-  const topLeads = await loadTopLeads(admin, limit);
+  const explicitIdsRaw = process.env.ENRICHMENT_PROJECT_IDS ?? '';
+  const explicitIds = explicitIdsRaw
+    .split(',')
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+
+  const topLeads =
+    explicitIds.length > 0
+      ? await loadLeadsByIds(admin, explicitIds)
+      : await loadTopLeads(admin, limit);
   console.log(
-    `[lead-detail-enrichment] loaded ${topLeads.length} top leads ` +
-      `(cap=${limit}, cost halt=$${costHalt}, dryRun=${dryRun})`,
+    `[lead-detail-enrichment] loaded ${topLeads.length} leads ` +
+      (explicitIds.length > 0
+        ? `(explicit ids=${explicitIds.length}, dryRun=${dryRun})`
+        : `(cap=${limit}, cost halt=$${costHalt}, dryRun=${dryRun})`),
   );
 
   const summary: EnricherBatchSummary = {
