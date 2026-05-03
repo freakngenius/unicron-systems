@@ -9,8 +9,15 @@ import { notFound } from 'next/navigation';
 import { LeadDetail } from '@/components/lead/LeadDetail';
 import { LeadDetailModal } from '@/components/lead/LeadDetailModal';
 import type { CrossPollinationMatchRow } from '@/components/zedcor/ZedcorRelationshipContext';
+import {
+  formatFromDisplay,
+  resolveActiveConnection,
+} from '@/lib/outreach/user-connection';
 import { supabase } from '@/lib/supabase';
 import { buildTimelineForProject, type TimelineEvent } from '@/lib/timeline';
+
+const DEMO_OPERATOR_EMAIL =
+  process.env.PF_DEMO_OPERATOR_EMAIL ?? 'kyle@freakngenius.com';
 import type {
   LeadContactRow,
   OutreachDraft,
@@ -147,7 +154,12 @@ export default async function LeadDetailPage({
       zedcorBranch,
     },
     neighborIds,
-  ] = await Promise.all([fetchData(projectId), fetchNeighborIds()]);
+    connection,
+  ] = await Promise.all([
+    fetchData(projectId),
+    fetchNeighborIds(),
+    resolveActiveConnection(DEMO_OPERATOR_EMAIL),
+  ]);
   if (!project) notFound();
 
   // Demo Polish UX Gate 7A — flag-gated lead detail redesign. Read at the
@@ -177,6 +189,8 @@ export default async function LeadDetailPage({
       redesignEnabled={redesignEnabled}
       isTopFifty={isTopFifty}
       isAdmin={true}
+      fromDisplay={formatFromDisplay(connection)}
+      isConnected={connection?.isConnected ?? false}
     />
   );
 

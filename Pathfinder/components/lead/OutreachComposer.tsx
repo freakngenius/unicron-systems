@@ -88,30 +88,32 @@ export function OutreachComposer({
     }
     setSubmitting(true);
     try {
-      // Gate 9C uses the existing /api/outreach/send for now. Gate 9D
-      // adds /pathfinder/api/leads/[id]/outreach/send with connection
-      // routing; this composer will switch when 9D lands.
-      const res = await fetch('/pathfinder/api/outreach/send', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          project_id: projectId,
-          actor_email: extractEmail(fromDisplay),
-          provider: extractProvider(fromDisplay),
-          recipient_email: to,
-          draft_subject: subject,
-          draft_body: body,
-          sent_subject: subject,
-          sent_body: body,
-        }),
-      });
+      // Gate 9D — connection-routed send endpoint. Server resolves the
+      // operator's user_connections row (or falls back to
+      // email_integrations during the demo window) and dispatches via
+      // Gmail or Microsoft Graph. Writes both pathfinder.outreach_sends
+      // (v2 surface) and pathfinder.outreach_edits (legacy diff loop).
+      const res = await fetch(
+        `/pathfinder/api/leads/${encodeURIComponent(projectId)}/outreach/send`,
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ to, subject, body }),
+        },
+      );
       const json = (await res.json().catch(() => ({}))) as {
         ok?: boolean;
         error?: string;
+        code?: string;
       };
       if (res.ok && json.ok) {
         setFeedback({ kind: 'ok', message: 'Sent.' });
         if (onSendComplete) onSendComplete();
+      } else if (json.code === 'no_connection') {
+        setFeedback({
+          kind: 'err',
+          message: 'Not connected. Connect Gmail or Outlook in Settings.',
+        });
       } else {
         setFeedback({
           kind: 'err',
@@ -309,14 +311,3 @@ function wordCount(s: string): number {
   return trimmed.split(/\s+/).length;
 }
 
-// Pull the email + provider out of the From display string. Format:
-// "<email> via <Provider>". Falls back to empty values when the format
-// doesn't match — Gate 9D replaces this with a real lookup so the
-// fallback only matters during the 9C → 9D window.
-function extractEmail(display: string): string {
-  const match = display.match(/^([^\s]+@[^\s]+)/);
-  return match ? match[1] : '';
-}
-function extractProvider(display: string): 'gmail' | 'outlook' {
-  return /outlook/i.test(display) ? 'outlook' : 'gmail';
-}
