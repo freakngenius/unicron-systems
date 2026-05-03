@@ -4,6 +4,69 @@ Append-only operational log. Newest entry on top. Tuesday 2026-05-05 demo deadli
 
 ---
 
+## 2026-05-02 22:30 UTC — Gate 7A (Lead Detail Redesign scaffolding + QuickFactsGrid) — PR #96 open
+
+**Override:** Gate 7 promoted from "post-demo" to active sprint by operator. Land before Tuesday 2026-05-05 demo. Spec is locked; build to it.
+
+**Gate 7 stack:**
+- Gate 7A — Component scaffolding + QuickFactsGrid full — branch `demo-polish-ux/gate7-lead-detail-redesign` — PR #96 (base `origin/main` `2be40e4`)
+- Gate 7B — Empty-states + parse-rationale full + DecisionBar verdict + CrossPoll lift — queued
+- Gate 7C — Wiring + preview-deploy verification — queued
+- Gate 7D — Production flag flip — queued
+- Gate 7E (post-7-day-stable) — Archive old `ProjectFactsCard` + sidebar code — queued for 2026-05-12
+
+### Scope shipped (Gate 7A)
+
+- `Pathfinder/supabase/migrations/0111_lead_detail_redesign.sql` — additive `enrichment_citations` jsonb on `pathfinder.projects`. Idempotent. `pipeline_stage` already exists from migration 0050 — verified, no-op.
+- `Pathfinder/lib/types.ts` — `Project.enrichment_citations` shape extension.
+- `Pathfinder/lib/leads/parse-rationale.ts` — stable contract; always returns `fallback: true` with `monolithic` populated. 7B replaces with extraction logic.
+- `Pathfinder/components/lead/QuickFactsGrid.tsx` — full impl. 9 cells per spec § 3 (Owner / Prime Contractor / Project Value / Industry / Stage / Timing / Location / Permit / Lot Size). All 4 empty-state kinds wired (`pending` / `unknown` / `not-disclosed` / `pre-award`). Owner-type chip color coding. Linear-infra NAICS detection hides Lot Size for highway/pipeline/power/transit projects.
+- 6 stub components (`DecisionBar`, `CrossPollinationCard`, `RecommendedAction`, `ProjectStory`, `ScoreBreakdown`, `SourceCitations`) — render correctly in 7A's flag-on path; full impl deferred to 7B/7C. CrossPollinationCard re-renders existing `ZedcorRelationshipContext` so the 12 Gate-2 matches are preserved (hard-halt protected).
+- `Pathfinder/components/lead/LeadDetail.tsx` — `redesignEnabled` prop branches between existing layout (default) and new `RedesignedBody` composition.
+- `Pathfinder/app/leads/[projectId]/page.tsx` — server route reads `process.env.LEAD_DETAIL_REDESIGN === '1'` and passes as prop.
+- `Pathfinder/docs/PLAN-demo-polish-ux-gate7-lead-detail-redesign.md` — full PLAN doc per Pathfinder protocol.
+
+### Verification (Gate 7A)
+
+```
+$ pnpm typecheck → 0 errors
+$ pnpm lint      → no warnings or errors
+$ pnpm test      → 983 passed | 24 skipped (was 949 | 24 — net +34 new tests)
+```
+
+**Test baseline correction:** spec stated 902/902. Actual baseline post Gate 4 + 5 is 949/949. PLAN doc + operator-todo updated; <949 treated as regression.
+
+### Hard-halt items not tripped
+
+- ✅ Flag default off — production rendering unchanged
+- ✅ `CrossPollinationCard` re-uses existing `ZedcorRelationshipContext` → 12 Gate-2 matches preserved (no risk in 7A)
+- ✅ Schema additive only (jsonb add column if not exists)
+- ✅ No regression in 949-test baseline (983 passed; net +34)
+- ⏸ Houston flagship live render — deferred to 7C preview verification
+- ⏸ Bundle-size delta vs. flag-off — deferred to 7C
+- ⏸ parse-rationale TxDOT extraction — deferred to 7B
+- ⏸ LCP regression measurement — deferred to 7C
+
+### Commit chain (Gate 7A)
+
+```
+9b834be docs+schema: gate 7A foundation — PLAN, migration 0111, type extension
+bd99c84 feat(lead): gate 7A — parse-rationale + 6 component stubs
+8b59c7b feat(lead): gate 7A — QuickFactsGrid full implementation
+1b82967 feat(lead): gate 7A — flag-gate redesign in LeadDetail + tests
+```
+
+### Operator-todo cards filed
+
+- `MEMORY/operator-todos/2026-05-02-pathfinder-gate7-lead-detail-redesign.md` (parent — In Process)
+- `MEMORY/operator-todos/2026-05-02-pathfinder-gate7a-pr-96.md` (In Review)
+- `MEMORY/operator-todos/2026-05-03-pathfinder-gate7b-empty-states-parse-rationale.md` (Queued)
+- `MEMORY/operator-todos/2026-05-04-pathfinder-gate7c-wiring-preview-verification.md` (Queued)
+- `MEMORY/operator-todos/2026-05-05-pathfinder-gate7d-production-flag-flip.md` (Queued)
+- `MEMORY/operator-todos/2026-05-12-archive-old-lead-detail.md` (Queued for 2026-05-12)
+
+---
+
 ## 2026-05-02 18:30 UTC — Gate 4 (4A → 4B-3) + Gate 5 dry-run plan green; PRs open
 
 **State mismatch flag:** the Gate 4 prompt assumed Gate 3 PRs (#78, #79,
