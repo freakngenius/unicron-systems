@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { forward, handleError, pipe, serializeBody } from '../_lib/proxy';
+import { forward, handleError, pipe, serializeBody } from '../_lib/proxy.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
