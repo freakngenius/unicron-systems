@@ -693,3 +693,42 @@ Total new: 50 tests. All green; full Pathfinder suite remains 809 passing.
 | File | Tests | Covers |
 |---|---|---|
 | `tests/tower-estimator.test.ts` | 13 | Prompt builder (title/value/NAICS/lot/location/sites/perimeter embedding, summary fallback, null omission), JSON parser happy paths (integer + numeric-string + range + range-with-whitespace + ```json fence + trailing prose + fractional rounding), failure modes (non-JSON, empty rationale, missing/negative count, malformed string). |
+
+---
+
+## Demo Polish UX Sprint — Gate 13W-A (daily intelligence loop, schema + composer)
+
+**State:** PR #131 pending merge. Gate 13W-A is the foundation slice; cron + send land in 13W-B, settings UI in 13W-C, production verification in 13W-D.
+
+#### Pathfinder/lib/types.ts
+**Implements:** Gate 13W dispatch § "Schema + brief composition" — `BriefingPrefs`, `BriefingSections`, `BriefingFrequency`, `DailyBrief`, `DailyBriefMetrics`, `DEFAULT_BRIEFING_PREFS` (mirrors migration 0122 column defaults). `briefing_prefs` row added to `PathfinderDatabase.Tables` so the typed Supabase client recognizes the new table.
+**Last verified against spec:** 2026-05-03.
+**Drift:** none — newly specced in the Gate 13W dispatch.
+
+#### Pathfinder/services/briefer/sections.ts
+**Implements:** Gate 13W dispatch § "Compose per-user brief" — five per-section helpers (`fetchNewLeads`/`renderNewLeads`, `fetchFollowUps`/`renderFollowUps`, `fetchStageChanges`/`renderStageChanges`, `fetchReplies`/`renderReplies`, `fetchContactsPending`/`renderContactsPending`). Last-24-h windows; follow-ups stale after 3 days; stage changes joined to deals owned by the user. Pure render half exported for unit tests. `BrieferClient` is a structural subset of supabase-js's client; the typed Tables map doesn't yet include outreach_sends / lead_contacts (existing convention — see lib/connectors/user-connection.ts).
+**Last verified against spec:** 2026-05-03.
+**Drift:** none.
+
+#### Pathfinder/services/briefer/render.ts
+**Implements:** Gate 13W dispatch § "Compose per-user brief" — markdown→HTML for the small inline subset we emit (**bold**, _italic_, [text](url)) so wrappers around links render correctly (linkRe-extract → format → token-substitute). `buildSubject` (quiet-day fallback when no leads/follow-ups; singular/plural handled). `formatLocalDate` via Intl in the user's IANA timezone.
+**Last verified against spec:** 2026-05-03.
+**Drift:** none.
+
+#### Pathfinder/services/briefer/agent.ts
+**Implements:** Gate 13W dispatch § "Compose per-user brief" — `composeDailyBrief({ userId, now, prefs?, db?, fetchers?, baseUrl?, llm? })` orchestrates section fetch in parallel, renders markdown + html, derives subject + metrics. `loadPrefs` returns the row for user_id or the table default when none exists (matches the read-time-defaults convention used by `connectors.metadata.hubspot_mapping`). `mergeSections` treats missing keys as opt-in so additive section keys land safely. LLM mode is template-only in v1 per the gate prompt ("optional; can be template-only for v1").
+**Last verified against spec:** 2026-05-03.
+**Drift:** none.
+
+#### Pathfinder/services/briefer/index.ts
+**Implements:** Barrel export for the briefer service.
+**Last verified against spec:** 2026-05-03.
+**Drift:** none.
+
+### Tests
+
+| File | Tests | Covers |
+|---|---|---|
+| `tests/briefer-sections.test.ts` | 17 | Small helpers (`isoMinusHours`, `leadUrl` URL-encoding + trailing-slash strip, `formatUsd` M/K/null, `formatScore`, `daysAgo` invalid + future clamp). Each render function: empty-state fallback + populated rendering with link, score, value, owner, stage transitions, recipient. |
+| `tests/briefer-agent.test.ts` | 10 | Quiet-day subject + empty-state markdown shape + manage-link footer. Populated-day metrics + sections_rendered + bolded destination stage + URL encoding + HTML anchor/heading/list/strong elements. Section toggles skip disabled fetchers. `mergeSections` defaults missing keys to true. `buildSubject` singular/plural. `markdownToHtml` HTML escaping + inline bold/italic + links. |
+
