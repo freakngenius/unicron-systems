@@ -296,6 +296,45 @@ export interface ProjectContact {
   surfaced_at: string;
 }
 
+// Lead contacts — Demo Polish UX § Gate 8.
+//
+// Mirrors a single row from `pathfinder.lead_contacts` (migration 0112).
+// Decision-maker enrichment surfaced by the contact-enricher cron + the
+// admin on-demand API. Distinct from `ProjectContact` (the legacy
+// `pathfinder.project_contacts` table; different shape, different writer).
+export interface LeadContactRow {
+  id: string;
+  project_id: string;
+  owner_organization: string;
+  contact_name: string;
+  role: string | null;
+  seniority:
+    | 'c_suite'
+    | 'vp'
+    | 'director'
+    | 'manager'
+    | 'individual_contributor'
+    | 'unknown'
+    | null;
+  email: string | null;
+  email_status: 'verified' | 'guessed' | 'invalid' | 'unknown' | null;
+  phone: string | null;
+  phone_type: 'direct' | 'mobile' | 'switchboard' | 'unknown' | null;
+  linkedin_url: string | null;
+  source: 'clay' | 'apollo' | 'hunter' | 'manual';
+  source_confidence: number | null;
+  decision_authority:
+    | 'signer'
+    | 'influencer'
+    | 'gatekeeper'
+    | 'champion'
+    | 'unknown'
+    | null;
+  enriched_at: string;
+  last_verified_at: string | null;
+  notes: string | null;
+}
+
 // Cross-pollination — Demo Polish UX § Gate 2.
 //
 // Mirrors a single row from `pathfinder.lead_cross_pollination` augmented with
