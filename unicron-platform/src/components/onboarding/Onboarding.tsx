@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { DefinePain } from './DefinePain';
 import { ArchitectThinking } from './ArchitectThinking';
+import { BuildingCluster } from './BuildingCluster';
 import { SystemDeployed } from './SystemDeployed';
 import { useSystem } from '../../context/SystemContext';
 
-type State = 'define' | 'thinking' | 'deployed';
+type State = 'define' | 'thinking' | 'building' | 'deployed';
 
 type Props = {
   onOpenLive: () => void;
@@ -13,7 +14,7 @@ type Props = {
 export function Onboarding({ onOpenLive }: Props) {
   const [state, setState] = useState<State>('define');
   const [prompt, setPrompt] = useState('');
-  const { deployDefault, resetToUnconfigured } = useSystem();
+  const { deploy, resetToUnconfigured } = useSystem();
 
   return (
     <div className="min-h-[calc(100vh-56px)] flex items-center justify-center">
@@ -30,12 +31,17 @@ export function Onboarding({ onOpenLive }: Props) {
       {state === 'thinking' && (
         <ArchitectThinking
           buyerPain={prompt}
-          onApprove={() => {
-            deployDefault(prompt);
-            setState('deployed');
+          onApprove={(config) => {
+            // Apply the architecture (either the unedited recommendation or
+            // the operator's edited shape) so BuildingCluster can derive its
+            // scripted timeline (data sources, agents) from real config.
+            deploy(config);
+            setState('building');
           }}
-          onEdit={() => setState('define')}
         />
+      )}
+      {state === 'building' && (
+        <BuildingCluster onComplete={() => setState('deployed')} />
       )}
       {state === 'deployed' && <SystemDeployed onOpenLive={onOpenLive} />}
     </div>
