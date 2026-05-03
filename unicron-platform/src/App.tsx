@@ -11,6 +11,7 @@ import { CustomersView } from './views/CustomersView';
 import { CustomerDetailView } from './views/CustomerDetailView';
 import { AuditLogView } from './views/audit-log/AuditLogView';
 import { ConnectorsHealthView } from './views/connectors-health/ConnectorsHealthView';
+import { EvalDashboardView } from './views/eval-dashboard/EvalDashboardView';
 import { SignInGate } from './components/auth/SignInGate';
 import { useAuth } from './lib/auth';
 import type { CustomerOrg } from './lib/contracts/customers';
@@ -51,6 +52,7 @@ function Shell() {
         )}
         {tab === 'audit' && <AuditLogView />}
         {tab === 'connectors-health' && <ConnectorsHealthView />}
+        {tab === 'eval-dashboard' && <EvalDashboardView />}
       </main>
 
       <SettingsDrawer open={settingsOpen} onClose={() => setSettingsOpen(false)} />
