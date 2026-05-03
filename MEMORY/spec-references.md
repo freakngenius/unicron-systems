@@ -732,3 +732,31 @@ Total new: 50 tests. All green; full Pathfinder suite remains 809 passing.
 | `tests/briefer-send.test.ts` | 5 | Happy path with stubbed integration + sendImpl + db (gmail integration → sends → outreach_sends row written with `type='briefing'`, `project_id=null`, `status='sent'`, `message_id` captured). Outlook fallback when gmail is absent. `no_active_integration` returns ok=false without inserting a row. sendImpl throw flips to `status='failed'` with `error_message`. Audit-row insert failure does NOT flip a successful send to failed (`ok=true, outreach_send_id=null`). |
 | `tests/briefer-cron.test.ts` | 12 | `shouldSkip` pure decision: paused → frequency_paused → wrong_day_for_weekly (Monday vs other) → wrong_local_hour. `hourInTz` / `isoWeekdayInTz` against PT, UTC, JP, NY (DST-aware). Iterator: counts sent / skipped / failed (including no_active_integration as skip). Pre-gate skips don't trigger compose. loadPrefs failure counted as failed and loop continues. Per-user error isolation. |
 
+
+---
+
+## Demo Polish UX Sprint — Gate 13W-C (daily intelligence loop, prefs UI + manual dispatch)
+
+**State:** PR pending. Stacked on 13W-B.
+
+#### Pathfinder/app/api/briefing/prefs/route.ts
+**Implements:** Gate 13W dispatch § "UI: brief preview + prefs" — GET (load briefing_prefs row, defaults if absent via `loadPrefs` from 13W-A) + POST (sanitize + upsert by user_id with `onConflict: 'user_id'`). Auth via `getCurrentUserId(req)` matching the existing pattern in `/api/connectors/hubspot/install`. Sanitizers reject malformed `frequency` (must be daily/weekly/paused), out-of-range `send_hour` (clamped to 0-23), missing `timezone` (falls back to default). Section toggles default to true for missing keys (additive section growth).
+**Last verified against spec:** 2026-05-03.
+**Drift:** none.
+
+#### Pathfinder/app/api/briefing/preview/route.ts
+**Implements:** Gate 13W dispatch § "UI: brief preview" — GET composes a brief for the current operator via `composeDailyBrief({ userId, now })` and returns `{ brief: { subject, markdown, html, metrics, sections_rendered } }` WITHOUT sending. Used by the settings page's preview pane.
+**Last verified against spec:** 2026-05-03.
+**Drift:** none.
+
+#### Pathfinder/app/api/briefing/dispatch/route.ts
+**Implements:** Gate 13W dispatch § "UI: Send me one now button" — POST composes + sends via `sendDailyBrief`. Bypasses `BRIEFING_CRON_ENABLED` and `shouldSkip` gates; this is the operator-initiated on-demand path. Returns 412 with error='no_active_integration' so the UI can prompt to connect a mailbox; 502 for other send failures.
+**Last verified against spec:** 2026-05-03.
+**Drift:** none.
+
+### Tests
+
+| File | Tests | Covers |
+|---|---|---|
+| `tests/briefing-prefs-form.test.tsx` | 6 | Renders no-operator-email message when localStorage is empty. Loads + populates form from `/prefs` response. Falls back to defaults on empty/malformed response. POST fires when Save clicked + shows "Saved." confirmation. Preview button populates the markdown preview pane. Dispatch returns no_active_integration → renders "Connect Gmail or Outlook" hint. |
+
