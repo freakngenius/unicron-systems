@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 //
-// Unit tests for components/lead/RawPayloadFacts (Gate 8X-3).
+// Unit tests for components/lead/SourceRecord (Gate 8X-3).
 //
 // Fixtures mirror real shapes seen in production: sam.gov Whiteriver
 // solicitation, usaspending VA award, harris county permit, news article.
@@ -10,7 +10,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 
-import { RawPayloadFacts } from '@/components/lead/RawPayloadFacts';
+import { SourceRecord } from '@/components/lead/SourceRecord';
 import type { Project } from '@/lib/types';
 
 afterEach(() => {
@@ -41,10 +41,10 @@ function makeProject(over: Partial<Project> = {}): Project {
   } as unknown as Project;
 }
 
-describe('RawPayloadFacts — sam.gov', () => {
+describe('SourceRecord — sam.gov', () => {
   it('renders solicitation card with agency, office, set-aside, soln, deadline + sam.gov link', () => {
     render(
-      <RawPayloadFacts
+      <SourceRecord
         project={makeProject({
           source: 'sam.gov',
           raw_payload: {
@@ -80,7 +80,7 @@ describe('RawPayloadFacts — sam.gov', () => {
 
   it('hides set-aside when value is "No Set aside used" (signal noise)', () => {
     render(
-      <RawPayloadFacts
+      <SourceRecord
         project={makeProject({
           source: 'sam.gov',
           raw_payload: {
@@ -96,14 +96,14 @@ describe('RawPayloadFacts — sam.gov', () => {
 
   it('returns null when raw_payload is null', () => {
     const { container } = render(
-      <RawPayloadFacts project={makeProject({ source: 'sam.gov', raw_payload: null })} />,
+      <SourceRecord project={makeProject({ source: 'sam.gov', raw_payload: null })} />,
     );
     expect(container.firstChild).toBeNull();
   });
 
   it('returns null when no fields populate any row', () => {
     const { container } = render(
-      <RawPayloadFacts
+      <SourceRecord
         project={makeProject({
           source: 'sam.gov',
           raw_payload: { someOtherField: 'x' } as unknown as Record<string, unknown>,
@@ -114,10 +114,10 @@ describe('RawPayloadFacts — sam.gov', () => {
   });
 });
 
-describe('RawPayloadFacts — usaspending', () => {
+describe('SourceRecord — usaspending', () => {
   it('renders award card with recipient, agency, award id, period, place + usaspending link', () => {
     render(
-      <RawPayloadFacts
+      <SourceRecord
         project={makeProject({
           source: 'usaspending',
           raw_payload: {
@@ -150,7 +150,7 @@ describe('RawPayloadFacts — usaspending', () => {
 
   it('falls back to keyword search link when agency_slug missing', () => {
     render(
-      <RawPayloadFacts
+      <SourceRecord
         project={makeProject({
           source: 'usaspending',
           raw_payload: {
@@ -166,10 +166,10 @@ describe('RawPayloadFacts — usaspending', () => {
   });
 });
 
-describe('RawPayloadFacts — harris', () => {
+describe('SourceRecord — harris', () => {
   it('renders permit type, filing date, address, contractor flag', () => {
     render(
-      <RawPayloadFacts
+      <SourceRecord
         project={makeProject({
           source: 'harris' as Project['source'],
           raw_payload: {
@@ -190,7 +190,7 @@ describe('RawPayloadFacts — harris', () => {
 
   it('renders No when contractor_listed is false', () => {
     render(
-      <RawPayloadFacts
+      <SourceRecord
         project={makeProject({
           source: 'harris' as Project['source'],
           raw_payload: {
@@ -204,10 +204,10 @@ describe('RawPayloadFacts — harris', () => {
   });
 });
 
-describe('RawPayloadFacts — news', () => {
+describe('SourceRecord — news', () => {
   it('renders publication, link to article, published date', () => {
     render(
-      <RawPayloadFacts
+      <SourceRecord
         project={makeProject({
           source: 'news',
           raw_payload: {
@@ -228,10 +228,10 @@ describe('RawPayloadFacts — news', () => {
   });
 });
 
-describe('RawPayloadFacts — unknown source', () => {
+describe('SourceRecord — unknown source', () => {
   it('returns null for an unrecognized source', () => {
     const { container } = render(
-      <RawPayloadFacts
+      <SourceRecord
         project={makeProject({ source: 'mystery' as Project['source'] })}
       />,
     );
