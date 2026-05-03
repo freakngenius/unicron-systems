@@ -97,3 +97,7 @@ Resume condition: once `unicron-systems` deploys READY for `49a3c9d` (or any sub
 1. Quick fix: env var restored, `unicron-systems` main deploy READY for the current commit.
 2. Durable fix: PR opened that adds `export const dynamic = 'force-dynamic'` to all ~14 affected routes; merged; subsequent build succeeds without relying on env-var-at-prerender-time.
 3. M0 entry's "14-route force-dynamic refactor … non-blocking cleanup todo" can be marked done.
+
+---
+
+RESOLVED at 3672b204ca3686e48dee790f99eda951ea8eaa67 · merged at 2026-05-03T02:48:43Z (PR #93). Force-dynamic applied to all 15 affected routes + `app/app/page.tsx`. Multi-Vercel post-merge state at merge SHA: unicron-systems READY (`dpl_2djJs1BopcHWFwq1NFzF6o6FNPxK`), metacron READY (`dpl_4E53tgiPTqTAKx9QRoD5iVryhWXa`), pathfinder READY (`dpl_GNPKWKm4XYpajcJiCouFtCAV7tLD`). Vercel build log confirms all 15 routes + `/app` show `ƒ (Dynamic)`; `/app` flipped from Static (`revalidate = 30`) to Dynamic.
