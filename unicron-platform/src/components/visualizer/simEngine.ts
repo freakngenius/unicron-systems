@@ -144,6 +144,7 @@ export class SimEngine {
   hoveredNodeId: number | null = null;
   clickHandler: (e: MouseEvent) => void;
   resizeHandler: () => void;
+  resizeObserver: ResizeObserver | null = null;
   visibilityHandler: () => void;
   lastHudPush = 0;
 
@@ -172,7 +173,16 @@ export class SimEngine {
     this.resizeHandler = () => this.resize();
     this.visibilityHandler = () => this.handleVisibility();
     this.canvas.addEventListener('click', this.clickHandler);
-    window.addEventListener('resize', this.resizeHandler);
+    // Observe the canvas itself so we react to layout changes (initial flush,
+    // grid stretch, sibling collapse) — not just window resize. Without this,
+    // a canvas mounted before its parent has computed dimensions falls back to
+    // the 300×150 default in resize() and is then CSS-stretched into an ellipse.
+    if (typeof ResizeObserver !== 'undefined') {
+      this.resizeObserver = new ResizeObserver(this.resizeHandler);
+      this.resizeObserver.observe(this.canvas);
+    } else {
+      window.addEventListener('resize', this.resizeHandler);
+    }
     document.addEventListener('visibilitychange', this.visibilityHandler);
 
     const tick = () => {
@@ -196,7 +206,12 @@ export class SimEngine {
     if (this.rafHandle != null) cancelAnimationFrame(this.rafHandle);
     this.rafHandle = null;
     this.canvas.removeEventListener('click', this.clickHandler);
-    window.removeEventListener('resize', this.resizeHandler);
+    if (this.resizeObserver) {
+      this.resizeObserver.disconnect();
+      this.resizeObserver = null;
+    } else {
+      window.removeEventListener('resize', this.resizeHandler);
+    }
     document.removeEventListener('visibilitychange', this.visibilityHandler);
     gsap.killTweensOf(this.nodes);
     gsap.killTweensOf(this.tracers);
