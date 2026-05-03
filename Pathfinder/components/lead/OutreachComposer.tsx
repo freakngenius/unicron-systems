@@ -14,6 +14,10 @@ import * as React from 'react';
 
 import { hexAlpha, PF_TINTS } from '@/lib/agent-tints';
 
+import { ActivateIntegrationModal } from './ActivateIntegrationModal';
+
+const DEFAULT_OPERATOR_EMAIL = 'kyle@freakngenius.com';
+
 export interface OutreachDraftValue {
   to: string;
   subject: string;
@@ -38,6 +42,10 @@ interface Props {
   isConnected: boolean;
   /** Settings link target for connecting a provider when not connected. */
   settingsHref?: string;
+  /** Operator's email for the OAuth start URL's `actor` parameter. The
+   *  existing /api/email/oauth/start endpoint keys email_integrations
+   *  rows by actor_email. Defaults to the demo operator. */
+  actorEmail?: string;
   /** Optional. Fired after a successful send so the parent can refresh
    *  the sent-history sub-section. */
   onSendComplete?: () => void;
@@ -50,6 +58,7 @@ export function OutreachComposer({
   fromDisplay,
   isConnected,
   settingsHref = '/pathfinder/settings/connections',
+  actorEmail = DEFAULT_OPERATOR_EMAIL,
   onSendComplete,
 }: Props): React.ReactElement {
   const [to, setTo] = React.useState(initialDraft.to);
@@ -60,6 +69,12 @@ export function OutreachComposer({
     kind: 'ok' | 'err';
     message: string;
   } | null>(null);
+  // Gate 11B — when Send returns `no_connection` (or any
+  // no_active_integration variant), surface the inline shortcut modal
+  // with Connect Gmail / Connect Outlook tiles. The modal links to the
+  // existing /api/email/oauth/start endpoint.
+  const [needsConnection, setNeedsConnection] = React.useState(false);
+  const [activateModalOpen, setActivateModalOpen] = React.useState(false);
 
   // Re-seed fields when the parent bumps `seedNonce`. Watching nonce
   // (not the draft values) lets the parent reset operator-typed state
@@ -87,6 +102,7 @@ export function OutreachComposer({
       return;
     }
     setSubmitting(true);
+    setNeedsConnection(false);
     try {
       // Gate 9D — connection-routed send endpoint. Server resolves the
       // operator's user_connections row (or falls back to
@@ -109,11 +125,15 @@ export function OutreachComposer({
       if (res.ok && json.ok) {
         setFeedback({ kind: 'ok', message: 'Sent.' });
         if (onSendComplete) onSendComplete();
-      } else if (json.code === 'no_connection') {
-        setFeedback({
-          kind: 'err',
-          message: 'Not connected. Connect Gmail or Outlook in Settings.',
-        });
+      } else if (
+        json.code === 'no_connection' ||
+        json.error === 'no_active_integration' ||
+        (typeof json.error === 'string' && /no[_ ]active[_ ]integration/i.test(json.error))
+      ) {
+        // Gate 11B — surface the inline Activate Integration shortcut
+        // instead of a bare error message.
+        setNeedsConnection(true);
+        setFeedback(null);
       } else {
         setFeedback({
           kind: 'err',
@@ -240,6 +260,61 @@ export function OutreachComposer({
         </div>
       )}
 
+      {/* Gate 11B — friendly card replaces the bare error text on the
+          no_active_integration path. Primary action opens the inline
+          ActivateIntegrationModal with Connect Gmail / Connect Outlook
+          tiles; both link to the existing /api/email/oauth/start endpoint. */}
+      {needsConnection && (
+        <div
+          data-testid="outreach-composer-needs-connection"
+          style={{
+            padding: 14,
+            border: `1px solid ${hexAlpha('#9d35ff', 0.4)}`,
+            background: hexAlpha('#9d35ff', 0.06),
+            borderRadius: PF_TINTS.r.md,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 10,
+          }}
+        >
+          <div
+            style={{
+              font: `600 13.5px ${PF_TINTS.sans}`,
+              color: PF_TINTS.ink,
+            }}
+          >
+            Connect your email to send from Pathfinder.
+          </div>
+          <div
+            style={{
+              font: `400 12.5px/1.5 ${PF_TINTS.sans}`,
+              color: PF_TINTS.inkSub,
+            }}
+          >
+            Outreach sends from your own inbox so replies land where you
+            already work.
+          </div>
+          <div>
+            <button
+              type="button"
+              onClick={() => setActivateModalOpen(true)}
+              data-testid="outreach-composer-activate-integration"
+              style={{
+                background: '#9d35ff',
+                color: '#fff',
+                border: '1px solid #9d35ff',
+                padding: '8px 16px',
+                borderRadius: 3,
+                font: `500 13px ${PF_TINTS.sans}`,
+                cursor: 'pointer',
+              }}
+            >
+              Activate Integration
+            </button>
+          </div>
+        </div>
+      )}
+
       <div
         style={{
           display: 'flex',
@@ -266,6 +341,12 @@ export function OutreachComposer({
           {submitting ? 'Sending…' : 'Send'}
         </button>
       </div>
+
+      <ActivateIntegrationModal
+        open={activateModalOpen}
+        onClose={() => setActivateModalOpen(false)}
+        actorEmail={actorEmail}
+      />
     </section>
   );
 }
