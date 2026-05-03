@@ -24,6 +24,7 @@ import {
   type CrossPollinationMatchRow,
 } from '@/components/zedcor/ZedcorRelationshipContext';
 import { hexAlpha, PF_TINTS } from '@/lib/agent-tints';
+import type { ScoringOutput } from '@/lib/scoring';
 import type { TimelineEvent } from '@/lib/timeline';
 import type {
   EmailIntegrationStatus,
@@ -55,6 +56,11 @@ interface LeadDetailProps {
   // layout untouched). Set by the page route from
   // process.env.LEAD_DETAIL_REDESIGN === '1'.
   redesignEnabled?: boolean;
+  // Demo Polish UX Gate 7C — pre-computed per-component scoring breakdown
+  // from the page route's scoreProject() call. Null when the project lacks
+  // the geographic data required to recompute; ScoreBreakdown then renders
+  // the composite-only fallback.
+  scoringBreakdown?: ScoringOutput | null;
 }
 
 export function LeadDetail({
@@ -66,6 +72,7 @@ export function LeadDetail({
   crossPollMatches = [],
   zedcorBranch = null,
   redesignEnabled = false,
+  scoringBreakdown = null,
 }: LeadDetailProps) {
   // Z-F integrator — header now also surfaces the nearest Zedcor branch +
   // distance and a "Warm intro" badge when we have cross-poll matches.
@@ -156,6 +163,7 @@ export function LeadDetail({
           timelineEvents={timelineEvents}
           crossPollMatches={crossPollMatches}
           zedcorBranch={zedcorBranch}
+          scoringBreakdown={scoringBreakdown}
         />
       ) : (
         <>
@@ -218,6 +226,7 @@ function RedesignedBody({
   timelineEvents,
   crossPollMatches,
   zedcorBranch,
+  scoringBreakdown,
 }: {
   project: Project;
   latestEmailDraft: OutreachDraft | null;
@@ -226,6 +235,7 @@ function RedesignedBody({
   timelineEvents?: TimelineEvent[];
   crossPollMatches: CrossPollinationMatchRow[];
   zedcorBranch: ZedcorBranchInfo | null;
+  scoringBreakdown: ScoringOutput | null;
 }) {
   // Hook insertion bridge — CrossPollinationCard fires onInsertHook with the
   // selected hook text; we bump nonce and pass the override down to
@@ -282,7 +292,9 @@ function RedesignedBody({
       />
       <RecommendedAction project={project} />
       <ProjectStory project={project} />
-      {!noRationaleAndNoScore && <ScoreBreakdown project={project} />}
+      {!noRationaleAndNoScore && (
+        <ScoreBreakdown project={project} breakdown={scoringBreakdown} />
+      )}
       <EmailComposer
         project={project}
         draft={latestEmailDraft}

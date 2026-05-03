@@ -8,9 +8,12 @@ import { notFound } from 'next/navigation';
 
 import { LeadDetail } from '@/components/lead/LeadDetail';
 import type { CrossPollinationMatchRow } from '@/components/zedcor/ZedcorRelationshipContext';
+import { scoreProject, type ScoringOutput } from '@/lib/scoring';
 import { supabase } from '@/lib/supabase';
 import { buildTimelineForProject, type TimelineEvent } from '@/lib/timeline';
 import type {
+  Branch,
+  Customer,
   OutreachDraft,
   OutreachEdit,
   Project,
@@ -37,6 +40,8 @@ async function fetchData(projectId: string): Promise<{
   timelineEvents: TimelineEvent[];
   crossPollMatches: CrossPollinationMatchRow[];
   zedcorBranch: ZedcorBranchInfo | null;
+  branches: Branch[];
+  customers: Customer[];
 }> {
   const [
     projectRes,
@@ -45,6 +50,8 @@ async function fetchData(projectId: string): Promise<{
     editsRes,
     timelineEvents,
     crossPollRes,
+    branchesRes,
+    customersRes,
   ] = await Promise.all([
     supabase.from('projects').select('*').eq('id', projectId).maybeSingle(),
     supabase
@@ -75,6 +82,11 @@ async function fetchData(projectId: string): Promise<{
       .eq('lead_id', projectId)
       .order('match_confidence', { ascending: false })
       .limit(10),
+    // Gate 7C — branches + customers for the ScoreBreakdown recompute.
+    // Small-cardinality reads (Zedcor has ~5 branches, ~50 customers).
+    // Used by the page-route's scoreProject() call below.
+    supabase.from('branches').select('*'),
+    supabase.from('customers').select('*'),
   ]);
 
   const project = (projectRes.data as Project | null) ?? null;
@@ -100,7 +112,28 @@ async function fetchData(projectId: string): Promise<{
     timelineEvents,
     crossPollMatches: ((crossPollRes.data ?? []) as unknown as CrossPollinationMatchRow[]) ?? [],
     zedcorBranch,
+    branches: ((branchesRes.data ?? []) as Branch[]) ?? [],
+    customers: ((customersRes.data ?? []) as Customer[]) ?? [],
   };
+}
+
+// Gate 7C — recompute the per-component scoring breakdown server-side so the
+// ScoreBreakdown component can render geo/stage/customer rows without a
+// client fetch. Returns null when project lacks geographic data (scoreProject
+// throws on missing lat/lon) — ScoreBreakdown falls back to composite-only.
+function computeBreakdown(
+  project: Project,
+  branches: Branch[],
+  customers: Customer[],
+): ScoringOutput | null {
+  if (project.lat == null || project.lon == null || branches.length === 0) {
+    return null;
+  }
+  try {
+    return scoreProject({ project, branches, customers });
+  } catch {
+    return null;
+  }
 }
 
 export default async function LeadDetailPage({
@@ -116,15 +149,15 @@ export default async function LeadDetailPage({
     timelineEvents,
     crossPollMatches,
     zedcorBranch,
+    branches,
+    customers,
   } = await fetchData(params.projectId);
   if (!project) notFound();
 
   // Demo Polish UX Gate 7A — flag-gated lead detail redesign. Read at the
-  // server-component boundary; default off. When `1`, LeadDetail renders the
-  // new component composition (QuickFactsGrid full; other 6 sections
-  // stubbed). When unset/0, the existing pre-redesign layout renders
-  // untouched.
+  // server-component boundary; default off.
   const redesignEnabled = process.env.LEAD_DETAIL_REDESIGN === '1';
+  const scoringBreakdown = computeBreakdown(project, branches, customers);
 
   return (
     <LeadDetail
@@ -136,6 +169,7 @@ export default async function LeadDetailPage({
       crossPollMatches={crossPollMatches}
       zedcorBranch={zedcorBranch}
       redesignEnabled={redesignEnabled}
+      scoringBreakdown={scoringBreakdown}
     />
   );
 }
