@@ -71,6 +71,12 @@ interface LeadDetailProps {
   // so this is effectively always true today; passed explicitly so the
   // shape generalizes when per-rep auth lands.
   isAdmin?: boolean;
+  // Demo Polish UX Gate 9D — operator's resolved connection. Server-side
+  // page route resolves user_connections (with email_integrations
+  // fallback) and passes the formatted display + isConnected state.
+  // Default: no connection (Send disabled, Settings link surfaced).
+  fromDisplay?: string;
+  isConnected?: boolean;
 }
 
 export function LeadDetail({
@@ -85,6 +91,8 @@ export function LeadDetail({
   redesignEnabled = false,
   isTopFifty = false,
   isAdmin = false,
+  fromDisplay = 'Not connected',
+  isConnected = false,
 }: LeadDetailProps) {
   // Z-F integrator — header now also surfaces the nearest Zedcor branch +
   // distance and a "Warm intro" badge when we have cross-poll matches.
@@ -178,6 +186,8 @@ export function LeadDetail({
           zedcorBranch={zedcorBranch}
           isTopFifty={isTopFifty}
           isAdmin={isAdmin}
+          fromDisplay={fromDisplay}
+          isConnected={isConnected}
         />
       ) : (
         <>
@@ -260,6 +270,8 @@ function RedesignedBody({
   zedcorBranch,
   isTopFifty,
   isAdmin,
+  fromDisplay,
+  isConnected,
 }: {
   project: Project;
   latestEmailDraft: OutreachDraft | null;
@@ -271,6 +283,8 @@ function RedesignedBody({
   zedcorBranch: ZedcorBranchInfo | null;
   isTopFifty: boolean;
   isAdmin: boolean;
+  fromDisplay: string;
+  isConnected: boolean;
 }) {
   // Hook insertion bridge — CrossPollinationCard fires onInsertHook with the
   // selected hook text; we bump nonce and pass the override down to
@@ -392,8 +406,8 @@ function RedesignedBody({
           projectId={project.id}
           leadContacts={leadContacts}
           recentEdits={recentEdits}
-          fromDisplay="kyle@freakngenius.com via Gmail"
-          isConnected={true}
+          fromDisplay={fromDisplay}
+          isConnected={isConnected}
           bodyOverride={bodyOverride}
           recipientOverride={recipientOverride}
         />
