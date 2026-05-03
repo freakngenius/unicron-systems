@@ -6,6 +6,7 @@ import { writeNotionRun } from "@/lib/patterns/beehive/notion";
 import { logger } from "@/lib/logger";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 export const maxDuration = 120;
 
 const Body = z.object({

@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getMetaSummary } from "@/lib/patterns/meta";
 import { RunDemoSuiteButton } from "@/components/run-demo-suite";
 
-export const revalidate = 30;
+export const dynamic = "force-dynamic";
 
 export default async function MetaDashboard() {
   const s = await getMetaSummary();

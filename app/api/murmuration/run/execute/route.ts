@@ -6,6 +6,7 @@ import { writeNotionFlock } from "@/lib/patterns/murmuration/notion";
 import { logger } from "@/lib/logger";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
 const Body = z.object({ run_id: z.string().uuid() });

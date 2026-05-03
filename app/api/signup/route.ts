@@ -8,6 +8,8 @@ function getSupabase() {
   );
 }
 
+export const dynamic = "force-dynamic";
+
 export async function POST(req: NextRequest) {
   try {
     const { name, email } = await req.json();

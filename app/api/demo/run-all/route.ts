@@ -11,6 +11,7 @@ import { loadFixture } from "@/lib/patterns/slime/cycle";
 import { classifySignal } from "@/lib/patterns/mycelium/classify";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
 function encode(line: { step: string; ok: boolean; note?: string }) {
