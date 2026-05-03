@@ -82,6 +82,15 @@ describe('OutreachSection — initial state', () => {
     expect(screen.getByTestId('outreach-composer-send')).toBeDisabled();
   });
 
+  // Gate 12B — the default Settings link must point at the actual
+  // /pathfinder/settings/connectors route. Prior to 12B it pointed at
+  // /pathfinder/settings/connections (404 in prod).
+  it('Settings link points at /pathfinder/settings/connectors (gate 12B regression)', () => {
+    renderSection({ isConnected: false });
+    const link = screen.getByTestId('outreach-composer-connect-link');
+    expect(link).toHaveAttribute('href', '/pathfinder/settings/connectors');
+  });
+
   it('does NOT render Sent History when no recent edits', () => {
     renderSection();
     expect(screen.queryByTestId('outreach-sent-history')).toBeNull();
