@@ -227,24 +227,148 @@ function RedesignedBody({
   crossPollMatches: CrossPollinationMatchRow[];
   zedcorBranch: ZedcorBranchInfo | null;
 }) {
+  // Hook insertion bridge — CrossPollinationCard fires onInsertHook with the
+  // selected hook text; we bump nonce and pass the override down to
+  // EmailComposer, which uses an effect (watching nonce) to overwrite the
+  // body. This keeps EmailComposer's own state intact when no override is
+  // pending, while letting the operator click "Open in Outreach with this
+  // hook" to seed the composer.
+  const [bodyOverride, setBodyOverride] = React.useState<{
+    text: string;
+    nonce: number;
+  } | null>(null);
+  const handleInsertHook = React.useCallback((hook: string) => {
+    setBodyOverride((prev) => ({ text: hook, nonce: (prev?.nonce ?? 0) + 1 }));
+    // Scroll the composer into view so the operator sees the inserted hook.
+    if (typeof document !== 'undefined') {
+      const el = document.getElementById('lead-email-composer');
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, []);
+
+  // Page-level empty states (per spec § "Empty states (page-level)"):
+  // - rejected → muted page state + banner
+  // - score present but enriched_at null → "Request enrichment" banner
+  // - rationale null → handled implicitly (RecommendedAction null-renders;
+  //   DecisionBar generates "Pending rank" via score==null path; we also
+  //   suppress ScoreBreakdown when rationale is missing AND score is null,
+  //   per the spec's "suppress sections 5, 7" intent).
+  const rejected = project.rejection_reason != null;
+  const enrichmentMissing =
+    project.score != null && project.enriched_at == null && !rejected;
+  const noRationaleAndNoScore = project.rationale == null && project.score == null;
+
   return (
     <div
       data-testid="lead-detail-redesigned"
-      style={{ display: 'flex', flexDirection: 'column', gap: 16 }}
+      data-rejected={rejected ? 'true' : 'false'}
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 16,
+        opacity: rejected ? 0.6 : 1,
+      }}
     >
-      <DecisionBar project={project} hasCrossPollMatches={crossPollMatches.length > 0} />
+      {rejected && (
+        <RejectedBanner reason={project.rejection_reason!} rejectedAt={project.rejected_at ?? null} />
+      )}
+      {enrichmentMissing && <EnrichmentRequestBanner projectId={project.id} />}
+      <DecisionBar project={project} matches={crossPollMatches} />
       <QuickFactsGrid project={project} />
-      <CrossPollinationCard matches={crossPollMatches} targetRegion={zedcorBranch?.state ?? null} />
+      <CrossPollinationCard
+        matches={crossPollMatches}
+        targetRegion={zedcorBranch?.state ?? null}
+        onInsertHook={handleInsertHook}
+      />
       <RecommendedAction project={project} />
       <ProjectStory project={project} />
-      <ScoreBreakdown project={project} />
-      <EmailComposer project={project} draft={latestEmailDraft} contacts={contacts} />
-      {recentEdits.length > 0 && (
-        <RecentSendsBlock recentEdits={recentEdits} />
-      )}
+      {!noRationaleAndNoScore && <ScoreBreakdown project={project} />}
+      <EmailComposer
+        project={project}
+        draft={latestEmailDraft}
+        contacts={contacts}
+        bodyOverride={bodyOverride}
+      />
+      {recentEdits.length > 0 && <RecentSendsBlock recentEdits={recentEdits} />}
       <Timeline projectId={project.id} initialEvents={timelineEvents} />
       <SourceCitations project={project} />
     </div>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────────
+// Page-level empty-state banners (Gate 7B — spec § "Empty states (page-level)")
+// ────────────────────────────────────────────────────────────────────────
+
+function RejectedBanner({
+  reason,
+  rejectedAt,
+}: {
+  reason: string;
+  rejectedAt: string | null;
+}) {
+  return (
+    <section
+      data-testid="lead-detail-rejected-banner"
+      style={{
+        background: hexAlpha('#dc2626', 0.08),
+        border: `1px solid ${hexAlpha('#dc2626', 0.4)}`,
+        borderRadius: PF_TINTS.r.md,
+        padding: 12,
+        font: `500 13px ${PF_TINTS.sans}`,
+        color: '#b91c1c',
+      }}
+    >
+      Lead rejected — <strong>{reason}</strong>
+      {rejectedAt && (
+        <span style={{ font: `400 11px ${PF_TINTS.mono}`, marginLeft: 8 }}>
+          ({new Date(rejectedAt).toISOString().slice(0, 10)})
+        </span>
+      )}
+    </section>
+  );
+}
+
+function EnrichmentRequestBanner({ projectId }: { projectId: string }) {
+  // Spec § page-level empty state: surface a "Request enrichment" affordance
+  // when the lead has a score but enriched_at is null (top-50 cap excluded
+  // it). The /api/enrichment/request endpoint doesn't exist yet (Gate 8
+  // territory) — we render the link with an alert handler so the affordance
+  // is visible without a false promise.
+  const onClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (typeof window !== 'undefined') {
+      window.alert(
+        `Request enrichment for ${projectId} — endpoint pending Gate 8.`,
+      );
+    }
+  };
+  return (
+    <section
+      data-testid="lead-detail-enrichment-banner"
+      style={{
+        background: hexAlpha('#3b82f6', 0.06),
+        border: `1px solid ${hexAlpha('#3b82f6', 0.3)}`,
+        borderRadius: PF_TINTS.r.md,
+        padding: 10,
+        font: `400 12px ${PF_TINTS.sans}`,
+        color: PF_TINTS.inkSub,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 12,
+      }}
+    >
+      <span>This lead has a score but hasn&apos;t been enriched yet.</span>
+      <a
+        href="#"
+        onClick={onClick}
+        data-testid="lead-detail-enrichment-request-link"
+        style={{ color: '#3b82f6', font: `500 12px ${PF_TINTS.sans}` }}
+      >
+        Request enrichment
+      </a>
+    </section>
   );
 }
 
@@ -304,9 +428,16 @@ interface EmailComposerProps {
   project: Project;
   draft: OutreachDraft | null;
   contacts: ProjectContact[];
+  /**
+   * Optional body-override bridge from the redesigned page (Gate 7B). When
+   * `nonce` changes, EmailComposer overwrites its body with `text`. Lets
+   * CrossPollinationCard's "Open in Outreach with this hook" feed the
+   * composer without making body fully controlled.
+   */
+  bodyOverride?: { text: string; nonce: number } | null;
 }
 
-function EmailComposer({ project, draft, contacts }: EmailComposerProps) {
+function EmailComposer({ project, draft, contacts, bodyOverride }: EmailComposerProps) {
   const initialSubject = draft?.draft_subject ?? '';
   const initialBody = draft?.draft_body ?? '';
   const initialRecipient = pickRecipientEmail(contacts) ?? '';
@@ -319,6 +450,18 @@ function EmailComposer({ project, draft, contacts }: EmailComposerProps) {
   const [statuses, setStatuses] = React.useState<EmailIntegrationStatus[] | null>(null);
   const [submitting, setSubmitting] = React.useState<boolean>(false);
   const [feedback, setFeedback] = React.useState<{ kind: 'ok' | 'err'; message: string } | null>(null);
+
+  // Apply hook-insertion overrides from the redesigned page. Watching
+  // `nonce` lets the parent re-fire the same hook text without stale-deps
+  // pitfalls. We prepend the hook to whatever's already in the body so
+  // operator edits aren't blown away.
+  const lastNonce = React.useRef<number | null>(null);
+  React.useEffect(() => {
+    if (!bodyOverride) return;
+    if (bodyOverride.nonce === lastNonce.current) return;
+    lastNonce.current = bodyOverride.nonce;
+    setBody((prev) => (prev ? `${bodyOverride.text}\n\n${prev}` : bodyOverride.text));
+  }, [bodyOverride]);
 
   // Operator identity isn't carried in basic-auth headers, so v1 caches the
   // rep's email in localStorage. Future iterations swap to Supabase Auth.
@@ -407,6 +550,7 @@ function EmailComposer({ project, draft, contacts }: EmailComposerProps) {
 
   return (
     <section
+      id="lead-email-composer"
       style={{
         background: PF_TINTS.bg,
         border: `1px solid ${PF_TINTS.ruleSoft}`,
