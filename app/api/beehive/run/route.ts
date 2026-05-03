@@ -3,6 +3,7 @@ import { z } from "zod";
 import { supabaseService } from "@/lib/supabase";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 const Body = z.object({
   input_url: z.string().min(4).max(200),
