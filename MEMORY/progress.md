@@ -4,6 +4,71 @@ Cross-stream progress log. Newest entries on top. One section per stream/sprint.
 
 ---
 
+## Stream M2 (Metacron) — 2026-05-02
+
+Phase 1 / Stream M2 (Source Onboarder Modal) shipped to PR #84 (open, awaiting Kyle review). Branched from M1 (`feat/metacron-m1-coverage-expansion`) so M2 inherits the `AgentDefinition.modalComponent` extension; rebases cleanly onto main once M1 (PR #80) merges.
+
+**Files (all under `unicron-platform/`):**
+
+- `src/views/agents/SourceOnboarderModal.tsx` (new) — orchestrator with the `isMockRuntime` gate (mirrors M1). Three result branches: Tier 1 (live), Tier 2 (human-assist), declined.
+- `src/components/agents/source-onboarder/SourceOnboarderInputForm.tsx` (new) — URL or description (either-or), hint dropdown (`socrata` / `rest` / `rss` / `json-dump`), jurisdiction, `api_key_env` (NAME ONLY — never the key), test_only checkbox.
+- `src/components/agents/source-onboarder/SourceOnboarderResultPanel.tsx` (new) — Tier 1 schema preview + Commit, Tier 2 escalation block + Open Ticket, declined reason. Tier 1 commit verifies the dispatch.
+- `src/components/agents/Tier2ResolveModal.tsx` (new — exported for reuse) — three modes (manual / dismiss / resume). Required note for manual + dismiss; resume reveals URL / api_key_env / hint / jurisdiction overrides. Backed by `POST /api/architect/inbox/[id]/resolve`.
+- `src/lib/inboxClient.ts` (new) — typed wrapper for inbox list + resolve. Reuses `VITE_ARCHITECT_API_*` env (architect inbox is shared between Stream D and Stream E by category).
+- `src/lib/contracts/inbox.ts` (new) — wire types matching the Pathfinder route handlers.
+- `src/lib/agents/sourceOnboarderAgent.ts` (new) — registry entry; lazy `modalComponent`.
+- `src/lib/agents/index.ts` (extended) — registers `sourceOnboarderAgent` alongside M1's `coverageExpansionAgent`.
+- `src/data/mocks.ts` (additive, +156 LOC) — `sourceOnboarderDispatchesMock`, `inboxTicketsMock` (Pittsburgh RSS + Austin 401 fixtures), `sourceOnboarderMockOnboardResult` / `sourceOnboarderMockTier2Result`, 10-step scripted live timeline.
+- `src/components/live/panels/AddSourcePanel.tsx` — replaced with a redirect shim that surfaces "moved to Agents tab → Source Onboarder."
+- `src/components/live/panels/_archive/AddSourcePanel.tsx` (moved via `git mv`) — original two-phase analyze/deploy panel preserved per `feedback_no_deletes.md`.
+- `tsconfig.app.json` + `eslint.config.js` — exclude `src/**/_archive/**` from build + lint so archived code doesn't pollute baselines.
+
+**Tests:**
+
+- `src/lib/inboxClient.test.ts` — 7 tests (mock + real modes; filter/query encoding, error mapping, all three resolution modes).
+- `src/components/agents/Tier2ResolveModal.test.tsx` — 5 tests (mode coverage manual/dismiss/resume + validation).
+- `src/components/agents/source-onboarder/SourceOnboarderInputForm.test.tsx` — 3 tests (validation, payload, `toOnboardRequest` mapping).
+- `src/components/agents/source-onboarder/SourceOnboarderResultPanel.test.tsx` — 4 tests (Tier 1 + Tier 2 + declined + readOnly).
+- `src/views/agents/SourceOnboarderModal.test.tsx` — 3 tests (Tier 1 happy path, Tier 2 escalation surfaces `Tier2ResolveModal`, error path).
+
+Total: 22 new. Suite went 101 → 123, all passing.
+
+**Pre-flight (verbatim):**
+
+```
+$ npm run typecheck   → exit 0 (clean)
+$ npm test            → Test Files 21 passed (21) | Tests 123 passed (123) | Duration 4.40s
+$ npm run lint        → 13 problems (11 errors, 2 warnings) — matches origin/main baseline; zero new
+$ npm run build       → built in 642ms; SourceOnboarderModal lazy chunk 25.79 kB / 6.82 kB gzip
+```
+
+**Multi-Vercel state at branch settle (verbatim):**
+
+- **metacron** preview `dpl_AAzKom8wzVvAcquzsV5GhSbwBSXb` for commit `<m2-sha>` — **READY**. URL: `metacron-nlsvzdrpc-kekas-projects-89ac4317.vercel.app`.
+- **pathfinder** main production `dpl_5XfN8KDYJ2Zjafzbx3amh1NaHrHM` at `7d707a28` — **READY**.
+- **unicron-systems** main production `dpl_WAtRG7Z1gZgKQJdk5EcqNdVG6cGK` at `7d707a28` — **READY**.
+
+**Coordination filed:**
+
+- **PR #80 (M1)** depends on this PR's `Tier2ResolveModal` export. The coordination watcher (`trig_01FdqrNFnMKq3pS1rNJJcG12`) auto-flags the M2 merge so M1's `onTier2Click` no-op can swap to `setTier2Ticket(candidate)` — single-line edit.
+- **AddSourcePanel redirect**: LiveSystem ActionBar → "Add Source" still works; the panel renders a "moved to Agents tab" notice + close. A follow-up can thread `onSwitchToAgentsTab` through ActionBar/LiveSystem if friction warrants.
+
+**Outstanding TODOs:**
+
+- **Real-mode env decision** (Kyle): direct browser → Pathfinder routes vs. server-side proxy. Either works with this PR's clients.
+- **Phase 1F verification write** — same as M1; adds `pathfinder.agent_verifications` row when the Pathfinder bridge ships.
+- **Ticket fetch by ID** — Pathfinder's inbox route lacks a single-ticket GET; M2's `realFetchTicket` narrows the open-list response. Acceptable for small queues; revisit if queue grows.
+- **AdapterCode inline edit** — preview-only this PR. Edit-in-place is a follow-up sprint per the M2 prompt.
+
+**Kanban (Metacron Features data source `07970e18-984a-4034-b491-cde76b9b1bad`):**
+
+- "Tier 2 ticket resolution UI" (existing card `354785c6-7e72-8179-8fe2-fffff00e16bb`) → Stage `Not Yet Started` → `Review`. Scope absorbed into Source Onboarder Modal.
+- "Source Onboarder Modal" (NEW card) → Stage `Review`. Created with full PR + branch + test-delta + coordination notes.
+
+PR: https://github.com/freakngenius/unicron-systems/pull/84
+
+---
+
 ## Stream M1 (Metacron) — 2026-05-02
 
 Phase 1 / Stream M1 (Coverage Expansion Modal) shipped to PR #80 (open, awaiting Kyle review).

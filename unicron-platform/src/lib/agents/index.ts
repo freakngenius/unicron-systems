@@ -5,9 +5,10 @@
 // module can be safely re-imported (tests, HMR) without throwing.
 
 import { coverageExpansionAgent } from './coverageExpansionAgent';
+import { sourceOnboarderAgent } from './sourceOnboarderAgent';
 import { getAgent, registerAgent } from '../agentRegistry';
 
-const ALL_AGENTS = [coverageExpansionAgent];
+const ALL_AGENTS = [coverageExpansionAgent, sourceOnboarderAgent];
 
 for (const agent of ALL_AGENTS) {
   if (!getAgent(agent.name)) registerAgent(agent);
