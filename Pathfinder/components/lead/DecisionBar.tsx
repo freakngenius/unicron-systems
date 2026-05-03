@@ -22,6 +22,13 @@ import type { Project } from '@/lib/types';
 // composer with this id.
 export const EMAIL_COMPOSER_ANCHOR_ID = 'lead-email-composer';
 
+// performance.mark name surfaced when the verdict line first paints. Spec
+// acceptance criterion #4 requires the line to render within 200 ms of page
+// load — Speed Insights / Web Vitals can pick this mark up to evaluate
+// against that bar. Today (Gate 7C) the codebase doesn't ship Speed
+// Insights so the mark is dormant; instrumentation lands in a follow-up.
+export const VERDICT_RENDERED_MARK = 'decision-bar-verdict-rendered';
+
 export type VerdictTone = 'strong' | 'speculative' | 'urgent' | 'pending' | 'neutral';
 
 export interface DecisionBarVerdict {
@@ -54,6 +61,18 @@ export function DecisionBar({
   const verdict = generateVerdict(project, matches);
   const cta = generateCTA(project, now);
   const verdictColor = toneToColor(verdict.tone);
+
+  // Mark verdict-line render for future Speed Insights / Web Vitals capture.
+  // Effect runs after first paint so the timestamp reflects the actual paint
+  // moment, not commit. Idempotent guard keeps multiple renders from pushing
+  // duplicate marks during a single page session.
+  React.useEffect(() => {
+    if (typeof performance === 'undefined' || typeof performance.mark !== 'function') return;
+    const existing = performance.getEntriesByName(VERDICT_RENDERED_MARK);
+    if (existing.length === 0) {
+      performance.mark(VERDICT_RENDERED_MARK);
+    }
+  }, []);
 
   return (
     <section
