@@ -676,3 +676,24 @@ Total new: 50 tests. All green; full Pathfinder suite remains 809 passing.
 | File | Tests | Covers |
 |---|---|---|
 | `tests/hubspot-recon.test.ts` | 10 | reconcileDeals (matched, all 3 policies — last_write_wins newer-wins + tied-escalates, pathfinder_locked, hubspot_locked), HubSpot-only / Pathfinder-only deals (skipped, outbound territory), null/null match, null/value conflict, numeric/string cross-coerce, escalationToInboxRow shape. |
+
+---
+
+## Post-demo Gate 2 — NAICS code/description coupling fix
+
+**State:** PR shipped during the post-demo-queue Wednesday recovery sweep.
+
+#### Pathfinder/services/enricher/lead-detail.ts (re-verified 2026-05-02)
+**Fix:** `applyAnthropic()` now enforces pair-or-neither for naics_code + naics_description. Anthropic's pair is authoritative when present; a description without a code never grafts onto an existing code. New `EnrichOptions.forceRevalidateNaics` flag bypasses `needsAnthropic()` for backfills.
+
+#### Pathfinder/services/enricher/prompts.ts (re-verified 2026-05-02)
+**Fix:** `ANTHROPIC_SYSTEM` documents the pair-or-neither rule. `buildAnthropicUserPrompt()` always asks Anthropic to re-validate (or initially classify) the NAICS pair when the call fires.
+
+#### Pathfinder/scripts/backfill-naics-revalidate.ts (new 2026-05-02)
+**Implements:** One-shot revalidation script. Pulls every project where naics_code + naics_description + enrichment_provider in (sonar, anthropic, sonar+anthropic), calls `enrichOneLead({ forceRevalidateNaics: true })`, persists the corrected pair when Anthropic disagrees with the on-file pair.
+
+### Tests
+
+| File | Tests | Covers |
+|---|---|---|
+| `tests/lead-detail-enricher.test.ts` | 27 (3 net new) | Pair-or-neither: rejects description-only writes (the Gate 3C bug), overwrites mismatched pairs, no-op when Anthropic agrees, fills description_long independently. |

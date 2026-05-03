@@ -85,6 +85,16 @@ Rules:
 - naics_code: 6-digit string. If the title is too generic (e.g. just a
   contract number) and confidence < 0.7, return null.
 - naics_description: human-readable sector name matching the 6-digit code.
+- **PAIR-OR-NEITHER (post-demo Gate 2 fix):** naics_code and
+  naics_description must agree. Either return both as a valid pair
+  (e.g. "237310" + "Highway, Street, and Bridge Construction") or
+  return both as null. Do NOT return one without the other and do
+  NOT return a description that doesn't match the code.
+- If you're given a pre-existing naics_code and you would classify
+  the project differently, return YOUR best pair (we'll overwrite the
+  stored code+description together). If you agree with the existing
+  classification, return that exact pair. Never return only the
+  description for someone else's code.
 - description_long: 2-3 complete sentences. If input is too thin, return
   the literal string "Insufficient detail in source." Never invent
   facts not present in the input.
@@ -107,13 +117,16 @@ export function buildAnthropicUserPrompt(p: EnricherInput): string {
   ].filter(Boolean);
 
   const tasks: string[] = [];
-  if (p.naics_code == null) tasks.push('Classify into the closest 6-digit NAICS code.');
+  // NAICS task is always part of the call when needed — even if
+  // p.naics_code is set, we re-classify in case the existing code is
+  // wrong (post-demo Gate 2 fix). Caller's needsAnthropic() gates
+  // whether the call happens at all.
+  tasks.push(
+    p.naics_code
+      ? `Re-validate the existing NAICS classification: code on file is ${p.naics_code}${p.naics_description ? ` (${p.naics_description})` : ''}. Return your best code+description pair — replace the existing pair if you disagree, repeat it if you agree.`
+      : 'Classify into the closest 6-digit NAICS code (return code AND matching description as a pair).',
+  );
   if (p.description_long == null) tasks.push('Produce a 2-3 sentence project description.');
-  // If both are already populated this path won't be hit (caller checks);
-  // include both to keep the schema stable.
-  if (tasks.length === 0) {
-    tasks.push('Return null for both fields (caller filtered).');
-  }
 
   return [
     ...lines,
