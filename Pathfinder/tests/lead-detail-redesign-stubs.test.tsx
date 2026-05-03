@@ -52,20 +52,15 @@ function baseProject(overrides: Partial<Project> = {}): Project {
   };
 }
 
-describe('DecisionBar (stub)', () => {
-  it('renders verdict line including score + verifier when set', () => {
-    render(<DecisionBar project={baseProject({ score: 92, verified: true })} hasCrossPollMatches={false} />);
-    expect(screen.getByTestId('decision-bar-verdict')).toHaveTextContent(/Score 92/);
+describe('DecisionBar (post-7B; basic neutral verdict path)', () => {
+  it('renders verdict line including score + verifier when neutral path', () => {
+    render(<DecisionBar project={baseProject({ score: 75, verified: true })} matches={[]} />);
+    expect(screen.getByTestId('decision-bar-verdict')).toHaveTextContent(/Score 75/);
     expect(screen.getByTestId('decision-bar-verdict')).toHaveTextContent(/verified/);
   });
 
-  it('includes "warm intro available" when hasCrossPollMatches is true', () => {
-    render(<DecisionBar project={baseProject()} hasCrossPollMatches={true} />);
-    expect(screen.getByTestId('decision-bar-verdict')).toHaveTextContent(/warm intro/);
-  });
-
-  it('falls back to "Pending rank" when score is null and not verified', () => {
-    render(<DecisionBar project={baseProject({ score: null, verified: null })} hasCrossPollMatches={false} />);
+  it('falls back to "Pending rank" when score is null', () => {
+    render(<DecisionBar project={baseProject({ score: null, verified: null })} matches={[]} />);
     expect(screen.getByTestId('decision-bar-verdict')).toHaveTextContent(/Pending rank/);
   });
 });
@@ -77,10 +72,16 @@ describe('CrossPollinationCard (stub)', () => {
   });
 });
 
-describe('RecommendedAction (stub)', () => {
-  it('renders nothing in 7A (parse-rationale always falls back)', () => {
-    const { container } = render(<RecommendedAction project={baseProject({ rationale: 'Call them.' })} />);
-    // 7A: stub returns null when fallback === true, which is always.
+describe('RecommendedAction (post-7B parse-rationale)', () => {
+  it('renders extracted action when parse-rationale finds an imperative sentence', () => {
+    render(<RecommendedAction project={baseProject({ rationale: 'Call them tomorrow.' })} />);
+    expect(screen.getByTestId('recommended-action')).toHaveTextContent(/call them/i);
+  });
+
+  it('renders null when parse-rationale falls back (no action extractable)', () => {
+    const { container } = render(
+      <RecommendedAction project={baseProject({ rationale: 'Just facts. No recommendation.' })} />,
+    );
     expect(container.firstChild).toBeNull();
   });
 });
