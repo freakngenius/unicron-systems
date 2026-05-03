@@ -234,12 +234,31 @@ function applyAnthropic(
   upd: EnricherUpdate,
 ): number {
   let filled = 0;
-  if (p.naics_code == null && ant.naics_code) {
-    upd.naics_code = ant.naics_code;
-    if (ant.naics_description) upd.naics_description = ant.naics_description;
-    filled++;
-  } else if (p.naics_description == null && ant.naics_description && p.naics_code) {
-    upd.naics_description = ant.naics_description;
+  // NAICS coupling rule (post-demo Gate 2 fix):
+  //   The code and description MUST come from the same source. Anthropic
+  //   returns them as a pair; we either accept both (overwriting any
+  //   pre-existing pair when Anthropic's classification differs) or
+  //   write neither.
+  //
+  //   Background: Gate 3C originally took Anthropic's description and
+  //   grafted it onto the existing sam.gov code. That produced visibly
+  //   wrong pairs (e.g. TxDOT I-45 stamped `561612 Security Guards` with
+  //   `Highway, Street, and Bridge Construction`). We now treat
+  //   Anthropic's pair as authoritative when both fields are present,
+  //   and refuse to mix.
+  if (ant.naics_code && ant.naics_description) {
+    const isOverwrite = p.naics_code != null;
+    if (
+      p.naics_code !== ant.naics_code ||
+      p.naics_description !== ant.naics_description
+    ) {
+      upd.naics_code = ant.naics_code;
+      upd.naics_description = ant.naics_description;
+      // Count as a "fill" only when this row went from null → set on
+      // either field. Pure-overwrite cases (replacing an existing pair)
+      // still record but don't bump the metric.
+      if (!isOverwrite || p.naics_description == null) filled++;
+    }
   }
   if (p.description_long == null && ant.description_long) {
     upd.description_long = ant.description_long;
@@ -248,8 +267,18 @@ function applyAnthropic(
   return filled;
 }
 
+export interface EnrichOptions {
+  /** Post-demo Gate 2 fix: force the Anthropic call even when both
+   *  naics_code and description_long are already set, so the
+   *  re-validation re-pair logic in `applyAnthropic` fires. Used by
+   *  the NAICS cleanup backfill script.
+   */
+  forceRevalidateNaics?: boolean;
+}
+
 export async function enrichOneLead(
   p: EnricherInput,
+  opts: EnrichOptions = {},
 ): Promise<EnricherRunResult> {
   const upd: EnricherUpdate = {};
   const errors: string[] = [];
@@ -281,7 +310,7 @@ export async function enrichOneLead(
     }
   }
 
-  if (needsAnthropic(p)) {
+  if (needsAnthropic(p) || opts.forceRevalidateNaics) {
     try {
       const res = await run({
         model: ANTHROPIC_MODEL,

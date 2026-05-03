@@ -183,7 +183,7 @@ describe('applySonar — only fills nulls', () => {
   });
 });
 
-describe('applyAnthropic', () => {
+describe('applyAnthropic — pair-or-neither NAICS coupling (Gate 2 fix)', () => {
   it('fills naics_code + description together when code is null', () => {
     const upd: EnricherUpdate = {};
     const filled = applyAnthropic(
@@ -197,11 +197,54 @@ describe('applyAnthropic', () => {
     expect(upd.description_long).toBe('desc');
   });
 
-  it('fills naics_description alone when only code is already set', () => {
+  it('REJECTS Anthropic returning description without code (was the Gate 3C bug)', () => {
     const upd: EnricherUpdate = {};
     const p = blankProject({ naics_code: '561612' });
-    applyAnthropic(p, { naics_description: 'Security Guards' }, upd);
-    expect(upd.naics_description).toBe('Security Guards');
+    applyAnthropic(p, { naics_description: 'Highway, Street, and Bridge Construction' }, upd);
+    // Description must NOT graft onto the existing 561612 code.
+    expect(upd.naics_code).toBeUndefined();
+    expect(upd.naics_description).toBeUndefined();
+  });
+
+  it('overwrites the existing pair when Anthropic returns a different pair', () => {
+    const upd: EnricherUpdate = {};
+    const p = blankProject({ naics_code: '561612', naics_description: 'Security Guards' });
+    applyAnthropic(
+      p,
+      { naics_code: '237310', naics_description: 'Highway, Street, and Bridge Construction' },
+      upd,
+    );
+    expect(upd.naics_code).toBe('237310');
+    expect(upd.naics_description).toBe('Highway, Street, and Bridge Construction');
+  });
+
+  it('no-op when Anthropic agrees with the existing pair', () => {
+    const upd: EnricherUpdate = {};
+    const p = blankProject({ naics_code: '237310', naics_description: 'Highway, Street, and Bridge Construction' });
+    const filled = applyAnthropic(
+      p,
+      { naics_code: '237310', naics_description: 'Highway, Street, and Bridge Construction' },
+      upd,
+    );
+    expect(filled).toBe(0);
+    expect(upd.naics_code).toBeUndefined();
+    expect(upd.naics_description).toBeUndefined();
+  });
+
+  it('still fills description_long independent of NAICS', () => {
+    const upd: EnricherUpdate = {};
+    const p = blankProject({ naics_code: '561612', naics_description: 'Security Guards' });
+    const filled = applyAnthropic(
+      p,
+      {
+        naics_code: '561612',
+        naics_description: 'Security Guards',
+        description_long: 'A description.',
+      },
+      upd,
+    );
+    expect(filled).toBe(1);
+    expect(upd.description_long).toBe('A description.');
   });
 });
 
