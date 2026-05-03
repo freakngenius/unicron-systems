@@ -119,15 +119,28 @@ describe('LeadDetail — enrichment request banner', () => {
   });
 });
 
-describe('LeadDetail — pending-rank suppression', () => {
-  it('does NOT render ScoreBreakdown when both rationale and score are null', () => {
-    renderRedesigned(baseProject({ rationale: null, score: null }));
+describe('LeadDetail — Gate 9A v2 drops legacy redesign sections', () => {
+  it('does NOT render ScoreBreakdown in v2 (dropped per spec § "What is removed")', () => {
+    renderRedesigned(baseProject({ rationale: null, score: 70 }));
     expect(screen.queryByTestId('score-breakdown')).toBeNull();
+    expect(screen.queryByTestId('score-breakdown-toggle')).toBeNull();
   });
 
-  it('renders ScoreBreakdown when score is present even if rationale is null', () => {
-    renderRedesigned(baseProject({ rationale: null, score: 70 }));
-    expect(screen.getByTestId('score-breakdown')).toBeInTheDocument();
+  it('does NOT render DecisionBar in v2', () => {
+    renderRedesigned(baseProject({ score: 70, verified: true }));
+    expect(screen.queryByTestId('decision-bar-verdict')).toBeNull();
+  });
+
+  it('does NOT render RecommendedAction in v2', () => {
+    renderRedesigned(baseProject({ rationale: 'Call them tomorrow.' }));
+    expect(screen.queryByTestId('recommended-action')).toBeNull();
+  });
+
+  it('does NOT render ProjectStory in v2', () => {
+    renderRedesigned(
+      baseProject({ description_long: 'detailed description here' }),
+    );
+    expect(screen.queryByTestId('project-story-description')).toBeNull();
   });
 });
 
