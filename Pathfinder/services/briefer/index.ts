@@ -1,7 +1,15 @@
-// services/briefer/index.ts — Demo Polish UX Gate 13W-A barrel.
+// services/briefer/index.ts — Demo Polish UX Gate 13W barrel.
 
 export { composeDailyBrief, loadPrefs } from './agent';
 export type { ComposeDailyBriefInput, SectionFetchers } from './agent';
+export { sendDailyBrief } from './send';
+export type { SendDailyBriefInput, SendDailyBriefResult } from './send';
+export { runDailyBriefingForAllUsers, shouldSkip } from './cron';
+export type {
+  RunDailyBriefingInput,
+  RunDailyBriefingResult,
+  SkipReason,
+} from './cron';
 export {
   fetchContactsPending,
   fetchFollowUps,

@@ -693,3 +693,42 @@ Total new: 50 tests. All green; full Pathfinder suite remains 809 passing.
 | File | Tests | Covers |
 |---|---|---|
 | `tests/tower-estimator.test.ts` | 13 | Prompt builder (title/value/NAICS/lot/location/sites/perimeter embedding, summary fallback, null omission), JSON parser happy paths (integer + numeric-string + range + range-with-whitespace + ```json fence + trailing prose + fractional rounding), failure modes (non-JSON, empty rationale, missing/negative count, malformed string). |
+
+---
+
+## Demo Polish UX Sprint — Gate 13W-B (daily intelligence loop, cron + send)
+
+**State:** PR pending. Stubbed behind `BRIEFING_CRON_ENABLED=1`; production cron returns immediately until 13W-D verification is signed off.
+
+#### Pathfinder/services/briefer/send.ts
+**Implements:** Gate 13W dispatch § "Inngest cron + send" — `sendDailyBrief({ userId, brief, db?, sendImpl?, integration?, getIntegration? })`. Picks the user's most recent active `email_integrations` row (gmail then outlook), sends the brief via `sendEmail` from→to the operator's connected mailbox, logs the result to `pathfinder.outreach_sends` with `type='briefing'` + `project_id=null` (allowed by 13W-A's CHECK constraint). Body sent as plain-text markdown — `lib/email/send.ts` is plain-text only at present; HTML rendering deferred to a follow-up that extends `sendEmail`. Audit-row insert failure does NOT flip a successful send to failed; it returns `outreach_send_id: null` for observability.
+**Last verified against spec:** 2026-05-03.
+**Drift:** **minor, justified.** Body is plain-text markdown (not HTML) until `lib/email/send.ts` grows multipart support — out of scope for 13W-B per Pathfinder/CLAUDE.md scope discipline.
+
+#### Pathfinder/services/briefer/cron.ts
+**Implements:** Gate 13W dispatch § "Inngest cron + send" — `runDailyBriefingForAllUsers({ now, db?, listUsers?, loadPrefsImpl?, composeImpl?, sendImpl?, weeklyDay? })` per-user iterator. Pure `shouldSkip(prefs, now, weeklyDay)` decision (paused → frequency_paused → wrong_day_for_weekly → wrong_local_hour). `Intl.DateTimeFormat`-based `hourInTz` / `isoWeekdayInTz` so `briefing_prefs.timezone` + `send_hour` are honored correctly across DST. Per-user error isolation — a single user's loadPrefs / compose / send failure increments `failed` but does not abort the loop. Lazy `dbThunk()` so tests that stub every adapter need not provide a Supabase client. `no_active_integration` counted as a skip (with reason populated), not a failure — the user simply hasn't connected a mailbox yet.
+**Last verified against spec:** 2026-05-03.
+**Drift:** none.
+
+#### Pathfinder/lib/inngest/functions/daily-briefing.ts
+**Implements:** Gate 13W dispatch § "Inngest cron + send" — `dailyBriefingCron` Inngest function with cron trigger `TZ=UTC 0 * * * *` (hourly). Hourly cadence + per-user `send_hour`/`timezone` gate is the prompt's "or one cron that iterates users" alternative to `0 7 * * *` per-user — without hourly granularity, a 7am-UTC cron would land Kyle's brief at midnight PT. Stubbed behind `BRIEFING_CRON_ENABLED=1`; default-off function returns `{ enabled: false, ... }` so production stays quiet until 13W-D verification.
+**Last verified against spec:** 2026-05-03.
+**Drift:** **minor, justified.** Hourly cron + per-user gate instead of `0 7 * * *` per-user. Documented in PR body and PLAN doc.
+
+#### Pathfinder/lib/inngest/functions/index.ts
+**Implements:** Barrel export adds `dailyBriefingCron` alongside the existing 12 entries.
+**Last verified against spec:** 2026-05-03.
+**Drift:** none.
+
+#### Pathfinder/services/briefer/index.ts
+**Implements:** Barrel export adds `sendDailyBrief`, `runDailyBriefingForAllUsers`, `shouldSkip`, plus their input/result types.
+**Last verified against spec:** 2026-05-03.
+**Drift:** none.
+
+### Tests
+
+| File | Tests | Covers |
+|---|---|---|
+| `tests/briefer-send.test.ts` | 5 | Happy path with stubbed integration + sendImpl + db (gmail integration → sends → outreach_sends row written with `type='briefing'`, `project_id=null`, `status='sent'`, `message_id` captured). Outlook fallback when gmail is absent. `no_active_integration` returns ok=false without inserting a row. sendImpl throw flips to `status='failed'` with `error_message`. Audit-row insert failure does NOT flip a successful send to failed (`ok=true, outreach_send_id=null`). |
+| `tests/briefer-cron.test.ts` | 12 | `shouldSkip` pure decision: paused → frequency_paused → wrong_day_for_weekly (Monday vs other) → wrong_local_hour. `hourInTz` / `isoWeekdayInTz` against PT, UTC, JP, NY (DST-aware). Iterator: counts sent / skipped / failed (including no_active_integration as skip). Pre-gate skips don't trigger compose. loadPrefs failure counted as failed and loop continues. Per-user error isolation. |
+
