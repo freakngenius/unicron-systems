@@ -12,6 +12,7 @@ import * as React from 'react';
 
 import { ContactsCard } from '@/components/lead/ContactsCard';
 import { CrossPollinationCard } from '@/components/lead/CrossPollinationCard';
+import { OutreachSection } from '@/components/lead/OutreachSection';
 import { ProjectFactsCard } from '@/components/lead/ProjectFactsCard';
 import { QuickFactsGrid } from '@/components/lead/QuickFactsGrid';
 import { QuickMetricsStrip } from '@/components/lead/QuickMetricsStrip';
@@ -381,17 +382,21 @@ function RedesignedBody({
         </section>
       )}
 
-      {/* §7 — Outreach (placeholder — 9C refactors composer + drafter LLM) */}
+      {/* §7 — Outreach (Gate 9C — drafter LLM + new Composer with single
+          Send button; 9D adds connection-routed Send. The "From" field is
+          a hardcoded stub for 9C; real user_connections lookup ships in
+          9D. */}
       <section data-testid="lead-detail-section-outreach">
         <SectionHeading title="Outreach" />
-        <EmailComposer
-          project={project}
-          draft={latestEmailDraft}
-          contacts={contacts}
+        <OutreachSection
+          projectId={project.id}
+          leadContacts={leadContacts}
+          recentEdits={recentEdits}
+          fromDisplay="kyle@freakngenius.com via Gmail"
+          isConnected={true}
           bodyOverride={bodyOverride}
           recipientOverride={recipientOverride}
         />
-        {recentEdits.length > 0 && <RecentSendsBlock recentEdits={recentEdits} />}
       </section>
 
       {/* §8 — Verifier */}
