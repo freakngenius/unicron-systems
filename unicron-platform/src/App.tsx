@@ -7,12 +7,16 @@ import { Onboarding } from './components/onboarding/Onboarding';
 import { LiveSystem } from './components/live/LiveSystem';
 import { ArchitectInbox } from './components/inbox/ArchitectInbox';
 import { AgentsView } from './components/agent-console/AgentsView';
+import { CustomersView } from './views/CustomersView';
+import { CustomerDetailView } from './views/CustomerDetailView';
 import { SignInGate } from './components/auth/SignInGate';
 import { useAuth } from './lib/auth';
+import type { CustomerOrg } from './lib/contracts/customers';
 
 function Shell() {
   const [tab, setTab] = useState<TabId>('onboarding');
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [customerSelected, setCustomerSelected] = useState<CustomerOrg | null>(null);
   const { toast } = useSettings();
 
   return (
@@ -33,6 +37,16 @@ function Shell() {
         )}
         {tab === 'inbox' && <ArchitectInbox />}
         {tab === 'agents' && <AgentsView />}
+        {tab === 'customers' && (
+          customerSelected ? (
+            <CustomerDetailView
+              org={customerSelected}
+              onBack={() => setCustomerSelected(null)}
+            />
+          ) : (
+            <CustomersView onSelect={(org) => setCustomerSelected(org)} />
+          )
+        )}
       </main>
 
       <SettingsDrawer open={settingsOpen} onClose={() => setSettingsOpen(false)} />
