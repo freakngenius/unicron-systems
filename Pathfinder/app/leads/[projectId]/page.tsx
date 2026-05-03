@@ -119,6 +119,13 @@ export default async function LeadDetailPage({
   } = await fetchData(params.projectId);
   if (!project) notFound();
 
+  // Demo Polish UX Gate 7A — flag-gated lead detail redesign. Read at the
+  // server-component boundary; default off. When `1`, LeadDetail renders the
+  // new component composition (QuickFactsGrid full; other 6 sections
+  // stubbed). When unset/0, the existing pre-redesign layout renders
+  // untouched.
+  const redesignEnabled = process.env.LEAD_DETAIL_REDESIGN === '1';
+
   return (
     <LeadDetail
       project={project}
@@ -128,6 +135,7 @@ export default async function LeadDetailPage({
       timelineEvents={timelineEvents}
       crossPollMatches={crossPollMatches}
       zedcorBranch={zedcorBranch}
+      redesignEnabled={redesignEnabled}
     />
   );
 }

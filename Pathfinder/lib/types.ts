@@ -139,6 +139,14 @@ export interface Project {
     | 'sonar+anthropic'
     | null;
   enrichment_cost_usd?: number | null;
+  // Demo Polish UX Sprint Gate 7A (migration 0111) — per-fact source URLs
+  // for the enrichment pass. Populated by the enricher (extension landing
+  // post-7A); read by components/lead/SourceCitations.tsx.
+  enrichment_citations?: Array<{
+    url: string;
+    fact_supported: string;
+    confidence: number;
+  }> | null;
 }
 
 export interface OrgGeoConfig {
