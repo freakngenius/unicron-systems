@@ -9,6 +9,7 @@ import { ArchitectInbox } from './components/inbox/ArchitectInbox';
 import { AgentsView } from './components/agent-console/AgentsView';
 import { CustomersView } from './views/CustomersView';
 import { CustomerDetailView } from './views/CustomerDetailView';
+import { AuditLogView } from './views/audit-log/AuditLogView';
 import { SignInGate } from './components/auth/SignInGate';
 import { useAuth } from './lib/auth';
 import type { CustomerOrg } from './lib/contracts/customers';
@@ -47,6 +48,7 @@ function Shell() {
             <CustomersView onSelect={(org) => setCustomerSelected(org)} />
           )
         )}
+        {tab === 'audit' && <AuditLogView />}
       </main>
 
       <SettingsDrawer open={settingsOpen} onClose={() => setSettingsOpen(false)} />
