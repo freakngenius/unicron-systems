@@ -119,6 +119,14 @@ export default async function LeadDetailPage({
 }: {
   params: { projectId: string };
 }) {
+  // Next.js 14 Page server components receive `params` URL-encoded
+  // (Route Handlers receive them decoded — known inconsistency). Project
+  // ids in pathfinder.projects are stored as `sam.gov:<noticeid>` etc.
+  // with literal colons; without this decode, supabase.eq() on the
+  // encoded `sam.gov%3A<noticeid>` returns null and the page 404s for
+  // every lead. Filed in MEMORY/operator-todos/2026-05-03-pathfinder-lead-detail-route-404.md.
+  const projectId = decodeURIComponent(params.projectId);
+
   const {
     project,
     latestEmailDraft,
@@ -128,7 +136,7 @@ export default async function LeadDetailPage({
     timelineEvents,
     crossPollMatches,
     zedcorBranch,
-  } = await fetchData(params.projectId);
+  } = await fetchData(projectId);
   if (!project) notFound();
 
   // Demo Polish UX Gate 7A — flag-gated lead detail redesign. Read at the
