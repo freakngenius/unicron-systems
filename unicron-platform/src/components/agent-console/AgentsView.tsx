@@ -1,8 +1,10 @@
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
 import type { AgentDefinition } from '../../lib/agentRegistry';
 import { listAgents } from '../../lib/agentRegistry';
 import { AgentModalShell } from './AgentModalShell';
 import { AgentHistoryGrid } from './AgentHistoryGrid';
+// Side-effect import — Phase 1 streams register their AgentDefinitions here.
+import '../../lib/agents';
 
 /**
  * Foundation entry point for the operator-facing Agent Console.
@@ -66,23 +68,43 @@ export function AgentsView() {
       )}
 
       {selected ? (
-        <AgentModalShell
-          agent={selected}
-          status="idle"
-          costUsd={null}
-          recentRunsCount={null}
-          onClose={() => setSelected(null)}
-        >
-          <div className="max-w-3xl mx-auto flex flex-col gap-8">
-            <p className="mono text-[11px] uppercase tracking-[0.18em] text-text-primary/40">
-              {selected.formSchema
-                ? 'INPUT FORM AVAILABLE — phase 1 stream provides dispatch handler'
-                : 'INPUT FORM PENDING — phase 1 stream will register'}
-            </p>
-            <AgentHistoryGrid agentName={selected.name} />
-          </div>
-        </AgentModalShell>
+        selected.modalComponent ? (
+          <Suspense fallback={<ModalLoading />}>
+            <selected.modalComponent onClose={() => setSelected(null)} />
+          </Suspense>
+        ) : (
+          <AgentModalShell
+            agent={selected}
+            status="idle"
+            costUsd={null}
+            recentRunsCount={null}
+            onClose={() => setSelected(null)}
+          >
+            <div className="max-w-3xl mx-auto flex flex-col gap-8">
+              <p className="mono text-[11px] uppercase tracking-[0.18em] text-text-primary/40">
+                {selected.formSchema
+                  ? 'INPUT FORM AVAILABLE — phase 1 stream provides dispatch handler'
+                  : 'INPUT FORM PENDING — phase 1 stream will register'}
+              </p>
+              <AgentHistoryGrid agentName={selected.name} />
+            </div>
+          </AgentModalShell>
+        )
       ) : null}
+    </div>
+  );
+}
+
+function ModalLoading() {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-bg-base"
+      role="status"
+      aria-label="Loading agent modal"
+    >
+      <span className="mono text-[11px] uppercase tracking-[0.18em] text-text-primary/40">
+        LOADING…
+      </span>
     </div>
   );
 }

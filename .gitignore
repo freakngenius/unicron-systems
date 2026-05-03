@@ -15,6 +15,11 @@ coverage/
 test-results/
 playwright-report/
 blob-report/
+# source directories named `coverage/` (e.g. unicron-platform's Coverage Expansion
+# agent module) are tracked — the bare `coverage/` rule above intentionally
+# matches Istanbul/Jest output dirs only.
+!unicron-platform/src/**/coverage/
+!unicron-platform/src/**/coverage/**
 
 # next.js
 .next/

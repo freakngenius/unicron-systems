@@ -2,7 +2,7 @@
 // (Coverage Expansion, Source Onboarder, Architect, Cross-Pollination) call
 // `registerAgent(...)` to populate it.
 
-import type { ReactNode } from 'react';
+import type { ComponentType, ReactNode } from 'react';
 import type { AgentDispatch } from './contracts/agentConsole';
 
 export interface AgentFormFieldOption {
@@ -30,6 +30,19 @@ export type AgentDispatchHandler = (
 
 export type AgentResultRenderer = (dispatch: AgentDispatch) => ReactNode;
 
+export interface AgentModalComponentProps {
+  onClose: () => void;
+}
+
+/**
+ * Per-agent modal component. Phase 1 streams (Coverage Expansion, Source
+ * Onboarder, Architect, Cross-Pollination) provide a custom orchestrator
+ * that composes `AgentModalShell` + role-specific input/result panels +
+ * `AgentLiveExecution` + `AgentHistoryGrid`. When omitted, AgentsView
+ * falls back to the generic placeholder shipped in Phase 0.5.
+ */
+export type AgentModalComponent = ComponentType<AgentModalComponentProps>;
+
 export interface AgentDefinition {
   /** Stable slug used to match `agent_dispatches.agent_name` and the URL slot. */
   name: string;
@@ -48,6 +61,11 @@ export interface AgentDefinition {
   resultRenderer?: AgentResultRenderer;
   /** Dispatch handler — Phase 1 streams provide; foundation has no built-in. */
   dispatchHandler?: AgentDispatchHandler;
+  /**
+   * Optional per-agent modal. When defined, AgentsView renders this component
+   * (lazy-loaded) instead of the generic AgentModalShell placeholder.
+   */
+  modalComponent?: AgentModalComponent;
 }
 
 const registry = new Map<string, AgentDefinition>();
