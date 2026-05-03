@@ -19,6 +19,7 @@
 // understands why the section is empty rather than assuming a bug.
 
 import * as React from 'react';
+import { useRouter } from 'next/navigation';
 
 import type { LeadContactRow, Project } from '@/lib/types';
 import { hexAlpha, PF_TINTS } from '@/lib/agent-tints';
@@ -80,6 +81,14 @@ export function ContactsCard(props: Props): React.ReactElement {
   const { project, contacts, isAdmin, onSetRecipient } = props;
   const empty = classifyEmptyState(props);
 
+  // Demo Polish UX Gate 12C — Run Now result feedback. The endpoint may
+  // return ok=true with inserted=0 (e.g. sam.gov has no pointOfContact, or
+  // the source has no provider wired). Without surfacing the response
+  // message, the operator sees the same "Enrichment pending" copy after
+  // the click and assumes the button is broken. Hoist the run state to
+  // the card so the message renders inside the empty-state block.
+  const [runState, setRunState] = React.useState<RunState>({ kind: 'idle' });
+
   const ownerLabel = project.owner_name ?? '—';
   const headerCount = contacts.length;
   const headerTitle =
@@ -120,7 +129,11 @@ export function ContactsCard(props: Props): React.ReactElement {
           {headerTitle}
         </h3>
         {empty === 'topFiftyPending' && isAdmin && (
-          <RunNowButton projectId={project.id} />
+          <RunNowButton
+            projectId={project.id}
+            runState={runState}
+            setRunState={setRunState}
+          />
         )}
       </header>
 
@@ -146,8 +159,11 @@ export function ContactsCard(props: Props): React.ReactElement {
               color: PF_TINTS.inkSub,
             }}
           >
-            Enrichment pending — refresh in 5 min.
+            {runState.kind === 'running'
+              ? 'Running enrichment…'
+              : 'Enrichment pending — click Run now to fetch.'}
           </p>
+          <RunResultNote runState={runState} />
           <SourcePublishingNote source={project.source} />
         </div>
       )}
@@ -209,30 +225,62 @@ export function ContactsCard(props: Props): React.ReactElement {
   );
 }
 
-function RunNowButton({ projectId }: { projectId: string }): React.ReactElement {
-  const [busy, setBusy] = React.useState(false);
-  const [error, setError] = React.useState<string | null>(null);
+// Demo Polish UX Gate 12C — RunState lives in ContactsCard so both the
+// button (header) and result note (empty-state body) share status.
+type RunState =
+  | { kind: 'idle' }
+  | { kind: 'running' }
+  | { kind: 'success'; inserted: number; message: string }
+  | { kind: 'error'; error: string };
+
+function RunNowButton({
+  projectId,
+  runState,
+  setRunState,
+}: {
+  projectId: string;
+  runState: RunState;
+  setRunState: (s: RunState) => void;
+}): React.ReactElement {
+  const router = useRouter();
+  const busy = runState.kind === 'running';
   const onClick = async () => {
     if (busy) return;
-    setBusy(true);
-    setError(null);
+    setRunState({ kind: 'running' });
     try {
       const res = await fetch(
         `/pathfinder/api/leads/${encodeURIComponent(projectId)}/enrich-contacts?force=1`,
         { method: 'POST' },
       );
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        setError(`Failed: ${body.error ?? res.status}`);
-      } else if (typeof window !== 'undefined') {
-        window.location.reload();
+      const body = (await res.json().catch(() => ({}))) as {
+        ok?: boolean;
+        inserted?: number;
+        message?: string;
+        error?: string;
+      };
+      if (!res.ok || body.ok === false) {
+        setRunState({
+          kind: 'error',
+          error: body.error ?? `HTTP ${res.status}`,
+        });
+        return;
       }
+      const inserted = typeof body.inserted === 'number' ? body.inserted : 0;
+      const message = body.message ?? 'Enrichment complete.';
+      setRunState({ kind: 'success', inserted, message });
+      // Re-fetch the server component (which reads pathfinder.lead_contacts)
+      // so any newly inserted rows appear in the Contacts list. Avoids a
+      // full window.location.reload (jarring inside the lead-detail modal
+      // shell — Gate 9A — and loses scroll position).
+      router.refresh();
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setBusy(false);
+      setRunState({
+        kind: 'error',
+        error: e instanceof Error ? e.message : String(e),
+      });
     }
   };
+  const errorTitle = runState.kind === 'error' ? runState.error : null;
   return (
     <button
       type="button"
@@ -250,10 +298,47 @@ function RunNowButton({ projectId }: { projectId: string }): React.ReactElement 
         textTransform: 'uppercase',
         cursor: busy ? 'wait' : 'pointer',
       }}
-      title={error ?? 'Trigger immediate Clay/Apollo/Hunter enrichment'}
+      title={errorTitle ?? 'Trigger immediate Clay/Apollo/Hunter enrichment'}
     >
       {busy ? 'Running…' : 'Run now'}
     </button>
+  );
+}
+
+// Renders the Run Now result inline under the empty-state copy. Without
+// this, sources that legitimately return 0 contacts (sam.gov with no
+// pointOfContact, usaspending / harris / news with no provider wired)
+// look identical to a broken button — the empty state never changes.
+function RunResultNote({
+  runState,
+}: {
+  runState: RunState;
+}): React.ReactElement | null {
+  if (runState.kind === 'idle' || runState.kind === 'running') return null;
+  const isError = runState.kind === 'error';
+  const text = isError
+    ? `Run failed: ${runState.error}`
+    : runState.inserted > 0
+      ? `Run complete — inserted ${runState.inserted} contact${runState.inserted === 1 ? '' : 's'}.`
+      : runState.message;
+  return (
+    <p
+      data-testid="contacts-run-now-result"
+      data-kind={runState.kind}
+      style={{
+        margin: 0,
+        font: `500 12px ${PF_TINTS.sans}`,
+        color: isError ? '#a3261d' : PF_TINTS.ink,
+        background: isError
+          ? hexAlpha('#a3261d', 0.06)
+          : hexAlpha(PF_TINTS.ink, 0.04),
+        border: `1px solid ${isError ? hexAlpha('#a3261d', 0.25) : PF_TINTS.ruleHair}`,
+        borderRadius: 4,
+        padding: '6px 8px',
+      }}
+    >
+      {text}
+    </p>
   );
 }
 
