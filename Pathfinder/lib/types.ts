@@ -901,3 +901,28 @@ export interface PathfinderDatabase {
     CompositeTypes: Record<string, never>;
   };
 }
+
+// Gate 13X-A — reply detection.
+//
+// pathfinder.outreach_replies row shape. One row per inbound reply
+// matched to an outreach_sends record. Gate 13X-B (Gmail inbound) and
+// Gate 13X-C (Outlook inbound) insert here; Gate 13X-D (Reply UI)
+// reads from here.
+//
+// outreach_sends does not have a central row type in this codebase
+// (callers infer per-query). Consumers in B/C/D should adopt the new
+// column trio directly: reply_received_at, reply_message_id,
+// reply_thread_id.
+export type OutreachReply = {
+  id: string;
+  outreach_send_id: string;
+  received_at: string;
+  from_email: string;
+  subject: string | null;
+  body_text: string | null;
+  body_html: string | null;
+  message_id: string | null;
+  thread_id: string | null;
+  raw_headers: Record<string, unknown> | null;
+  processed_at: string | null;
+};
