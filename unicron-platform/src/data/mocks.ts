@@ -1211,3 +1211,78 @@ export const sourceOnboarderMockLiveEvents: ReadonlyArray<{
   { delayMs: 250, event_type: 'decision', payload: { text: 'Tier 1 onboard succeeded. Awaiting operator commit.' } },
 ];
 
+// ---------------------------------------------------------------------------
+// Connectors Health (Wave 2 / Stream W2-E) fixture.
+// ---------------------------------------------------------------------------
+
+import type { ConnectorsHealthRollup } from '../lib/contracts/connectorsHealth';
+
+/**
+ * Static rollup fixture used by ConnectorsHealthView in mock-mode (the
+ * default — flip VITE_PATHFINDER_DB_ENABLED=true to hit Supabase).
+ *
+ * Built as a function so `generated_at` is fresh on every call (the live
+ * branch returns a new timestamp each fetch; tests would diverge otherwise).
+ */
+export function connectorsHealthMock(): ConnectorsHealthRollup {
+  const now = new Date();
+  const ago = (ms: number) => new Date(now.getTime() - ms).toISOString();
+  return {
+    generated_at: now.toISOString(),
+    totals: { connectors: 4, customers: 2 },
+    byType: { slack: 2, teams: 1, hubspot: 1, other: 0 },
+    byStatus: {
+      active: 2,
+      pending: 0,
+      expired: 1,
+      error: 1,
+      disconnected: 0,
+      revoked: 0,
+      unknown: 0,
+    },
+    errorRate24h: { total_events: 47, failed_events: 3, rate: 3 / 47 },
+    mostRecentSuccessByConnector: [
+      {
+        connector_id: 'mock-conn-zedcor-slack',
+        customer_org_id: 'zedcor',
+        type: 'slack',
+        status: 'active',
+        account_name: 'Zedcor Workspace',
+        last_success_at: ago(11 * 60 * 1000),
+        last_error_at: null,
+        last_error_message: null,
+      },
+      {
+        connector_id: 'mock-conn-zedcor-hubspot',
+        customer_org_id: 'zedcor',
+        type: 'hubspot',
+        status: 'expired',
+        account_name: 'Zedcor HubSpot',
+        last_success_at: ago(36 * 60 * 60 * 1000),
+        last_error_at: ago(20 * 60 * 1000),
+        last_error_message: 'OAuth refresh token expired — reconnect required',
+      },
+      {
+        connector_id: 'mock-conn-acme-teams',
+        customer_org_id: 'acme',
+        type: 'teams',
+        status: 'error',
+        account_name: 'Acme Tenant',
+        last_success_at: ago(4 * 60 * 60 * 1000),
+        last_error_at: ago(6 * 60 * 1000),
+        last_error_message: 'Bot not in target channel',
+      },
+      {
+        connector_id: 'mock-conn-acme-slack',
+        customer_org_id: 'acme',
+        type: 'slack',
+        status: 'active',
+        account_name: 'Acme HQ',
+        last_success_at: ago(2 * 60 * 1000),
+        last_error_at: null,
+        last_error_message: null,
+      },
+    ],
+  };
+}
+
