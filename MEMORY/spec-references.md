@@ -635,3 +635,20 @@ Total new: 50 tests. All green; full Pathfinder suite remains 809 passing.
 | File | Tests | Covers |
 |---|---|---|
 | `tests/hubspot-inbound.test.ts` | 12 | parseHubspotWebhook (valid array, malformed, missing fields, propertyName/Value pass-through), groupHubspotEvents (deal/contact/engagement/unknown routing), summariseEvent (with/without propertyName), redact (null/short/long inputs). |
+
+---
+
+## Demo Polish UX Sprint — Gate 4B-2 (HubSpot mapping UI)
+
+**State:** PR #88 merged to main during the post-demo-queue Wednesday recovery sweep.
+
+#### Pathfinder/lib/connectors/hubspot/mapping.ts
+**Implements:** `Company Docs/Specs/SPEC - Connectors (Slack, Teams, HubSpot).md` § 5 "Field + stage mapping config." `HubspotMappingConfig` shape, `DEFAULT_HUBSPOT_MAPPING` defaults mirroring lib/hubspot/deal-mapper.ts, tolerant `parseMapping()` (drops malformed rows + falls back), `validateMappingInput()` (human-readable errors). Per-row conflict policy: last_write_wins / pathfinder_locked / hubspot_locked.
+**Last verified against spec:** 2026-05-02.
+**Drift:** none.
+
+### Tests
+
+| File | Tests | Covers |
+|---|---|---|
+| `tests/hubspot-mapping.test.ts` | 9 | parseMapping (default fallback, round-trip, malformed-row drop, unknown-policy fallback, unknown-stage drop), validateMappingInput (missing arrays, per-row malformations, valid input). |
