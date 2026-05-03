@@ -739,6 +739,46 @@ export interface ConnectorAuditLogRow {
   created_at: string;
 }
 
+// Multi-rep team foundation — Demo Polish UX § Gate 13Y-A (migration 0120).
+//
+// Three additive tables: customer_orgs (multi-tenant container), users
+// (per-rep identity, replacing operator-email-as-identity post-flag-flip),
+// deal_assignments (audit trail of ownership transfers). The flag
+// MULTI_REP_ENABLED gates whether the read paths actually consult these
+// tables — schema lives even when flag is off so rollout is a config
+// flip, not a deploy.
+
+export type UserRole = 'admin' | 'rep' | 'viewer';
+
+export interface CustomerOrg {
+  id: string;
+  slug: string;
+  name: string;
+  created_at: string;
+}
+
+export interface User {
+  id: string;
+  email: string;
+  name: string | null;
+  customer_org_id: string;
+  role: UserRole;
+  branches: string[];
+  created_at: string;
+  last_active_at: string | null;
+}
+
+export type DealAssignmentStatus = 'active' | 'transferred' | 'revoked';
+
+export interface DealAssignment {
+  id: string;
+  deal_id: string;
+  user_id: string;
+  assigned_at: string;
+  assigned_by: string | null;
+  status: DealAssignmentStatus;
+}
+
 // Daily intelligence loop — Demo Polish UX § Gate 13W (migration 0122).
 //
 // Per-user preferences for the auto-generated daily brief. Composer in
@@ -959,6 +999,35 @@ export interface PathfinderDatabase {
           created_at?: string;
         };
         Update: Partial<ConnectorAuditLogRow>;
+        Relationships: [];
+      };
+      // Multi-rep team foundation (migration 0120) — see Gate 13Y-A.
+      customer_orgs: {
+        Row: CustomerOrg;
+        Insert: Omit<CustomerOrg, 'id' | 'created_at'> & {
+          id?: string;
+          created_at?: string;
+        };
+        Update: Partial<CustomerOrg>;
+        Relationships: [];
+      };
+      users: {
+        Row: User;
+        Insert: Omit<User, 'id' | 'created_at' | 'branches'> & {
+          id?: string;
+          created_at?: string;
+          branches?: string[];
+        };
+        Update: Partial<User>;
+        Relationships: [];
+      };
+      deal_assignments: {
+        Row: DealAssignment;
+        Insert: Omit<DealAssignment, 'id' | 'assigned_at'> & {
+          id?: string;
+          assigned_at?: string;
+        };
+        Update: Partial<DealAssignment>;
         Relationships: [];
       };
       // Daily intelligence loop (migration 0122).
