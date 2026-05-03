@@ -2,7 +2,7 @@
 
 A non-technical walkthrough of what Metacron is, what an operator does with it, and what's production-ready vs. prototype after the current sprint of kanban cards ships. Written for new team members, partners, and investors.
 
-Version: 2026-05-02 (revised post-Agent-Console spec). Author: Kyle Kesterson.
+Version: 2026-05-03 (post-Phase-1 cascade + Issue #48 fix). Author: Kyle Kesterson.
 
 ---
 
@@ -113,58 +113,65 @@ After this sprint, the remaining backlog. These are still vision-level until pri
 
 ---
 
-## Production-Ready vs. Prototype After This Sprint
+## Production-Ready vs. Prototype (as of 2026-05-03)
 
-The operator UI being demoable does not mean the platform is investor-ready in every layer. Where things stand once these cards merge.
+### Real — production, demo-able now
 
-### Frontend (the operator UI itself)
+**Frontend.** metacron.unicron.systems live with public access, magic-link sign-in functional, custom domain attached. Living Intelligence visualizer, activity feed, HUD counters all rendering real data from production Supabase. Settings drawer functional after 0090_unicron_settings.sql migration applied. Architect Inbox, Add Source, Edit Node panel, Customers tab + Zedcor profile all rendering live data.
 
-**Production-ready.** Vite + React 19, deployed to a dedicated Vercel project at `metacron.unicron.systems`. Typecheck and tests gate every merge. Deploy is auto-reverted on regression. Magic-link authentication is wired to Supabase Auth, sessions persist, sign-out works. The visualizer renders at 60fps under realistic agent loads. The Agent Console shell + the four primary agent modals (Coverage Expansion, Source Onboarder, Architect, Cross-Pollination) ship with mock-mode fixtures so they're demoable with no backend dependency.
+**Backend.** Pathfinder agent backend fully shipped: Ingestor (sam.gov, USAspending, Harris County, news), Ranker, Verifier, Enricher (Perplexity), AdjacencyMapper, GeoMapper, Outreach Drafter, Briefer. Architect agent (decomposition, tuning, discovery) shipped. Source Onboarder shipped (Tier 1 auto + Tier 2 escalation). Coverage Expansion shipped. Cross-Pollination shipped.
 
-**Gap.** No mobile-responsive treatment — operator team uses laptops, acceptable for now. No accessibility audit yet. The five Phase 2 agent modals (Enricher, Verifier, Ranker, Outreach Drafter, Briefer) are not yet built; their backend agents run autonomously today, but operator-facing transparency on those runs is still on the roadmap.
+**Database.** unicron.agent_dispatches + unicron.agent_dispatch_events + unicron.settings live in production Supabase. RLS enabled on all customer-facing tables. Realtime subscriptions powering visualizer, activity feed, agent console live execution.
 
-### Backend (the agent system)
+**Infrastructure.** Three Vercel projects (pathfinder, metacron, unicron-systems) all deploying independently, all auto-reverted on regression. Issue #48 (recurring prerender flake) permanently resolved via PR #93 force-dynamic cleanup.
 
-**Production-ready.** Pathfinder agent backend is fully shipped and running against Zedcor's data: Ingestor (sam.gov, USAspending, Harris County, news), Ranker, Verifier, Enricher (Perplexity-driven), AdjacencyMapper, GeoMapper, Outreach Drafter, Briefer. All on Vercel cron + Inngest. Cost tracking on every LLM call via the gateway. Architect agent (decomposition, tuning, discovery) is shipped. Source Onboarder is shipped (Tier 1 auto-deploy + Tier 2 human-assist queue). Coverage Expansion agent is shipped. Cross-pollination engine is shipped.
+### Prototype — deployed but mock-mode only
 
-**Gap.** Agent code is heavily Pathfinder-specific. The Agent Console abstraction is new in this sprint, so the dispatch / event / verify pattern is untested at scale. Conductor v1.0 (build-time supervisor) is vision-level, not built. Self-modifying Architect is vision-level. Auto-fan-out from Architect Decomposition (one verify spawns Coverage Expansion + Source Onboarder dispatches) is a gap in the M4 sprint and needs follow-up work.
+**Coverage Expansion modal.** Full UX flow (input → live → result → verify) functional in mock mode. Real-mode dispatch gated on Pathfinder shipping /api/coverage/goals* HTTP routes. Operator-todo filed.
 
-### Database
+**Source Onboarder modal real mode.** Mock-mode complete. Real mode needs operator session permissions tested against Stream E /api/sources/onboard endpoint from metacron domain.
 
-**Production-ready.** Supabase project hosting both `pathfinder.*` and `unicron.*` schemas. RLS enabled on all customer-facing tables. Migrations versioned in source control. Realtime subscriptions powering the visualizer, activity feed, and the new Agent Console live execution surface.
+**Architect modal real mode.** Three sub-modes (Decomposition, Tuning, Discovery) functional in mock mode. Real mode needs VITE_ARCHITECT_API_URL env config + bearer token set on metacron Vercel project.
 
-**New in this sprint.** `unicron.agent_dispatches` and `unicron.agent_dispatch_events` tables ship in Phase 0.5; `pathfinder.agent_verifications` ships in Phase 1F as a coordinated cross-chat sprint. These three tables are the spine of the verified-completion handoff.
+**Tier 2 ticket resolve real mode.** Mock works; real mode needs anon-vs-service-role permission validation.
 
-**Gap.** No formal multi-tenant org table on the Pathfinder side — Zedcor is currently a hardcoded constant. Adding customer #2 will require a migration. Tracked as a follow-up. No replica strategy yet, no point-in-time recovery testing.
+**Cross-Pollination modal.** Review-only mode functional against real pathfinder.cross_pollination_matches. On-demand dispatch endpoint not yet shipped on Pathfinder side.
 
-### Security
+### Not yet started — gaps for the demo
 
-**Mixed.** Authentication is solid: magic-link via Supabase Auth, no passwords, JWT sessions with rotation. RLS guards customer-data access. Service-role keys live only in server environments and are not committed.
+**Phase 1F Living System bridge.** The marquee demo moment per SPEC §12 (operator clicks Verify in Metacron → Pathfinder customer dashboard activity ticker updates in real time) is NOT FUNCTIONAL. Verify currently writes to unicron.agent_dispatches only. The bridge to pathfinder.agent_verifications is gated on Pathfinder shipping that table + the customer-side ActivityTicker component. Coordination operator-todo filed; 24h escalation deadline 2026-05-04T00:30:00Z.
 
-**New in this sprint.** Verification records carry `verified_by_user_id` + `verified_at`, giving us per-action attribution for everything an operator commits to production. That's the foundation for an audit log even though the audit log surface itself isn't in this sprint.
+**Galaxy canvas (multi-clustomer view).** Phase 2 design priority. Operators see single-customer Zedcor only today.
 
-**Gap.** Three meaningful holes remain:
-- No operator-team RBAC. Anyone with a magic-link to an authorized email sees everything. Acceptable for a 2-person team; not acceptable when we add agent-orchestrator engineers.
-- No audit log surface. Verification records exist in the database now, but there's no UI for who-approved-what review. Needed before any customer asks for compliance evidence.
-- Per-customer data isolation in the operator UI is enforced by RLS at the database but not yet by RBAC at the UI layer. An operator with access to customer A could in principle query customer B's data through Metacron. Acceptable while we are the only customers; not acceptable at customer #2.
+**New Cluster slide-out (Architect-driven onboarding).** Phase 2 design priority. New colonies require direct backend setup today.
 
-### APIs
+**Persistent HUD top bar + Escalations drawer.** Phase 2 design priority.
 
-**Production-ready.** Architect Agent endpoints (decompose / tune / discover), Source Onboarder endpoints (single-phase onboard + sessions polling), Coverage Expansion endpoints (goals CRUD + run dispatch), Architect Inbox endpoints (list + resolve). All Bearer-token authenticated, rate-limited at the Vercel layer, with eval coverage for the agent calls behind them.
+**Signal Stack right rail on Galaxy home.** Phase 2 design priority.
 
-**Gap.** Cross-Pollination has no on-demand HTTP dispatch endpoint yet — it's cron-driven. The Cross-Pollination modal ships in review-only mode until that endpoint lands (a Pathfinder chat task). No public API for customers; Pathfinder is closed UI today. No webhook system for outbound events. The Connector Framework (Slack, Microsoft Teams, HubSpot) is in flight in a parallel sprint and not yet shipped to production.
+**Per-paradigm visualizers** (bees / ants / slime / mycelium / murmuration / sperm-egg). Phase 4 design lift.
 
-### Deployment & Infrastructure
+**Operator RBAC, audit log surface, eval pass-rate dashboard, cost tracking dashboard, connector health dashboard, Inngest job monitor.** Phase 2/3.
 
-**Production-ready.** Three independent Vercel projects (Pathfinder customer app, Marketing Site, Metacron operator UI), each auto-deployed from main, each independently auto-reverted on failure. GitHub Actions for typecheck, lint, test. Inngest for cron + background jobs. Custom domains and SSL handled.
+**Conductor v1+v2, plugin marketplace, self-modifying Architect, inter-customer learning.** Phase 4+ vision-level.
 
-**Gap.** No staging environment separate from preview deploys. No formal incident-response runbook. No on-call rotation.
+### Demo paths today
 
-### Observability
+1. Sign in at metacron.unicron.systems via magic-link
+2. Living Intelligence visualizer renders with real-time agent activity
+3. HUD counters show real cost data from pathfinder.llm_calls
+4. Activity feed scrolls with live Pathfinder agent events
+5. Architect Inbox surfaces real Stream D proposals (if queued)
+6. Add Source accepts a real URL and onboards via Stream E
+7. Customers tab shows Zedcor profile with live lead volume, cost, sources, agents
+8. Agents tab shows four registered modals; each demoable in mock mode end-to-end
 
-**Mixed.** LLM-call cost tracked per agent per run via the gateway. Agent runs logged to `pathfinder.agent_log` with realtime subscription powering the activity feed. Vercel deploy logs and runtime logs available. Agent Console adds per-dispatch reasoning trail in `unicron.agent_dispatch_events`.
+### Demo gaps
 
-**Gap.** No centralized error monitoring (Sentry not wired). No SLA dashboards. Eval pass-rate dashboard is on the roadmap but not yet built. Cost tracking dashboard for cross-customer spend is on the roadmap but not yet built. No alerting on dispatch failures or verification stalls.
+- Phase 1F not shipped: Verify click does not propagate to Pathfinder customer ticker. Marquee "Living System" demo moment unavailable.
+- Real-mode agent dispatches require Vercel env vars set on the metacron project (VITE_COVERAGE_API_*, VITE_ARCHITECT_API_*, VITE_SOURCE_ONBOARDER_*). Without them, all four agent modals demo in mock mode only.
+- Galaxy view is single-customer. Multi-customer constellation is Phase 2.
+- New Cluster onboarding flow has no UI yet. Phase 2 design priority.
 
 ---
 
