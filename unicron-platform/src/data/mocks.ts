@@ -787,6 +787,253 @@ export const sourceOnboarderMockTier2Result: OnboardSyncResponse = {
   duration_ms: 64_000,
 };
 
+// ---------------------------------------------------------------------------
+// Architect Modal (Stream M4) fixtures.
+//
+// Three sub-modes — Decomposition, Tuning, Discovery. Mirrors the wire shape
+// from `Pathfinder/app/api/architect/{decompose,tune,discover}/route.ts` via
+// the contract types in `src/lib/contracts/architect.ts`.
+// ---------------------------------------------------------------------------
+
+import type {
+  ArchitectProposalRow,
+  DecompositionApiResponse,
+  DiscoveryApiResponse,
+  TuningApiResponse,
+} from '../lib/contracts/architect';
+
+export const architectDecompositionMock: DecompositionApiResponse = {
+  proposal_id: 'prop-decomp-pittsburgh',
+  session_id: 'sess-decomp-pittsburgh',
+  architecture: {
+    buyer: 'distributors of temporary construction-site security',
+    buying_signal:
+      'large new commercial construction permits, value > $1M, no permanent security on file with the GC',
+    data_sources_proposed: [
+      { type: 'permits', jurisdictions: ['Pittsburgh, PA', 'Allegheny County, PA'], expected_daily_volume: 110 },
+      { type: 'sam_gov', jurisdictions: ['US national'], expected_daily_volume: 38 },
+      { type: 'news', jurisdictions: ['Pittsburgh metro'], expected_daily_volume: 12 },
+      { type: 'entity_formation', jurisdictions: ['PA'], expected_daily_volume: 6 },
+    ],
+    data_sources_rejected: [{ type: 'land_txn', reason: 'low signal-to-noise for this use case' }],
+    layer_2_watchers: [
+      { source_type: 'permits', instruction: 'Poll Allegheny County socrata feed; normalize new filings.' },
+      { source_type: 'sam_gov', instruction: 'Watch NAICS 23 construction RFPs.' },
+      { source_type: 'news', instruction: 'Pittsburgh-metro construction announcements.' },
+    ],
+    layer_3_agents: [
+      { role: 'Qualifier', instruction: 'Filter to value > $1M commercial new-build.' },
+      { role: 'Enricher', instruction: 'Resolve GC contact + project owner via Sonar Pro.' },
+      { role: 'GeoMapper', instruction: 'Resolve address to lat/lon; filter within 25mi radius.' },
+      { role: 'CompetitiveIntel', instruction: 'Identify incumbent security vendor on similar projects.' },
+    ],
+    layer_4_agents: [
+      { role: 'Ranker', instruction: 'Score by value × no-incumbent × geography.' },
+      { role: 'OutreachDrafter', instruction: 'Draft personalized outreach citing project + GC.' },
+      { role: 'Briefer', instruction: 'Friday weekly brief.' },
+    ],
+    estimates: {
+      daily_qualified_volume: 7,
+      cost_per_lead_usd: 0.06,
+      architecture_confidence: 'high',
+    },
+    open_questions: [
+      'Should the GeoMapper radius default to 25mi or 50mi for this vertical?',
+      'Adjacent-need detection — extend Enricher or split into AdjacencyMapper?',
+    ],
+  },
+  reasoning: [
+    'Buyer is upstream of construction; their signal is large new builds without permanent security.',
+    'Permit feeds are the highest-signal public data source. Adding Allegheny + Pittsburgh covers ~95% of metro volume.',
+    'sam.gov is supplementary for federal/military projects.',
+    'News + entity-formation are corroborative, not primary.',
+    'Recommend GeoMapper radius 25mi to keep Qualifier signal density high.',
+  ],
+  cost_usd: 0.42,
+  duration_ms: 18_400,
+  status: 'completed',
+};
+
+export const architectTuningMock: TuningApiResponse = {
+  session_id: 'sess-tune-zedcor-2026-05',
+  proposals: [
+    {
+      id: 'prop-tune-1',
+      session_id: 'sess-tune-zedcor-2026-05',
+      vertical_id: 'pathfinder-default',
+      type: 'tuning_suggestion',
+      status: 'pending',
+      headline: 'Tighten GeoMapper radius from 50mi to 20mi',
+      body:
+        '7 wrong-geography reject markers in the last 7 days. Shadow test on 412 prior leads predicts -84% wrong-geo with -3% total volume.',
+      details: {
+        agent_role: 'GeoMapper',
+        cluster_key: 'wrong-geo',
+        cluster_count: 7,
+        current_instruction: 'Filter projects within 50mi radius of branch.',
+        proposed_instruction: 'Filter projects within 20mi radius of branch.',
+        shadow_test: {
+          sample_size: 412,
+          wins: 24,
+          losses: 1,
+          side_effects: 12,
+          win_rate: 0.96,
+          side_effect_rate: 0.029,
+          method: 'model_introspective_estimate',
+        },
+        confidence: 0.88,
+        estimated_impact: '-84% wrong-geo, -3% total volume',
+      },
+      confidence: 0.88,
+      resolved_at: null,
+      resolved_by_user_email: null,
+      resolution_notes: null,
+      source_input_summary: null,
+      created_at: '2026-05-02T15:11:00.000Z',
+    } as ArchitectProposalRow,
+    {
+      id: 'prop-tune-2',
+      session_id: 'sess-tune-zedcor-2026-05',
+      vertical_id: 'pathfinder-default',
+      type: 'tuning_suggestion',
+      status: 'pending',
+      headline: 'Add subcontractor-relationship feature to Ranker scoring',
+      body:
+        'Outreach reply rate is 31% lower for projects where the GC routes security through a single subcontractor. Adding that feature to the Ranker would deprioritize them in the queue.',
+      details: {
+        agent_role: 'Ranker',
+        cluster_key: 'sub-route-low-reply',
+        cluster_count: 14,
+        current_instruction: 'Score by value × no-incumbent × geography.',
+        proposed_instruction:
+          'Score by value × no-incumbent × geography × (1 - sub-route-probability).',
+        shadow_test: {
+          sample_size: 318,
+          wins: 22,
+          losses: 4,
+          side_effects: 6,
+          win_rate: 0.85,
+          side_effect_rate: 0.019,
+          method: 'model_introspective_estimate',
+        },
+        confidence: 0.74,
+        estimated_impact: '+18% reply rate on outreach',
+      },
+      confidence: 0.74,
+      resolved_at: null,
+      resolved_by_user_email: null,
+      resolution_notes: null,
+      source_input_summary: null,
+      created_at: '2026-05-02T15:11:00.000Z',
+    } as ArchitectProposalRow,
+  ],
+  rejected: [
+    {
+      cluster_key: 'late-stage-bid',
+      reason: 'Below shadow-test win threshold (0.62 < 0.70).',
+    },
+  ],
+  summary: '2 tuning proposals (1 high-confidence GeoMapper change, 1 medium-confidence Ranker change), 1 rejected.',
+  cost_usd: 0.18,
+  duration_ms: 9_200,
+  status: 'completed',
+};
+
+export const architectDiscoveryMock: DiscoveryApiResponse = {
+  session_id: 'sess-discover-pittsburgh-metro',
+  proposals: [
+    {
+      id: 'prop-disc-1',
+      session_id: 'sess-discover-pittsburgh-metro',
+      vertical_id: 'pathfinder-default',
+      type: 'source_discovery',
+      status: 'pending',
+      headline: 'Allegheny County permit portal',
+      body: 'Socrata-style API; auto-onboardable.',
+      details: {
+        candidate_jurisdiction: 'Allegheny County, PA',
+        source_type: 'permits',
+        source_url: 'https://data.alleghenycounty.us/permits',
+        source_name: 'Allegheny County permits',
+        tier: 'tier_1',
+        reference_count: 42,
+        reference_rate: 0.32,
+        lift_per_day: 4.1,
+        confidence: 0.94,
+        reasoning:
+          'High overlap with Pittsburgh metro construction signal; valuation field present in feed.',
+      },
+      confidence: 0.94,
+      resolved_at: null,
+      resolved_by_user_email: null,
+      resolution_notes: null,
+      source_input_summary: null,
+      created_at: '2026-05-02T15:11:00.000Z',
+    } as ArchitectProposalRow,
+    {
+      id: 'prop-disc-2',
+      session_id: 'sess-discover-pittsburgh-metro',
+      vertical_id: 'pathfinder-default',
+      type: 'source_discovery',
+      status: 'pending',
+      headline: 'Pittsburgh DCP permits',
+      body: 'REST JSON; manageable adapter.',
+      details: {
+        candidate_jurisdiction: 'Pittsburgh, PA',
+        source_type: 'permits',
+        source_url: 'https://pittsburghpa.gov/dcp/permits',
+        source_name: 'Pittsburgh DCP permits',
+        tier: 'tier_1',
+        reference_count: 28,
+        reference_rate: 0.21,
+        lift_per_day: 2.0,
+        confidence: 0.86,
+        reasoning: 'Covers city-only filings; complements the county feed.',
+      },
+      confidence: 0.86,
+      resolved_at: null,
+      resolved_by_user_email: null,
+      resolution_notes: null,
+      source_input_summary: null,
+      created_at: '2026-05-02T15:11:00.000Z',
+    } as ArchitectProposalRow,
+    {
+      id: 'prop-disc-3',
+      session_id: 'sess-discover-pittsburgh-metro',
+      vertical_id: 'pathfinder-default',
+      type: 'source_discovery',
+      status: 'pending',
+      headline: 'UPMC construction RSS',
+      body: 'Free-text RSS; needs parser hint (Tier 2).',
+      details: {
+        candidate_jurisdiction: 'Pittsburgh, PA',
+        source_type: 'news',
+        source_url: 'https://upmcconstruction.example.com/rss',
+        source_name: 'UPMC construction RSS',
+        tier: 'tier_2',
+        reference_count: 6,
+        reference_rate: 0.18,
+        lift_per_day: 0.6,
+        confidence: 0.62,
+        reasoning: 'Hospital-system construction feed; high-value when parsed correctly.',
+      },
+      confidence: 0.62,
+      resolved_at: null,
+      resolved_by_user_email: null,
+      resolution_notes: null,
+      source_input_summary: null,
+      created_at: '2026-05-02T15:11:00.000Z',
+    } as ArchitectProposalRow,
+  ],
+  rejected: [
+    { candidate: 'pittsburghchamber.com/news', reason: 'Below reference_rate 0.15 threshold.' },
+  ],
+  summary: '3 candidates: 2 Tier 1 (auto-onboardable), 1 Tier 2 (operator review).',
+  cost_usd: 0.31,
+  duration_ms: 12_800,
+  status: 'completed',
+};
+
 export const sourceOnboarderMockLiveEvents: ReadonlyArray<{
   delayMs: number;
   event_type: 'reasoning' | 'tool_call' | 'tool_result' | 'partial_output' | 'decision';
