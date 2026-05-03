@@ -12,7 +12,7 @@
 //     anchored card) inside <APIProvider> so child components can call useMap().
 
 import * as React from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { APIProvider, Map as GoogleMap, useMap } from '@vis.gl/react-google-maps';
 import type { Branch, CrossPollMatch, Customer, Project } from '@/lib/types';
 import { TopBar, type SourceKey } from './TopBar';
@@ -81,6 +81,12 @@ export interface DashboardProps {
    * the dashboard still renders cleanly if the server-side fetch was
    * skipped or returned an error. */
   initialCrossPollMatches?: CrossPollMatch[];
+  /** Demo Polish UX § Gate 7A flag — when true, every "open a project"
+   * affordance (map pin click, list row, kanban tile, stat-popover row,
+   * etc.) navigates to /leads/[projectId] instead of opening the legacy
+   * ProjectModal overlay. Plumbed in from app/page.tsx where
+   * `process.env.LEAD_DETAIL_REDESIGN === '1'` is read server-side. */
+  redesignEnabled?: boolean;
 }
 
 export function Dashboard({
@@ -88,7 +94,11 @@ export function Dashboard({
   initialCustomers,
   initialProjects,
   initialCrossPollMatches = [],
+  redesignEnabled = false,
 }: DashboardProps) {
+  // Used by `openLead` below — declared after `setOpenProjectId` to
+  // satisfy temporal-dead-zone access of the setter.
+  const router = useRouter();
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
 
   // Demo Polish UX § Gate 1C — the dashboard's branch surface is restricted
@@ -121,6 +131,21 @@ export function Dashboard({
   const [source, setSource] = React.useState<SourceKey>('all');
   const [crossPoll, setCrossPoll] = React.useState(false);
   const [openProjectId, setOpenProjectId] = React.useState<string | null>(null);
+  // Demo Polish UX § Gate 7A flag — when on, every "open a project"
+  // affordance navigates to the redesigned /leads/[projectId] page;
+  // when off, the legacy ProjectModal overlay opens (existing behavior).
+  // Single helper so every call site (map pin, list row, kanban tile,
+  // stat-popover, anchored card) routes through one place.
+  const openLead = React.useCallback(
+    (projectId: string) => {
+      if (redesignEnabled) {
+        router.push(`/leads/${encodeURIComponent(projectId)}`);
+      } else {
+        setOpenProjectId(projectId);
+      }
+    },
+    [redesignEnabled, router],
+  );
   const [branchMin, setBranchMin] = React.useState(false);
   const [listMin, setListMin] = React.useState(false);
   const [activityOpen, setActivityOpen] = React.useState(false);
@@ -365,10 +390,10 @@ export function Dashboard({
           lng: p.lon as number,
           color: tier.color,
           hi: tier.isHi,
-          onClick: () => setOpenProjectId(p.id),
+          onClick: () => openLead(p.id),
         };
       });
-  }, [withBranchFiltered, crossPoll]);
+  }, [withBranchFiltered, crossPoll, openLead]);
 
   // ── Render ─────────────────────────────────────────────────────────────────
   if (!apiKey) {
@@ -471,7 +496,7 @@ export function Dashboard({
                     lat={l.project.lat}
                     lng={l.project.lon}
                     label={`WI-${i + 1}`}
-                    onClick={() => setOpenProjectId(l.project.id)}
+                    onClick={() => openLead(l.project.id)}
                   />
                 ))}
               </>
@@ -532,7 +557,7 @@ export function Dashboard({
           branch={selectedBranch}
           projects={filteredProjects}
           totalCount={totalForHeader}
-          onOpen={(p) => setOpenProjectId(p.id)}
+          onOpen={(p) => openLead(p.id)}
           crossPoll={crossPoll}
           minimized={listMin}
           setMinimized={setListMin}
@@ -563,7 +588,7 @@ export function Dashboard({
             rightOffset={statBucket === 'new' ? 240 : statBucket === 'total' ? 160 : 90}
             topOffset={84}
             onClose={() => setStatBucket(null)}
-            onOpenProject={(p) => setOpenProjectId(p.id)}
+            onOpenProject={(p) => openLead(p.id)}
           />
         )}
 
@@ -577,7 +602,7 @@ export function Dashboard({
             rightOffset={380}
             topOffset={84}
             onClose={() => setEscalationOpen(false)}
-            onOpenProject={(p) => setOpenProjectId(p.id)}
+            onOpenProject={(p) => openLead(p.id)}
           />
         )}
 
