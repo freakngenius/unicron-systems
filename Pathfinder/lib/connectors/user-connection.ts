@@ -1,0 +1,378 @@
+// lib/connectors/user-connection.ts — per-user OAuth grant storage.
+//
+// SPEC - HubSpot Bridge.md §Schema. One row per (user_id, provider) per
+// portal. Tokens encrypted via the same pgcrypto helpers (migration 0105)
+// the org-level connector_tokens table uses, so CONNECTOR_TOKEN_KEY is
+// the single secret rotation surface.
+//
+// Multi-tenant isolation invariant: every read filters by user_id +
+// provider + status='active'. The Gate 10B audit's user-isolation test
+// asserts user A's row is never returned when querying user B.
+//
+// Token plaintext NEVER leaves the DB envelope. Errors carry user_id
+// (an email today) but never the token value or its prefix.
+
+import { supabaseAdmin } from '@/lib/supabase';
+
+export type UserConnectionProvider = 'gmail' | 'outlook' | 'hubspot';
+export type UserConnectionStatus = 'active' | 'expired' | 'revoked';
+
+export interface UserConnection {
+  id: string;
+  user_id: string;
+  provider: UserConnectionProvider;
+  email: string | null;
+  portal_id: string | null;
+  portal_name: string | null;
+  scope: string[] | null;
+  connected_at: string;
+  expires_at: string | null;
+  status: UserConnectionStatus;
+}
+
+export interface UpsertHubspotConnectionInput {
+  user_id: string;
+  email: string | null;
+  portal_id: string;
+  portal_name: string | null;
+  access_token: string;
+  refresh_token: string | null;
+  expires_at: Date | null;
+  scope: string[];
+}
+
+interface RpcSupabase {
+  rpc: (
+    fn: string,
+    args: Record<string, unknown>,
+  ) => Promise<{ data: unknown; error: { message: string } | null }>;
+  from: (t: string) => unknown;
+}
+
+function getKey(): string {
+  const key = process.env.CONNECTOR_TOKEN_KEY;
+  if (!key || key.length < 32) {
+    throw new Error(
+      'CONNECTOR_TOKEN_KEY is missing or too short (expected 32+ hex chars).',
+    );
+  }
+  return key;
+}
+
+function admin(): RpcSupabase {
+  return supabaseAdmin() as unknown as RpcSupabase;
+}
+
+async function encryptViaPg(plaintext: string): Promise<string> {
+  const sb = admin();
+  const res = await sb.rpc('encrypt_connector_token', {
+    plaintext,
+    encryption_key: getKey(),
+  });
+  if (res.error) throw new Error(`encrypt_connector_token failed: ${res.error.message}`);
+  if (typeof res.data !== 'string') {
+    throw new Error('encrypt_connector_token returned non-string ciphertext');
+  }
+  return res.data;
+}
+
+async function decryptViaPg(ciphertext: unknown): Promise<string> {
+  const sb = admin();
+  const res = await sb.rpc('decrypt_connector_token', {
+    ciphertext,
+    encryption_key: getKey(),
+  });
+  if (res.error) throw new Error(`decrypt_connector_token failed: ${res.error.message}`);
+  if (typeof res.data !== 'string') {
+    throw new Error('decrypt_connector_token returned non-string plaintext');
+  }
+  return res.data;
+}
+
+interface UserConnectionRow {
+  id: string;
+  user_id: string;
+  provider: UserConnectionProvider;
+  email: string | null;
+  portal_id: string | null;
+  portal_name: string | null;
+  oauth_token_enc: unknown;
+  oauth_refresh_token_enc: unknown;
+  scope: string[] | null;
+  connected_at: string;
+  expires_at: string | null;
+  status: UserConnectionStatus;
+}
+
+function rowToConnection(row: UserConnectionRow): UserConnection {
+  return {
+    id: row.id,
+    user_id: row.user_id,
+    provider: row.provider,
+    email: row.email,
+    portal_id: row.portal_id,
+    portal_name: row.portal_name,
+    scope: row.scope,
+    connected_at: row.connected_at,
+    expires_at: row.expires_at,
+    status: row.status,
+  };
+}
+
+/**
+ * Look up the active HubSpot connection for the given user. Returns null
+ * when no active row exists. Multi-tenant boundary: filters on
+ * (user_id, provider='hubspot', status='active').
+ */
+export async function getActiveHubspotConnection(
+  userId: string,
+): Promise<UserConnection | null> {
+  const sb = admin() as unknown as {
+    from: (t: string) => {
+      select: (cols: string) => {
+        eq: (
+          col: string,
+          v: string,
+        ) => {
+          eq: (
+            col: string,
+            v: string,
+          ) => {
+            eq: (
+              col: string,
+              v: string,
+            ) => {
+              order: (
+                col: string,
+                opts: { ascending: boolean },
+              ) => {
+                limit: (n: number) => {
+                  maybeSingle: () => Promise<{
+                    data: UserConnectionRow | null;
+                    error: { message: string } | null;
+                  }>;
+                };
+              };
+            };
+          };
+        };
+      };
+    };
+  };
+  const res = await sb
+    .from('user_connections')
+    .select(
+      'id, user_id, provider, email, portal_id, portal_name, oauth_token_enc, oauth_refresh_token_enc, scope, connected_at, expires_at, status',
+    )
+    .eq('user_id', userId)
+    .eq('provider', 'hubspot')
+    .eq('status', 'active')
+    .order('connected_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (res.error) {
+    throw new Error(`getActiveHubspotConnection failed for user ${userId}: ${res.error.message}`);
+  }
+  if (!res.data) return null;
+  return rowToConnection(res.data);
+}
+
+/**
+ * Decrypt the access + refresh tokens for an active HubSpot connection.
+ * Used by API routes that call HubSpot on behalf of the user. Returns
+ * null when no active connection exists.
+ */
+export async function getHubspotConnectionTokens(
+  userId: string,
+): Promise<{ connection: UserConnection; access: string; refresh: string | null } | null> {
+  const sb = admin() as unknown as {
+    from: (t: string) => {
+      select: (cols: string) => {
+        eq: (
+          col: string,
+          v: string,
+        ) => {
+          eq: (
+            col: string,
+            v: string,
+          ) => {
+            eq: (
+              col: string,
+              v: string,
+            ) => {
+              order: (
+                col: string,
+                opts: { ascending: boolean },
+              ) => {
+                limit: (n: number) => {
+                  maybeSingle: () => Promise<{
+                    data: UserConnectionRow | null;
+                    error: { message: string } | null;
+                  }>;
+                };
+              };
+            };
+          };
+        };
+      };
+    };
+  };
+  const res = await sb
+    .from('user_connections')
+    .select(
+      'id, user_id, provider, email, portal_id, portal_name, oauth_token_enc, oauth_refresh_token_enc, scope, connected_at, expires_at, status',
+    )
+    .eq('user_id', userId)
+    .eq('provider', 'hubspot')
+    .eq('status', 'active')
+    .order('connected_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (res.error) {
+    throw new Error(`getHubspotConnectionTokens failed for user ${userId}: ${res.error.message}`);
+  }
+  if (!res.data) return null;
+  if (!res.data.oauth_token_enc) {
+    throw new Error(`user_connection ${res.data.id} has no oauth_token_enc`);
+  }
+  const access = await decryptViaPg(res.data.oauth_token_enc);
+  const refresh = res.data.oauth_refresh_token_enc
+    ? await decryptViaPg(res.data.oauth_refresh_token_enc)
+    : null;
+  return { connection: rowToConnection(res.data), access, refresh };
+}
+
+/**
+ * Insert (or replace) the active HubSpot connection for a user+portal.
+ * Existing rows for the same (user_id, provider='hubspot', portal_id)
+ * are marked status='revoked' so the partial-active uniqueness invariant
+ * holds without a hard unique constraint (which would block re-connects
+ * after a revoke).
+ */
+export async function upsertHubspotConnection(
+  input: UpsertHubspotConnectionInput,
+): Promise<UserConnection> {
+  const access_enc = await encryptViaPg(input.access_token);
+  const refresh_enc = input.refresh_token ? await encryptViaPg(input.refresh_token) : null;
+
+  // Soft-revoke any existing active row for (user, provider, portal).
+  const sbUpdate = admin() as unknown as {
+    from: (t: string) => {
+      update: (v: { status: UserConnectionStatus }) => {
+        eq: (
+          col: string,
+          v: string,
+        ) => {
+          eq: (
+            col: string,
+            v: string,
+          ) => {
+            eq: (
+              col: string,
+              v: string,
+            ) => {
+              eq: (
+                col: string,
+                v: string,
+              ) => Promise<{ error: { message: string } | null }>;
+            };
+          };
+        };
+      };
+    };
+  };
+  await sbUpdate
+    .from('user_connections')
+    .update({ status: 'revoked' as UserConnectionStatus })
+    .eq('user_id', input.user_id)
+    .eq('provider', 'hubspot')
+    .eq('portal_id', input.portal_id)
+    .eq('status', 'active');
+
+  // Insert the fresh row.
+  const sbInsert = admin() as unknown as {
+    from: (t: string) => {
+      insert: (rows: Record<string, unknown>) => {
+        select: (cols: string) => {
+          single: () => Promise<{
+            data: UserConnectionRow | null;
+            error: { message: string } | null;
+          }>;
+        };
+      };
+    };
+  };
+  const res = await sbInsert
+    .from('user_connections')
+    .insert({
+      user_id: input.user_id,
+      provider: 'hubspot',
+      email: input.email,
+      portal_id: input.portal_id,
+      portal_name: input.portal_name,
+      oauth_token_enc: access_enc,
+      oauth_refresh_token_enc: refresh_enc,
+      scope: input.scope,
+      expires_at: input.expires_at ? input.expires_at.toISOString() : null,
+      status: 'active',
+    })
+    .select(
+      'id, user_id, provider, email, portal_id, portal_name, oauth_token_enc, oauth_refresh_token_enc, scope, connected_at, expires_at, status',
+    )
+    .single();
+  if (res.error || !res.data) {
+    throw new Error(
+      `upsertHubspotConnection failed for user ${input.user_id}: ${res.error?.message ?? 'no row returned'}`,
+    );
+  }
+  return rowToConnection(res.data);
+}
+
+/**
+ * Mark the active HubSpot connection for a user as revoked. Idempotent —
+ * safe to call when no active row exists.
+ */
+export async function markHubspotConnectionRevoked(
+  userId: string,
+  portalId?: string,
+): Promise<void> {
+  const sb = admin() as unknown as {
+    from: (t: string) => {
+      update: (v: { status: UserConnectionStatus }) => {
+        eq: (col: string, v: string) => unknown;
+      };
+    };
+  };
+  // Build a query chain via casts (Supabase's typed query builder is
+  // narrow; we go through unknown to keep the types tight at the edge).
+  type Chain = {
+    eq: (col: string, v: string) => Chain;
+    then: <T>(onfulfilled: (v: { error: { message: string } | null }) => T) => Promise<T>;
+  };
+  let q = sb
+    .from('user_connections')
+    .update({ status: 'revoked' as UserConnectionStatus })
+    .eq('user_id', userId) as unknown as Chain;
+  q = q.eq('provider', 'hubspot');
+  q = q.eq('status', 'active');
+  if (portalId) q = q.eq('portal_id', portalId);
+  const res = await Promise.resolve(q);
+  if (res.error) {
+    throw new Error(`markHubspotConnectionRevoked failed for user ${userId}: ${res.error.message}`);
+  }
+}
+
+/**
+ * Best-effort revoke at HubSpot's OAuth API. Returns true on 2xx, false
+ * otherwise. Caller should still mark the local row revoked regardless
+ * of the return value — local truth is what we control.
+ */
+export async function revokeHubspotRefreshTokenAtProvider(refresh: string): Promise<boolean> {
+  const url = `https://api.hubapi.com/oauth/v1/refresh-tokens/${encodeURIComponent(refresh)}`;
+  try {
+    const res = await fetch(url, { method: 'DELETE' });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
