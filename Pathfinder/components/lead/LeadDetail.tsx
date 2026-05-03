@@ -12,6 +12,7 @@ import * as React from 'react';
 
 import { ContactsCard } from '@/components/lead/ContactsCard';
 import { CrossPollinationCard } from '@/components/lead/CrossPollinationCard';
+import { HubspotSection } from '@/components/lead/HubspotSection';
 import { OutreachSection } from '@/components/lead/OutreachSection';
 import { ProjectFactsCard } from '@/components/lead/ProjectFactsCard';
 import { QuickFactsGrid } from '@/components/lead/QuickFactsGrid';
@@ -379,6 +380,20 @@ function RedesignedBody({
           onSetRecipient={handleSetRecipient}
         />
       </section>
+
+      {/* §5.5 — HubSpot (Gate 10C). Slots between Contacts and
+          Relationship Context per spec. Self-hydrates from
+          /api/leads/[id]/hubspot/status. NOTE_BUTTON_ENABLED env flag
+          gates the Add Note button — defaults to a disabled stub until
+          Kyle upgrades the sandbox tier and engagement scopes are
+          granted (Gate 10D). */}
+      <HubspotSection
+        project={project}
+        branchCode={null}
+        branchName={zedcorBranch?.branch_name ?? null}
+        contactsCount={leadContacts.length}
+        noteButtonEnabled={process.env.NEXT_PUBLIC_NOTE_BUTTON_ENABLED === '1'}
+      />
 
       {/* §6 — Relationship Context (renamed from Cross-Pollination; card
           self-hides when 0 matches). Section heading rendered only when
