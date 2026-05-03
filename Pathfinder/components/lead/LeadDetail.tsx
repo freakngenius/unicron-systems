@@ -16,6 +16,7 @@ import { DecisionBar } from '@/components/lead/DecisionBar';
 import { ProjectFactsCard } from '@/components/lead/ProjectFactsCard';
 import { ProjectStory } from '@/components/lead/ProjectStory';
 import { QuickFactsGrid } from '@/components/lead/QuickFactsGrid';
+import { RawPayloadFacts } from '@/components/lead/RawPayloadFacts';
 import { RecommendedAction } from '@/components/lead/RecommendedAction';
 import { ScoreBreakdown } from '@/components/lead/ScoreBreakdown';
 import { SourceCitations } from '@/components/lead/SourceCitations';
@@ -338,6 +339,10 @@ function RedesignedBody({
       {enrichmentMissing && <EnrichmentRequestBanner projectId={project.id} />}
       <DecisionBar project={project} matches={crossPollMatches} />
       <QuickFactsGrid project={project} />
+      {/* Demo Polish UX Gate 8X-3 — per-source raw_payload fields. Self-
+          hides for sources or rows where the field is null, so leads
+          without rich payload don't render an empty card. */}
+      <RawPayloadFacts project={project} />
       <CrossPollinationCard
         matches={crossPollMatches}
         targetRegion={zedcorBranch?.state ?? null}

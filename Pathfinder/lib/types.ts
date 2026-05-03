@@ -321,7 +321,16 @@ export interface LeadContactRow {
   phone: string | null;
   phone_type: 'direct' | 'mobile' | 'switchboard' | 'unknown' | null;
   linkedin_url: string | null;
-  source: 'clay' | 'apollo' | 'hunter' | 'manual';
+  // 'sam.gov-pointOfContact' added in Gate 8X — federal solicitation
+  // contracting officers extracted from raw_payload, no API spend. The
+  // DB column is unconstrained text; this union just documents the
+  // values writers actually emit.
+  source:
+    | 'clay'
+    | 'apollo'
+    | 'hunter'
+    | 'manual'
+    | 'sam.gov-pointOfContact';
   source_confidence: number | null;
   decision_authority:
     | 'signer'
