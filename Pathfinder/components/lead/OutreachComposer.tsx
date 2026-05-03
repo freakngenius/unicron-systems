@@ -57,7 +57,7 @@ export function OutreachComposer({
   seedNonce,
   fromDisplay,
   isConnected,
-  settingsHref = '/pathfinder/settings/connections',
+  settingsHref = '/pathfinder/settings/connectors',
   actorEmail = DEFAULT_OPERATOR_EMAIL,
   onSendComplete,
 }: Props): React.ReactElement {
