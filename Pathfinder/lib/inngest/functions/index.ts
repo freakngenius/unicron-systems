@@ -16,3 +16,5 @@ export { sourceOnboarder } from './source-onboarder';
 export { coverageExpansionEstimate, coverageExpansionRun } from './coverage-expansion';
 // Demo Polish UX Gate 4B-3 — nightly HubSpot reconciliation cron.
 export { hubspotReconCron } from './hubspot-recon-cron';
+// Demo Polish UX Gate 13W-B — daily intelligence brief cron.
+export { dailyBriefingCron } from './daily-briefing';
