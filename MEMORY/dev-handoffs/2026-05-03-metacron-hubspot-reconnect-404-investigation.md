@@ -26,13 +26,15 @@ Pathfinder owns `/pathfinder/settings/connectors` with a HubSpot tile (`HubspotU
 
 The install route was originally **POST-only**. Per-user OAuth tile fallback navigation issues a `GET` (browsers cannot navigate via POST without a form), which returned 405 / 404 depending on the route's runtime.
 
-A peer agent's worktree at `Pathfinder-worktrees/gate12e-hubspot-reconnect-fix/` (branch `demo-polish-ux/gate12e-hubspot-reconnect-fix`) already holds the fix as commit `1ae83e3 fix(pathfinder): demo polish UX gate 12E — HubSpot Reconnect 404`. Diff:
+Peer `j2fu42j9` already shipped the fix as **PR #124** (https://github.com/freakngenius/unicron-systems/pull/124, branch `demo-polish-ux/gate12e-hubspot-reconnect-fix`). Per the PR's root-cause analysis: `HubspotUserTile.handleConnect` was using `fetch(..., { method: 'POST', redirect: 'manual' })` and trying to read `Location` off the opaqueredirect response — the Fetch spec strips that header, so the fetch fell through to `window.location.href = '/pathfinder/api/connectors/hubspot/install?...'` (a **GET**). The route was POST-only → 405 → Next.js 404 page.
 
-- Adds a shared `handleInstall(req)` helper.
-- Exports `GET` and `POST` against the same handler (matches the Slack pattern at `/api/connectors/[type]/auth`).
-- Comment block updated to reference Gate 12E.
+Fix in PR #124:
+- Add `GET` handler delegating to the same `handleInstall()` body (matches Slack's `app/api/connectors/[type]/auth/route.ts` pattern).
+- `POST` preserved for backwards-compat.
+- `HubspotUserTile.handleConnect` simplified to direct `window.location.href` navigation with `?operator_email=` query param.
+- Verification: typecheck/lint clean, 1260 tests pass (+6 regression tests for GET/POST × auth states).
 
-**As of 2026-05-03 18:20 UTC the gate12e branch has not been pushed to `origin` and no PR is open.** Pinging peer `4qw7zwu7` to push + PR.
+**Awaiting Kyle's merge.**
 
 ### 3. Why Kyle filed the bug as "metacron-side"
 
