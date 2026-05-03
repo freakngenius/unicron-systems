@@ -136,10 +136,57 @@ describe('QuickFactsGrid — Houston flagship (acceptance criterion #1)', () => 
     expect(screen.queryByTestId('quick-facts-cell-lot-size')).toBeNull();
   });
 
-  it('renders all 8 expected cells (lot-size hidden for linear infra)', () => {
+  it('renders all 9 expected cells (lot-size hidden for linear infra; Gate 11D adds Estimated Towers)', () => {
     const { container } = render(<QuickFactsGrid project={houstonFlagship} />);
     const cells = container.querySelectorAll('[data-testid^="quick-facts-cell-"]');
-    expect(cells.length).toBe(8);
+    expect(cells.length).toBe(9);
+  });
+
+  it('renames Project Value cell to Project Size (Gate 11D)', () => {
+    render(<QuickFactsGrid project={houstonFlagship} />);
+    expect(screen.getByTestId('quick-facts-cell-project-size')).toBeInTheDocument();
+    expect(screen.queryByTestId('quick-facts-cell-project-value')).toBeNull();
+    expect(screen.getByText('Project Size')).toBeInTheDocument();
+  });
+
+  it('renders an Estimated Towers cell (Gate 11D)', () => {
+    render(<QuickFactsGrid project={houstonFlagship} />);
+    expect(
+      screen.getByTestId('quick-facts-cell-estimated-towers'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Estimated Towers')).toBeInTheDocument();
+  });
+
+  it('Estimated Towers shows the count when populated', () => {
+    render(
+      <QuickFactsGrid
+        project={{ ...houstonFlagship, estimated_towers_count: 32 }}
+      />,
+    );
+    expect(screen.getByTestId('quick-facts-towers-value')).toHaveTextContent('32');
+  });
+
+  it('Estimated Towers shows a range string verbatim', () => {
+    render(
+      <QuickFactsGrid
+        project={{ ...houstonFlagship, estimated_towers_count: '25-35' }}
+      />,
+    );
+    expect(screen.getByTestId('quick-facts-towers-value')).toHaveTextContent('25-35');
+  });
+
+  it('Estimated Towers tooltip prefers rationale over default copy', () => {
+    render(
+      <QuickFactsGrid
+        project={{
+          ...houstonFlagship,
+          estimated_towers_count: 32,
+          estimated_towers_rationale: '14 segments × 1 tower + 6 yards × 2',
+        }}
+      />,
+    );
+    const cell = screen.getByTestId('quick-facts-towers-value');
+    expect(cell).toHaveAttribute('title', '14 segments × 1 tower + 6 yards × 2');
   });
 });
 

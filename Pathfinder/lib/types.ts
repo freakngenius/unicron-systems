@@ -147,6 +147,14 @@ export interface Project {
     fact_supported: string;
     confidence: number;
   }> | null;
+  // Demo Polish UX Sprint Gate 11D/11E — Estimated Zedcor mobile
+  // surveillance towers required for the project, populated by the
+  // tower-estimation enrichment pass (Gate 11E migration 0117). The
+  // count may be a single integer or a range string ("12-18") when the
+  // estimator is uncertain. Rationale records the inputs the LLM used
+  // (perimeter, lot size, site count) and is surfaced as a tooltip.
+  estimated_towers_count?: number | string | null;
+  estimated_towers_rationale?: string | null;
 }
 
 export interface OrgGeoConfig {

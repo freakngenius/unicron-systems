@@ -182,15 +182,41 @@ export function QuickFactsGrid({ project }: Props): React.ReactElement {
     </Cell>
   );
 
-  // Cell 3 — Project Value
+  // Cell 3 — Project Size (renamed from "Project Value" per Gate 11D
+  // operator feedback — "size" reads as both physical scope and
+  // contract value to a non-finance audience).
   const valueCell = (
-    <Cell label="Project Value">
+    <Cell label="Project Size">
       {project.project_value != null ? (
         <span style={{ font: `500 16px ${PF_TINTS.sans}`, color: PF_TINTS.ink }}>
           {formatMoneyShort(project.project_value)}
         </span>
       ) : samGovPreAward ? (
         <Empty kind="not-disclosed" detail="open solicitation" />
+      ) : (
+        <Empty kind={isEnriched ? 'unknown' : 'pending'} />
+      )}
+    </Cell>
+  );
+
+  // Cell 3.5 — Estimated Towers (Gate 11D — populated by Gate 11E's
+  // tower-estimation enrichment pass; until that backfills the column,
+  // most leads render the "pending" empty state). Tooltip on hover
+  // surfaces the rationale recorded by the LLM.
+  const towersValue = project.estimated_towers_count;
+  const towersRationale = project.estimated_towers_rationale ?? null;
+  const TOWERS_TOOLTIP =
+    'Estimated number of Zedcor mobile surveillance towers based on project perimeter, footprint, and scope. This is a directional estimate; final deployment depends on site survey.';
+  const estimatedTowersCell = (
+    <Cell label="Estimated Towers">
+      {towersValue != null && towersValue !== '' ? (
+        <span
+          style={{ font: `500 16px ${PF_TINTS.sans}`, color: PF_TINTS.ink }}
+          title={towersRationale ?? TOWERS_TOOLTIP}
+          data-testid="quick-facts-towers-value"
+        >
+          {String(towersValue)}
+        </span>
       ) : (
         <Empty kind={isEnriched ? 'unknown' : 'pending'} />
       )}
@@ -389,6 +415,7 @@ export function QuickFactsGrid({ project }: Props): React.ReactElement {
       {ownerCell}
       {primeCell}
       {valueCell}
+      {estimatedTowersCell}
       {industryCell}
       {stageCell}
       {timingCell}
