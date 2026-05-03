@@ -16,7 +16,10 @@ type Props = {
   onGoToOnboarding: () => void;
 };
 
-const COST_SUMMARY_URL = import.meta.env.VITE_COST_SUMMARY_URL as string | undefined;
+// Wave 3 Phase B: cost summary now flows through the same-origin proxy
+// (`/api/cost-summary-proxy`) which injects `ARCHITECT_API_TOKEN` server-side.
+// The legacy `VITE_COST_SUMMARY_URL` env var is ignored — proxy path is fixed.
+const COST_SUMMARY_URL = '/api/cost-summary-proxy';
 
 /** Resolve an `agent_runs.agent_name` (e.g. 'ranker') to the matching
  *  SystemConfig agent id (e.g. 'a-ranker') so the visualizer can pulse the

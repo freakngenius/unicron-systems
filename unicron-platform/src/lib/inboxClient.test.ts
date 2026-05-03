@@ -59,7 +59,8 @@ describe('inboxClient (real-mode)', () => {
     );
     await listInboxTickets({ category: 'source-discovery', status: 'open', limit: 5 });
     const [url] = fetchMock.mock.calls[0];
-    expect(url).toContain('/api/architect/inbox?');
+    // Wave 3 Phase B: same-origin proxy injects the bearer server-side.
+    expect(url).toContain('/api/architect/inbox-proxy?');
     expect(url).toContain('category=source-discovery');
     expect(url).toContain('status=open');
     expect(url).toContain('limit=5');
@@ -79,7 +80,9 @@ describe('inboxClient (real-mode)', () => {
     });
     expect(result.status).toBe('resolved');
     const [url, init] = fetchMock.mock.calls[0];
-    expect(url).toBe('https://example.test/api/architect/inbox/abc%20123/resolve');
+    // Wave 3 Phase B: ticket id flows as a query param to the proxy, which
+    // re-inserts it into the upstream path before forwarding.
+    expect(url).toBe('/api/architect/inbox-resolve-proxy?id=abc+123');
     expect(init.method).toBe('POST');
     expect(JSON.parse(init.body as string)).toEqual({
       resolution: 'manual',

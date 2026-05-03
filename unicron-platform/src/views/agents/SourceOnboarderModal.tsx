@@ -64,19 +64,12 @@ const REAL_BRIDGE: SourceOnboarderBridge = {
 };
 
 async function realOnboard(req: OnboardRequest): Promise<OnboardSyncResponse> {
-  const baseUrlRaw = (import.meta.env.VITE_SOURCE_ONBOARDER_URL as string | undefined) ?? '';
-  const baseUrl = baseUrlRaw.replace(/\/+$/, '');
-  if (!baseUrl) {
-    throw new Error('VITE_SOURCE_ONBOARDER_URL is not configured for real-mode onboard.');
-  }
-  const user = import.meta.env.VITE_SOURCE_ONBOARDER_BASIC_USER as string | undefined;
-  const pass = import.meta.env.VITE_SOURCE_ONBOARDER_BASIC_PASS as string | undefined;
+  // Wave 3 Phase B: same-origin proxy injects SOURCE_ONBOARDER_TOKEN server-side.
   const headers: Record<string, string> = {
     'content-type': 'application/json',
     accept: 'application/json',
   };
-  if (user && pass) headers.authorization = `Basic ${btoa(`${user}:${pass}`)}`;
-  const res = await fetch(`${baseUrl}/api/sources/onboard?sync=1`, {
+  const res = await fetch('/api/sources/onboard-proxy?sync=1', {
     method: 'POST',
     headers,
     body: JSON.stringify(req),
@@ -92,12 +85,9 @@ async function realOnboard(req: OnboardRequest): Promise<OnboardSyncResponse> {
 async function realFetchTicket(id: string): Promise<InboxTicket | null> {
   // Pathfinder doesn't ship a single-ticket GET; we fetch the open list and
   // narrow. Acceptable for now since Tier 2 lists are small and refresh on
-  // each modal open.
-  const baseUrlRaw = (import.meta.env.VITE_ARCHITECT_API_URL as string | undefined) ?? '';
-  const baseUrl = baseUrlRaw.replace(/\/+$/, '');
-  if (!baseUrl) return null;
+  // each modal open. Routed through the architect inbox proxy.
   const res = await fetch(
-    `${baseUrl}/api/architect/inbox?category=source-discovery&status=open&limit=200`,
+    '/api/architect/inbox-proxy?category=source-discovery&status=open&limit=200',
     { headers: { accept: 'application/json' } },
   );
   if (!res.ok) return null;

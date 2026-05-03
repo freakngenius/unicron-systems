@@ -1,7 +1,10 @@
 // Source Onboarder client. When `VITE_SOURCE_ONBOARDER_ENABLED=true`, hits
-// the real Stream E HTTP API at `VITE_SOURCE_ONBOARDER_URL`. Otherwise
+// the same-origin Vercel proxy (`/api/sources/onboard-proxy`) which injects
+// `SOURCE_ONBOARDER_TOKEN` server-side and forwards to Stream E. Otherwise
 // returns mock fixtures shaped against the contracts in
 // `./contracts/sourceOnboarder.ts`.
+//
+// Wave 3 Phase B moved the bearer off the client; the proxy adds it.
 //
 // **TODO[stream-e-mock]**: Once Stream E's STREAM-README publishes the
 // canonical contract, regenerate the mock fixtures so they match exactly.
@@ -33,19 +36,12 @@ const MOCK_FIXTURE = {
   confidence: 0.94,
 };
 
-function sourceOnboarderUrl(): string | undefined {
-  return import.meta.env.VITE_SOURCE_ONBOARDER_URL as string | undefined;
-}
-
 function realEnabled(): boolean {
-  return getEnv().sourceOnboarderEnabled && Boolean(sourceOnboarderUrl());
+  return getEnv().sourceOnboarderEnabled;
 }
 
 async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
-  const base = sourceOnboarderUrl();
-  if (!base) throw new Error('VITE_SOURCE_ONBOARDER_URL is not configured');
-  const url = `${base.replace(/\/$/, '')}${path}`;
-  const res = await fetch(url, {
+  const res = await fetch(path, {
     headers: { 'content-type': 'application/json', accept: 'application/json' },
     ...init,
   });
@@ -58,7 +54,9 @@ async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
 
 export async function analyze(req: AnalyzeRequest): Promise<AnalysisResponse> {
   if (realEnabled()) {
-    return fetchJson<AnalysisResponse>('/analyze', {
+    // Phase B: `/analyze` was prototype shape; production analyze is part
+    // of the onboard endpoint. Route through the same-origin proxy.
+    return fetchJson<AnalysisResponse>('/api/sources/onboard-proxy?sync=1', {
       method: 'POST',
       body: JSON.stringify(req),
     });
@@ -100,7 +98,7 @@ export async function analyze(req: AnalyzeRequest): Promise<AnalysisResponse> {
 
 export async function deploy(req: DeployRequest): Promise<DeployResponse> {
   if (realEnabled()) {
-    return fetchJson<DeployResponse>('/deploy', {
+    return fetchJson<DeployResponse>('/api/sources/onboard-proxy?sync=1', {
       method: 'POST',
       body: JSON.stringify(req),
     });
