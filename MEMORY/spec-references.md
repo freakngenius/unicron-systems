@@ -541,3 +541,42 @@ Stream P1 total cost-to-date: **$0.12** of $8 cap. All cost on Haiku coord-extra
 
 Total new: 50 tests. All green; full Pathfinder suite remains 809 passing.
 >>>>>>> 263eec4 (feat(connectors): C-2A Microsoft Teams OAuth + Bot Framework + Adaptive Cards)
+
+---
+
+## Demo Polish UX Sprint — Gate 3 (lead detail enrichment)
+
+**State:** PRs #78 (Gate 3A schema+spec) and #81 (Gate 3B+3C backfill+enrichment) merged to main during the post-demo-queue Wednesday recovery sweep. Verified post-merge against the live `pathfinder.projects` corpus (481 rows).
+
+### Services + scripts
+
+#### Pathfinder/services/enricher/lead-detail.ts
+**Implements:** `Company Docs/Specs/SPEC - Lead Detail Enrichment.md` § "Enrichment pass (Gate 3C)" — single Sonar + single Anthropic Sonnet 4.6 call per lead, strict JSON-only schemas, sanitizers reject malformed dates / out-of-range lot sizes / non-6-digit NAICS / unknown owner_type.
+**Last verified against spec:** 2026-05-02 (live run on top-50 leads at $0.1506 total).
+**Drift:** none.
+
+#### Pathfinder/services/enricher/prompts.ts
+**Implements:** `SPEC - Lead Detail Enrichment.md` Sonar + Anthropic system prompts. Anti-hallucination guardrails (null over guess; empty arrays preferred over fabrication).
+**Last verified against spec:** 2026-05-02.
+**Drift:** none.
+
+#### Pathfinder/services/enricher/types.ts
+**Implements:** `SPEC - Lead Detail Enrichment.md` `EnricherInput` / `SonarEnrichmentResult` / `AnthropicEnrichmentResult` / `EnricherUpdate` / `EnricherRunResult` / `EnricherBatchSummary` shapes.
+**Last verified against spec:** 2026-05-02.
+**Drift:** none.
+
+#### Pathfinder/scripts/backfill-lead-detail-fields.ts
+**Implements:** `SPEC - Lead Detail Enrichment.md` § "Backfill order (Gate 3B)". One-shot, idempotent. Per-source extractors (sam.gov / usaspending / harris / news no-op).
+**Last verified against spec:** 2026-05-02 (executed against all 481 projects).
+**Drift:** none.
+
+#### Pathfinder/scripts/run-lead-detail-enrichment.ts
+**Implements:** Top-50 batch runner for the enrichment service. Honours `ENRICHMENT_LIMIT` / `ENRICHMENT_COST_HALT` / `ENRICHMENT_DRY_RUN` / `ENRICHMENT_PROJECT_IDS` env knobs.
+**Last verified against spec:** 2026-05-02.
+**Drift:** none.
+
+### Tests
+
+| File | Tests | Covers |
+|---|---|---|
+| `tests/lead-detail-enricher.test.ts` | 24 | sanitizeSonar (owner_type whitelist, ISO date truncation, lot_size_acres bounds, key_subs cap+drop), sanitizeAnthropic (NAICS 6-digit guard), applySonar/applyAnthropic (null-only fill, empty key_subs distinct from never-tried), needsSonar/needsAnthropic skip gates, JSON parse tolerance (code fences, prose-wrapped, malformed). |
