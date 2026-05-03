@@ -4,6 +4,61 @@ Append-only operational log. Newest entry on top. Tuesday 2026-05-05 demo deadli
 
 ---
 
+## 2026-05-03 04:00 UTC — Gate 7B (empty states + parse-rationale + DecisionBar + CrossPoll lift) — PR #98 open
+
+**Predecessor:** 7A merged at `origin/main` `55dc863` (PR #96 squashed).
+
+### Scope shipped (Gate 7B)
+
+- `Pathfinder/lib/leads/parse-rationale.ts` — full heuristic regex extractor. Replaces 7A's always-fallback stub. Extracts action / buyingContact / timingPressure / fitWithProductMix / marketSignalStrength / geographicFit. TxDOT flagship rationale extracts `warm intro` for action (acceptance criterion #3 — extracted, not invented). Falls back to monolithic when no action; never throws.
+- `Pathfinder/components/lead/DecisionBar.tsx` — full impl. Verdict matrix (Strong fit white / Speculative amber / Pre-bid closing red / Pending dim / neutral); stage-aware CTA matrix (Wait for award notice / Schedule site survey / Open in Outreach); Send via Gmail / Outlook always rendered. CTA + Send scroll-target `#lead-email-composer`. Pure helpers (`generateVerdict`, `generateCTA`) exported for direct testing.
+- `Pathfinder/components/lead/CrossPollinationCard.tsx` — full lift from `ZedcorRelationshipContext`. EXACT solid magenta / FUZZY dashed magenta confidence chips. Per-match outreach hook auto-synthesized from match data (DB column pending — see operator-todo `2026-05-02-pathfinder-cross-pollination-verify-schema.md`). "Open in Outreach with this hook" callback wired into EmailComposer body via `bodyOverride` prop bridge. Hide entirely when 0 matches.
+- `Pathfinder/components/lead/LeadDetail.tsx` — page-level empty states wired (rejected banner + opacity 0.6 + enrichment-request banner + ScoreBreakdown suppression). EmailComposer extended with optional `bodyOverride` prop + `id="lead-email-composer"` anchor.
+- Stub-test housekeeping: `lead-detail-redesign-stubs.test.tsx` updated for new DecisionBar prop signature and post-7B RecommendedAction behavior.
+
+### Verification (Gate 7B)
+
+```
+$ pnpm typecheck → 0 errors
+$ pnpm lint      → no warnings or errors
+$ pnpm test      → 1043 passed | 24 skipped (was 983 | 24 — net +60 new tests)
+```
+
+Test files added:
+- `tests/parse-rationale.test.ts` (extended 4 → 20 tests)
+- `tests/decision-bar.test.tsx` (new, 18 tests)
+- `tests/cross-pollination-card.test.tsx` (new, 15 tests)
+- `tests/lead-detail-empty-states.test.tsx` (new, 11 tests)
+
+### Hard-halt items not tripped
+
+- ✅ Houston flagship Quick Facts unchanged (QuickFactsGrid not modified in 7B)
+- ✅ Cross-Pollination preserves all matches (12-match render regression test green)
+- ✅ TxDOT flagship `action` extraction (acceptance #3) — canonical test green
+- ✅ Test count well above 983 floor (1043 actual)
+- ✅ Schema unchanged (no migration in 7B)
+- ✅ Flag still default off — production rendering unchanged
+- ⏸ Bundle-size delta vs. flag-off — deferred to 7C
+- ⏸ Verdict-line render time ≤ 200 ms (acceptance #4) — deferred to 7C
+- ⏸ LCP regression measurement — deferred to 7C
+
+### Commit chain (Gate 7B)
+
+```
+3169ec9 docs: gate 7B PLAN — empty states + parse-rationale + DecisionBar + CrossPoll lift
+795f60e feat(leads): gate 7B — parse-rationale full heuristic extraction
+e55de16 feat(lead): gate 7B — DecisionBar verdict + stage-aware CTA + Send buttons
+a5cca1b feat(lead): gate 7B — CrossPollinationCard full lift from ZedcorRelationshipContext
+4f1276f feat(lead): gate 7B — page-level empty states + EmailComposer hook bridge
+```
+
+### Operator-todo cards updated
+
+- Parent (`2026-05-02-pathfinder-gate7-lead-detail-redesign.md`) — 7A status → MERGED, 7B status → In Review, baseline updated to 1043
+- 7B card (`2026-05-03-pathfinder-gate7b-empty-states-parse-rationale.md`) — Queued → In Review with full shipped-scope summary + verification
+
+---
+
 ## 2026-05-02 22:30 UTC — Gate 7A (Lead Detail Redesign scaffolding + QuickFactsGrid) — PR #96 open
 
 **Override:** Gate 7 promoted from "post-demo" to active sprint by operator. Land before Tuesday 2026-05-05 demo. Spec is locked; build to it.
