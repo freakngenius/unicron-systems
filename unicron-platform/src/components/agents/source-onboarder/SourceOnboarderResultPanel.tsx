@@ -1,4 +1,6 @@
+import { useState } from 'react';
 import type { OnboardSyncResponse, AdapterKind } from '../../../lib/contracts/sourceOnboarder';
+import { toggleBan, type BanStatus } from '../../../lib/agents/sourcesClient';
 
 interface Props {
   result: OnboardSyncResponse;
@@ -7,6 +9,10 @@ interface Props {
   committing?: boolean;
   /** True after the dispatch is verified or rejected — hide actions. */
   readOnly?: boolean;
+  /** Initial ban state for the source (defaults to 'active' if omitted). */
+  initialBanStatus?: BanStatus;
+  /** Optional override for the toggle call — used in tests. */
+  onToggleBan?: (next: BanStatus) => Promise<void> | void;
 }
 
 export function SourceOnboarderResultPanel({
@@ -15,16 +21,45 @@ export function SourceOnboarderResultPanel({
   onOpenTier2,
   committing,
   readOnly,
+  initialBanStatus,
+  onToggleBan,
 }: Props) {
   const isLive = result.status === 'live';
   const isHumanAssist = result.status === 'human-assist';
   const isDeclined = result.status === 'declined';
+  const [banStatus, setBanStatus] = useState<BanStatus>(initialBanStatus ?? 'active');
+  const [banPending, setBanPending] = useState(false);
+  const [banError, setBanError] = useState<string | null>(null);
+  const isBanned = banStatus === 'banned';
+
+  const handleToggleBan = async () => {
+    if (!result.source_id) return;
+    const next: BanStatus = isBanned ? 'active' : 'banned';
+    // Optimistic update.
+    setBanStatus(next);
+    setBanPending(true);
+    setBanError(null);
+    try {
+      if (onToggleBan) {
+        await onToggleBan(next);
+      } else {
+        await toggleBan({ source_id: result.source_id, ban_status: next });
+      }
+    } catch (err) {
+      // Roll back on failure.
+      setBanStatus(isBanned ? 'banned' : 'active');
+      setBanError(err instanceof Error ? err.message : 'toggle failed');
+    } finally {
+      setBanPending(false);
+    }
+  };
 
   return (
     <section
       data-testid="source-onboarder-result-panel"
       data-result-status={result.status}
-      className="flex flex-col gap-5"
+      data-ban-status={banStatus}
+      className={`flex flex-col gap-5 ${isBanned ? 'opacity-60' : ''}`}
     >
       <header className="flex items-baseline justify-between gap-4">
         <div className="flex flex-col gap-1">
@@ -69,6 +104,49 @@ export function SourceOnboarderResultPanel({
           >
             {committing ? 'COMMITTING…' : 'COMMIT TO PRODUCTION'}
           </button>
+        </footer>
+      ) : null}
+
+      {!readOnly && result.source_id ? (
+        <footer
+          data-testid="source-onboarder-ban-footer"
+          className="flex items-center justify-between border-t border-border-default pt-4"
+        >
+          <span className="mono text-[10px] uppercase tracking-[0.18em] text-text-primary/40">
+            {isBanned
+              ? 'Banned — excluded from active ingestion. Unban to re-enable.'
+              : 'Ban excludes this source from active ingestion lists.'}
+          </span>
+          <div className="flex flex-col items-end gap-1">
+            <button
+              type="button"
+              onClick={handleToggleBan}
+              disabled={banPending}
+              data-testid="source-onboarder-ban-toggle"
+              data-ban-state={banStatus}
+              className={`mono text-[11px] uppercase tracking-[0.18em] px-4 py-2 rounded-md disabled:opacity-50 transition-colors border ${
+                isBanned
+                  ? 'border-emerald-400/60 text-emerald-400 hover:bg-emerald-400 hover:text-bg-base'
+                  : 'border-rose-400/60 text-rose-400 hover:bg-rose-400 hover:text-bg-base'
+              }`}
+            >
+              {banPending
+                ? isBanned
+                  ? 'BANNING…'
+                  : 'UNBANNING…'
+                : isBanned
+                  ? 'UNBAN SOURCE'
+                  : 'BAN SOURCE'}
+            </button>
+            {banError ? (
+              <span
+                data-testid="source-onboarder-ban-error"
+                className="mono text-[10px] uppercase tracking-[0.18em] text-rose-400"
+              >
+                {banError}
+              </span>
+            ) : null}
+          </div>
         </footer>
       ) : null}
     </section>
