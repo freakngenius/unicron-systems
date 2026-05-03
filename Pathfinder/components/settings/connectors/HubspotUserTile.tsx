@@ -133,37 +133,26 @@ export function HubspotUserTile(props: HubspotUserTileProps) {
   const isConnected = liveState === 'connected';
   const needsReconnect = liveState === 'expired' || liveState === 'error';
 
-  const handleConnect = React.useCallback(async () => {
+  const handleConnect = React.useCallback(() => {
     if (!resolvedEmail) {
       setErrorMsg('No operator email — set OPERATOR_EMAIL in /pathfinder/settings first.');
       return;
     }
     setBusy(true);
     setErrorMsg(null);
-    try {
-      const res = await fetch('/pathfinder/api/connectors/hubspot/install', {
-        method: 'POST',
-        headers: { 'x-operator-email': resolvedEmail },
-        redirect: 'manual',
-      });
-      // The route returns a 302; fetch with redirect:'manual' surfaces
-      // it as an opaqueredirect. Read Location off the response when
-      // available, else fall back to the resolved URL.
-      const loc = res.headers.get('location');
-      if (loc) {
-        window.location.href = loc;
-        return;
-      }
-      // Fallback for browsers that block manual-redirect inspection:
-      // re-issue without manual so we follow the redirect and land on
-      // HubSpot's consent page.
-      window.location.href = `/pathfinder/api/connectors/hubspot/install?operator_email=${encodeURIComponent(
-        resolvedEmail,
-      )}`;
-    } catch (err) {
-      setBusy(false);
-      setErrorMsg(err instanceof Error ? err.message : 'install failed');
-    }
+    // Navigate directly. The install route returns a 302 to HubSpot's
+    // consent screen; the browser follows the redirect and lands on
+    // HubSpot. Operator email rides as a query param so the route
+    // (which reads via getCurrentUserId → getOperatorEmail) can scope
+    // the OAuth state to the right user.
+    //
+    // Gate 12E fix: the prior fetch+redirect:'manual' path 404'd
+    // because opaqueredirect strips Location headers and the GET
+    // fallback hit a POST-only route. The route now accepts GET; we
+    // navigate directly here.
+    window.location.href = `/pathfinder/api/connectors/hubspot/install?operator_email=${encodeURIComponent(
+      resolvedEmail,
+    )}`;
   }, [resolvedEmail]);
 
   const handleDisconnect = React.useCallback(async () => {
