@@ -56,7 +56,7 @@ describe('Source Onboarder client — real mode', () => {
     __resetEnvForTests();
   });
 
-  it('analyze POSTs to /analyze with the request body', async () => {
+  it('analyze POSTs to the same-origin onboard proxy with the request body', async () => {
     const expected = {
       analysisId: 'real-1',
       jurisdiction: 'NYC',
@@ -101,8 +101,10 @@ describe('Source Onboarder client — real mode', () => {
       input: 'https://data.cityofnewyork.us/permits',
     });
     expect(res).toEqual(expected);
+    // Wave 3 Phase B: legacy `/analyze` collapses into the production
+    // onboard endpoint, routed via the same-origin proxy.
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://onboarder.example/analyze',
+      '/api/sources/onboard-proxy?sync=1',
       expect.objectContaining({
         method: 'POST',
         body: expect.stringContaining('"tab":"url"'),

@@ -45,7 +45,7 @@ describe('architectModesClient (real-mode)', () => {
     vi.unstubAllGlobals();
   });
 
-  it('postArchitectDecompose POSTs to /api/architect/decompose with bearer token', async () => {
+  it('postArchitectDecompose POSTs to the same-origin decompose proxy without a client-side bearer', async () => {
     const fetchMock = globalThis.fetch as unknown as ReturnType<typeof vi.fn>;
     fetchMock.mockResolvedValue(
       new Response(
@@ -73,12 +73,13 @@ describe('architectModesClient (real-mode)', () => {
     );
     await postArchitectDecompose({ buyer_pain_prompt: 'real call' });
     const [url, init] = fetchMock.mock.calls[0];
-    expect(url).toBe('https://example.test/api/architect/decompose');
-    expect((init.headers as Record<string, string>).authorization).toBe('Bearer tok-1');
+    expect(url).toBe('/api/architect/decompose-proxy');
+    // Wave 3 Phase B: bearer is injected by the proxy server-side, not the browser.
+    expect((init.headers as Record<string, string>).authorization).toBeUndefined();
     expect(JSON.parse(init.body as string)).toEqual({ buyer_pain_prompt: 'real call' });
   });
 
-  it('postArchitectTune POSTs to /api/architect/tune', async () => {
+  it('postArchitectTune POSTs to the same-origin tune proxy', async () => {
     const fetchMock = globalThis.fetch as unknown as ReturnType<typeof vi.fn>;
     fetchMock.mockResolvedValue(
       new Response(
@@ -95,7 +96,7 @@ describe('architectModesClient (real-mode)', () => {
       ),
     );
     await postArchitectTune({ vertical_id: 'x' });
-    expect(fetchMock.mock.calls[0][0]).toBe('https://example.test/api/architect/tune');
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/architect/tune-proxy');
   });
 
   it('postArchitectDiscover throws on non-2xx', async () => {

@@ -141,7 +141,7 @@ describe('Architect client — real mode', () => {
     __resetEnvForTests();
   });
 
-  it('postDecomposition POSTs to /decompose with the canonical body and adapts the response', async () => {
+  it('postDecomposition POSTs to the same-origin proxy with the canonical body and adapts the response', async () => {
     const apiResponse: DecompositionApiResponse = {
       proposal_id: 'prop-1',
       session_id: 'sess-real',
@@ -189,13 +189,15 @@ describe('Architect client — real mode', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const call = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
     const [url, init] = call;
-    expect(url).toBe('https://architect.example/decompose');
+    // Wave 3 Phase B: client hits the same-origin proxy; the proxy injects
+    // the bearer server-side, so the browser request must NOT carry
+    // Authorization itself.
+    expect(url).toBe('/api/architect/decompose-proxy');
     expect(init.method).toBe('POST');
     expect(JSON.parse(init.body as string)).toEqual({ buyer_pain_prompt: 'real pain' });
 
-    // Bearer token forwarded.
     const headers = init.headers as Record<string, string>;
-    expect(headers.authorization).toBe('Bearer token-abc');
+    expect(headers.authorization).toBeUndefined();
 
     // Response adapted to legacy UI shape.
     expect(res.sessionId).toBe('sess-real');

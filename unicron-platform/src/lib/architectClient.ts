@@ -1,15 +1,18 @@
 // Architect client.
 //
-// When `VITE_ARCHITECT_API_ENABLED=true`, calls Stream D's real HTTP API
-// at `VITE_ARCHITECT_API_URL` for decomposition (and reads
-// `pathfinder.architect_proposals` directly via supabase for the inbox
-// listing — Stream D doesn't ship a list-proposals HTTP endpoint).
-// Otherwise returns mock fixtures shaped to the legacy UI types.
+// When `VITE_ARCHITECT_API_ENABLED=true`, calls the same-origin Vercel
+// serverless proxy at `/api/architect/decompose-proxy`, which injects the
+// server-side `ARCHITECT_API_TOKEN` and forwards to Stream D's real HTTP
+// API at `ARCHITECT_API_URL`. Otherwise returns mock fixtures shaped to
+// the legacy UI types.
 //
-// Auth: when `VITE_ARCHITECT_API_TOKEN` is set, every Architect HTTP
-// call sends `Authorization: Bearer <token>`. Stream D's routes return
-// 503 when the token is unset in production, 401 on mismatch, and pass
-// through unauthenticated in dev.
+// Why the proxy: holding the bearer token server-side keeps it out of
+// the browser bundle (Wave 3 Phase B). The proxy adds the Authorization
+// header; clients no longer touch tokens.
+//
+// `listProposals` still reads `pathfinder.architect_proposals` directly
+// via the supabase anon client — Stream D doesn't ship a list-proposals
+// HTTP endpoint and the table is anon-readable.
 //
 // Approve / dismiss: Stream D doesn't ship HTTP endpoints; we write
 // `architect_proposals.status` directly via the supabase anon client.
@@ -44,32 +47,17 @@ import {
 } from './contracts/architect';
 import { __testing as systemTesting } from '../context/SystemContext';
 
-function architectApiUrl(): string | undefined {
-  return import.meta.env.VITE_ARCHITECT_API_URL as string | undefined;
-}
-
 function realEnabled(): boolean {
-  return getEnv().architectApiEnabled && Boolean(architectApiUrl());
-}
-
-function authHeaders(): Record<string, string> {
-  const headers: Record<string, string> = {
-    'content-type': 'application/json',
-    accept: 'application/json',
-  };
-  const token = getEnv().architectApiToken;
-  if (token) headers.authorization = `Bearer ${token}`;
-  return headers;
+  return getEnv().architectApiEnabled;
 }
 
 async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
-  const base = architectApiUrl();
-  if (!base) throw new Error('VITE_ARCHITECT_API_URL is not configured');
-  const url = `${base.replace(/\/$/, '')}${path}`;
-  const res = await fetch(url, {
-    headers: { ...authHeaders(), ...((init?.headers as Record<string, string>) ?? {}) },
-    ...init,
-  });
+  const headers: Record<string, string> = {
+    'content-type': 'application/json',
+    accept: 'application/json',
+    ...((init?.headers as Record<string, string>) ?? {}),
+  };
+  const res = await fetch(path, { ...init, headers });
   if (!res.ok) {
     const body = await res.text().catch(() => '');
     throw new Error(`Architect API ${res.status}: ${body || res.statusText}`);
@@ -84,7 +72,7 @@ export async function postDecomposition(
 ): Promise<DecompositionResponse> {
   if (realEnabled()) {
     const body: DecompositionApiRequest = { buyer_pain_prompt: req.buyerPain };
-    const api = await fetchJson<DecompositionApiResponse>('/decompose', {
+    const api = await fetchJson<DecompositionApiResponse>('/api/architect/decompose-proxy', {
       method: 'POST',
       body: JSON.stringify(body),
     });
