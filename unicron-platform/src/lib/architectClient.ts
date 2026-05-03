@@ -29,16 +29,13 @@ import {
 } from './architectAdapters';
 import {
   proposals as mockProposals,
-  decompositionLines as mockDecompLines,
-  decompositionConfidence as mockConfidence,
-  decompositionCostLine as mockCostLine,
+  architectDecompositionMock,
 } from '../data/mocks';
 import {
   type ArchitectProposalRow,
   type ApproveProposalResponse,
   type DecompositionApiRequest,
   type DecompositionApiResponse,
-  type DecompositionLine,
   type DecompositionRequest,
   type DecompositionResponse,
   type DismissProposalResponse,
@@ -94,31 +91,24 @@ export async function postDecomposition(
     return decompositionApiToLegacy(api, req.buyerPain);
   }
 
-  // Mock: structurally matches the legacy contract; ignores `buyerPain`.
-  const lines: DecompositionLine[] = mockDecompLines.map((text, i) => ({
-    index: i,
-    text,
-    kind: detectKind(text),
-  }));
-  if (mockCostLine) {
-    lines.push({ index: lines.length, text: mockCostLine, kind: 'cost' });
-  }
-  return {
-    sessionId: `mock-${Date.now()}`,
-    lines,
-    recommendedConfig: systemTesting.buildDefaultArchitecture(req.buyerPain),
-    confidence: parseFloat(mockConfidence.replace(/[^\d.]/g, '')) || 0.83,
+  // Mock: derive a structured architecture from the canonical mock and echo
+  // the user's buyer-pain into the `buyer` field so two distinct inputs
+  // produce visibly distinct architectures (the rendered BUYER + the
+  // recommendedConfig.buyerPain both reflect the input). Real-mode uses the
+  // /decompose endpoint; this branch only runs when VITE_ARCHITECT_API_ENABLED
+  // is unset / false.
+  const trimmed = req.buyerPain.trim();
+  const echoedBuyer = trimmed.length > 0 ? trimmed : architectDecompositionMock.architecture.buyer;
+  const mockArchitecture = {
+    ...architectDecompositionMock.architecture,
+    buyer: echoedBuyer,
   };
-}
-
-function detectKind(line: string): DecompositionLine['kind'] {
-  const upper = line.trim().toUpperCase();
-  if (upper.startsWith('BUYER')) return 'buyer';
-  if (upper.startsWith('BUYING SIGNAL')) return 'signal';
-  if (upper.startsWith('PUBLIC DATA')) return 'data';
-  if (upper.startsWith('PROPOSED ARCHITECTURE')) return 'arch';
-  if (upper.startsWith('CONFIDENCE')) return 'confidence';
-  return 'header';
+  const apiResponse: DecompositionApiResponse = {
+    ...architectDecompositionMock,
+    session_id: `mock-${Date.now()}`,
+    architecture: mockArchitecture,
+  };
+  return decompositionApiToLegacy(apiResponse, req.buyerPain);
 }
 
 // ---- Proposals -----------------------------------------------------------

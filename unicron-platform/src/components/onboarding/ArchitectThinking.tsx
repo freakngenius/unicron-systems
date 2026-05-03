@@ -1,35 +1,39 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Visualizer } from '../visualizer/Visualizer';
 import { useSettings } from '../SettingsContext';
 import { useSystem } from '../../context/SystemContext';
 import { postDecomposition } from '../../lib/architectClient';
-import type { DecompositionResponse } from '../../lib/contracts/architect';
+import { architectureToSystemConfig } from '../../lib/architectAdapters';
+import type {
+  DecompositionArchitecture,
+  DecompositionResponse,
+} from '../../lib/contracts/architect';
+import type { SystemConfig } from '../../context/SystemContext';
+import { ArchitectureEditor } from './ArchitectureEditor';
 
 type Props = {
   buyerPain: string;
-  onApprove: () => void;
-  onEdit: () => void;
+  onApprove: (config: SystemConfig) => void;
 };
 
 const REVEAL_INTERVAL_MS = 60;
 
-export function ArchitectThinking({ buyerPain, onApprove, onEdit }: Props) {
+export function ArchitectThinking({ buyerPain, onApprove }: Props) {
   const { settings } = useSettings();
   const { config } = useSystem();
   const [response, setResponse] = useState<DecompositionResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [revealed, setRevealed] = useState(0);
-  // TODO[stream-d-contract,src/components/onboarding/ArchitectThinking.tsx:23]:
-  // When VITE_ARCHITECT_API_ENABLED=true, postDecomposition() will hit
-  // Stream D's /decomposition endpoint. The mock fixture below is shaped
-  // identically; no UI change is needed when D ships. See
-  // src/lib/contracts/architect.ts for the canonical type.
+  const [editing, setEditing] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
+    // Reset on buyerPain change so a new decomposition starts clean.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setResponse(null);
     setError(null);
     setRevealed(0);
+    setEditing(false);
 
     postDecomposition({ buyerPain })
       .then((res) => {
@@ -72,6 +76,19 @@ export function ArchitectThinking({ buyerPain, onApprove, onEdit }: Props) {
 
   const done = total > 0 && revealed >= total;
 
+  // APPLY EDITS commits the edited architecture as-is and dispatches the
+  // deploy. NO re-call to postDecomposition (per Phase B spec, confirmed by
+  // Kyle). The parent transitions to the next state.
+  const handleApply = (next: DecompositionArchitecture) => {
+    const nextConfig = architectureToSystemConfig(next, buyerPain);
+    onApprove({ ...nextConfig, status: 'live' });
+  };
+
+  const handleApprove = () => {
+    if (!response) return;
+    onApprove({ ...response.recommendedConfig, status: 'live' });
+  };
+
   return (
     <div className="w-full max-w-[1180px] px-6 grid grid-cols-1 lg:grid-cols-[3fr_2fr] gap-10 items-start py-12">
       <div className="flex flex-col items-center justify-center">
@@ -85,14 +102,14 @@ export function ArchitectThinking({ buyerPain, onApprove, onEdit }: Props) {
           />
         </div>
         <div className="mt-6 mono text-[11px] uppercase tracking-[0.22em] text-accent-gold flex items-center gap-1">
-          <span>ARCHITECT · THINKING</span>
-          <Ellipsis />
+          <span>{editing ? 'ARCHITECT · EDITING' : 'ARCHITECT · THINKING'}</span>
+          {!editing && <Ellipsis />}
         </div>
       </div>
 
       <div className="bg-bg-card border border-border-default rounded-lg p-6">
         <div className="mono text-[11px] uppercase tracking-[0.22em] text-accent-gold mb-4">
-          ARCHITECT · DECOMPOSING
+          {editing ? 'ARCHITECT · EDIT ARCHITECTURE' : 'ARCHITECT · DECOMPOSING'}
         </div>
 
         {error && (
@@ -101,35 +118,49 @@ export function ArchitectThinking({ buyerPain, onApprove, onEdit }: Props) {
           </div>
         )}
 
-        <pre className="mono text-[12px] leading-[1.65] text-text-primary whitespace-pre-wrap min-h-[420px]">
-          {lines.slice(0, revealed).map((line, i) => (
-            <Line key={i} text={line} />
-          ))}
-          {!done && !error && (
-            <span className="inline-block w-[6px] h-[12px] bg-accent-gold align-baseline animate-pulseDot" />
-          )}
-        </pre>
+        {editing && response ? (
+          <ArchitectureEditor
+            architecture={response.architecture}
+            onApply={handleApply}
+            onCancel={() => setEditing(false)}
+          />
+        ) : (
+          <>
+            <pre className="mono text-[12px] leading-[1.65] text-text-primary whitespace-pre-wrap min-h-[420px]">
+              {lines.slice(0, revealed).map((line, i) => (
+                <Line key={i} text={line} />
+              ))}
+              {!done && !error && (
+                <span className="inline-block w-[6px] h-[12px] bg-accent-gold align-baseline animate-pulseDot" />
+              )}
+            </pre>
 
-        <div className="flex gap-3 mt-6">
-          <button
-            type="button"
-            disabled={!done}
-            onClick={onApprove}
-            className={[
-              'bg-white text-bg-base mono text-[12px] tracking-[0.12em] uppercase py-3 px-5 rounded-md transition-all',
-              done ? 'hover:bg-text-primary' : 'opacity-40 cursor-not-allowed',
-            ].join(' ')}
-          >
-            APPROVE & DEPLOY
-          </button>
-          <button
-            type="button"
-            onClick={onEdit}
-            className="border border-border-default text-text-primary mono text-[12px] tracking-[0.12em] uppercase py-3 px-5 rounded-md hover:border-border-hover transition-colors"
-          >
-            EDIT ARCHITECTURE
-          </button>
-        </div>
+            <div className="flex gap-3 mt-6">
+              <button
+                type="button"
+                disabled={!done}
+                onClick={handleApprove}
+                className={[
+                  'bg-white text-bg-base mono text-[12px] tracking-[0.12em] uppercase py-3 px-5 rounded-md transition-all',
+                  done ? 'hover:bg-text-primary' : 'opacity-40 cursor-not-allowed',
+                ].join(' ')}
+              >
+                APPROVE & DEPLOY
+              </button>
+              <button
+                type="button"
+                disabled={!response}
+                onClick={() => setEditing(true)}
+                className={[
+                  'border border-border-default text-text-primary mono text-[12px] tracking-[0.12em] uppercase py-3 px-5 rounded-md transition-colors',
+                  response ? 'hover:border-border-hover' : 'opacity-40 cursor-not-allowed',
+                ].join(' ')}
+              >
+                EDIT ARCHITECTURE
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
@@ -139,10 +170,12 @@ function useStableLines(
   response: DecompositionResponse | null,
   includeCost: boolean,
 ): string[] {
-  if (!response) return [];
-  return response.lines
-    .filter((l) => includeCost || l.kind !== 'cost')
-    .map((l) => l.text);
+  return useMemo(() => {
+    if (!response) return [];
+    return response.lines
+      .filter((l) => includeCost || l.kind !== 'cost')
+      .map((l) => l.text);
+  }, [response, includeCost]);
 }
 
 function Line({ text }: { text: string }) {

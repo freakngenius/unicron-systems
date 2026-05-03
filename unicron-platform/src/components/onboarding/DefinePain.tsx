@@ -27,10 +27,12 @@ export function DefinePain({ onSubmit }: Props) {
   }, [value]);
 
   const placeholder = placeholderExamples[phIndex];
+  const trimmed = value.trim();
+  const canSubmit = trimmed.length > 0;
 
   const handleSubmit = () => {
-    const prompt = value.trim() || placeholder;
-    onSubmit(prompt);
+    if (!canSubmit) return;
+    onSubmit(trimmed);
   };
 
   return (
@@ -60,7 +62,12 @@ export function DefinePain({ onSubmit }: Props) {
         <button
           type="button"
           onClick={handleSubmit}
-          className="bg-white text-bg-base mono text-[12px] tracking-[0.12em] uppercase py-3 px-6 rounded-md hover:bg-text-primary transition-colors"
+          disabled={!canSubmit}
+          aria-disabled={!canSubmit}
+          className={[
+            'bg-white text-bg-base mono text-[12px] tracking-[0.12em] uppercase py-3 px-6 rounded-md transition-colors',
+            canSubmit ? 'hover:bg-text-primary' : 'opacity-40 cursor-not-allowed',
+          ].join(' ')}
         >
           LET ARCHITECT DESIGN IT →
         </button>

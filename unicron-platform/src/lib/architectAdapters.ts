@@ -37,6 +37,7 @@ export function decompositionApiToLegacy(
     recommendedConfig: architectureToSystemConfig(api.architecture, buyerPain),
     confidence: confidenceLabelToNumber(api.architecture.estimates.architecture_confidence),
     costUsd: api.cost_usd,
+    architecture: api.architecture,
   };
 }
 

@@ -91,10 +91,19 @@ describe('Architect client — mock mode', () => {
     const res = await postDecomposition({ buyerPain: 'sample pain' });
     expect(res.sessionId).toBeTruthy();
     expect(res.lines.length).toBeGreaterThan(0);
-    expect(res.recommendedConfig.status).toBe('live');
+    expect(res.recommendedConfig.status).toBe('configured');
     expect(res.recommendedConfig.agents.length).toBeGreaterThan(0);
     expect(res.confidence).toBeGreaterThan(0);
     expect(res.confidence).toBeLessThanOrEqual(1);
+    expect(res.architecture.buyer).toContain('sample pain');
+  });
+
+  it('postDecomposition produces visibly distinct architectures for two distinct inputs', async () => {
+    const a = await postDecomposition({ buyerPain: 'distributors of temporary site security' });
+    const b = await postDecomposition({ buyerPain: 'M&A advisors with finance ops gaps' });
+    expect(a.architecture.buyer).not.toBe(b.architecture.buyer);
+    expect(a.lines.some((l) => l.text.includes('temporary site security'))).toBe(true);
+    expect(b.lines.some((l) => l.text.includes('M&A advisors'))).toBe(true);
   });
 
   it('listProposals returns proposals shaped against the contract', async () => {

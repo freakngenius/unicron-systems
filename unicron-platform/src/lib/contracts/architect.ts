@@ -272,6 +272,11 @@ export type DecompositionResponse = {
   recommendedConfig: SystemConfig;
   confidence: number;
   costUsd?: number;
+  /**
+   * Structured architecture echoed from the canonical API (or synthesized in
+   * mock mode). Used by ArchitectThinking's in-place Edit Architecture flow.
+   */
+  architecture: DecompositionArchitecture;
 };
 
 /** @deprecated mapped from ArchitectProposalRow.type via the filter-pill rule. */
