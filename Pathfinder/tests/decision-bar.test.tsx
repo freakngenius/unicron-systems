@@ -14,6 +14,7 @@ import '@testing-library/jest-dom/vitest';
 import {
   DecisionBar,
   EMAIL_COMPOSER_ANCHOR_ID,
+  VERDICT_RENDERED_MARK,
   generateCTA,
   generateVerdict,
 } from '@/components/lead/DecisionBar';
@@ -219,5 +220,45 @@ describe('DecisionBar render — verdict + CTA wiring', () => {
     render(<DecisionBar project={baseProject()} matches={[]} />);
     expect(screen.getByTestId('decision-bar-send-gmail')).toBeInTheDocument();
     expect(screen.getByTestId('decision-bar-send-outlook')).toBeInTheDocument();
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────────
+// Gate 7C — verdict-line ≤ 200 ms acceptance criterion #4 instrumentation
+// ────────────────────────────────────────────────────────────────────────
+//
+// Speed Insights / Web Vitals isn't wired in this codebase as of 7C. Per
+// operator dispatch, the criterion is deferred. These tests assert the
+// underlying constraint that makes the criterion satisfiable: DecisionBar
+// renders fully synchronously (no Suspense, no async data hook) and emits a
+// performance.mark for future Speed Insights to consume.
+
+describe('DecisionBar — synchronous render (acceptance #4 underlying constraint)', () => {
+  it('renders verdict line in the same synchronous render as mount (no Suspense / no async)', () => {
+    render(<DecisionBar project={baseProject({ score: 80, verified: true })} matches={[]} />);
+    // If render were async / suspended, verdict element wouldn't be in the
+    // DOM after the synchronous render call. Asserting presence post-render
+    // proves DecisionBar is fully sync.
+    expect(screen.getByTestId('decision-bar-verdict')).toBeInTheDocument();
+  });
+
+  it('emits performance.mark for verdict-rendered after first paint', () => {
+    if (typeof performance === 'undefined') return; // node-only env guard
+    performance.clearMarks(VERDICT_RENDERED_MARK);
+    render(<DecisionBar project={baseProject()} matches={[]} />);
+    const marks = performance.getEntriesByName(VERDICT_RENDERED_MARK);
+    expect(marks.length).toBe(1);
+  });
+
+  it('does not double-mark across re-renders within the same session', () => {
+    if (typeof performance === 'undefined') return;
+    performance.clearMarks(VERDICT_RENDERED_MARK);
+    const { rerender } = render(
+      <DecisionBar project={baseProject({ score: 70 })} matches={[]} />,
+    );
+    rerender(<DecisionBar project={baseProject({ score: 80 })} matches={[]} />);
+    rerender(<DecisionBar project={baseProject({ score: 90 })} matches={[]} />);
+    const marks = performance.getEntriesByName(VERDICT_RENDERED_MARK);
+    expect(marks.length).toBe(1);
   });
 });
