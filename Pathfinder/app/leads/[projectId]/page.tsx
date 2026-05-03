@@ -7,6 +7,7 @@
 import { notFound } from 'next/navigation';
 
 import { LeadDetail } from '@/components/lead/LeadDetail';
+import { LeadDetailModal } from '@/components/lead/LeadDetailModal';
 import type { CrossPollinationMatchRow } from '@/components/zedcor/ZedcorRelationshipContext';
 import { supabase } from '@/lib/supabase';
 import { buildTimelineForProject, type TimelineEvent } from '@/lib/timeline';
@@ -17,6 +18,13 @@ import type {
   Project,
   ProjectContact,
 } from '@/lib/types';
+
+// Demo Polish UX Gate 9A — neighbor cap for arrow-key cycling. Top 200
+// ranked projects (score desc, posted_date desc) are passed to the modal
+// shell; arrow keys cycle within that set. 200 is enough to cover the
+// dashboard's default top-50 view plus a healthy margin and stays small
+// enough to ship inline (a few KB of IDs).
+const NEIGHBOR_CAP = 200;
 
 // Z-F integrator — minimal projection of the zedcor branch row used by the
 // LeadDetail header. Avoid importing the engine helper here (server-side
@@ -127,23 +135,25 @@ export default async function LeadDetailPage({
   // every lead. Filed in MEMORY/operator-todos/2026-05-03-pathfinder-lead-detail-route-404.md.
   const projectId = decodeURIComponent(params.projectId);
 
-  const {
-    project,
-    latestEmailDraft,
-    contacts,
-    leadContacts,
-    recentEdits,
-    timelineEvents,
-    crossPollMatches,
-    zedcorBranch,
-  } = await fetchData(projectId);
+  const [
+    {
+      project,
+      latestEmailDraft,
+      contacts,
+      leadContacts,
+      recentEdits,
+      timelineEvents,
+      crossPollMatches,
+      zedcorBranch,
+    },
+    neighborIds,
+  ] = await Promise.all([fetchData(projectId), fetchNeighborIds()]);
   if (!project) notFound();
 
   // Demo Polish UX Gate 7A — flag-gated lead detail redesign. Read at the
   // server-component boundary; default off. When `1`, LeadDetail renders the
-  // new component composition (QuickFactsGrid full; other 6 sections
-  // stubbed). When unset/0, the existing pre-redesign layout renders
-  // untouched.
+  // v2 composition (Gate 9A) wrapped in the LeadDetailModal shell. When
+  // unset/0, the existing pre-redesign layout renders untouched.
   const redesignEnabled = process.env.LEAD_DETAIL_REDESIGN === '1';
 
   // Demo Polish UX Gate 8C — top-50 status drives the ContactsCard
@@ -154,7 +164,7 @@ export default async function LeadDetailPage({
   const TOP_FIFTY_SCORE_FLOOR = 50;
   const isTopFifty = (project.score ?? 0) >= TOP_FIFTY_SCORE_FLOOR;
 
-  return (
+  const leadDetail = (
     <LeadDetail
       project={project}
       latestEmailDraft={latestEmailDraft}
@@ -169,4 +179,31 @@ export default async function LeadDetailPage({
       isAdmin={true}
     />
   );
+
+  // Gate 9A — wrap the redesigned view in the full-screen modal shell.
+  // Legacy (flag-off) path renders standalone so existing behavior stays
+  // identical until the redesign is fully validated in production.
+  if (redesignEnabled) {
+    return (
+      <LeadDetailModal currentProjectId={project.id} neighborIds={neighborIds}>
+        {leadDetail}
+      </LeadDetailModal>
+    );
+  }
+  return leadDetail;
+}
+
+// Demo Polish UX Gate 9A — fetch the top-N ranked project IDs so the modal
+// shell can cycle arrow-key navigation between sibling leads. Order
+// mirrors the dashboard's default ranking: score desc with nulls last,
+// then posted_date desc as a tiebreak. Capped at NEIGHBOR_CAP rows.
+async function fetchNeighborIds(): Promise<string[]> {
+  const { data, error } = await supabase
+    .from('projects')
+    .select('id')
+    .order('score', { ascending: false, nullsFirst: false })
+    .order('posted_date', { ascending: false, nullsFirst: false })
+    .limit(NEIGHBOR_CAP);
+  if (error) return [];
+  return ((data ?? []) as Array<{ id: string }>).map((r) => r.id);
 }

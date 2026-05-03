@@ -12,15 +12,14 @@ import * as React from 'react';
 
 import { ContactsCard } from '@/components/lead/ContactsCard';
 import { CrossPollinationCard } from '@/components/lead/CrossPollinationCard';
-import { DecisionBar } from '@/components/lead/DecisionBar';
 import { ProjectFactsCard } from '@/components/lead/ProjectFactsCard';
-import { ProjectStory } from '@/components/lead/ProjectStory';
 import { QuickFactsGrid } from '@/components/lead/QuickFactsGrid';
+import { QuickMetricsStrip } from '@/components/lead/QuickMetricsStrip';
+import { RationaleCard } from '@/components/lead/RationaleCard';
 import { RawPayloadFacts } from '@/components/lead/RawPayloadFacts';
-import { RecommendedAction } from '@/components/lead/RecommendedAction';
-import { ScoreBreakdown } from '@/components/lead/ScoreBreakdown';
-import { SourceCitations } from '@/components/lead/SourceCitations';
+import { SectionHeading } from '@/components/lead/SectionHeading';
 import { Timeline } from '@/components/lead/Timeline';
+import { VerifierSection } from '@/components/lead/VerifierSection';
 import {
   ZedcorRelationshipContext,
   type CrossPollinationMatchRow,
@@ -227,25 +226,27 @@ export function LeadDetail({
 }
 
 // ────────────────────────────────────────────────────────────────────────
-// RedesignedBody — single-column composition behind LEAD_DETAIL_REDESIGN
+// RedesignedBody — single-column v2 composition behind LEAD_DETAIL_REDESIGN
 // ────────────────────────────────────────────────────────────────────────
 //
-// Renders the new section order from SPEC - Lead Detail Page UX Redesign.md
-// when the flag is on. Section list:
+// Renders the v2 section order from SPEC - Lead Detail Page v2.md (Gate 9A
+// restructure). The header in <LeadDetail /> covers section 1; this body
+// renders sections 2-9:
 //
-//   2. Decision Bar           (DecisionBar — stub w/ verdict line)
-//   3. Quick Facts grid       (QuickFactsGrid — full)
-//   4. Cross-Pollination card (CrossPollinationCard — re-uses existing
-//                              ZedcorRelationshipContext to preserve the 12
-//                              Gate-2 matches)
-//   5. Recommended Action     (RecommendedAction — null while parse-rationale
-//                              fallback is the only path; 7B unblocks)
-//   6. Project Story          (ProjectStory — Description + de-emphasized
-//                              monolithic rationale)
-//   7. Score breakdown        (ScoreBreakdown — collapsible stub)
-//   9. Outreach               (existing EmailComposer)
-//  10. Activity Timeline      (existing Timeline)
-//  11. Source citations       (SourceCitations — null when empty)
+//   2. Quick metrics strip   (QuickMetricsStrip — 4-cell)
+//   3. Rationale             (RationaleCard — cyan-tinted)
+//   4. Project Facts         (QuickFactsGrid + section heading)
+//   5. Contacts              (ContactsCard + section heading)
+//   6. Relationship Context  (CrossPollinationCard, renamed heading;
+//                             card hides itself when 0 matches)
+//   7. Outreach              (EmailComposer + RecentSendsBlock; 9C refactor)
+//   8. Verifier              (VerifierSection — own heading)
+//   9. Source Record         (RawPayloadFacts + section heading;
+//                             component rename to SourceRecord in 9B)
+//
+// Dropped from v1 redesign per spec § "What's removed":
+//   - DecisionBar, RecommendedAction, ProjectStory, ScoreBreakdown,
+//     SourceCitations, raw JSON payload exposure
 
 function RedesignedBody({
   project,
@@ -313,14 +314,12 @@ function RedesignedBody({
   // Page-level empty states (per spec § "Empty states (page-level)"):
   // - rejected → muted page state + banner
   // - score present but enriched_at null → "Request enrichment" banner
-  // - rationale null → handled implicitly (RecommendedAction null-renders;
-  //   DecisionBar generates "Pending rank" via score==null path; we also
-  //   suppress ScoreBreakdown when rationale is missing AND score is null,
-  //   per the spec's "suppress sections 5, 7" intent).
+  // The Gate-9A v2 layout drops DecisionBar / RecommendedAction /
+  // ScoreBreakdown, so the rationale-null suppression branch is no longer
+  // needed — RationaleCard surfaces "Rationale pending" copy directly.
   const rejected = project.rejection_reason != null;
   const enrichmentMissing =
     project.score != null && project.enriched_at == null && !rejected;
-  const noRationaleAndNoScore = project.rationale == null && project.score == null;
 
   return (
     <div
@@ -337,40 +336,77 @@ function RedesignedBody({
         <RejectedBanner reason={project.rejection_reason!} rejectedAt={project.rejected_at ?? null} />
       )}
       {enrichmentMissing && <EnrichmentRequestBanner projectId={project.id} />}
-      <DecisionBar project={project} matches={crossPollMatches} />
-      <QuickFactsGrid project={project} />
-      {/* Demo Polish UX Gate 8X-3 — per-source raw_payload fields. Self-
-          hides for sources or rows where the field is null, so leads
-          without rich payload don't render an empty card. */}
-      <RawPayloadFacts project={project} />
-      <CrossPollinationCard
-        matches={crossPollMatches}
-        targetRegion={zedcorBranch?.state ?? null}
-        onInsertHook={handleInsertHook}
-      />
-      {/* Demo Polish UX Gate 8C — ContactsCard slot per spec § UI:
-          "between Cross-Pollination Card and Recommended Action".
-          Cross-Pollination handles warm intros; Contacts handles cold outreach. */}
-      <ContactsCard
-        project={project}
-        contacts={leadContacts}
-        isTopFifty={isTopFifty}
-        isAdmin={isAdmin}
-        onSetRecipient={handleSetRecipient}
-      />
-      <RecommendedAction project={project} />
-      <ProjectStory project={project} />
-      {!noRationaleAndNoScore && <ScoreBreakdown project={project} />}
-      <EmailComposer
-        project={project}
-        draft={latestEmailDraft}
-        contacts={contacts}
-        bodyOverride={bodyOverride}
-        recipientOverride={recipientOverride}
-      />
-      {recentEdits.length > 0 && <RecentSendsBlock recentEdits={recentEdits} />}
+
+      {/* §2 — Quick metrics strip: VALUE / STAGE / DISTANCE / POSTED */}
+      <QuickMetricsStrip project={project} />
+
+      {/* §3 — Rationale (cyan-tinted card with CACHED indicator) */}
+      <RationaleCard project={project} />
+
+      {/* §4 — Project Facts (QuickFactsGrid relocated under section heading) */}
+      <section data-testid="lead-detail-section-project-facts">
+        <SectionHeading title="Project Facts" />
+        <QuickFactsGrid project={project} />
+      </section>
+
+      {/* §5 — Contacts (ContactsCard relocated under section heading) */}
+      <section data-testid="lead-detail-section-contacts">
+        <SectionHeading
+          title="Contacts"
+          sub={leadContacts.length > 0 ? `${leadContacts.length} surfaced` : null}
+        />
+        <ContactsCard
+          project={project}
+          contacts={leadContacts}
+          isTopFifty={isTopFifty}
+          isAdmin={isAdmin}
+          onSetRecipient={handleSetRecipient}
+        />
+      </section>
+
+      {/* §6 — Relationship Context (renamed from Cross-Pollination; card
+          self-hides when 0 matches). Section heading rendered only when
+          there are matches so the redesign doesn't show an empty heading. */}
+      {crossPollMatches.length > 0 && (
+        <section data-testid="lead-detail-section-relationship-context">
+          <SectionHeading
+            title="Relationship Context"
+            sub={`${crossPollMatches.length} match${crossPollMatches.length === 1 ? '' : 'es'}`}
+          />
+          <CrossPollinationCard
+            matches={crossPollMatches}
+            targetRegion={zedcorBranch?.state ?? null}
+            onInsertHook={handleInsertHook}
+          />
+        </section>
+      )}
+
+      {/* §7 — Outreach (placeholder — 9C refactors composer + drafter LLM) */}
+      <section data-testid="lead-detail-section-outreach">
+        <SectionHeading title="Outreach" />
+        <EmailComposer
+          project={project}
+          draft={latestEmailDraft}
+          contacts={contacts}
+          bodyOverride={bodyOverride}
+          recipientOverride={recipientOverride}
+        />
+        {recentEdits.length > 0 && <RecentSendsBlock recentEdits={recentEdits} />}
+      </section>
+
+      {/* §8 — Verifier */}
+      <VerifierSection project={project} />
+
+      {/* §9 — Source Record (RawPayloadFacts under v2 heading; full file
+          rename to SourceRecord lands in 9B) */}
+      <section data-testid="lead-detail-section-source-record">
+        <SectionHeading title="Source Record" sub={project.source} />
+        <RawPayloadFacts project={project} />
+      </section>
+
+      {/* Activity timeline retained below the spec's 9 sections — provides
+          continuous context without competing with the v2 stack above. */}
       <Timeline projectId={project.id} initialEvents={timelineEvents} />
-      <SourceCitations project={project} />
     </div>
   );
 }
