@@ -739,6 +739,73 @@ export interface ConnectorAuditLogRow {
   created_at: string;
 }
 
+// Daily intelligence loop — Demo Polish UX § Gate 13W (migration 0122).
+//
+// Per-user preferences for the auto-generated daily brief. Composer in
+// services/briefer/agent.ts reads this row (or the default object below
+// when no row exists) to decide which sections to render, what time to
+// send, and whether to skip.
+export type BriefingFrequency = 'daily' | 'weekly' | 'paused';
+
+export interface BriefingSections {
+  new_leads: boolean;
+  follow_ups: boolean;
+  stage_changes: boolean;
+  replies: boolean;
+  contacts_pending: boolean;
+}
+
+export interface BriefingPrefs {
+  user_id: string;
+  frequency: BriefingFrequency;
+  send_hour: number;
+  timezone: string;
+  sections: BriefingSections;
+  paused: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+// Default applied at composition time when no row exists for user_id.
+// Kept in lib so the settings page (13W-C) and the cron (13W-B) hydrate
+// from the same source of truth. Mirrors the column defaults in
+// migration 0122.
+export const DEFAULT_BRIEFING_PREFS: Omit<
+  BriefingPrefs,
+  'user_id' | 'created_at' | 'updated_at'
+> = {
+  frequency: 'daily',
+  send_hour: 7,
+  timezone: 'America/Los_Angeles',
+  sections: {
+    new_leads: true,
+    follow_ups: true,
+    stage_changes: true,
+    replies: true,
+    contacts_pending: true,
+  },
+  paused: false,
+};
+
+export interface DailyBriefMetrics {
+  new_leads_count: number;
+  follow_ups_count: number;
+  stage_changes_count: number;
+  replies_count: number;
+  contacts_pending_count: number;
+  llm_cost_usd: number;
+}
+
+export interface DailyBrief {
+  subject: string;
+  markdown: string;
+  html: string;
+  metrics: DailyBriefMetrics;
+  // Section keys that actually rendered content (zero-row sections still
+  // render a placeholder line; this lists the keys whose data was non-empty).
+  sections_rendered: Array<keyof BriefingSections>;
+}
+
 // Database type bag for the typed Supabase client.
 export interface PathfinderDatabase {
   pathfinder: {
@@ -892,6 +959,16 @@ export interface PathfinderDatabase {
           created_at?: string;
         };
         Update: Partial<ConnectorAuditLogRow>;
+        Relationships: [];
+      };
+      // Daily intelligence loop (migration 0122).
+      briefing_prefs: {
+        Row: BriefingPrefs;
+        Insert: Omit<BriefingPrefs, 'created_at' | 'updated_at'> & {
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<BriefingPrefs>;
         Relationships: [];
       };
     };
