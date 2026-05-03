@@ -14,6 +14,7 @@ import { DEFAULT_ORG_ID } from '@/lib/connectors/auth';
 import { listConnectors, type ConnectorListItem } from '@/lib/connectors/queries';
 import { ConnectorsView } from '@/components/settings/connectors/ConnectorsView';
 import type { ConnectorTileState } from '@/components/settings/connectors/ConnectorTile';
+import { HubspotUserTile } from '@/components/settings/connectors/HubspotUserTile';
 
 export const metadata: Metadata = {
   title: 'Pathfinder · Connectors',
@@ -137,5 +138,21 @@ export default async function ConnectorsPage() {
   // mutation API routes.
   const items = await listConnectors(DEFAULT_ORG_ID).catch(() => []);
   const tiles = buildTiles(items);
-  return <ConnectorsView tiles={tiles} orgId={DEFAULT_ORG_ID} />;
+
+  // Gate 10B: HubSpot moves to a per-user tile reading from
+  // pathfinder.user_connections instead of pathfinder.connectors.
+  // The tile self-hydrates client-side via /api/connectors/hubspot/status
+  // (the operator email lives in localStorage; not in this server render's
+  // headers). Initial state stays disconnected until the client fetch lands.
+  const hubspotUserTile = (
+    <HubspotUserTile state="disconnected" operatorEmail={null} />
+  );
+
+  return (
+    <ConnectorsView
+      tiles={tiles}
+      orgId={DEFAULT_ORG_ID}
+      tileOverrides={{ hubspot: hubspotUserTile }}
+    />
+  );
 }

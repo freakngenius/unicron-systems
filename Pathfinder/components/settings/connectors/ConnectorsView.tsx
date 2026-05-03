@@ -71,9 +71,15 @@ interface OpenModal {
 export function ConnectorsView({
   tiles,
   orgId,
+  tileOverrides,
 }: {
   tiles: ConnectorsViewTile[];
   orgId: string;
+  /** Per-tile render override. When set for an id, the override node
+   *  replaces the standard ConnectorTile in the grid. Used by Gate 10B
+   *  to slot in the per-user HubspotUserTile while leaving Slack + Teams
+   *  on the org-level path. */
+  tileOverrides?: Partial<Record<ConnectorId, React.ReactNode>>;
 }) {
   const [modal, setModal] = React.useState<OpenModal | null>(null);
 
@@ -234,6 +240,11 @@ export function ConnectorsView({
           }}
         >
           {tiles.map((tile) => {
+            // Gate 10B: page can override a tile's render entirely (used
+            // for the HubSpot per-user tile, which has its own state +
+            // action wiring distinct from the org-level ConnectorTile).
+            const override = tileOverrides?.[tile.id];
+            if (override) return <React.Fragment key={tile.id}>{override}</React.Fragment>;
             // SPEC § 3.4: "Generate manifest for IT" only renders on the
             // disconnected (or error/expired) Slack + Teams tiles. HubSpot
             // uses the standard OAuth marketplace and has no manifest;

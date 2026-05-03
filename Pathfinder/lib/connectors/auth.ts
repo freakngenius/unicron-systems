@@ -52,6 +52,23 @@ export function isOperatorRequest(req: NextRequest): boolean {
 export const DEFAULT_ORG_ID = 'zedcor';
 
 /**
+ * Read the per-user identity for the current request. v1 returns the
+ * operator email (basic-auth principal) since real Auth tables don't
+ * exist yet — keep the API on `text user_id` to align with
+ * `pathfinder.user_connections.user_id` which Gate 9D shipped as text.
+ *
+ * Returns null when the caller is not an operator (route should 401/403).
+ * Gate 10B's HubSpot install/callback/disconnect routes rely on this
+ * to scope OAuth grants to the right user_connections row.
+ */
+export function getCurrentUserId(req: NextRequest): string | null {
+  // Today: 1:1 with operator email. Future-uuid migration flips this
+  // to a session lookup; the rest of the codebase reads through this
+  // helper so the swap point stays single-source.
+  return getOperatorEmail(req);
+}
+
+/**
  * Read the customer org id for this request. v1 returns DEFAULT_ORG_ID
  * unless an explicit override is sent via header/query — operators use
  * that to inspect another tenant's connectors. Customers (non-operators)

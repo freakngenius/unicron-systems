@@ -31,6 +31,11 @@ interface StatePayload {
   nonce: string;
   iat: number;
   exp: number;
+  /** Set on user-level OAuth flows (Gate 10B HubSpot per-user connect).
+   *  Org-level Slack/Teams flows omit this. The validator surfaces it
+   *  back so the callback can write user_connections rows scoped to the
+   *  same operator that initiated the install. */
+  user_id?: string;
 }
 
 const TEN_MINUTES_MS = 10 * 60 * 1000;
@@ -79,6 +84,10 @@ export interface IssueOptions {
   now?: number;
   /** Override TTL for tests. */
   ttlMs?: number;
+  /** User-level OAuth flows pass the operator email here so the callback
+   *  can write a user_connections row scoped to the right user. Optional
+   *  to keep the org-level Slack/Teams flow signature unchanged. */
+  user_id?: string;
 }
 
 /** Issue a fresh signed state token for an OAuth start. */
@@ -91,6 +100,7 @@ export function issueState(opts: IssueOptions): string {
     nonce: crypto.randomBytes(16).toString('hex'),
     iat: now,
     exp: now + ttl,
+    ...(opts.user_id ? { user_id: opts.user_id } : {}),
   };
   const header = b64url(JSON.stringify({ alg: 'HS256', typ: 'CONNECTOR_STATE' }));
   const body = b64url(JSON.stringify(payload));
