@@ -613,3 +613,25 @@ Total new: 50 tests. All green; full Pathfinder suite remains 809 passing.
 | File | Tests | Covers |
 |---|---|---|
 | `tests/probes.test.ts` | 16 | Slack response taxonomy (no_text / invalid_payload / no_service / channel_not_found / non-Slack-host / network error / env unset), Resend status codes (200 + N domains / 200 + empty list = degraded / 401 / network error / env unset), cache round-trip + expiry + per-key clear. |
+
+---
+
+## Demo Polish UX Sprint — Gate 4B-1 (HubSpot webhooks + outbound)
+
+**State:** PR #86 merged to main during the post-demo-queue Wednesday recovery sweep.
+
+#### Pathfinder/lib/connectors/hubspot/inbound.ts
+**Implements:** `Company Docs/Specs/SPEC - Connectors (Slack, Teams, HubSpot).md` § 6 "HubSpot inbound." Strict v3 event-array parser with shape validation. Family grouping (deal/contact/engagement/unknown). PII guard: payload_summary excludes propertyValue.
+**Last verified against spec:** 2026-05-02.
+**Drift:** none.
+
+#### Pathfinder/lib/connectors/hubspot/outbound.ts
+**Implements:** `pushDealStageChange()` outbound helper. Resolves active connector + decrypts token via `getToken()`, PATCHes HubSpot deal, audit-logs every attempt with the token redacted to `first4****last4`. `redact()` exported for re-use.
+**Last verified against spec:** 2026-05-02.
+**Drift:** none.
+
+### Tests
+
+| File | Tests | Covers |
+|---|---|---|
+| `tests/hubspot-inbound.test.ts` | 12 | parseHubspotWebhook (valid array, malformed, missing fields, propertyName/Value pass-through), groupHubspotEvents (deal/contact/engagement/unknown routing), summariseEvent (with/without propertyName), redact (null/short/long inputs). |
