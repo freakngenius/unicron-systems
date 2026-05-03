@@ -43,12 +43,23 @@ async function fetchInitialData(): Promise<{
 export default async function HomePage() {
   const { branches, customers, projects, crossPollMatches } = await fetchInitialData();
 
+  // Demo Polish UX § Gate 7A flag — when on, opening a project from the
+  // dashboard map / list / kanban routes to the redesigned lead detail
+  // page (`/leads/[projectId]`) instead of the legacy ProjectModal
+  // overlay. Read here at the server-component boundary so the flag is
+  // re-checked per request and the client-side Dashboard receives a
+  // boolean (env vars don't cross the client boundary unless prefixed
+  // with NEXT_PUBLIC_, which we deliberately don't do for this rollout
+  // toggle).
+  const redesignEnabled = process.env.LEAD_DETAIL_REDESIGN === '1';
+
   return (
     <Dashboard
       initialBranches={branches}
       initialCustomers={customers}
       initialProjects={projects}
       initialCrossPollMatches={crossPollMatches}
+      redesignEnabled={redesignEnabled}
     />
   );
 }
