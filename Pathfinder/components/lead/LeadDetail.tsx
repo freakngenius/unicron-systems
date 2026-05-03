@@ -18,6 +18,7 @@ import { QuickFactsGrid } from '@/components/lead/QuickFactsGrid';
 import { QuickMetricsStrip } from '@/components/lead/QuickMetricsStrip';
 import { RationaleCard } from '@/components/lead/RationaleCard';
 import { SectionHeading } from '@/components/lead/SectionHeading';
+import { SourceChip } from '@/components/lead/SourceChip';
 import { SourceRecord } from '@/components/lead/SourceRecord';
 import { Timeline } from '@/components/lead/Timeline';
 import { VerifierSection } from '@/components/lead/VerifierSection';
@@ -417,9 +418,13 @@ function RedesignedBody({
       <VerifierSection project={project} />
 
       {/* §9 — Source Record (renamed in Gate 9B from RawPayloadFacts).
-          Curated per-source fields only; no raw JSON exposure. */}
+          Curated per-source fields only; no raw JSON exposure. Gate 11C
+          renders the source as a colored chip in the heading right slot. */}
       <section data-testid="lead-detail-section-source-record">
-        <SectionHeading title="Source Record" sub={project.source} />
+        <SectionHeading
+          title="Source Record"
+          rightSlot={<SourceChip source={project.source} />}
+        />
         <SourceRecord project={project} />
       </section>
 
