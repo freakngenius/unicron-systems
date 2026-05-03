@@ -1,16 +1,25 @@
 // app/api/leads/[projectId]/outreach/draft/route.ts — Demo Polish UX
-// Gate 9C. Powers the "Draft recommended outreach" button on the v2 lead
-// detail page. Spec: SPEC - Lead Detail Page v2.md § "Outreach Drafter
-// LLM contract".
+// Gate 9C, sender wiring added in Gate 12D. Powers the "Draft
+// recommended outreach" button on the v2 lead detail page. Spec:
+// SPEC - Lead Detail Page v2.md § "Outreach Drafter LLM contract".
 //
 // Auth: relies on the upstream basic-auth gate (middleware.ts). Body
 // optionally includes a contact_id to pin the draft to a specific
 // decision-maker; when omitted, the drafter uses the highest-confidence
-// contact already enriched for this lead.
+// contact already enriched for this lead. Body may also include an
+// actor_email override; otherwise the route falls back to
+// PF_DEMO_OPERATOR_EMAIL so the sender first name in the sign-off is
+// real.
 
 import { NextResponse, type NextRequest } from 'next/server';
 
-import { generateV2Draft, type V2DraftContext } from '@/lib/outreach/anthropic-drafter';
+import {
+  generateV2Draft,
+  senderFirstNameFromEmail,
+  type V2DraftContext,
+  type V2DraftSender,
+} from '@/lib/outreach/anthropic-drafter';
+import { resolveActiveConnection } from '@/lib/outreach/user-connection';
 import { supabase } from '@/lib/supabase';
 import type { LeadContactRow, Project } from '@/lib/types';
 
@@ -18,8 +27,12 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 export const maxDuration = 30;
 
+const DEMO_OPERATOR_EMAIL =
+  process.env.PF_DEMO_OPERATOR_EMAIL ?? 'kyle@freakngenius.com';
+
 interface DraftRequestBody {
   contact_id?: string;
+  actor_email?: string;
 }
 
 interface ZedcorBranchInfo {
@@ -50,6 +63,10 @@ export async function POST(
     typeof body.contact_id === 'string' && body.contact_id.length > 0
       ? body.contact_id
       : null;
+  const actorEmail =
+    typeof body.actor_email === 'string' && body.actor_email.length > 0
+      ? body.actor_email
+      : DEMO_OPERATOR_EMAIL;
 
   const [projectRes, contactsRes, crossPollRes] = await Promise.all([
     supabase.from('projects').select('*').eq('id', projectId).maybeSingle(),
@@ -75,7 +92,7 @@ export async function POST(
 
   // Pick the contact: explicit contact_id takes precedence, then the
   // highest-confidence enriched contact, then null (drafter writes
-  // generically).
+  // generically by role).
   let pinnedContact: LeadContactRow | null = null;
   if (contactId) {
     pinnedContact = contacts.find((c) => c.id === contactId) ?? null;
@@ -95,6 +112,18 @@ export async function POST(
     if (branchRow) branch = branchRow as unknown as ZedcorBranchInfo;
   }
 
+  // Gate 12D — resolve sender identity so the model can sign the email
+  // with the operator's actual first name. Falls back to null when no
+  // connection exists; the system prompt then signs off with "Best,".
+  let sender: V2DraftSender | null = null;
+  const conn = await resolveActiveConnection(actorEmail);
+  if (conn?.email) {
+    const firstName = senderFirstNameFromEmail(conn.email);
+    if (firstName) {
+      sender = { firstName, email: conn.email, provider: conn.provider };
+    }
+  }
+
   const ctx: V2DraftContext = {
     project: {
       id: project.id,
@@ -104,6 +133,15 @@ export async function POST(
       distance_miles:
         project.zedcor_distance_miles ?? project.distance_miles ?? null,
       posted_date: project.posted_date ?? null,
+      // Procurement deadline isn't a canonical column on projects yet
+      // (nothing in lib/types.ts surfaces an RFP due date). Use the
+      // estimated_start_date as the next-best timing signal so the
+      // model has something concrete to anchor "before X" against.
+      deadline: project.estimated_start_date ?? null,
+      naics:
+        project.naics_code && project.naics_description
+          ? `${project.naics_code} (${project.naics_description})`
+          : project.naics_code ?? project.naics_description ?? null,
     },
     branch: branch
       ? { name: branch.branch_name, state: branch.state }
@@ -112,11 +150,23 @@ export async function POST(
       ? {
           name: pinnedContact.contact_name ?? null,
           role: pinnedContact.role ?? null,
+          organization:
+            pinnedContact.owner_organization ??
+            project.owner_name ??
+            null,
           email: pinnedContact.email ?? null,
         }
-      : null,
+      : project.owner_name
+        ? {
+            name: null,
+            role: null,
+            organization: project.owner_name,
+            email: null,
+          }
+        : null,
     warmIntroCustomer:
       crossPoll.length > 0 ? crossPoll[0].customer_canonical : null,
+    sender,
   };
 
   try {
