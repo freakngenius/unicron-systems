@@ -10,11 +10,13 @@
 
 import * as React from 'react';
 
+import { ContactsCard } from '@/components/lead/ContactsCard';
 import { CrossPollinationCard } from '@/components/lead/CrossPollinationCard';
 import { DecisionBar } from '@/components/lead/DecisionBar';
 import { ProjectFactsCard } from '@/components/lead/ProjectFactsCard';
 import { ProjectStory } from '@/components/lead/ProjectStory';
 import { QuickFactsGrid } from '@/components/lead/QuickFactsGrid';
+import { RawPayloadFacts } from '@/components/lead/RawPayloadFacts';
 import { RecommendedAction } from '@/components/lead/RecommendedAction';
 import { ScoreBreakdown } from '@/components/lead/ScoreBreakdown';
 import { SourceCitations } from '@/components/lead/SourceCitations';
@@ -28,6 +30,7 @@ import type { TimelineEvent } from '@/lib/timeline';
 import type {
   EmailIntegrationStatus,
   EmailProvider,
+  LeadContactRow,
   OutreachDraft,
   OutreachEdit,
   Project,
@@ -44,6 +47,10 @@ interface LeadDetailProps {
   project: Project;
   latestEmailDraft: OutreachDraft | null;
   contacts: ProjectContact[];
+  // Demo Polish UX Gate 8C — decision-maker enrichment from
+  // pathfinder.lead_contacts (populated by the contact-enricher cron).
+  // Distinct from `contacts` (legacy project_contacts surface).
+  leadContacts?: LeadContactRow[];
   recentEdits: OutreachEdit[];
   timelineEvents?: TimelineEvent[];
   // Z-F integrator — cross-pollination match rows from
@@ -55,17 +62,29 @@ interface LeadDetailProps {
   // layout untouched). Set by the page route from
   // process.env.LEAD_DETAIL_REDESIGN === '1'.
   redesignEnabled?: boolean;
+  // Demo Polish UX Gate 8C — drives the ContactsCard's "Run now" + the
+  // "Request enrichment" empty-state branching. Approximated server-side
+  // from project.score >= 50 in the page route.
+  isTopFifty?: boolean;
+  // Demo Polish UX Gate 8C — admin-only "Run now" affordance. The
+  // middleware's basic-auth gate already restricts the page to operators,
+  // so this is effectively always true today; passed explicitly so the
+  // shape generalizes when per-rep auth lands.
+  isAdmin?: boolean;
 }
 
 export function LeadDetail({
   project,
   latestEmailDraft,
   contacts,
+  leadContacts = [],
   recentEdits,
   timelineEvents,
   crossPollMatches = [],
   zedcorBranch = null,
   redesignEnabled = false,
+  isTopFifty = false,
+  isAdmin = false,
 }: LeadDetailProps) {
   // Z-F integrator — header now also surfaces the nearest Zedcor branch +
   // distance and a "Warm intro" badge when we have cross-poll matches.
@@ -152,13 +171,31 @@ export function LeadDetail({
           project={project}
           latestEmailDraft={latestEmailDraft}
           contacts={contacts}
+          leadContacts={leadContacts}
           recentEdits={recentEdits}
           timelineEvents={timelineEvents}
           crossPollMatches={crossPollMatches}
           zedcorBranch={zedcorBranch}
+          isTopFifty={isTopFifty}
+          isAdmin={isAdmin}
         />
       ) : (
         <>
+          {/* Demo Polish UX Gate 8C — ContactsCard rendered above the
+              two-column grid in flag-off mode. Spec: "append at the
+              bottom of existing LeadDetail layout (above Outreach)" —
+              the EmailComposer in the left column IS Outreach, so a
+              full-width row above the grid sits above Outreach
+              semantically without disrupting the existing two-column
+              composition. */}
+          <div style={{ marginBottom: 16 }}>
+            <ContactsCard
+              project={project}
+              contacts={leadContacts}
+              isTopFifty={isTopFifty}
+              isAdmin={isAdmin}
+            />
+          </div>
           <div
             style={{
               display: 'grid',
@@ -214,18 +251,24 @@ function RedesignedBody({
   project,
   latestEmailDraft,
   contacts,
+  leadContacts,
   recentEdits,
   timelineEvents,
   crossPollMatches,
   zedcorBranch,
+  isTopFifty,
+  isAdmin,
 }: {
   project: Project;
   latestEmailDraft: OutreachDraft | null;
   contacts: ProjectContact[];
+  leadContacts: LeadContactRow[];
   recentEdits: OutreachEdit[];
   timelineEvents?: TimelineEvent[];
   crossPollMatches: CrossPollinationMatchRow[];
   zedcorBranch: ZedcorBranchInfo | null;
+  isTopFifty: boolean;
+  isAdmin: boolean;
 }) {
   // Hook insertion bridge — CrossPollinationCard fires onInsertHook with the
   // selected hook text; we bump nonce and pass the override down to
@@ -245,6 +288,27 @@ function RedesignedBody({
       if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
   }, []);
+
+  // Demo Polish UX Gate 8C — ContactsCard "Use as outreach recipient"
+  // wires through to the EmailComposer's `to:` override using the same
+  // nonce-bump pattern as handleInsertHook above.
+  const [recipientOverride, setRecipientOverride] = React.useState<{
+    email: string;
+    nonce: number;
+  } | null>(null);
+  const handleSetRecipient = React.useCallback(
+    (email: string, _contactName: string) => {
+      setRecipientOverride((prev) => ({
+        email,
+        nonce: (prev?.nonce ?? 0) + 1,
+      }));
+      if (typeof document !== 'undefined') {
+        const el = document.getElementById('lead-email-composer');
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    },
+    [],
+  );
 
   // Page-level empty states (per spec § "Empty states (page-level)"):
   // - rejected → muted page state + banner
@@ -275,10 +339,24 @@ function RedesignedBody({
       {enrichmentMissing && <EnrichmentRequestBanner projectId={project.id} />}
       <DecisionBar project={project} matches={crossPollMatches} />
       <QuickFactsGrid project={project} />
+      {/* Demo Polish UX Gate 8X-3 — per-source raw_payload fields. Self-
+          hides for sources or rows where the field is null, so leads
+          without rich payload don't render an empty card. */}
+      <RawPayloadFacts project={project} />
       <CrossPollinationCard
         matches={crossPollMatches}
         targetRegion={zedcorBranch?.state ?? null}
         onInsertHook={handleInsertHook}
+      />
+      {/* Demo Polish UX Gate 8C — ContactsCard slot per spec § UI:
+          "between Cross-Pollination Card and Recommended Action".
+          Cross-Pollination handles warm intros; Contacts handles cold outreach. */}
+      <ContactsCard
+        project={project}
+        contacts={leadContacts}
+        isTopFifty={isTopFifty}
+        isAdmin={isAdmin}
+        onSetRecipient={handleSetRecipient}
       />
       <RecommendedAction project={project} />
       <ProjectStory project={project} />
@@ -288,6 +366,7 @@ function RedesignedBody({
         draft={latestEmailDraft}
         contacts={contacts}
         bodyOverride={bodyOverride}
+        recipientOverride={recipientOverride}
       />
       {recentEdits.length > 0 && <RecentSendsBlock recentEdits={recentEdits} />}
       <Timeline projectId={project.id} initialEvents={timelineEvents} />
@@ -435,9 +514,22 @@ interface EmailComposerProps {
    * composer without making body fully controlled.
    */
   bodyOverride?: { text: string; nonce: number } | null;
+  /**
+   * Demo Polish UX Gate 8C — recipient-override bridge. Same nonce pattern
+   * as bodyOverride. ContactsCard's "Use as outreach recipient" button
+   * fires this to set the composer's `to:` field to the selected
+   * decision-maker's email.
+   */
+  recipientOverride?: { email: string; nonce: number } | null;
 }
 
-function EmailComposer({ project, draft, contacts, bodyOverride }: EmailComposerProps) {
+function EmailComposer({
+  project,
+  draft,
+  contacts,
+  bodyOverride,
+  recipientOverride,
+}: EmailComposerProps) {
   const initialSubject = draft?.draft_subject ?? '';
   const initialBody = draft?.draft_body ?? '';
   const initialRecipient = pickRecipientEmail(contacts) ?? '';
@@ -462,6 +554,17 @@ function EmailComposer({ project, draft, contacts, bodyOverride }: EmailComposer
     lastNonce.current = bodyOverride.nonce;
     setBody((prev) => (prev ? `${bodyOverride.text}\n\n${prev}` : bodyOverride.text));
   }, [bodyOverride]);
+
+  // Demo Polish UX Gate 8C — recipient override from ContactsCard's
+  // "Use as outreach recipient" button. Same nonce pattern as bodyOverride
+  // so the parent can re-fire the same address without stale-deps issues.
+  const lastRecipientNonce = React.useRef<number | null>(null);
+  React.useEffect(() => {
+    if (!recipientOverride) return;
+    if (recipientOverride.nonce === lastRecipientNonce.current) return;
+    lastRecipientNonce.current = recipientOverride.nonce;
+    setRecipient(recipientOverride.email);
+  }, [recipientOverride]);
 
   // Operator identity isn't carried in basic-auth headers, so v1 caches the
   // rep's email in localStorage. Future iterations swap to Supabase Auth.

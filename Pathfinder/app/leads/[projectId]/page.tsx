@@ -11,6 +11,7 @@ import type { CrossPollinationMatchRow } from '@/components/zedcor/ZedcorRelatio
 import { supabase } from '@/lib/supabase';
 import { buildTimelineForProject, type TimelineEvent } from '@/lib/timeline';
 import type {
+  LeadContactRow,
   OutreachDraft,
   OutreachEdit,
   Project,
@@ -33,6 +34,7 @@ async function fetchData(projectId: string): Promise<{
   project: Project | null;
   latestEmailDraft: OutreachDraft | null;
   contacts: ProjectContact[];
+  leadContacts: LeadContactRow[];
   recentEdits: OutreachEdit[];
   timelineEvents: TimelineEvent[];
   crossPollMatches: CrossPollinationMatchRow[];
@@ -42,6 +44,7 @@ async function fetchData(projectId: string): Promise<{
     projectRes,
     draftRes,
     contactsRes,
+    leadContactsRes,
     editsRes,
     timelineEvents,
     crossPollRes,
@@ -59,6 +62,13 @@ async function fetchData(projectId: string): Promise<{
       .select('*')
       .eq('project_id', projectId)
       .order('confidence', { ascending: false }),
+    // Demo Polish UX Gate 8C — read decision-maker contacts from
+    // pathfinder.lead_contacts (populated by Gate 8B's enricher).
+    supabase
+      .from('lead_contacts')
+      .select('*')
+      .eq('project_id', projectId)
+      .order('enriched_at', { ascending: false }),
     supabase
       .from('outreach_edits')
       .select('*')
@@ -96,6 +106,7 @@ async function fetchData(projectId: string): Promise<{
     project,
     latestEmailDraft: ((draftRes.data ?? [])[0] as OutreachDraft | undefined) ?? null,
     contacts: ((contactsRes.data ?? []) as ProjectContact[]) ?? [],
+    leadContacts: ((leadContactsRes.data ?? []) as LeadContactRow[]) ?? [],
     recentEdits: ((editsRes.data ?? []) as OutreachEdit[]) ?? [],
     timelineEvents,
     crossPollMatches: ((crossPollRes.data ?? []) as unknown as CrossPollinationMatchRow[]) ?? [],
@@ -112,6 +123,7 @@ export default async function LeadDetailPage({
     project,
     latestEmailDraft,
     contacts,
+    leadContacts,
     recentEdits,
     timelineEvents,
     crossPollMatches,
@@ -126,16 +138,27 @@ export default async function LeadDetailPage({
   // untouched.
   const redesignEnabled = process.env.LEAD_DETAIL_REDESIGN === '1';
 
+  // Demo Polish UX Gate 8C — top-50 status drives the ContactsCard
+  // empty-state. Threshold mirrors the contact-enricher cron's selection
+  // (top 50 by score). Approximate from project.score; the real cron
+  // recomputes nightly. The UI's only failure mode here is showing
+  // "Run now" for a lead that's borderline — acceptable.
+  const TOP_FIFTY_SCORE_FLOOR = 50;
+  const isTopFifty = (project.score ?? 0) >= TOP_FIFTY_SCORE_FLOOR;
+
   return (
     <LeadDetail
       project={project}
       latestEmailDraft={latestEmailDraft}
       contacts={contacts}
+      leadContacts={leadContacts}
       recentEdits={recentEdits}
       timelineEvents={timelineEvents}
       crossPollMatches={crossPollMatches}
       zedcorBranch={zedcorBranch}
       redesignEnabled={redesignEnabled}
+      isTopFifty={isTopFifty}
+      isAdmin={true}
     />
   );
 }
