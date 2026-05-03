@@ -676,3 +676,20 @@ Total new: 50 tests. All green; full Pathfinder suite remains 809 passing.
 | File | Tests | Covers |
 |---|---|---|
 | `tests/hubspot-recon.test.ts` | 10 | reconcileDeals (matched, all 3 policies — last_write_wins newer-wins + tied-escalates, pathfinder_locked, hubspot_locked), HubSpot-only / Pathfinder-only deals (skipped, outbound territory), null/null match, null/value conflict, numeric/string cross-coerce, escalationToInboxRow shape. |
+
+---
+
+## Demo Polish UX Sprint — Gate 11E (tower estimation enrichment)
+
+**State:** PR #117 pending merge.
+
+#### Pathfinder/services/tower-estimator/agent.ts
+**Implements:** Gate 11 dispatch § 11E — single Sonnet 4.6 call per project producing `{ count: number | string, rationale: string }`. System prompt encodes the heuristic stack (1 tower per ~500 ft of perimeter / ~5 acres of open lot; linear-infrastructure 1 per 1500 ft + 1-2 per yard; multi-site 1-2 per site; round up; range when uncertain; value-tier fallback). Pure prompt builder + tolerant JSON parser exported for unit testing. Wraps the instrumented `anthropic()` client so calls land in `pathfinder.llm_calls` as `agent_name=tower_estimator`.
+**Last verified against spec:** 2026-05-03.
+**Drift:** none — feature was newly specced in the Gate 11 dispatch.
+
+### Tests
+
+| File | Tests | Covers |
+|---|---|---|
+| `tests/tower-estimator.test.ts` | 13 | Prompt builder (title/value/NAICS/lot/location/sites/perimeter embedding, summary fallback, null omission), JSON parser happy paths (integer + numeric-string + range + range-with-whitespace + ```json fence + trailing prose + fractional rounding), failure modes (non-JSON, empty rationale, missing/negative count, malformed string). |
