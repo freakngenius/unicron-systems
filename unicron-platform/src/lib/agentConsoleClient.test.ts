@@ -5,6 +5,7 @@ import {
   verifyDispatch,
   rejectDispatch,
   appendEvent,
+  requeueDispatch,
 } from './agentConsoleClient';
 import type { AgentDispatch, AgentDispatchEvent } from './contracts/agentConsole';
 import { __resetSupabaseForTests } from './supabase';
@@ -180,6 +181,88 @@ describe('agentConsoleClient', () => {
     expect(updateArg.status).toBe('rejected');
     expect(updateArg.rejection_reason).toBe('because');
     expect(updateArg.verified_by_user_id).toBe('op-123');
+  });
+
+  it('requeueDispatch reads the source row, then inserts a copy with parent_dispatch_id set', async () => {
+    const failedSource: AgentDispatch = {
+      ...FIXTURE_DISPATCH,
+      status: 'failed',
+      input_payload: { foo: 'bar', count: 3 },
+      dispatched_by_user_id: 'op-original',
+    };
+    const insertedCopy: AgentDispatch = {
+      ...failedSource,
+      id: '33333333-3333-3333-3333-333333333333',
+      status: 'queued',
+      parent_dispatch_id: failedSource.id,
+      dispatched_by_user_id: 'op-rerun',
+    };
+
+    // Two sequential calls: getDispatch (maybeSingle) → createDispatch (single).
+    const builders: Builder[] = [];
+    const fromCalls: Array<{ data: unknown; error: unknown }> = [
+      { data: failedSource, error: null },
+      { data: insertedCopy, error: null },
+    ];
+    let callIdx = 0;
+    const supa = {
+      schema: vi.fn(() => ({
+        from: vi.fn(() => {
+          const b = makeBuilder(fromCalls[callIdx++]);
+          builders.push(b);
+          lastBuilder = b;
+          return b;
+        }),
+      })),
+      from: vi.fn(),
+    };
+    const { getSupabase } = await import('./supabase');
+    (getSupabase as unknown as { mockReturnValue: (v: unknown) => void }).mockReturnValue(supa);
+
+    const out = await requeueDispatch({
+      dispatch_id: failedSource.id,
+      dispatched_by_user_id: 'op-rerun',
+    });
+
+    expect(out).toEqual(insertedCopy);
+    // First builder = getDispatch (eq + maybeSingle).
+    expect(builders[0].eq).toHaveBeenCalledWith('id', failedSource.id);
+    // Second builder = createDispatch (insert).
+    const insertArg = (builders[1].insert as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(insertArg).toEqual(
+      expect.objectContaining({
+        agent_name: failedSource.agent_name,
+        customer_org_id: failedSource.customer_org_id,
+        input_payload: failedSource.input_payload,
+        status: 'queued',
+        parent_dispatch_id: failedSource.id,
+        dispatched_by_user_id: 'op-rerun',
+      }),
+    );
+  });
+
+  it('requeueDispatch refuses to requeue a non-failed dispatch', async () => {
+    const verifiedSource: AgentDispatch = {
+      ...FIXTURE_DISPATCH,
+      status: 'verified',
+    };
+    const supa = mockSupabase({ data: verifiedSource, error: null });
+    const { getSupabase } = await import('./supabase');
+    (getSupabase as unknown as { mockReturnValue: (v: unknown) => void }).mockReturnValue(supa);
+
+    await expect(
+      requeueDispatch({ dispatch_id: verifiedSource.id }),
+    ).rejects.toThrow(/only failed dispatches/);
+  });
+
+  it('requeueDispatch throws when the source dispatch does not exist', async () => {
+    const supa = mockSupabase({ data: null, error: null });
+    const { getSupabase } = await import('./supabase');
+    (getSupabase as unknown as { mockReturnValue: (v: unknown) => void }).mockReturnValue(supa);
+
+    await expect(
+      requeueDispatch({ dispatch_id: '00000000-0000-0000-0000-000000000000' }),
+    ).rejects.toThrow(/not found/);
   });
 
   it('appendEvent inserts an event tied to the dispatch', async () => {

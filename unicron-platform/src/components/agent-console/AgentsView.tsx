@@ -1,8 +1,10 @@
-import { Suspense, useState } from 'react';
+import { Suspense, useCallback, useState } from 'react';
 import type { AgentDefinition } from '../../lib/agentRegistry';
 import { listAgents } from '../../lib/agentRegistry';
 import { AgentModalShell } from './AgentModalShell';
 import { AgentHistoryGrid } from './AgentHistoryGrid';
+import { requeueDispatch } from '../../lib/agentConsoleClient';
+import type { AgentDispatch } from '../../lib/contracts/agentConsole';
 // Side-effect import — Phase 1 streams register their AgentDefinitions here.
 import '../../lib/agents';
 
@@ -21,6 +23,18 @@ import '../../lib/agents';
 export function AgentsView() {
   const agents = listAgents();
   const [selected, setSelected] = useState<AgentDefinition | null>(null);
+
+  // Operator-triggered "force re-run" for failed dispatches. Surfaces inside
+  // the per-agent default modal's history grid; per-agent modals (Architect,
+  // Coverage, etc.) stay opt-in by passing their own onRerun if/when they
+  // want it.
+  const handleRerun = useCallback(async (dispatch: AgentDispatch) => {
+    try {
+      await requeueDispatch({ dispatch_id: dispatch.id });
+    } catch (err) {
+      console.error('requeueDispatch failed', err);
+    }
+  }, []);
 
   return (
     <div className="px-6 py-8">
@@ -86,7 +100,7 @@ export function AgentsView() {
                   ? 'INPUT FORM AVAILABLE — phase 1 stream provides dispatch handler'
                   : 'INPUT FORM PENDING — phase 1 stream will register'}
               </p>
-              <AgentHistoryGrid agentName={selected.name} />
+              <AgentHistoryGrid agentName={selected.name} onRerun={handleRerun} />
             </div>
           </AgentModalShell>
         )
