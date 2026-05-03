@@ -8,6 +8,7 @@ import {
   createDispatch,
   getDispatch,
   rejectDispatch,
+  requeueDispatch,
   verifyDispatch,
 } from '../../lib/agentConsoleClient';
 import {
@@ -289,6 +290,11 @@ export function ArchitectModal({ onClose, bridge = REAL_BRIDGE }: Props) {
           <AgentHistoryGrid
             agentName={architectAgent.name}
             customerOrgId={ORG_ID}
+            onRerun={(d) => {
+              void requeueDispatch({ dispatch_id: d.id }).catch((err) => {
+                console.error('requeueDispatch failed', err);
+              });
+            }}
           />
         </div>
       </div>

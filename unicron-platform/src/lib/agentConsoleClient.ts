@@ -70,6 +70,40 @@ export async function listDispatches(filter: ListDispatchesFilter = {}): Promise
   return (data ?? []) as AgentDispatch[];
 }
 
+/**
+ * Re-queue a failed dispatch by inserting a fresh row that copies the
+ * original's `agent_name`, `customer_org_id`, and `input_payload`, and points
+ * back at the parent via `parent_dispatch_id`. The new row starts in
+ * `status='queued'` so it gets picked up by the dispatch worker on the next
+ * cycle.
+ *
+ * Throws if the source dispatch does not exist or is not in `failed` state —
+ * this is the operator-facing "force re-run" action and we intentionally
+ * refuse to replay non-failed runs (use the agent's normal Run flow for that).
+ */
+export async function requeueDispatch(input: {
+  dispatch_id: string;
+  dispatched_by_user_id?: string | null;
+}): Promise<AgentDispatch> {
+  const original = await getDispatch(input.dispatch_id);
+  if (!original) {
+    throw new Error(`requeueDispatch: dispatch ${input.dispatch_id} not found`);
+  }
+  if (original.status !== 'failed') {
+    throw new Error(
+      `requeueDispatch: dispatch ${input.dispatch_id} is in status "${original.status}", only failed dispatches can be re-queued`,
+    );
+  }
+  return createDispatch({
+    agent_name: original.agent_name,
+    customer_org_id: original.customer_org_id,
+    input_payload: original.input_payload,
+    dispatched_by_user_id:
+      input.dispatched_by_user_id ?? original.dispatched_by_user_id ?? null,
+    parent_dispatch_id: original.id,
+  });
+}
+
 export async function getDispatch(id: string): Promise<AgentDispatch | null> {
   const supabase = getSupabase();
   const { data, error } = await supabase

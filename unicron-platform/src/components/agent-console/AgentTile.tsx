@@ -3,6 +3,13 @@ import type { AgentDispatch, AgentDispatchStatus } from '../../lib/contracts/age
 interface Props {
   dispatch: AgentDispatch;
   onClick?: (dispatch: AgentDispatch) => void;
+  /**
+   * When provided AND `dispatch.status === 'failed'`, renders an inline
+   * "RE-RUN" action that copies the failed dispatch into a fresh queued row
+   * (see `requeueDispatch` in `agentConsoleClient`). The click is stopped
+   * from bubbling so the surrounding tile click handler does not also fire.
+   */
+  onRerun?: (dispatch: AgentDispatch) => void;
 }
 
 const STATUS_TONE: Record<AgentDispatchStatus, string> = {
@@ -23,14 +30,28 @@ const STATUS_LABEL: Record<AgentDispatchStatus, string> = {
   failed: 'FAILED',
 };
 
-export function AgentTile({ dispatch, onClick }: Props) {
+export function AgentTile({ dispatch, onClick, onRerun }: Props) {
   const summary = summarize(dispatch);
   const interactive = onClick !== undefined;
+  const showRerun = onRerun !== undefined && dispatch.status === 'failed';
+  // Use a div + role=button so we can nest the inline RE-RUN button without
+  // creating an invalid <button> inside <button>.
+  const handleActivate = () => {
+    if (interactive) onClick?.(dispatch);
+  };
   return (
-    <button
-      type="button"
-      onClick={() => onClick?.(dispatch)}
-      disabled={!interactive}
+    <div
+      role={interactive ? 'button' : undefined}
+      tabIndex={interactive ? 0 : -1}
+      onClick={handleActivate}
+      onKeyDown={(e) => {
+        if (!interactive) return;
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          handleActivate();
+        }
+      }}
+      aria-disabled={!interactive}
       data-testid="agent-tile"
       data-dispatch-id={dispatch.id}
       data-dispatch-status={dispatch.status}
@@ -60,8 +81,21 @@ export function AgentTile({ dispatch, onClick }: Props) {
         {dispatch.verified_at ? (
           <span className="text-emerald-400">✓ {dispatch.verified_at.slice(0, 10)}</span>
         ) : null}
+        {showRerun ? (
+          <button
+            type="button"
+            data-testid="rerun-button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onRerun?.(dispatch);
+            }}
+            className="ml-auto mono text-[10px] uppercase tracking-[0.18em] border border-accent-gold/40 text-accent-gold rounded-md px-2 py-0.5 hover:bg-accent-gold/10 transition-colors"
+          >
+            RE-RUN
+          </button>
+        ) : null}
       </div>
-    </button>
+    </div>
   );
 }
 

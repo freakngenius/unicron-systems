@@ -15,6 +15,7 @@ import {
   createDispatch,
   getDispatch,
   rejectDispatch,
+  requeueDispatch,
   verifyDispatch,
 } from '../../lib/agentConsoleClient';
 import {
@@ -357,6 +358,11 @@ export function SourceOnboarderModal({ onClose, bridge = REAL_BRIDGE }: Props) {
               agentName={sourceOnboarderAgent.name}
               customerOrgId={ORG_ID}
               initialDispatches={isMockRuntime ? sourceOnboarderDispatchesMock : undefined}
+              onRerun={(d) => {
+                void requeueDispatch({ dispatch_id: d.id }).catch((err) => {
+                  console.error('requeueDispatch failed', err);
+                });
+              }}
             />
           </div>
         </div>

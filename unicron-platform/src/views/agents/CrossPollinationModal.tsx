@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { AgentModalShell } from '../../components/agent-console/AgentModalShell';
 import { AgentHistoryGrid } from '../../components/agent-console/AgentHistoryGrid';
 import { crossPollinationAgent } from '../../lib/agents/crossPollinationAgent';
-import { createDispatch, verifyDispatch } from '../../lib/agentConsoleClient';
+import { createDispatch, requeueDispatch, verifyDispatch } from '../../lib/agentConsoleClient';
 import { listCrossPollinationMatches } from '../../lib/crossPollinationClient';
 import { crossPollinationMatchesMock } from '../../data/mocks';
 import {
@@ -345,6 +345,11 @@ export function CrossPollinationModal({ onClose, bridge = REAL_BRIDGE }: Props) 
                   ]
                 : undefined
             }
+            onRerun={(d) => {
+              void requeueDispatch({ dispatch_id: d.id }).catch((err) => {
+                console.error('requeueDispatch failed', err);
+              });
+            }}
           />
         </div>
       </div>

@@ -14,6 +14,7 @@ import {
   createDispatch,
   getDispatch,
   rejectDispatch,
+  requeueDispatch,
   verifyDispatch,
 } from '../../lib/agentConsoleClient';
 import {
@@ -326,6 +327,11 @@ export function CoverageExpansionModal({ onClose, bridge = REAL_BRIDGE }: Props)
             customerOrgId={ORG_ID}
             initialDispatches={MOCK_MODE ? coverageDispatchesMock : undefined}
             onTileClick={handleHistoryClick}
+            onRerun={(d) => {
+              void requeueDispatch({ dispatch_id: d.id }).catch((err) => {
+                console.error('requeueDispatch failed', err);
+              });
+            }}
           />
         </div>
       </div>

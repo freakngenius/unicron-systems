@@ -8,6 +8,13 @@ interface Props {
   agentName: string;
   customerOrgId?: string;
   onTileClick?: (dispatch: AgentDispatch) => void;
+  /**
+   * When provided, each tile whose dispatch is in `failed` status renders an
+   * inline RE-RUN action that invokes this handler with the failed dispatch.
+   * The grid is intentionally agnostic about the actual re-queue mechanism;
+   * call `requeueDispatch` from `agentConsoleClient` in the handler.
+   */
+  onRerun?: (dispatch: AgentDispatch) => void;
   /** Test seam — override the loader. */
   loader?: typeof listDispatches;
   /** Test seam — provide initial dispatches synchronously, skipping the loader. */
@@ -21,6 +28,7 @@ export function AgentHistoryGrid({
   agentName,
   customerOrgId,
   onTileClick,
+  onRerun,
   loader = listDispatches,
   initialDispatches,
 }: Props) {
@@ -70,9 +78,27 @@ export function AgentHistoryGrid({
       data-agent-name={agentName}
     >
       <header className="flex items-center justify-between">
-        <span className="mono text-[10px] uppercase tracking-[0.18em] text-text-primary/50">
-          HISTORY
-        </span>
+        <div className="flex items-center gap-3">
+          <span className="mono text-[10px] uppercase tracking-[0.18em] text-text-primary/50">
+            HISTORY
+          </span>
+          <button
+            type="button"
+            data-testid="failed-filter-chip"
+            aria-pressed={statusFilter === 'failed'}
+            onClick={() =>
+              setStatusFilter((prev) => (prev === 'failed' ? 'all' : 'failed'))
+            }
+            className={[
+              'mono text-[9px] uppercase tracking-[0.18em] border rounded-md px-2 py-0.5 transition-colors',
+              statusFilter === 'failed'
+                ? 'border-rose-400/60 text-rose-400 bg-rose-400/10'
+                : 'border-border-default text-text-primary/50 hover:border-rose-400/40 hover:text-rose-400',
+            ].join(' ')}
+          >
+            FAILED ONLY
+          </button>
+        </div>
         <div className="flex items-center gap-3">
           <label className="flex items-center gap-2 mono text-[10px] uppercase tracking-[0.18em] text-text-primary/40">
             STATUS
@@ -119,7 +145,12 @@ export function AgentHistoryGrid({
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {visible.map((d) => (
-            <AgentTile key={d.id} dispatch={d} onClick={onTileClick} />
+            <AgentTile
+              key={d.id}
+              dispatch={d}
+              onClick={onTileClick}
+              onRerun={onRerun}
+            />
           ))}
         </div>
       )}
