@@ -120,7 +120,22 @@ export function LeadDetailModal({
         justifyContent: 'center',
       }}
     >
-      {/* Backdrop — click-to-close + dim + blur. */}
+      {/* Backdrop — click-to-close + dim + blur.
+       *
+       * Gate 12A regression fix: the lead detail lives at its own route
+       * (/pathfinder/leads/[projectId]) rather than as an intercepted
+       * route over the dashboard, so Next.js renders nothing behind the
+       * modal — only the body's own background (#ffffff per globals.css)
+       * is visible behind the backdrop. With the original 0.55 alpha
+       * that produced a washed-out near-white panel instead of the
+       * specced "dark dim + blur" feel.
+       *
+       * Until the routing is reworked into intercepting/parallel routes
+       * (tracked as Gate 12.5), drive the backdrop at near-opaque dark
+       * so the framing reads correctly on the modal route. The blur is
+       * preserved for visual texture and to keep the same component
+       * working unchanged if/when a real layer renders behind it.
+       */}
       <div
         data-testid="lead-detail-modal-backdrop"
         onClick={close}
@@ -128,7 +143,7 @@ export function LeadDetailModal({
         style={{
           position: 'absolute',
           inset: 0,
-          background: 'rgba(10,10,10,0.55)',
+          background: 'rgba(10,10,10,0.92)',
           backdropFilter: 'blur(8px)',
           WebkitBackdropFilter: 'blur(8px)',
         }}
