@@ -12,6 +12,11 @@
 //   - `belowThreshold` — sub-top-50 lead → "Request enrichment" link
 //   - `ownerUnknown` — Pre-award / null owner → muted "Contact lookup pending owner identification"
 //   - `noResults` — providers ran and returned 0 → "No contacts found via providers"
+//
+// Gate 9B addendum (per SPEC - Lead Detail Page v2.md § 5 Contacts):
+// every empty state appends a per-source publishing note explaining
+// whether the source itself ever publishes contact data, so the operator
+// understands why the section is empty rather than assuming a bug.
 
 import * as React from 'react';
 
@@ -24,6 +29,7 @@ interface Props {
     Project,
     | 'id'
     | 'owner_name'
+    | 'source'
     | 'score'
     | 'rejection_reason'
   > & {
@@ -131,16 +137,19 @@ export function ContactsCard(props: Props): React.ReactElement {
       )}
 
       {empty === 'topFiftyPending' && (
-        <p
-          data-testid="contacts-empty-pending"
-          style={{
-            margin: 0,
-            font: `400 13px ${PF_TINTS.sans}`,
-            color: PF_TINTS.inkSub,
-          }}
-        >
-          Enrichment pending — refresh in 5 min.
-        </p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <p
+            data-testid="contacts-empty-pending"
+            style={{
+              margin: 0,
+              font: `400 13px ${PF_TINTS.sans}`,
+              color: PF_TINTS.inkSub,
+            }}
+          >
+            Enrichment pending — refresh in 5 min.
+          </p>
+          <SourcePublishingNote source={project.source} />
+        </div>
       )}
 
       {empty === 'belowThreshold' && (
@@ -154,35 +163,42 @@ export function ContactsCard(props: Props): React.ReactElement {
           >
             Contacts not enriched (lead score below threshold).
           </p>
+          <SourcePublishingNote source={project.source} />
           <RequestEnrichmentLink projectId={project.id} />
         </div>
       )}
 
       {empty === 'ownerUnknown' && (
-        <p
-          data-testid="contacts-empty-owner-unknown"
-          style={{
-            margin: 0,
-            font: `400 13px ${PF_TINTS.sans}`,
-            color: PF_TINTS.inkDim,
-            fontStyle: 'italic',
-          }}
-        >
-          Contact lookup pending owner identification.
-        </p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <p
+            data-testid="contacts-empty-owner-unknown"
+            style={{
+              margin: 0,
+              font: `400 13px ${PF_TINTS.sans}`,
+              color: PF_TINTS.inkDim,
+              fontStyle: 'italic',
+            }}
+          >
+            Contact lookup pending owner identification.
+          </p>
+          <SourcePublishingNote source={project.source} />
+        </div>
       )}
 
       {empty === 'noResults' && (
-        <p
-          data-testid="contacts-empty-no-results"
-          style={{
-            margin: 0,
-            font: `400 13px ${PF_TINTS.sans}`,
-            color: PF_TINTS.inkSub,
-          }}
-        >
-          No contacts found via providers. Manual research required.
-        </p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <p
+            data-testid="contacts-empty-no-results"
+            style={{
+              margin: 0,
+              font: `400 13px ${PF_TINTS.sans}`,
+              color: PF_TINTS.inkSub,
+            }}
+          >
+            No contacts found via providers. Manual research required.
+          </p>
+          <SourcePublishingNote source={project.source} />
+        </div>
       )}
 
       {/* Show low-confidence toggle stub — surfaced when there are
@@ -268,5 +284,45 @@ function RequestEnrichmentLink({
     >
       Request enrichment →
     </a>
+  );
+}
+
+// SPEC - Lead Detail Page v2.md § 5 Contacts — per-source explanation
+// shown in every empty-state branch. Tells the operator whether the
+// upstream source publishes contact data at all (sam.gov sometimes,
+// USAspending / Harris / news essentially never), so absence isn't
+// confused with a bug.
+const SOURCE_NOTES: Record<string, string> = {
+  'sam.gov':
+    'Source: sam.gov publishes pointOfContact data only when the contracting officer attaches it to the notice. Many solicitations omit it.',
+  usaspending:
+    'Source: USAspending does not publish decision-maker contact data. Contacts here come from Clay / Apollo / Hunter enrichment against the awarding agency.',
+  harris:
+    'Source: Harris County permits do not publish contact information. Contacts must be enriched against the listed contractor or property owner.',
+  news:
+    'Source: news articles rarely include direct contacts. Manual research or third-party enrichment is required.',
+};
+
+function SourcePublishingNote({
+  source,
+}: {
+  source: string | null | undefined;
+}): React.ReactElement | null {
+  if (!source) return null;
+  const text = SOURCE_NOTES[source];
+  if (!text) return null;
+  return (
+    <p
+      data-testid="contacts-source-publishing-note"
+      data-source={source}
+      style={{
+        margin: 0,
+        font: `400 11.5px/1.5 ${PF_TINTS.sans}`,
+        color: PF_TINTS.inkDim,
+        fontStyle: 'italic',
+      }}
+    >
+      {text}
+    </p>
   );
 }

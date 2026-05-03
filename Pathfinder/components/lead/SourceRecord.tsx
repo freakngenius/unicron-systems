@@ -1,10 +1,12 @@
 'use client';
 
-// components/lead/RawPayloadFacts.tsx — Demo Polish UX Gate 8X-3.
+// components/lead/SourceRecord.tsx — Demo Polish UX Gate 8X-3 (renamed
+// from RawPayloadFacts in Gate 9B to align with SPEC - Lead Detail Page
+// v2.md § 9 Source Record).
 //
 // Per-source breakdown of fields the ingester already captured into
 // pathfinder.projects.raw_payload but that QuickFactsGrid didn't surface.
-// Slot below QuickFactsGrid in the redesigned LeadDetail.
+// Renders curated, source-aware fields only — no raw JSON dump per spec.
 //
 // Source-specific layouts:
 //   - sam.gov     → contracting-office address, agency hierarchy, set-aside,
@@ -385,7 +387,7 @@ function NewsFacts({ project }: { project: Project }): React.ReactElement | null
   );
 }
 
-export function RawPayloadFacts({ project }: Props): React.ReactElement | null {
+export function SourceRecord({ project }: Props): React.ReactElement | null {
   switch (project.source) {
     case 'sam.gov':
       return <SamGovFacts project={project} />;

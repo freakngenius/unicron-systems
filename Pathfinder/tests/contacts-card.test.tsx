@@ -40,11 +40,12 @@ function makeContact(over: Partial<LeadContactRow> = {}): LeadContactRow {
 
 function makeProject(over: Partial<Project> = {}): Pick<
   Project,
-  'id' | 'owner_name' | 'score' | 'rejection_reason'
+  'id' | 'owner_name' | 'source' | 'score' | 'rejection_reason'
 > & { enriched_at: string | null } {
   return {
     id: 'sam.gov:TXDOT-I45-2026-001',
     owner_name: 'Texas Department of Transportation',
+    source: 'sam.gov',
     score: 80,
     rejection_reason: null,
     enriched_at: '2026-05-02T22:00:00Z',
@@ -263,5 +264,99 @@ describe('ContactsCard — chips and source citations', () => {
       />,
     );
     expect(screen.getByText(/^guessed$/i)).toBeInTheDocument();
+  });
+});
+
+describe('ContactsCard — Gate 9B per-source publishing note', () => {
+  it('renders the sam.gov publishing note when contacts are empty', () => {
+    render(
+      <ContactsCard
+        project={makeProject({ source: 'sam.gov', score: 80 })}
+        contacts={[]}
+        isTopFifty={true}
+      />,
+    );
+    const note = screen.getByTestId('contacts-source-publishing-note');
+    expect(note).toHaveAttribute('data-source', 'sam.gov');
+    expect(note).toHaveTextContent(/sam\.gov publishes pointOfContact/i);
+  });
+
+  it('renders the USAspending note for usaspending source', () => {
+    render(
+      <ContactsCard
+        project={makeProject({ source: 'usaspending', score: 80 })}
+        contacts={[]}
+        isTopFifty={true}
+      />,
+    );
+    const note = screen.getByTestId('contacts-source-publishing-note');
+    expect(note).toHaveAttribute('data-source', 'usaspending');
+    expect(note).toHaveTextContent(/USAspending does not publish/i);
+  });
+
+  it('renders the Harris note for harris source', () => {
+    render(
+      <ContactsCard
+        project={makeProject({ source: 'harris', score: 80 })}
+        contacts={[]}
+        isTopFifty={true}
+      />,
+    );
+    const note = screen.getByTestId('contacts-source-publishing-note');
+    expect(note).toHaveAttribute('data-source', 'harris');
+    expect(note).toHaveTextContent(/Harris County permits/i);
+  });
+
+  it('renders the news note for news source', () => {
+    render(
+      <ContactsCard
+        project={makeProject({ source: 'news', score: 80 })}
+        contacts={[]}
+        isTopFifty={true}
+      />,
+    );
+    const note = screen.getByTestId('contacts-source-publishing-note');
+    expect(note).toHaveAttribute('data-source', 'news');
+    expect(note).toHaveTextContent(/news articles rarely include/i);
+  });
+
+  it('renders the publishing note in the belowThreshold (sub-top-50) empty state', () => {
+    render(
+      <ContactsCard
+        project={makeProject({ source: 'sam.gov', score: 30 })}
+        contacts={[]}
+        isTopFifty={false}
+      />,
+    );
+    expect(screen.getByTestId('contacts-empty-below')).toBeInTheDocument();
+    expect(
+      screen.getByTestId('contacts-source-publishing-note'),
+    ).toHaveTextContent(/sam\.gov/);
+  });
+
+  it('renders the publishing note in the ownerUnknown empty state', () => {
+    render(
+      <ContactsCard
+        project={makeProject({ source: 'sam.gov', owner_name: null, score: 80 })}
+        contacts={[]}
+        isTopFifty={true}
+      />,
+    );
+    expect(screen.getByTestId('contacts-empty-owner-unknown')).toBeInTheDocument();
+    expect(
+      screen.getByTestId('contacts-source-publishing-note'),
+    ).toHaveTextContent(/sam\.gov/);
+  });
+
+  it('does NOT render the publishing note when contacts exist', () => {
+    render(
+      <ContactsCard
+        project={makeProject({ source: 'sam.gov' })}
+        contacts={[makeContact()]}
+      />,
+    );
+    expect(
+      screen.queryByTestId('contacts-source-publishing-note'),
+    ).toBeNull();
   });
 });

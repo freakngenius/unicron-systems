@@ -16,8 +16,8 @@ import { ProjectFactsCard } from '@/components/lead/ProjectFactsCard';
 import { QuickFactsGrid } from '@/components/lead/QuickFactsGrid';
 import { QuickMetricsStrip } from '@/components/lead/QuickMetricsStrip';
 import { RationaleCard } from '@/components/lead/RationaleCard';
-import { RawPayloadFacts } from '@/components/lead/RawPayloadFacts';
 import { SectionHeading } from '@/components/lead/SectionHeading';
+import { SourceRecord } from '@/components/lead/SourceRecord';
 import { Timeline } from '@/components/lead/Timeline';
 import { VerifierSection } from '@/components/lead/VerifierSection';
 import {
@@ -241,8 +241,8 @@ export function LeadDetail({
 //                             card hides itself when 0 matches)
 //   7. Outreach              (EmailComposer + RecentSendsBlock; 9C refactor)
 //   8. Verifier              (VerifierSection — own heading)
-//   9. Source Record         (RawPayloadFacts + section heading;
-//                             component rename to SourceRecord in 9B)
+//   9. Source Record         (SourceRecord — curated per-source fields,
+//                             no raw JSON dump per spec § 9)
 //
 // Dropped from v1 redesign per spec § "What's removed":
 //   - DecisionBar, RecommendedAction, ProjectStory, ScoreBreakdown,
@@ -397,11 +397,11 @@ function RedesignedBody({
       {/* §8 — Verifier */}
       <VerifierSection project={project} />
 
-      {/* §9 — Source Record (RawPayloadFacts under v2 heading; full file
-          rename to SourceRecord lands in 9B) */}
+      {/* §9 — Source Record (renamed in Gate 9B from RawPayloadFacts).
+          Curated per-source fields only; no raw JSON exposure. */}
       <section data-testid="lead-detail-section-source-record">
         <SectionHeading title="Source Record" sub={project.source} />
-        <RawPayloadFacts project={project} />
+        <SourceRecord project={project} />
       </section>
 
       {/* Activity timeline retained below the spec's 9 sections — provides
