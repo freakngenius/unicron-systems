@@ -4,10 +4,27 @@
 // Spec: SPEC - Contact Enrichment.md § UI — Contacts Card.
 
 import * as React from 'react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 
+// Demo Polish UX Gate 12C — RunNowButton now imports useRouter from
+// next/navigation to call router.refresh() after a successful POST. Mock
+// it so tests can assert refresh fires (replaces the prior
+// window.location.reload approach).
+const mockRefresh = vi.fn();
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({
+    refresh: mockRefresh,
+    push: vi.fn(),
+    back: vi.fn(),
+    replace: vi.fn(),
+  }),
+}));
+
+beforeEach(() => {
+  mockRefresh.mockReset();
+});
 afterEach(() => {
   cleanup();
 });
@@ -358,5 +375,206 @@ describe('ContactsCard — Gate 9B per-source publishing note', () => {
     expect(
       screen.queryByTestId('contacts-source-publishing-note'),
     ).toBeNull();
+  });
+});
+
+describe('ContactsCard — Gate 12C Run Now UI refresh', () => {
+  function setupFetchMock(
+    response: Partial<Response> & {
+      jsonBody?: unknown;
+      okOverride?: boolean;
+      statusOverride?: number;
+    },
+  ) {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: response.okOverride ?? true,
+      status: response.statusOverride ?? 200,
+      json: () => Promise.resolve(response.jsonBody ?? {}),
+    } as unknown as Response);
+    vi.stubGlobal('fetch', fetchMock);
+    return fetchMock;
+  }
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('shows "Running enrichment…" while the POST is in flight', async () => {
+    let resolveFetch: (value: unknown) => void = () => undefined;
+    const pending = new Promise((resolve) => {
+      resolveFetch = resolve;
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation(() => pending),
+    );
+
+    render(
+      <ContactsCard
+        project={makeProject({ source: 'sam.gov', score: 80 })}
+        contacts={[]}
+        isTopFifty
+        isAdmin
+      />,
+    );
+    // Initial copy
+    expect(screen.getByTestId('contacts-empty-pending')).toHaveTextContent(
+      /click Run now to fetch/i,
+    );
+    fireEvent.click(screen.getByTestId('contacts-run-now'));
+    await waitFor(() => {
+      expect(screen.getByTestId('contacts-empty-pending')).toHaveTextContent(
+        /Running enrichment/i,
+      );
+    });
+    expect(screen.getByTestId('contacts-run-now')).toBeDisabled();
+    // Cleanup pending promise
+    resolveFetch({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({ ok: true, inserted: 0, message: 'done.' }),
+    });
+  });
+
+  it('on success calls router.refresh() so server-rendered contacts re-fetch', async () => {
+    setupFetchMock({
+      jsonBody: {
+        ok: true,
+        inserted: 2,
+        source: 'sam.gov',
+        message: 'Inserted 2 contacts from sam.gov pointOfContact.',
+      },
+    });
+    render(
+      <ContactsCard
+        project={makeProject({ source: 'sam.gov', score: 80 })}
+        contacts={[]}
+        isTopFifty
+        isAdmin
+      />,
+    );
+    fireEvent.click(screen.getByTestId('contacts-run-now'));
+    await waitFor(() => {
+      expect(mockRefresh).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it('renders the response message inline so 0-insert results are visible', async () => {
+    setupFetchMock({
+      jsonBody: {
+        ok: true,
+        inserted: 0,
+        source: 'usaspending',
+        message:
+          'USAspending does not publish decision-maker contacts. Clay / Apollo / Hunter enrichment pending (Gate 8B).',
+      },
+    });
+    render(
+      <ContactsCard
+        project={makeProject({ source: 'usaspending', score: 80 })}
+        contacts={[]}
+        isTopFifty
+        isAdmin
+      />,
+    );
+    fireEvent.click(screen.getByTestId('contacts-run-now'));
+    const note = await screen.findByTestId('contacts-run-now-result');
+    expect(note).toHaveAttribute('data-kind', 'success');
+    expect(note).toHaveTextContent(/USAspending does not publish/i);
+  });
+
+  it('reports inserted count when the endpoint inserts rows', async () => {
+    setupFetchMock({
+      jsonBody: {
+        ok: true,
+        inserted: 2,
+        source: 'sam.gov',
+        message: 'Inserted 2 contacts from sam.gov pointOfContact.',
+      },
+    });
+    render(
+      <ContactsCard
+        project={makeProject({ source: 'sam.gov', score: 80 })}
+        contacts={[]}
+        isTopFifty
+        isAdmin
+      />,
+    );
+    fireEvent.click(screen.getByTestId('contacts-run-now'));
+    const note = await screen.findByTestId('contacts-run-now-result');
+    expect(note).toHaveTextContent(/inserted 2 contacts/i);
+  });
+
+  it('surfaces a recoverable error when the endpoint returns non-2xx', async () => {
+    setupFetchMock({
+      okOverride: false,
+      statusOverride: 500,
+      jsonBody: { ok: false, error: 'lead_contacts insert failed: oops' },
+    });
+    render(
+      <ContactsCard
+        project={makeProject({ source: 'sam.gov', score: 80 })}
+        contacts={[]}
+        isTopFifty
+        isAdmin
+      />,
+    );
+    fireEvent.click(screen.getByTestId('contacts-run-now'));
+    const note = await screen.findByTestId('contacts-run-now-result');
+    expect(note).toHaveAttribute('data-kind', 'error');
+    expect(note).toHaveTextContent(/Run failed:/i);
+    expect(note).toHaveTextContent(/insert failed/i);
+    // Button should be re-enabled so the operator can retry.
+    expect(screen.getByTestId('contacts-run-now')).not.toBeDisabled();
+    // No router refresh on failure.
+    expect(mockRefresh).not.toHaveBeenCalled();
+  });
+
+  it('surfaces a recoverable error on network failure (fetch throws)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockRejectedValue(new Error('network down')),
+    );
+    render(
+      <ContactsCard
+        project={makeProject({ source: 'sam.gov', score: 80 })}
+        contacts={[]}
+        isTopFifty
+        isAdmin
+      />,
+    );
+    fireEvent.click(screen.getByTestId('contacts-run-now'));
+    const note = await screen.findByTestId('contacts-run-now-result');
+    expect(note).toHaveAttribute('data-kind', 'error');
+    expect(note).toHaveTextContent(/network down/i);
+    expect(screen.getByTestId('contacts-run-now')).not.toBeDisabled();
+    expect(mockRefresh).not.toHaveBeenCalled();
+  });
+
+  it('POSTs to the correct endpoint URL with force=1', async () => {
+    const fetchMock = setupFetchMock({
+      jsonBody: { ok: true, inserted: 0, message: 'noop' },
+    });
+    render(
+      <ContactsCard
+        project={makeProject({
+          id: 'sam.gov:NOTICE-ABC',
+          source: 'sam.gov',
+          score: 80,
+        })}
+        contacts={[]}
+        isTopFifty
+        isAdmin
+      />,
+    );
+    fireEvent.click(screen.getByTestId('contacts-run-now'));
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe(
+      '/pathfinder/api/leads/sam.gov%3ANOTICE-ABC/enrich-contacts?force=1',
+    );
+    expect(init).toMatchObject({ method: 'POST' });
   });
 });
