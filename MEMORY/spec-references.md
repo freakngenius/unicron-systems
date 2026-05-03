@@ -591,3 +591,25 @@ Total new: 50 tests. All green; full Pathfinder suite remains 809 passing.
 | File | Tests | Covers |
 |---|---|---|
 | `tests/posted-date.test.ts` | 8 | Today / 1-day-ago / N-days-ago / future "in N days", MM-DD-YY zero-pad, ISO datetime truncation, null + malformed input. |
+
+---
+
+## Demo Polish UX Sprint — Gate 4A (connection-status probes)
+
+**State:** PR #85 merged to main during the post-demo-queue Wednesday recovery sweep.
+
+#### Pathfinder/lib/probes.ts
+**Implements:** `Company Docs/Specs/SPEC - Connectors (Slack, Teams, HubSpot).md` § "Settings — connection status probes." Slack webhook POST-empty-`{}` taxonomy + Resend `GET /domains` taxonomy. Anti-deliver guard: empty payload returns Slack's `no_text` error without delivering a message.
+**Last verified against spec:** 2026-05-02.
+**Drift:** none.
+
+#### Pathfinder/lib/probe-cache.ts
+**Implements:** Shared 5-minute module-scoped TTL cache for the `/api/probes/*` route handlers. Per-Lambda; warm instances hold up to TTL_MS staleness.
+**Last verified against spec:** 2026-05-02.
+**Drift:** none.
+
+### Tests
+
+| File | Tests | Covers |
+|---|---|---|
+| `tests/probes.test.ts` | 16 | Slack response taxonomy (no_text / invalid_payload / no_service / channel_not_found / non-Slack-host / network error / env unset), Resend status codes (200 + N domains / 200 + empty list = degraded / 401 / network error / env unset), cache round-trip + expiry + per-key clear. |
