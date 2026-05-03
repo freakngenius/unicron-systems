@@ -13,6 +13,7 @@ import { stageLabel, stagesEnumerated } from '@/lib/stages';
 import { sourceLabel, sourcesEnumerated } from '@/lib/sources';
 import { useScoringConfig } from '@/lib/scoring-config';
 import { useOutreachDraftsForProject } from '@/lib/outreach-drafts-client';
+import { formatPostedDate } from '@/lib/posted-date';
 import { Tooltip } from './Tooltip';
 
 // Width applied to every project-detail tooltip — Stage's full taxonomy
@@ -155,7 +156,10 @@ export function ProjectModal({ project, branch, onClose }: ProjectModalProps) {
                   letterSpacing: '0.04em',
                 }}
               >
-                {project.source_id} · {sourceDisplay} · posted {project.posted_date ?? '—'}
+                {project.source_id} · {sourceDisplay} · posted {formatPostedDate(project.posted_date).top}
+                {formatPostedDate(project.posted_date).subtitle
+                  ? ` (${formatPostedDate(project.posted_date).subtitle})`
+                  : ''}
               </div>
             </div>
             <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0 }}>
@@ -231,12 +235,15 @@ export function ProjectModal({ project, branch, onClose }: ProjectModalProps) {
             background: PF.bgAlt,
           }}
         >
-          {[
-            { label: 'Value', value, accent: null as string | null },
-            { label: 'Stage', value: stage, accent: null },
-            { label: 'Distance', value: dist, accent: null },
-            { label: 'Posted', value: project.posted_date ?? '—', accent: null },
-          ].map((cell, i) => (
+          {(() => {
+            const posted = formatPostedDate(project.posted_date);
+            return [
+              { label: 'Value', value, subtitle: null as string | null, accent: null as string | null },
+              { label: 'Stage', value: stage, subtitle: null, accent: null },
+              { label: 'Distance', value: dist, subtitle: null, accent: null },
+              { label: 'Posted', value: posted.top, subtitle: posted.subtitle, accent: null },
+            ];
+          })().map((cell, i) => (
             <div
               key={cell.label}
               style={{
@@ -259,6 +266,19 @@ export function ProjectModal({ project, branch, onClose }: ProjectModalProps) {
               >
                 {cell.value}
               </div>
+              {cell.subtitle && (
+                <div
+                  className="pf-mono"
+                  style={{
+                    fontSize: 10,
+                    marginTop: 2,
+                    color: PF.inkDim,
+                    letterSpacing: '0.04em',
+                  }}
+                >
+                  {cell.subtitle}
+                </div>
+              )}
             </div>
           ))}
         </div>

@@ -580,3 +580,14 @@ Total new: 50 tests. All green; full Pathfinder suite remains 809 passing.
 | File | Tests | Covers |
 |---|---|---|
 | `tests/lead-detail-enricher.test.ts` | 24 | sanitizeSonar (owner_type whitelist, ISO date truncation, lot_size_acres bounds, key_subs cap+drop), sanitizeAnthropic (NAICS 6-digit guard), applySonar/applyAnthropic (null-only fill, empty key_subs distinct from never-tried), needsSonar/needsAnthropic skip gates, JSON parse tolerance (code fences, prose-wrapped, malformed). |
+
+### Gate 3D — UI helpers
+
+#### Pathfinder/lib/posted-date.ts
+**Implements:** `Company Docs/Specs/SPEC - Lead Detail Enrichment.md` § "Posted date reformat" — relative top-line + MM-DD-YY subtitle helper consumed by ProjectModal.tsx.
+**Last verified against spec:** 2026-05-02.
+**Drift:** none.
+
+| File | Tests | Covers |
+|---|---|---|
+| `tests/posted-date.test.ts` | 8 | Today / 1-day-ago / N-days-ago / future "in N days", MM-DD-YY zero-pad, ISO datetime truncation, null + malformed input. |

@@ -10,6 +10,7 @@
 
 import * as React from 'react';
 
+import { ProjectFactsCard } from '@/components/lead/ProjectFactsCard';
 import { Timeline } from '@/components/lead/Timeline';
 import {
   ZedcorRelationshipContext,
@@ -537,6 +538,7 @@ function Sidebar({
         matches={crossPollMatches}
         targetRegion={zedcorBranch?.state ?? null}
       />
+      <ProjectFactsCard project={project} />
       <SidebarCard title="Rationale">
         <div
           style={{
