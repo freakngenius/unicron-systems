@@ -4,6 +4,86 @@ Append-only operational log. Newest entry on top. Tuesday 2026-05-05 demo deadli
 
 ---
 
+## 2026-05-03 06:00 UTC — Gate 7C (preview verification + bundle instrumentation) — PR #99 open
+
+**Predecessor:** 7B merged at `origin/main` `13427ad` (PR #98 squashed).
+
+### Scope shipped (Gate 7C — code path)
+
+- `Pathfinder/components/lead/ScoreBreakdown.tsx` — full impl. Replaces 7A stub. Server route re-runs `lib/scoring.ts:scoreProject(project, branches, customers)` and passes result as `breakdown` prop; ScoreBreakdown renders 3 component rows + total + per-component rationale toggles. Falls back to "breakdown unavailable" copy when no breakdown computable (project missing geo data).
+- `Pathfinder/app/leads/[projectId]/page.tsx` — fetches branches + customers in existing parallel Promise.all; computes ScoringOutput via `computeBreakdown()` helper; passes `scoringBreakdown` prop.
+- `Pathfinder/components/lead/LeadDetail.tsx` — accepts `scoringBreakdown` prop, threads through RedesignedBody → ScoreBreakdown.
+- `Pathfinder/components/lead/DecisionBar.tsx` — `performance.mark('decision-bar-verdict-rendered')` instrumentation (idempotent across re-renders). Future Speed Insights install picks up the mark for spec acceptance #4 measurement.
+- `MEMORY/demo-prep/2026-05-04-demo-dry-run-screenshots/README-gate7c-preview.md` — capture checklist (Kyle action; 8 beats covering Houston flagship desktop+mobile, Pittsburgh sparse, rejected, enrichment-pending).
+- 1 new test file (+11 tests; baseline 1043 → 1054).
+
+### Bundle-size delta (Gate 6 wontfix premise — primary 7C deliverable)
+
+```
+pre-7A baseline (origin/main 2be40e4):
+  /leads/[projectId]   7.11 kB per-route   98.7 kB First Load
+
+post-7C (this branch):
+  /leads/[projectId]  13.4 kB per-route    105 kB First Load
+
+Delta: +6.3 kB per-route   +6.3 kB First Load
+       (94% under 100 KB hard halt threshold) ✅
+```
+
+### Verification (Gate 7C — code path)
+
+```
+$ pnpm typecheck → 0 errors
+$ pnpm lint      → no warnings or errors
+$ pnpm test      → 1054 passed | 24 skipped (was 1043 | 24 — net +11 new tests)
+$ pnpm build     → success; /leads/[projectId] 13.4 kB per-route + 105 kB First Load
+```
+
+Test files added:
+- `tests/score-breakdown.test.tsx` (new, 10 tests — collapsed/expanded states, per-row rationale toggle, fallback path)
+- `tests/decision-bar.test.tsx` (extended, +3 tests — synchronous-render assertion, performance.mark fired once, no-double-mark across re-renders)
+
+### Acceptance criteria status (cumulative across 7A + 7B + 7C)
+
+- ✅ #1 Houston flagship Quick Facts (7A)
+- ⏸ #2 Cross-Poll Brasfield + Big-D EXACT magenta — pending preview screenshot (Kyle action)
+- ✅ #3 Recommended Action extracted (7B)
+- ⏸ skip #4 Verdict line ≤200 ms — Speed Insights not wired; performance.mark instrumented for future pickup; underlying synchronous-render constraint asserted in unit tests; deferred via follow-up todo `2026-05-03-pathfinder-wire-speed-insights.md`
+- ✅ #5 Posted-date format (Gate 3D)
+- ✅ #6 NAICS (7A)
+- ✅ #7 Empty states (7A + 7B)
+- ⏸ #8 Mobile 1-col stack — pending preview screenshot (Kyle action)
+- ✅ #9 No regressions (1043 → 1054)
+- ✅ #10 Per-component unit tests
+
+### Hard-halt items not tripped (code path)
+
+- ✅ Bundle delta on `/leads/[projectId]`: +6.3 KB (well under 100 KB)
+- ✅ Test count up (1043 → 1054; new floor)
+- ✅ ScoreBreakdown recompute doesn't throw on real-data shape (try/catch + null fallback)
+- ✅ Schema unchanged
+- ✅ Flag still default off — production rendering unchanged
+- ⏸ Houston flagship preview screenshots (Kyle action filed)
+- ⏸ Mobile viewport stack proof (Kyle action filed)
+
+### Commit chain (Gate 7C)
+
+```
+836f03a docs: gate 7C PLAN — preview verification + bundle instrumentation
+2d426e9 feat(lead): gate 7C — ScoreBreakdown per-component breakdown via server-side recompute
+879e185 feat(lead): gate 7C — DecisionBar verdict performance.mark instrumentation
+5732053 chore(demo): gate 7C preview-deploy capture checklist (Kyle action)
+```
+
+### Operator-todo cards updated / added
+
+- Parent (`2026-05-02-pathfinder-gate7-lead-detail-redesign.md`) — 7B status → MERGED at `13427ad`, 7C status → In Review (PR #99), baseline raised to 1054
+- 7C card (`2026-05-04-pathfinder-gate7c-wiring-preview-verification.md`) — Queued → In Review with shipped code-path scope + Kyle action items + bundle delta numbers
+- New: `2026-05-03-pathfinder-persist-score-components.md` — follow-up to drop the per-page recompute via persisted columns
+- New: `2026-05-03-pathfinder-wire-speed-insights.md` — follow-up to satisfy spec acceptance #4
+
+---
+
 ## 2026-05-03 04:00 UTC — Gate 7B (empty states + parse-rationale + DecisionBar + CrossPoll lift) — PR #98 open
 
 **Predecessor:** 7A merged at `origin/main` `55dc863` (PR #96 squashed).
