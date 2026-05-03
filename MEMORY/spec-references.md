@@ -652,3 +652,27 @@ Total new: 50 tests. All green; full Pathfinder suite remains 809 passing.
 | File | Tests | Covers |
 |---|---|---|
 | `tests/hubspot-mapping.test.ts` | 9 | parseMapping (default fallback, round-trip, malformed-row drop, unknown-policy fallback, unknown-stage drop), validateMappingInput (missing arrays, per-row malformations, valid input). |
+
+---
+
+## Demo Polish UX Sprint — Gate 4B-3 (HubSpot nightly reconciliation)
+
+**State:** PR #90 merged to main during the post-demo-queue Wednesday recovery sweep.
+
+#### Pathfinder/lib/connectors/hubspot/recon.ts
+**Implements:** Pure `reconcileDeals()` engine with cross-type tolerance (HubSpot stringifies amount). `escalationToInboxRow()` shapes the architect_inbox payload for unresolvable conflicts.
+
+#### Pathfinder/services/connectors/hubspot-recon.ts
+**Implements:** I/O wrapper `runHubspotRecon()` — connectors + tokens + mapping → HubSpot deals search → recon engine → escalations to `pathfinder.architect_inbox` with `category='hubspot-sync-conflict'`. Apply mode gated behind `HUBSPOT_RECON_APPLY=1`.
+
+#### Pathfinder/lib/inngest/functions/hubspot-recon-cron.ts
+**Implements:** Inngest cron `TZ=UTC 0 3 * * *` wrapping `runHubspotRecon`.
+
+#### Pathfinder/lib/inngest/functions/index.ts
+**Implements:** Barrel export for the Inngest serve() handler. Gate 4B-3 adds `hubspotReconCron` alongside existing entries.
+
+### Tests
+
+| File | Tests | Covers |
+|---|---|---|
+| `tests/hubspot-recon.test.ts` | 10 | reconcileDeals (matched, all 3 policies — last_write_wins newer-wins + tied-escalates, pathfinder_locked, hubspot_locked), HubSpot-only / Pathfinder-only deals (skipped, outbound territory), null/null match, null/value conflict, numeric/string cross-coerce, escalationToInboxRow shape. |
