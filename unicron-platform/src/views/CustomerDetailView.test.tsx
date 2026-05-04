@@ -5,6 +5,7 @@ import type { CustomerOrg } from '../lib/contracts/customers';
 
 const ZEDCOR: CustomerOrg = {
   id: 'zedcor',
+  slug: 'zedcor',
   display_name: 'Zedcor Security Solutions',
   status: 'active',
   onboarded_at: '2026-04-01T00:00:00.000Z',
