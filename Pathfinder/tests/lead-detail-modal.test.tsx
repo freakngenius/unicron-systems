@@ -203,41 +203,42 @@ describe('LeadDetailModal — arrow-key cycling', () => {
   });
 });
 
-// Gate 12A — Modal background regression fix.
+// Gate 15A — Modal backdrop styling.
 //
-// The lead detail route renders standalone (no map behind), so the
-// backdrop must be dark enough that the body's #ffffff doesn't bleed
-// through and produce a "white background" effect. Until the route is
-// converted to an intercepted/parallel route (Gate 12.5), assert the
-// backdrop ships as a near-opaque dark layer with the specced blur.
-describe('LeadDetailModal — backdrop styling (Gate 12A)', () => {
-  it('renders a dark, semi-transparent backdrop (not solid white) with blur', () => {
+// The lead detail now ships as an intercepting route over the live
+// dashboard map (app/@modal/(.)leads/[projectId]/page.tsx). The
+// backdrop is 40% black + 12px blur (Tailwind backdrop-blur-md
+// equivalent) so the map is visible through the dim. Standalone direct
+// URL loads no longer go through this modal shell.
+describe('LeadDetailModal — backdrop styling (Gate 15A)', () => {
+  it('renders a 40%-opacity black backdrop with 12px blur', () => {
     renderModal();
     const backdrop = screen.getByTestId('lead-detail-modal-backdrop');
     const bg = backdrop.style.background || backdrop.style.backgroundColor;
-    // Must be an rgba() dark fill — never a solid white / transparent.
-    expect(bg).toMatch(/rgba\(\s*10\s*,\s*10\s*,\s*10\s*,\s*0?\.\d+\s*\)/);
+    // Must be an rgba() black fill at ~40% opacity — never solid white.
+    expect(bg).toMatch(/rgba\(\s*0\s*,\s*0\s*,\s*0\s*,\s*0?\.4\s*\)/);
     expect(bg).not.toMatch(/#fff/i);
     expect(bg).not.toMatch(/white/i);
-    // Backdrop must be near-opaque so the underlying body background
-    // (white per globals.css) doesn't read as the modal background.
+    // Alpha must read through (not near-opaque) so the underlying map
+    // remains visible behind the modal.
     const alphaMatch = bg.match(
-      /rgba\(\s*10\s*,\s*10\s*,\s*10\s*,\s*(0?\.\d+)\s*\)/,
+      /rgba\(\s*0\s*,\s*0\s*,\s*0\s*,\s*(0?\.\d+)\s*\)/,
     );
     expect(alphaMatch).not.toBeNull();
     const alpha = Number(alphaMatch![1]);
-    expect(alpha).toBeGreaterThanOrEqual(0.85);
-    expect(alpha).toBeLessThan(1);
-    // Blur preserved per Gate 9A spec (8px, with WebKit fallback).
-    expect(backdrop.style.backdropFilter).toBe('blur(8px)');
+    expect(alpha).toBeGreaterThan(0.2);
+    expect(alpha).toBeLessThanOrEqual(0.5);
+    // Blur upgraded from 8px → 12px (Tailwind backdrop-blur-md
+    // equivalent) per Gate 15A.
+    expect(backdrop.style.backdropFilter).toBe('blur(12px)');
     expect(
       (backdrop.style as unknown as Record<string, string>)[
         'WebkitBackdropFilter'
       ],
-    ).toBe('blur(8px)');
+    ).toBe('blur(12px)');
   });
 
-  it('backdrop covers the viewport (position fixed/absolute, inset 0)', () => {
+  it('backdrop covers the viewport (position absolute, inset 0)', () => {
     renderModal();
     const backdrop = screen.getByTestId('lead-detail-modal-backdrop');
     expect(backdrop.style.position).toBe('absolute');
