@@ -9,12 +9,15 @@
 // Spec: SPEC - Connectors (Slack, Teams, HubSpot).md §§ 3.3 + 3.6 + 4.4.
 
 import type { Metadata } from 'next';
+import type { ReactNode } from 'react';
 
 import { DEFAULT_ORG_ID } from '@/lib/connectors/auth';
 import { listConnectors, type ConnectorListItem } from '@/lib/connectors/queries';
 import { ConnectorsView } from '@/components/settings/connectors/ConnectorsView';
 import type { ConnectorTileState } from '@/components/settings/connectors/ConnectorTile';
 import { HubspotUserTile } from '@/components/settings/connectors/HubspotUserTile';
+import { TeamsUserTile } from '@/components/settings/connectors/TeamsUserTile';
+import type { ConnectorId } from '@/components/settings/connectors/ConnectorTile';
 
 export const metadata: Metadata = {
   title: 'Pathfinder · Connectors',
@@ -148,11 +151,26 @@ export default async function ConnectorsPage() {
     <HubspotUserTile state="disconnected" operatorEmail={null} />
   );
 
+  // Gate 14A: Microsoft Teams moves to a per-user tile when
+  // MULTI_TENANT_TEAMS_ENABLED=1 in the deploy env. Without the flag the
+  // existing "Coming in Phase 2" stub modal renders unchanged — which is
+  // safe to ship before Kyle has finished registering the Microsoft Entra
+  // app + redirect URI.
+  const teamsUserEnabled = process.env.MULTI_TENANT_TEAMS_ENABLED === '1';
+  const teamsUserTile = teamsUserEnabled ? (
+    <TeamsUserTile state="disconnected" operatorEmail={null} />
+  ) : null;
+
+  const tileOverrides: Partial<Record<ConnectorId, ReactNode>> = {
+    hubspot: hubspotUserTile,
+  };
+  if (teamsUserTile) tileOverrides.teams = teamsUserTile;
+
   return (
     <ConnectorsView
       tiles={tiles}
       orgId={DEFAULT_ORG_ID}
-      tileOverrides={{ hubspot: hubspotUserTile }}
+      tileOverrides={tileOverrides}
     />
   );
 }
