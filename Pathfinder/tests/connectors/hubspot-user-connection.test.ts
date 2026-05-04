@@ -114,6 +114,7 @@ import {
   upsertHubspotConnection,
   markHubspotConnectionRevoked,
   revokeHubspotRefreshTokenAtProvider,
+  __setHubspotRefreshTokenOverrideForTests,
 } from '../../lib/connectors/user-connection';
 
 describe('user-connection / HubSpot', () => {
@@ -182,7 +183,9 @@ describe('user-connection / HubSpot', () => {
         oauth_refresh_token_enc: 'enc:my-refresh',
         scope: ['crm.objects.deals.read'],
         connected_at: '2026-05-03T12:00:00Z',
-        expires_at: '2026-05-03T12:30:00Z',
+        // Far future so the gate 12I refresh-on-expiry path doesn't
+        // trigger here; the refresh path has its own dedicated test.
+        expires_at: '2099-01-01T00:00:00Z',
         status: 'active',
       },
       error: null,
@@ -279,5 +282,125 @@ describe('user-connection / HubSpot', () => {
     } finally {
       global.fetch = realFetch;
     }
+  });
+
+  // ─────────── gate 12I — token-refresh path ───────────
+
+  describe('getHubspotConnectionTokens — refresh-on-expiry (gate 12I)', () => {
+    afterEach(() => {
+      __setHubspotRefreshTokenOverrideForTests(null);
+    });
+
+    function expiredRow() {
+      return {
+        id: 'row-expired',
+        user_id: 'alice@zedcor.com',
+        provider: 'hubspot' as const,
+        email: null,
+        portal_id: 'portal-A',
+        portal_name: 'Alice Sandbox',
+        oauth_token_enc: 'enc:stale-access',
+        oauth_refresh_token_enc: 'enc:stale-refresh',
+        scope: ['crm.objects.deals.write'],
+        connected_at: '2026-05-03T12:00:00Z',
+        expires_at: '2026-05-03T12:00:00Z', // ~24h in the past from test wall clock (2026-05-04)
+        status: 'active' as const,
+      };
+    }
+
+    it('refreshes when expires_at is in the past, persists rotated tokens, returns the fresh access', async () => {
+      // SELECT row → expired
+      queryResults.push({ data: expiredRow(), error: null });
+      // UPDATE rotate result (no row needed)
+      queryResults.push({ data: null, error: null });
+
+      const refreshFn = vi.fn(async (refresh: string) => ({
+        access_token: 'fresh-access-1',
+        refresh_token: `${refresh}-rotated`,
+        expires_in: 1800, // 30 min
+      }));
+      __setHubspotRefreshTokenOverrideForTests(refreshFn);
+
+      const result = await getHubspotConnectionTokens('alice@zedcor.com');
+      expect(result?.access).toBe('fresh-access-1');
+      expect(result?.refresh).toBe('stale-refresh-rotated');
+      expect(refreshFn).toHaveBeenCalledTimes(1);
+      // The rotate UPDATE should have encrypted both tokens before writing.
+      const encryptCalls = calls.filter(
+        (c) => c.fn === 'rpc' && (c.args[0] as string) === 'encrypt_connector_token',
+      );
+      expect(encryptCalls.length).toBe(2);
+      // The UPDATE was scoped by connection id (the rotate path).
+      expect(filterTrace).toContain('eq:id=row-expired');
+    });
+
+    it('does NOT refresh when expires_at is far in the future', async () => {
+      queryResults.push({
+        data: { ...expiredRow(), expires_at: '2099-01-01T00:00:00Z' },
+        error: null,
+      });
+      const refreshFn = vi.fn();
+      __setHubspotRefreshTokenOverrideForTests(refreshFn);
+
+      const result = await getHubspotConnectionTokens('alice@zedcor.com');
+      expect(result?.access).toBe('stale-access');
+      expect(refreshFn).not.toHaveBeenCalled();
+    });
+
+    it('refreshes when expires_at is within the 60s buffer', async () => {
+      const inFortySeconds = new Date(Date.now() + 40_000).toISOString();
+      queryResults.push({
+        data: { ...expiredRow(), expires_at: inFortySeconds },
+        error: null,
+      });
+      // UPDATE rotate
+      queryResults.push({ data: null, error: null });
+
+      const refreshFn = vi.fn(async () => ({
+        access_token: 'fresh-access-2',
+        refresh_token: 'fresh-refresh-2',
+        expires_in: 1800,
+      }));
+      __setHubspotRefreshTokenOverrideForTests(refreshFn);
+
+      const result = await getHubspotConnectionTokens('alice@zedcor.com');
+      expect(refreshFn).toHaveBeenCalledTimes(1);
+      expect(result?.access).toBe('fresh-access-2');
+    });
+
+    it('on refresh failure: marks the row revoked + throws "user must reconnect"', async () => {
+      // SELECT (expired)
+      queryResults.push({ data: expiredRow(), error: null });
+      // The eventual UPDATE (markHubspotConnectionRevoked) — best-effort
+      queryResults.push({ data: null, error: null });
+
+      __setHubspotRefreshTokenOverrideForTests(async () => {
+        throw new Error('hubspot refresh failed: status=401 body=BAD_REFRESH_TOKEN');
+      });
+
+      await expect(getHubspotConnectionTokens('alice@zedcor.com')).rejects.toThrow(
+        /user must reconnect/i,
+      );
+      // The revoke UPDATE filtered by user + provider + status.
+      expect(filterTrace).toContain('eq:user_id=alice@zedcor.com');
+      expect(filterTrace).toContain('eq:provider=hubspot');
+      expect(filterTrace).toContain('eq:status=active');
+    });
+
+    it('skips refresh when no refresh_token is stored (cannot rotate)', async () => {
+      queryResults.push({
+        data: { ...expiredRow(), oauth_refresh_token_enc: null },
+        error: null,
+      });
+      const refreshFn = vi.fn();
+      __setHubspotRefreshTokenOverrideForTests(refreshFn);
+
+      const result = await getHubspotConnectionTokens('alice@zedcor.com');
+      expect(refreshFn).not.toHaveBeenCalled();
+      // Caller still gets the (stale) access token; the next HubSpot
+      // call will 401 and the route can surface "reconnect" then.
+      expect(result?.access).toBe('stale-access');
+      expect(result?.refresh).toBeNull();
+    });
   });
 });

@@ -153,7 +153,9 @@ describe('pushLeadDeal', () => {
         oauth_refresh_token_enc: 'enc:refresh-token',
         scope: ['crm.objects.deals.write'],
         connected_at: '2026-05-03T12:00:00Z',
-        expires_at: '2026-05-03T12:30:00Z',
+        // Far future so the gate 12I refresh-on-expiry path doesn't
+        // trigger here; the orchestration suite uses fresh tokens.
+        expires_at: '2099-01-01T00:00:00Z',
         status: 'active',
       },
       error: null,

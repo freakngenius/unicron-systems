@@ -13,6 +13,27 @@
 // (an email today) but never the token value or its prefix.
 
 import { supabaseAdmin } from '@/lib/supabase';
+import { refreshToken as refreshHubspotToken } from '@/lib/connectors/hubspot/oauth';
+
+/** Refresh-when-expiring buffer: refresh proactively if the token has
+ *  less than this many seconds of life left, so the call we're about to
+ *  make doesn't 401 mid-flight when expiry crosses during the request. */
+const TOKEN_REFRESH_BUFFER_SECONDS = 60;
+
+/** Test seam: lets the refresh-path tests inject a stub without
+ *  network calls. Production paths leave this null and use the real
+ *  HubSpot refresh function. */
+let refreshTokenOverride:
+  | ((refresh: string) => Promise<{ access_token: string; refresh_token: string; expires_in: number }>)
+  | null = null;
+
+export function __setHubspotRefreshTokenOverrideForTests(
+  fn:
+    | ((refresh: string) => Promise<{ access_token: string; refresh_token: string; expires_in: number }>)
+    | null,
+): void {
+  refreshTokenOverride = fn;
+}
 
 export type UserConnectionProvider = 'gmail' | 'outlook' | 'hubspot' | 'teams';
 export type UserConnectionStatus = 'active' | 'expired' | 'revoked';
@@ -261,11 +282,94 @@ export async function getHubspotConnectionTokens(
   if (!res.data.oauth_token_enc) {
     throw new Error(`user_connection ${res.data.id} has no oauth_token_enc`);
   }
-  const access = await decryptViaPg(res.data.oauth_token_enc);
-  const refresh = res.data.oauth_refresh_token_enc
+  let access = await decryptViaPg(res.data.oauth_token_enc);
+  let refresh = res.data.oauth_refresh_token_enc
     ? await decryptViaPg(res.data.oauth_refresh_token_enc)
     : null;
-  return { connection: rowToConnection(res.data), access, refresh };
+  let connection = rowToConnection(res.data);
+
+  // Token-refresh gate: HubSpot access tokens expire after ~30 minutes.
+  // If the stored token is past (or near) expiry, swap it for a fresh
+  // one before returning. The caller should not have to know about
+  // expiry — every code path that gets a token from this function gets
+  // a usable token. Refresh failures surface as a clear error so the
+  // route can prompt the user to reconnect rather than 401-storming
+  // HubSpot on every push.
+  if (refresh && tokenIsExpiring(connection.expires_at)) {
+    try {
+      const refreshFn = refreshTokenOverride ?? refreshHubspotToken;
+      const refreshed = await refreshFn(refresh);
+      const newExpiresAt = new Date(Date.now() + refreshed.expires_in * 1000);
+      await rotateHubspotConnectionTokens({
+        connectionId: connection.id,
+        accessToken: refreshed.access_token,
+        refreshToken: refreshed.refresh_token,
+        expiresAt: newExpiresAt,
+      });
+      access = refreshed.access_token;
+      refresh = refreshed.refresh_token;
+      connection = { ...connection, expires_at: newExpiresAt.toISOString() };
+    } catch (err) {
+      // Refresh failed (refresh token revoked, HubSpot 4xx, etc.). The
+      // user has to reconnect. Mark the local row revoked so subsequent
+      // calls fall through to "no_connection" rather than retrying a
+      // doomed refresh on every push.
+      try {
+        await markHubspotConnectionRevoked(userId, connection.portal_id ?? undefined);
+      } catch {
+        // best-effort
+      }
+      const detail = err instanceof Error ? err.message : String(err);
+      throw new Error(
+        `hubspot token refresh failed for user ${userId}: ${detail.slice(0, 240)} — user must reconnect`,
+      );
+    }
+  }
+
+  return { connection, access, refresh };
+}
+
+/** True when `expires_at` is in the past or within TOKEN_REFRESH_BUFFER_SECONDS of now. */
+function tokenIsExpiring(expiresAt: string | null): boolean {
+  if (!expiresAt) return false;
+  const expiryMs = Date.parse(expiresAt);
+  if (!Number.isFinite(expiryMs)) return false;
+  return expiryMs - Date.now() < TOKEN_REFRESH_BUFFER_SECONDS * 1000;
+}
+
+/** Update the encrypted access + refresh tokens + expires_at on an
+ *  existing user_connections row. Used by the token-refresh path so we
+ *  rotate in place (preserving connected_at + scope + portal metadata)
+ *  rather than insert a new row. */
+export async function rotateHubspotConnectionTokens(input: {
+  connectionId: string;
+  accessToken: string;
+  refreshToken: string;
+  expiresAt: Date;
+}): Promise<void> {
+  const access_enc = await encryptViaPg(input.accessToken);
+  const refresh_enc = await encryptViaPg(input.refreshToken);
+  const sb = admin() as unknown as {
+    from: (t: string) => {
+      update: (v: Record<string, unknown>) => {
+        eq: (col: string, v: string) => Promise<{ error: { message: string } | null }>;
+      };
+    };
+  };
+  const res = await sb
+    .from('user_connections')
+    .update({
+      oauth_token_enc: access_enc,
+      oauth_refresh_token_enc: refresh_enc,
+      expires_at: input.expiresAt.toISOString(),
+      status: 'active',
+    })
+    .eq('id', input.connectionId);
+  if (res.error) {
+    throw new Error(
+      `rotateHubspotConnectionTokens failed for connection ${input.connectionId}: ${res.error.message}`,
+    );
+  }
 }
 
 /**
