@@ -693,3 +693,28 @@ Total new: 50 tests. All green; full Pathfinder suite remains 809 passing.
 | File | Tests | Covers |
 |---|---|---|
 | `tests/tower-estimator.test.ts` | 13 | Prompt builder (title/value/NAICS/lot/location/sites/perimeter embedding, summary fallback, null omission), JSON parser happy paths (integer + numeric-string + range + range-with-whitespace + ```json fence + trailing prose + fractional rounding), failure modes (non-JSON, empty rationale, missing/negative count, malformed string). |
+
+---
+
+## Gate 10C — HubSpot Bridge (push endpoint + lead detail section)
+
+**State:** PR #123 — Lead detail HubSpot section + push endpoint + field mapper.
+
+### Files
+
+#### Pathfinder/components/lead/HubspotSection.tsx
+**Implements:** SPEC - HubSpot Bridge.md §"Lead detail — HubSpot section".
+**Last verified against spec:** 2026-05-03.
+
+#### Pathfinder/app/api/leads/[projectId]/hubspot/push/route.ts
+**Implements:** SPEC - HubSpot Bridge.md §"API endpoints" — push endpoint.
+**Last verified against spec:** 2026-05-03.
+
+#### Pathfinder/lib/hubspot/field-mapper.ts + stage-map.ts + client.ts
+**Implements:** SPEC - HubSpot Bridge.md §"Field mapping" + §"API endpoints".
+**Last verified against spec:** 2026-05-03.
+
+#### Pathfinder/supabase/migrations/0116_lead_hubspot_deals.sql
+**Implements:** SPEC - HubSpot Bridge.md §"Schema" — lead_hubspot_deals + lead_hubspot_contacts.
+**Last verified against spec:** 2026-05-03.
+
