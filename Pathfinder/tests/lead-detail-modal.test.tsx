@@ -21,8 +21,9 @@ import '@testing-library/jest-dom/vitest';
 
 const mockPush = vi.fn();
 const mockBack = vi.fn();
+const mockReplace = vi.fn();
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({ push: mockPush, back: mockBack, replace: vi.fn() }),
+  useRouter: () => ({ push: mockPush, back: mockBack, replace: mockReplace }),
 }));
 
 import { LeadDetailModal } from '@/components/lead/LeadDetailModal';
@@ -30,6 +31,7 @@ import { LeadDetailModal } from '@/components/lead/LeadDetailModal';
 beforeEach(() => {
   mockPush.mockReset();
   mockBack.mockReset();
+  mockReplace.mockReset();
 });
 afterEach(() => cleanup());
 
@@ -103,58 +105,55 @@ describe('LeadDetailModal — close behavior', () => {
 });
 
 describe('LeadDetailModal — arrow-key cycling', () => {
-  it('Arrow Right navigates to the next neighbor', () => {
+  // Regression guard for Gate 12H:
+  //   1. Path MUST be root-relative ('/leads/<id>'). basePath is auto-
+  //      prepended at runtime; including '/pathfinder' explicitly breaks
+  //      the URL into '/pathfinder/pathfinder/leads/<id>' (404).
+  //   2. Cycling MUST use router.replace(), not push(). Otherwise each
+  //      arrow keypress stacks a history entry, and pressing X / Esc
+  //      would pop to the previous lead instead of the dashboard.
+  it('Arrow Right replaces with the next neighbor (root-relative path)', () => {
     renderModal({ current: 'sam.gov:p2', neighbors: ['sam.gov:p1', 'sam.gov:p2', 'sam.gov:p3'] });
     fireEvent.keyDown(window, { key: 'ArrowRight' });
-    expect(mockPush).toHaveBeenLastCalledWith(
-      '/pathfinder/leads/sam.gov%3Ap3',
-    );
+    expect(mockReplace).toHaveBeenLastCalledWith('/leads/sam.gov%3Ap3');
+    expect(mockPush).not.toHaveBeenCalled();
   });
 
-  it('Arrow Down also navigates to the next neighbor', () => {
+  it('Arrow Down also replaces with the next neighbor', () => {
     renderModal({ current: 'sam.gov:p2', neighbors: ['sam.gov:p1', 'sam.gov:p2', 'sam.gov:p3'] });
     fireEvent.keyDown(window, { key: 'ArrowDown' });
-    expect(mockPush).toHaveBeenLastCalledWith(
-      '/pathfinder/leads/sam.gov%3Ap3',
-    );
+    expect(mockReplace).toHaveBeenLastCalledWith('/leads/sam.gov%3Ap3');
   });
 
   it('Arrow Right wraps from the last neighbor back to the first', () => {
     renderModal({ current: 'sam.gov:p3', neighbors: ['sam.gov:p1', 'sam.gov:p2', 'sam.gov:p3'] });
     fireEvent.keyDown(window, { key: 'ArrowRight' });
-    expect(mockPush).toHaveBeenLastCalledWith(
-      '/pathfinder/leads/sam.gov%3Ap1',
-    );
+    expect(mockReplace).toHaveBeenLastCalledWith('/leads/sam.gov%3Ap1');
   });
 
-  it('Arrow Left navigates to the previous neighbor', () => {
+  it('Arrow Left replaces with the previous neighbor', () => {
     renderModal({ current: 'sam.gov:p2', neighbors: ['sam.gov:p1', 'sam.gov:p2', 'sam.gov:p3'] });
     fireEvent.keyDown(window, { key: 'ArrowLeft' });
-    expect(mockPush).toHaveBeenLastCalledWith(
-      '/pathfinder/leads/sam.gov%3Ap1',
-    );
+    expect(mockReplace).toHaveBeenLastCalledWith('/leads/sam.gov%3Ap1');
   });
 
   it('Arrow Left wraps from the first neighbor back to the last', () => {
     renderModal({ current: 'sam.gov:p1', neighbors: ['sam.gov:p1', 'sam.gov:p2', 'sam.gov:p3'] });
     fireEvent.keyDown(window, { key: 'ArrowLeft' });
-    expect(mockPush).toHaveBeenLastCalledWith(
-      '/pathfinder/leads/sam.gov%3Ap3',
-    );
+    expect(mockReplace).toHaveBeenLastCalledWith('/leads/sam.gov%3Ap3');
   });
 
-  it('Arrow Up also navigates to the previous neighbor', () => {
+  it('Arrow Up also replaces with the previous neighbor', () => {
     renderModal({ current: 'sam.gov:p2', neighbors: ['sam.gov:p1', 'sam.gov:p2', 'sam.gov:p3'] });
     fireEvent.keyDown(window, { key: 'ArrowUp' });
-    expect(mockPush).toHaveBeenLastCalledWith(
-      '/pathfinder/leads/sam.gov%3Ap1',
-    );
+    expect(mockReplace).toHaveBeenLastCalledWith('/leads/sam.gov%3Ap1');
   });
 
   it('arrow keys are no-ops when only one neighbor', () => {
     renderModal({ current: 'only', neighbors: ['only'] });
     fireEvent.keyDown(window, { key: 'ArrowRight' });
     fireEvent.keyDown(window, { key: 'ArrowLeft' });
+    expect(mockReplace).not.toHaveBeenCalled();
     expect(mockPush).not.toHaveBeenCalled();
   });
 
@@ -170,6 +169,7 @@ describe('LeadDetailModal — arrow-key cycling', () => {
     const ta = screen.getByTestId('composer-body');
     ta.focus();
     fireEvent.keyDown(ta, { key: 'ArrowRight' });
+    expect(mockReplace).not.toHaveBeenCalled();
     expect(mockPush).not.toHaveBeenCalled();
   });
 
@@ -185,6 +185,7 @@ describe('LeadDetailModal — arrow-key cycling', () => {
     const inp = screen.getByTestId('composer-subject');
     inp.focus();
     fireEvent.keyDown(inp, { key: 'ArrowLeft' });
+    expect(mockReplace).not.toHaveBeenCalled();
     expect(mockPush).not.toHaveBeenCalled();
   });
 
