@@ -4,16 +4,24 @@ import { useSettings } from '../SettingsContext';
 import { useSystem } from '../../context/SystemContext';
 import { postDecomposition } from '../../lib/architectClient';
 import { architectureToSystemConfig } from '../../lib/architectAdapters';
+import { listCustomerOrgs } from '../../lib/customersClient';
 import type {
   DecompositionArchitecture,
   DecompositionResponse,
 } from '../../lib/contracts/architect';
 import type { SystemConfig } from '../../context/SystemContext';
 import { ArchitectureEditor } from './ArchitectureEditor';
+import { ApproveDeployModal, deriveDefaultName } from './ApproveDeployModal';
+
+export type ApproveMeta = {
+  name: string;
+  slug: string;
+  architecture: DecompositionArchitecture;
+};
 
 type Props = {
   buyerPain: string;
-  onApprove: (config: SystemConfig) => void;
+  onApprove: (config: SystemConfig, meta: ApproveMeta) => Promise<void> | void;
 };
 
 const REVEAL_INTERVAL_MS = 60;
@@ -25,6 +33,13 @@ export function ArchitectThinking({ buyerPain, onApprove }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [revealed, setRevealed] = useState(0);
   const [editing, setEditing] = useState(false);
+  const [pending, setPending] = useState<{
+    architecture: DecompositionArchitecture;
+    config: SystemConfig;
+  } | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [serverError, setServerError] = useState<string | null>(null);
+  const [existingSlugs, setExistingSlugs] = useState<string[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -34,6 +49,8 @@ export function ArchitectThinking({ buyerPain, onApprove }: Props) {
     setError(null);
     setRevealed(0);
     setEditing(false);
+    setPending(null);
+    setServerError(null);
 
     postDecomposition({ buyerPain })
       .then((res) => {
@@ -49,10 +66,22 @@ export function ArchitectThinking({ buyerPain, onApprove }: Props) {
     };
   }, [buyerPain]);
 
-  // Filter out the cost line when the operator hasn't opted into internal
-  // metrics. Drift from the original mock-only behavior: we still respect
-  // the `showInternalCostMetrics` setting even though Stream D will return
-  // the cost line unconditionally.
+  // Prefetch existing slugs so the modal can validate uniqueness offline.
+  useEffect(() => {
+    let cancelled = false;
+    listCustomerOrgs()
+      .then((orgs) => {
+        if (cancelled) return;
+        setExistingSlugs(orgs.map((o) => o.slug));
+      })
+      .catch(() => {
+        // Non-fatal — modal still validates server-side via SlugConflictError.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const lines = useStableLines(response, settings.showInternalCostMetrics);
   const total = lines.length;
   const intervalRef = useRef<number | null>(null);
@@ -76,17 +105,39 @@ export function ArchitectThinking({ buyerPain, onApprove }: Props) {
 
   const done = total > 0 && revealed >= total;
 
-  // APPLY EDITS commits the edited architecture as-is and dispatches the
-  // deploy. NO re-call to postDecomposition (per Phase B spec, confirmed by
-  // Kyle). The parent transitions to the next state.
+  // APPLY EDITS commits the edited architecture as-is. The modal collects
+  // name + slug before the deploy actually happens, so we stash the pending
+  // architecture/config and let the modal drive the next step.
   const handleApply = (next: DecompositionArchitecture) => {
     const nextConfig = architectureToSystemConfig(next, buyerPain);
-    onApprove({ ...nextConfig, status: 'live' });
+    setPending({ architecture: next, config: { ...nextConfig, status: 'live' } });
+    setServerError(null);
   };
 
   const handleApprove = () => {
     if (!response) return;
-    onApprove({ ...response.recommendedConfig, status: 'live' });
+    setPending({
+      architecture: response.architecture,
+      config: { ...response.recommendedConfig, status: 'live' },
+    });
+    setServerError(null);
+  };
+
+  const handleConfirm = async ({ name, slug }: { name: string; slug: string }) => {
+    if (!pending) return;
+    setSubmitting(true);
+    setServerError(null);
+    try {
+      await onApprove(pending.config, {
+        name,
+        slug,
+        architecture: pending.architecture,
+      });
+    } catch (e) {
+      setServerError(e instanceof Error ? e.message : String(e));
+      setSubmitting(false);
+    }
+    // On success, the parent navigates away — no need to clear local state.
   };
 
   return (
@@ -162,6 +213,20 @@ export function ArchitectThinking({ buyerPain, onApprove }: Props) {
           </>
         )}
       </div>
+
+      {pending ? (
+        <ApproveDeployModal
+          defaultName={deriveDefaultName(buyerPain)}
+          existingSlugs={existingSlugs}
+          submitting={submitting}
+          serverError={serverError}
+          onCancel={() => {
+            if (submitting) return;
+            setPending(null);
+          }}
+          onConfirm={handleConfirm}
+        />
+      ) : null}
     </div>
   );
 }

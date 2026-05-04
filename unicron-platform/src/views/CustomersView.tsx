@@ -95,8 +95,7 @@ export function CustomersView({ onSelect }: Props) {
           data-testid="customers-single-tenant-note"
           className="mt-6 mono text-[10px] uppercase tracking-[0.18em] text-text-primary/30"
         >
-          Multi-tenant view scaffolded; second customer coming after pilot. See
-          MEMORY/operator-todos/2026-05-02-pathfinder-needs-org-table.md.
+          Onboard another customer via the Architect to grow this list.
         </p>
       ) : null}
     </div>

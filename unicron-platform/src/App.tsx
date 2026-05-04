@@ -31,7 +31,15 @@ function Shell() {
       />
 
       <main className="pt-14">
-        {tab === 'onboarding' && <Onboarding onOpenLive={() => setTab('live')} />}
+        {tab === 'onboarding' && (
+          <Onboarding
+            onOpenLive={() => setTab('live')}
+            onCustomerCreated={(org) => {
+              setCustomerSelected(org);
+              setTab('customers');
+            }}
+          />
+        )}
         {tab === 'live' && (
           <LiveSystem
             onArchitectClick={() => setTab('inbox')}
