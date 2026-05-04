@@ -127,7 +127,9 @@ describe('field-mapper', () => {
       expect(props.pathfinder_score).toBe(92);
       expect(props.pathfinder_branch).toBe('Houston');
       expect(props.pathfinder_industry).toBe('Highway Construction');
-      expect(props.hs_lead_source).toBe('OTHER_CAMPAIGNS');
+      // hs_lead_source intentionally omitted (gate 12H): it's a contact-
+      // only standard property and 400s a freshly-connected portal.
+      expect(props.hs_lead_source).toBeUndefined();
     });
     it('omits amount when project_value is null', () => {
       const props = buildDealProperties({

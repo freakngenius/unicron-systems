@@ -68,14 +68,6 @@ export function closedateMsFor(project: Project, now: number = Date.now()): numb
   return baseMs + 90 * MS_PER_DAY;
 }
 
-/** Best-effort `hs_lead_source` value. HubSpot's standard property is an
- *  enum; the safe path is "Other" + a custom property with the real source.
- *  We surface 'Other' here so the deal create doesn't 400 on enum
- *  mismatch; the custom property carries the truth. */
-export function hubspotLeadSource(): string {
-  return 'OTHER_CAMPAIGNS';
-}
-
 export interface BuildDealPropertiesInput {
   project: Project;
   branchName: string | null;
@@ -99,11 +91,15 @@ export interface BuildDealPropertiesInput {
 export function buildDealProperties(input: BuildDealPropertiesInput): HubspotProperties {
   const { project, branchName, branchCode, hubspotStageId, hubspotPipelineId } = input;
   const prefix = input.prefix ?? 'pathfinder_';
+  // hs_lead_source intentionally omitted: it's a HubSpot standard CONTACT
+  // property, not a deal property. Setting it on the deal payload 400s a
+  // freshly-connected portal with PROPERTY_DOESNT_EXIST. The Pathfinder
+  // source attribution lives in pathfinder_source_id (custom deal prop)
+  // which the lazy provisioner ensures.
   const props: HubspotProperties = {
     dealname: dealnameFor(project, branchCode),
     description: descriptionFor(project),
     closedate: closedateMsFor(project),
-    hs_lead_source: hubspotLeadSource(),
     [`${prefix}lead_id`]: project.id,
     [`${prefix}source_id`]: `${project.source}:${project.source_id}`,
   };
