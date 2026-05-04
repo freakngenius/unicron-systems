@@ -11,10 +11,23 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+// Demo Polish UX Gate 15A — `@modal` parallel slot powers the
+// intercepting-route lead detail modal. The slot renders alongside
+// children; its `default.tsx` returns `null` so the slot is empty until
+// an intercept fires.
+export default function RootLayout({
+  children,
+  modal,
+}: {
+  children: React.ReactNode;
+  modal: React.ReactNode;
+}) {
   return (
     <html lang="en" className={`${inter.variable} ${jetbrains.variable}`}>
-      <body>{children}</body>
+      <body>
+        {children}
+        {modal}
+      </body>
     </html>
   );
 }
