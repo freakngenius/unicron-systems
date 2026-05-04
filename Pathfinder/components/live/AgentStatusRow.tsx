@@ -21,12 +21,35 @@ import type { AgentName } from '@/lib/types';
 import { AgentCell, deriveCellData } from './AgentCell';
 import { ModelRoutingStrip } from './ModelRoutingStrip';
 
+// Gate 18C — Pathfinder customer UI hides the operator telemetry strip by
+// default. Metacron sets NEXT_PUBLIC_SHOW_AGENT_TELEMETRY=1 to surface it.
+// `'1'` / `'true'` are both treated as truthy so deploy configs are forgiving.
+const SHOW_AGENT_TELEMETRY = (() => {
+  const v = process.env.NEXT_PUBLIC_SHOW_AGENT_TELEMETRY;
+  return v === '1' || v === 'true';
+})();
+
 export interface AgentStatusRowProps {
   /** Optional override for the routing strip's initial collapsed state. */
   initialCollapsed?: boolean;
 }
 
 export function AgentStatusRow({ initialCollapsed = true }: AgentStatusRowProps) {
+  // When telemetry is hidden, publish a header height that accounts only for
+  // TopBar (76 px) + 16 px gap so BranchDock / ProjectList start at the top
+  // of the map area instead of leaving a dead band.
+  useEffect(() => {
+    if (!SHOW_AGENT_TELEMETRY) {
+      setHeaderHeight(76 + 16);
+    }
+  }, []);
+
+  if (!SHOW_AGENT_TELEMETRY) return null;
+
+  return <AgentStatusRowVisible initialCollapsed={initialCollapsed} />;
+}
+
+function AgentStatusRowVisible({ initialCollapsed = true }: AgentStatusRowProps) {
   const runs = useAgentRuns();
   const aggregates = useAgentAggregates();
   const escalations = useEscalations();
