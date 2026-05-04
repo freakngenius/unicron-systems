@@ -271,8 +271,23 @@ export async function pushLeadDeal(input: PushLeadDealInput): Promise<PushLeadDe
   const branch = await loadBranchForProject(project);
   const leadContacts = await loadLeadContacts(project.id);
 
+  // Gate 12J: onTokenExpired threads the refresh path back to the
+  // user-connection layer. If a HubSpot call mid-flight 401s with
+  // EXPIRED_AUTHENTICATION (clock skew, very long-running call, or any
+  // edge case the gate 12I proactive-refresh missed), the client
+  // re-fetches tokens — which gate 12I refreshes if needed — and
+  // retries the call once before throwing. Distinct from the proactive
+  // refresh because that runs BEFORE the call; this runs DURING.
   const client =
-    input.clientOverride ?? createUserClient({ accessToken: tokens.access });
+    input.clientOverride ??
+    createUserClient({
+      accessToken: tokens.access,
+      onTokenExpired: async () => {
+        const fresh = await getHubspotConnectionTokens(input.userId);
+        if (!fresh) throw new Error('connection vanished mid-call');
+        return fresh.access;
+      },
+    });
 
   const stageNormalized = normalizeProjectStage(project.project_stage);
   const dealProps = buildDealProperties({
