@@ -62,7 +62,14 @@ export function LeadDetailModal({
       const next = (base + delta + neighborIds.length) % neighborIds.length;
       const nextId = neighborIds[next];
       if (nextId === currentProjectId) return;
-      router.push(`/pathfinder/leads/${encodeURIComponent(nextId)}`);
+      // Path is root-relative — Next.js auto-prepends the basePath
+      // ('/pathfinder' per next.config.js), so the runtime URL is
+      // '/pathfinder/leads/<id>'. Including '/pathfinder' explicitly here
+      // would yield the broken '/pathfinder/pathfinder/leads/<id>' (404).
+      // Use replace() rather than push() so cycling through leads doesn't
+      // stack history entries — pressing X / Esc still pops back to the
+      // dashboard, not to the previous lead.
+      router.replace(`/leads/${encodeURIComponent(nextId)}`);
     },
     [router, currentProjectId, neighborIds],
   );
