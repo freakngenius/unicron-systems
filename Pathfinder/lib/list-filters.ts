@@ -6,14 +6,16 @@
 //   "Filter + sort state should persist in the URL query string:
 //    ?sort=score&dir=desc&range=within&min_score=80"
 //
-// Defaults (Demo Polish UX § Gate 1C + 1D):
-//   sort=score, dir=desc, range=within, min_score=50, filter=all
+// Defaults (Demo Polish UX § Gate 1C + 1D, lowered to 30 in Gate 17B):
+//   sort=score, dir=desc, range=within, min_score=30, filter=all
 //
 // Range and minScore defaults were widened from the spec § 3.2 baseline
 // (range=all, min_score=0) so the dashboard's first paint already shows the
 // "leads worth caring about, near a Zedcor branch" view that the Tuesday
-// demo opens with. All four are still freely selectable; the change only
-// affects what URL-omitted ?... resolves to.
+// demo opens with. Gate 17B lowered the score floor 50 → 30 so the demo
+// surfaces medium-confidence leads alongside the high-score Houston flagship.
+// All four are still freely selectable; the change only affects what
+// URL-omitted ?... resolves to.
 //
 // All fields are validated against an explicit allow-list — any unknown
 // value falls back to the default for that field. Invalid query strings
@@ -47,7 +49,7 @@ export const DEFAULT_LIST_FILTER_STATE: ListFilterState = {
   sort: 'score',
   dir: 'desc',
   range: 'within',
-  minScore: 50,
+  minScore: 30,
   filter: 'all',
 };
 
