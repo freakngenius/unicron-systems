@@ -64,13 +64,33 @@ export interface NonBranchFilterContext {
    * cleanly regardless of the active score floor / range setting (per
    * Kyle's PR-body assertion: cross-poll filter must show ≥ 12 leads). */
   crossPollLeadIds?: ReadonlySet<string>;
+  /** Demo Polish UX § Gate 18E — set of branch ids visible on the map.
+   * When provided, the range filter switches from per-lead distance
+   * (which targets the lead's nearest_branch_id and breaks once
+   * DEMO_HOUSTON_ONLY narrows the visible coverage circles) to a
+   * branch-set membership check:
+   *   within  = nearest_branch_id ∈ activeBranchIds
+   *   outside = nearest_branch_id ∉ activeBranchIds
+   *   all     = no narrowing
+   * Without this set, the range filter falls back to the original
+   * distance-based check. */
+  activeBranchIds?: ReadonlySet<string>;
 }
 
 /** Apply every filter that is NOT branch-selection. The result feeds both
  * the per-branch counts (via groupCountsByBranch below) and the rendered
  * project list (after a final branch-id narrowing). */
 export function applyNonBranchFilters(ctx: NonBranchFilterContext): Project[] {
-  const { projects, source, crossPoll, hidden, state, maxDistance, crossPollLeadIds } = ctx;
+  const {
+    projects,
+    source,
+    crossPoll,
+    hidden,
+    state,
+    maxDistance,
+    crossPollLeadIds,
+    activeBranchIds,
+  } = ctx;
   let arr = projects;
 
   if (hidden.size > 0) {
@@ -102,11 +122,24 @@ export function applyNonBranchFilters(ctx: NonBranchFilterContext): Project[] {
   }
 
   if (state.range !== 'all') {
-    arr = arr.filter((p) => {
-      const d = projectDistanceMiles(p);
-      if (d == null) return false;
-      return state.range === 'within' ? d <= maxDistance : d > maxDistance;
-    });
+    if (activeBranchIds && activeBranchIds.size > 0) {
+      // Gate 18E — branch-set membership. The within/outside semantics now
+      // mirror the visible coverage circles on the map rather than the
+      // lead's nearest_branch_id distance, which broke once
+      // DEMO_HOUSTON_ONLY narrowed the dock to a single branch.
+      arr = arr.filter((p) => {
+        const id = p.nearest_branch_id;
+        if (id == null) return state.range === 'outside';
+        const inSet = activeBranchIds.has(id);
+        return state.range === 'within' ? inSet : !inSet;
+      });
+    } else {
+      arr = arr.filter((p) => {
+        const d = projectDistanceMiles(p);
+        if (d == null) return false;
+        return state.range === 'within' ? d <= maxDistance : d > maxDistance;
+      });
+    }
   }
 
   if (state.minScore > 0) {

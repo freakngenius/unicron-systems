@@ -190,6 +190,66 @@ describe('applyNonBranchFilters', () => {
     });
     expect(out.map((x) => x.id)).toEqual(['b']);
   });
+
+  // Gate 18E — branch-set membership for within/outside when a small
+  // demo set is in play (e.g. Houston-only mode).
+  describe('range filter with activeBranchIds (Gate 18E)', () => {
+    const houstonOnly = new Set(['hou-002']);
+
+    it('within + activeBranchIds=Houston keeps only Houston-attached leads', () => {
+      const projects = [
+        p({ id: 'h', nearest_branch_id: 'hou-002', distance_miles: 50 }),
+        p({ id: 'phx', nearest_branch_id: 'phx-005', distance_miles: 20 }),
+        p({ id: 'orphan', nearest_branch_id: null }),
+      ];
+      const out = applyNonBranchFilters({
+        projects,
+        source: 'all',
+        crossPoll: false,
+        hidden: empty,
+        state: { range: 'within', minScore: 0 },
+        maxDistance: 300,
+        activeBranchIds: houstonOnly,
+      });
+      expect(out.map((x) => x.id)).toEqual(['h']);
+    });
+
+    it('outside + activeBranchIds=Houston keeps everything NOT attached to Houston', () => {
+      const projects = [
+        p({ id: 'h', nearest_branch_id: 'hou-002', distance_miles: 50 }),
+        p({ id: 'phx', nearest_branch_id: 'phx-005', distance_miles: 5000 }),
+        p({ id: 'lax', nearest_branch_id: 'lax-008', distance_miles: 80 }),
+      ];
+      const out = applyNonBranchFilters({
+        projects,
+        source: 'all',
+        crossPoll: false,
+        hidden: empty,
+        state: { range: 'outside', minScore: 0 },
+        maxDistance: 300,
+        activeBranchIds: houstonOnly,
+      });
+      expect(out.map((x) => x.id).sort()).toEqual(['lax', 'phx']);
+    });
+
+    it('range=all + activeBranchIds keeps everything regardless of branch', () => {
+      const projects = [
+        p({ id: 'h', nearest_branch_id: 'hou-002' }),
+        p({ id: 'phx', nearest_branch_id: 'phx-005' }),
+        p({ id: 'orphan', nearest_branch_id: null }),
+      ];
+      const out = applyNonBranchFilters({
+        projects,
+        source: 'all',
+        crossPoll: false,
+        hidden: empty,
+        state: { range: 'all', minScore: 0 },
+        maxDistance: 300,
+        activeBranchIds: houstonOnly,
+      });
+      expect(out).toHaveLength(3);
+    });
+  });
 });
 
 describe('applyBranchFilter', () => {
