@@ -1,81 +1,62 @@
 'use client';
 
-// CoverageCircle — viewport-relative focus ring around the selected branch.
+// CoverageCircle — geographic 300mi coverage radius around the selected branch.
 //
-// We deliberately don't use google.maps.Circle here. A geographic 300mi
-// circle (real coverage radius) renders very differently at zoom 7 vs.
-// zoom 11 — at zoom 7 it spans multiple states, at zoom 11 it fills the
-// whole window edge-to-edge. Since the auto-zoom now fits the branch's
-// projects, the circle should read as a "focus area" indicator that stays
-// the same on-screen size regardless of zoom.
+// Renders a native `google.maps.Circle` with radius in meters so the circle
+// represents a real geographic area (Galveston → Austin/San Antonio at the
+// boundary for a Houston-anchored branch) and scales pixel-correctly with
+// zoom. Drawing the circle inside the Google Maps canvas (via `useMap()`)
+// rather than as a CSS DOM overlay means Google handles the lat/lng → pixel
+// projection at every zoom level for us.
 //
-// Implementation: project the branch lat/lng to container pixels via the
-// existing `useLatLngToPixel` hook and render a CSS circle at fixed pixel
-// dimensions. The container's resize observer keeps the diameter sized as
-// a fraction of the smaller viewport axis so it feels right on iPad
-// landscape AND a 27" desktop without manual tuning.
+// Note: branch and lead pin markers are intentionally fixed-pixel-size and
+// live in `MapMarkers.tsx` / `ProjectClusterLayer.tsx`. They are unaffected
+// by this component — only the coverage *area* visualization scales.
 
 import * as React from 'react';
-import { useLatLngToPixel } from './useLatLngToPixel';
+import { useMap } from '@vis.gl/react-google-maps';
 
 const HI = '#22d3ee';
+const COVERAGE_RADIUS_MILES = 300;
+const METERS_PER_MILE = 1609.344;
 
 export interface CoverageCircleProps {
   lat: number;
   lng: number;
-  /** Diameter as a fraction of `min(containerW, containerH)`. Defaults to 0.55. */
-  fraction?: number;
-  /** Hard min/max in pixels so the ring stays sensible at extreme aspect ratios. */
-  minPx?: number;
-  maxPx?: number;
+  /** Coverage radius in miles. Defaults to 300. */
+  radiusMiles?: number;
 }
 
 export function CoverageCircle({
   lat,
   lng,
-  fraction = 0.55,
-  minPx = 220,
-  maxPx = 520,
+  radiusMiles = COVERAGE_RADIUS_MILES,
 }: CoverageCircleProps) {
-  const px = useLatLngToPixel(lat, lng);
-  const [viewport, setViewport] = React.useState<{ w: number; h: number }>({
-    w: typeof window !== 'undefined' ? window.innerWidth : 1200,
-    h: typeof window !== 'undefined' ? window.innerHeight : 800,
-  });
+  const map = useMap();
+  const circleRef = React.useRef<google.maps.Circle | null>(null);
 
   React.useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const update = () => setViewport({ w: window.innerWidth, h: window.innerHeight });
-    update();
-    window.addEventListener('resize', update);
-    return () => window.removeEventListener('resize', update);
-  }, []);
+    if (!map || typeof google === 'undefined' || !google.maps?.Circle) return;
 
-  if (!px) return null;
-  const diameter = Math.min(maxPx, Math.max(minPx, Math.min(viewport.w, viewport.h) * fraction));
-  return (
-    <div
-      style={{
-        position: 'absolute',
-        left: px.x - diameter / 2,
-        top: px.y - diameter / 2,
-        width: diameter,
-        height: diameter,
-        borderRadius: '50%',
-        background: `radial-gradient(circle at center, ${hexAlpha(HI, 0.10)} 0%, ${hexAlpha(HI, 0.04)} 60%, transparent 100%)`,
-        border: `1px dashed ${hexAlpha(HI, 0.55)}`,
-        pointerEvents: 'none',
-        zIndex: 2,
-        transition: 'left 220ms ease-out, top 220ms ease-out, width 220ms ease-out, height 220ms ease-out',
-      }}
-      aria-hidden="true"
-    />
-  );
-}
+    const circle = new google.maps.Circle({
+      map,
+      center: { lat, lng },
+      radius: radiusMiles * METERS_PER_MILE,
+      strokeColor: HI,
+      strokeOpacity: 0.55,
+      strokeWeight: 1.5,
+      fillColor: HI,
+      fillOpacity: 0.08,
+      clickable: false,
+      zIndex: 2,
+    });
+    circleRef.current = circle;
 
-function hexAlpha(hex: string, a: number): string {
-  const m = hex.match(/^#([0-9a-f]{6})$/i);
-  if (!m) return hex;
-  const n = parseInt(m[1], 16);
-  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${a})`;
+    return () => {
+      circle.setMap(null);
+      circleRef.current = null;
+    };
+  }, [map, lat, lng, radiusMiles]);
+
+  return null;
 }
