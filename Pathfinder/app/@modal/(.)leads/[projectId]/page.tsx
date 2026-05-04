@@ -10,6 +10,7 @@
 // `app/leads/[projectId]/page.tsx` and skip this intercept entirely.
 
 import { notFound } from 'next/navigation';
+import * as React from 'react';
 
 import { LeadDetail } from '@/components/lead/LeadDetail';
 import { LeadDetailModal } from '@/components/lead/LeadDetailModal';

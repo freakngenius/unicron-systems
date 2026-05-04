@@ -7,6 +7,7 @@
 // when navigation originates from the dashboard.
 
 import { notFound } from 'next/navigation';
+import * as React from 'react';
 
 import { LeadDetail } from '@/components/lead/LeadDetail';
 import { loadLeadDetailPayload } from '@/lib/lead-detail-data';
