@@ -78,14 +78,42 @@ describe('buildAuthorizeUrl', () => {
     const url = new URL(buildAuthorizeUrl('s'));
     const scope = url.searchParams.get('scope') ?? '';
     for (const required of [
+      'oauth',
       'crm.objects.deals.read',
       'crm.objects.deals.write',
       'crm.objects.contacts.read',
       'crm.objects.contacts.write',
+      'crm.objects.companies.read',
+      'crm.objects.companies.write',
       'crm.schemas.deals.read',
+      'crm.schemas.contacts.read',
     ]) {
       expect(scope.split(' ')).toContain(required);
     }
+  });
+
+  it('requests every scope the HubSpot app has marked Required (regression: install rejects pre-token if any are missing)', () => {
+    const url = new URL(buildAuthorizeUrl('s'));
+    const scope = url.searchParams.get('scope') ?? '';
+    const scopes = scope.split(' ').filter(Boolean);
+    // HubSpot app config currently lists 9 Required scopes. If you add a
+    // scope to the dashboard, add it here and to lib/connectors/providers.ts
+    // — keep both in lockstep or every install 400s with
+    // `scopes are missing [...]` before HubSpot ever issues a token.
+    expect(scopes).toEqual(
+      expect.arrayContaining([
+        'oauth',
+        'crm.objects.deals.read',
+        'crm.objects.deals.write',
+        'crm.objects.contacts.read',
+        'crm.objects.contacts.write',
+        'crm.objects.companies.read',
+        'crm.objects.companies.write',
+        'crm.schemas.deals.read',
+        'crm.schemas.contacts.read',
+      ]),
+    );
+    expect(scopes.length).toBeGreaterThanOrEqual(9);
   });
 
   it('uses the framework callback URL', () => {

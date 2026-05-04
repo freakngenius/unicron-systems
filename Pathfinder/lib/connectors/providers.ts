@@ -61,15 +61,24 @@ const PROVIDERS: Record<ConnectorType, ProviderConfig> = {
     displayName: 'HubSpot',
     authorizeUrl: 'https://app.hubspot.com/oauth/authorize',
     tokenExchangeUrl: 'https://api.hubapi.com/oauth/v1/token',
-    // SPEC § 5.4: deal/contact read+write + schemas.deals.read for stage
-    // mapping discovery. C-3A is read-only (bulk sync); the .write scopes
-    // are pre-requested so C-3B doesn't require a re-auth.
+    // SPEC § 5.4: deal/contact/company read+write + schemas.deals.read +
+    // schemas.contacts.read for stage- and property-mapping discovery.
+    // C-3A is read-only (bulk sync); the .write scopes are pre-requested so
+    // C-3B doesn't require a re-auth. companies.* added to support
+    // account-level sync (PLAN-gate10b § scope expansion); schemas.contacts
+    // and `oauth` are required by HubSpot's app config — install rejects
+    // pre-token with `scopes are missing` when the authorize URL omits any
+    // scope marked Required in the developer dashboard.
     scopes: [
+      'oauth',
       'crm.objects.deals.read',
       'crm.objects.deals.write',
       'crm.objects.contacts.read',
       'crm.objects.contacts.write',
+      'crm.objects.companies.read',
+      'crm.objects.companies.write',
       'crm.schemas.deals.read',
+      'crm.schemas.contacts.read',
     ],
     scopeSeparator: ' ',
     exchangeImplemented: true,
