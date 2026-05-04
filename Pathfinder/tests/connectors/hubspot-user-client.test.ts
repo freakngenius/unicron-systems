@@ -142,6 +142,144 @@ describe('user-client', () => {
   });
 });
 
+// ─────────── gate 12J — 401 EXPIRED_AUTHENTICATION recovery ───────────
+
+describe('user-client — 401 EXPIRED_AUTHENTICATION recovery (gate 12J)', () => {
+  function expired401(): Response {
+    return {
+      ok: false,
+      status: 401,
+      text: async () =>
+        JSON.stringify({
+          status: 'error',
+          message: 'The OAuth token used to make this call expired 32 second(s) ago.',
+          category: 'EXPIRED_AUTHENTICATION',
+        }),
+      clone() {
+        return this as unknown as Response;
+      },
+      json: async () => ({}),
+      headers: new Headers(),
+    } as unknown as Response;
+  }
+
+  function ok201(body: unknown): Response {
+    return {
+      ok: true,
+      status: 201,
+      text: async () => JSON.stringify(body),
+      clone() {
+        return this as unknown as Response;
+      },
+      json: async () => body,
+      headers: new Headers(),
+    } as unknown as Response;
+  }
+
+  function bad401NotExpired(): Response {
+    // 401 that's NOT an expired-token error (e.g., bad client secret,
+    // revoked refresh) — must NOT trigger the refresh callback.
+    return {
+      ok: false,
+      status: 401,
+      text: async () =>
+        JSON.stringify({ status: 'error', message: 'invalid token', category: 'INVALID_AUTHENTICATION' }),
+      clone() {
+        return this as unknown as Response;
+      },
+      json: async () => ({}),
+      headers: new Headers(),
+    } as unknown as Response;
+  }
+
+  it('refreshes + retries once on EXPIRED_AUTHENTICATION; uses fresh token on retry', async () => {
+    const calls: Array<{ url: string; auth: string | undefined }> = [];
+    const fetcher: typeof fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+      const u = typeof url === 'string' ? url : url instanceof URL ? url.toString() : '';
+      const auth = (init?.headers as Record<string, string> | undefined)?.['Authorization'];
+      calls.push({ url: u, auth });
+      if (calls.length === 1) return expired401();
+      return ok201({ id: 'deal-after-refresh' });
+    }) as unknown as typeof fetch;
+
+    const onTokenExpired = vi.fn(async () => 'fresh-token-XYZ');
+    const client = createUserClient({
+      accessToken: 'stale-token-ABC',
+      fetcher,
+      onTokenExpired,
+    });
+    const out = await client.createDeal({ properties: { dealname: 'X' } });
+
+    expect(out.id).toBe('deal-after-refresh');
+    expect(onTokenExpired).toHaveBeenCalledTimes(1);
+    expect(calls).toHaveLength(2);
+    expect(calls[0].auth).toBe('Bearer stale-token-ABC');
+    expect(calls[1].auth).toBe('Bearer fresh-token-XYZ');
+  });
+
+  it('subsequent calls in the same client reuse the refreshed token', async () => {
+    const calls: Array<{ auth: string | undefined }> = [];
+    const fetcher: typeof fetch = (async (_url: string | URL | Request, init?: RequestInit) => {
+      const auth = (init?.headers as Record<string, string> | undefined)?.['Authorization'];
+      calls.push({ auth });
+      if (calls.length === 1) return expired401();
+      return ok201({ id: `deal-${calls.length}` });
+    }) as unknown as typeof fetch;
+
+    const onTokenExpired = vi.fn(async () => 'fresh-token-XYZ');
+    const client = createUserClient({
+      accessToken: 'stale',
+      fetcher,
+      onTokenExpired,
+    });
+    await client.createDeal({ properties: {} });
+    await client.createDeal({ properties: {} });
+    await client.createDeal({ properties: {} });
+
+    // Refresh callback only fires once — tokenRef carries the fresh
+    // token forward into subsequent calls.
+    expect(onTokenExpired).toHaveBeenCalledTimes(1);
+    expect(calls.slice(1).every((c) => c.auth === 'Bearer fresh-token-XYZ')).toBe(true);
+  });
+
+  it('non-EXPIRED_AUTHENTICATION 401 does NOT trigger refresh', async () => {
+    const fetcher: typeof fetch = (async () => bad401NotExpired()) as unknown as typeof fetch;
+    const onTokenExpired = vi.fn();
+    const client = createUserClient({ accessToken: 'tok', fetcher, onTokenExpired });
+    await expect(client.createDeal({ properties: {} })).rejects.toBeInstanceOf(HubspotUserClientError);
+    expect(onTokenExpired).not.toHaveBeenCalled();
+  });
+
+  it('without onTokenExpired: 401 EXPIRED_AUTHENTICATION still throws (no silent retry)', async () => {
+    const fetcher: typeof fetch = (async () => expired401()) as unknown as typeof fetch;
+    const client = createUserClient({ accessToken: 'tok', fetcher });
+    await expect(client.createDeal({ properties: {} })).rejects.toBeInstanceOf(HubspotUserClientError);
+  });
+
+  it('refresh callback throws → original 401 surfaces (no infinite loop)', async () => {
+    const fetcher: typeof fetch = (async () => expired401()) as unknown as typeof fetch;
+    const onTokenExpired = vi.fn(async () => {
+      throw new Error('refresh exchange 401');
+    });
+    const client = createUserClient({ accessToken: 'tok', fetcher, onTokenExpired });
+    await expect(client.createDeal({ properties: {} })).rejects.toBeInstanceOf(HubspotUserClientError);
+    expect(onTokenExpired).toHaveBeenCalledTimes(1);
+  });
+
+  it('retried call also returns 401 → throws (single retry, not a loop)', async () => {
+    let attempts = 0;
+    const fetcher: typeof fetch = (async () => {
+      attempts += 1;
+      return expired401();
+    }) as unknown as typeof fetch;
+    const onTokenExpired = vi.fn(async () => 'fresh-token');
+    const client = createUserClient({ accessToken: 'tok', fetcher, onTokenExpired });
+    await expect(client.createDeal({ properties: {} })).rejects.toBeInstanceOf(HubspotUserClientError);
+    expect(attempts).toBe(2);
+    expect(onTokenExpired).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('portal URL helpers', () => {
   it('builds a deal URL with portal id + deal id', () => {
     expect(portalDealUrl('12345', 'deal-9999')).toBe(
