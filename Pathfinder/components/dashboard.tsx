@@ -40,7 +40,7 @@ import {
   applyBranchFilter,
   groupCountsByBranch,
 } from '@/lib/dashboard-filters';
-import { pickDemoBranches } from '@/lib/demo-branches';
+import { pickDemoBranches, getActiveDemoBranchIds, isHoustonOnlyMode } from '@/lib/demo-branches';
 import { indexMatchesByLead } from '@/lib/cross-poll-fetch';
 import {
   BranchMarkerGM,
@@ -108,10 +108,28 @@ export function Dashboard({
   // refocus, but the operator-facing chrome only renders the four demo
   // cities. `pickDemoBranches` preserves narrative order regardless of the
   // server-fetch order.
+  //
+  // Gate 17A — when `NEXT_PUBLIC_DEMO_HOUSTON_ONLY=1`, `pickDemoBranches`
+  // narrows to Houston only. `projectsForDashboard` below also drops
+  // projects whose nearest_branch_id is LAX/NSH/PIT so the right-rail
+  // "See all" count and BranchDock totals reflect the Houston-only surface
+  // rather than including LA/NSH/PIT-anchored projects with no visible
+  // dock row.
   const initialBranches = React.useMemo(
     () => pickDemoBranches(initialBranchesRaw),
     [initialBranchesRaw],
   );
+
+  // Gate 17A — narrow the project corpus to active demo branches when in
+  // Houston-only mode. Off-mode (the default) returns initialProjects as is
+  // so the existing four-city behavior is byte-identical.
+  const projectsForDashboard = React.useMemo<Project[]>(() => {
+    if (!isHoustonOnlyMode()) return initialProjects;
+    const active = new Set(getActiveDemoBranchIds());
+    return initialProjects.filter(
+      (p) => p.nearest_branch_id != null && active.has(p.nearest_branch_id),
+    );
+  }, [initialProjects]);
 
   // Demo Polish UX § Gate 2 — index cross-pollination matches by lead id so
   // the filter + warm-intro overlay can do O(1) lookups. When a project has
@@ -288,7 +306,7 @@ export function Dashboard({
   const preBranchFiltered = React.useMemo<Project[]>(
     () =>
       applyNonBranchFilters({
-        projects: initialProjects,
+        projects: projectsForDashboard,
         source,
         crossPoll,
         hidden,
@@ -296,7 +314,7 @@ export function Dashboard({
         maxDistance,
         crossPollLeadIds: xpollLeadIds,
       }),
-    [initialProjects, source, crossPoll, hidden, filterState, maxDistance, xpollLeadIds],
+    [projectsForDashboard, source, crossPoll, hidden, filterState, maxDistance, xpollLeadIds],
   );
 
   const withBranchFiltered = React.useMemo<Project[]>(
@@ -441,7 +459,7 @@ export function Dashboard({
           >
             <MapController
               branches={initialBranches}
-              projects={initialProjects}
+              projects={projectsForDashboard}
               selectedBranchId={selectedBranchId}
               focusKey={focusKey}
               onMapReady={setMapInstance}
@@ -584,7 +602,7 @@ export function Dashboard({
         {statBucket && (
           <StatPopover
             bucket={statBucket}
-            projects={initialProjects}
+            projects={projectsForDashboard}
             rightOffset={statBucket === 'new' ? 240 : statBucket === 'total' ? 160 : 90}
             topOffset={84}
             onClose={() => setStatBucket(null)}
@@ -628,7 +646,7 @@ export function Dashboard({
             hiddenProjectIds: Array.from(hidden),
           })}
           branches={initialBranches}
-          projects={initialProjects}
+          projects={projectsForDashboard}
           customers={initialCustomers}
         />
       </APIProvider>
