@@ -23,7 +23,7 @@
 // which is what we want for shared / bookmarked URLs that survive a
 // schema change.
 
-export type ListSortMode = 'score' | 'distance' | 'posted' | 'recent';
+export type ListSortMode = 'score' | 'distance' | 'posted' | 'recent' | 'value';
 export type ListSortDir = 'asc' | 'desc';
 export type RangeMode = 'within' | 'outside' | 'all';
 export type ListFilterMode = 'all' | 'starred';
@@ -53,7 +53,7 @@ export const DEFAULT_LIST_FILTER_STATE: ListFilterState = {
   filter: 'all',
 };
 
-const VALID_SORT: ReadonlySet<ListSortMode> = new Set(['score', 'distance', 'posted', 'recent']);
+const VALID_SORT: ReadonlySet<ListSortMode> = new Set(['score', 'distance', 'posted', 'recent', 'value']);
 const VALID_DIR: ReadonlySet<ListSortDir> = new Set(['asc', 'desc']);
 const VALID_RANGE: ReadonlySet<RangeMode> = new Set(['within', 'outside', 'all']);
 const VALID_FILTER: ReadonlySet<ListFilterMode> = new Set(['all', 'starred']);
