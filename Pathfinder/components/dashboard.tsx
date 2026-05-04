@@ -383,6 +383,10 @@ export function Dashboard({
     }[] = [];
     for (const p of withBranchFiltered) {
       if (p.lat == null || p.lon == null) continue;
+      // Skip geo_unknown projects so warm-intro lines don't terminate
+      // at the geocoder's state-centroid fallback coordinate. Matches
+      // the projectClusterMarkers filter above.
+      if (p.geo_unknown === true) continue;
       const m = xpollByLeadId.get(p.id);
       if (!m || m.customer_lat == null || m.customer_lon == null) continue;
       out.push({
@@ -416,10 +420,15 @@ export function Dashboard({
   // the cluster count badges, the right-rail list, and the BranchDock
   // counts (per-branch from preBranchFiltered) all stay aligned with the
   // active filter set.
+  //
+  // geo_unknown projects are dropped from the map only — they share a
+  // state/region centroid that the geocoder fell back to, so rendering
+  // them produces a phantom cluster (e.g. 11 leads stacked on a single
+  // Texas centroid coordinate). The right-rail list still shows them.
   const projectClusterMarkers = React.useMemo<ClusterMarker[]>(() => {
     if (crossPoll) return [];
     return withBranchFiltered
-      .filter((p) => p.lat != null && p.lon != null)
+      .filter((p) => p.lat != null && p.lon != null && p.geo_unknown !== true)
       .map((p) => {
         const tier = projectTier({
           score: p.score,
