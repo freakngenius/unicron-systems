@@ -41,11 +41,11 @@ describe('parseListFilterState', () => {
     });
   });
 
-  it('uses Demo-Polish defaults (range=within, minScore=50) when query is empty', () => {
+  it('uses Demo-Polish defaults (range=within, minScore=30) when query is empty', () => {
     expect(DEFAULT_LIST_FILTER_STATE.range).toBe('within');
-    expect(DEFAULT_LIST_FILTER_STATE.minScore).toBe(50);
+    expect(DEFAULT_LIST_FILTER_STATE.minScore).toBe(30);
     expect(parseListFilterState(qs('')).range).toBe('within');
-    expect(parseListFilterState(qs('')).minScore).toBe(50);
+    expect(parseListFilterState(qs('')).minScore).toBe(30);
   });
 
   it('respects an explicit min_score=0 (operator widening to no floor)', () => {
@@ -117,13 +117,13 @@ describe('serializeListFilterState', () => {
     expect(parseListFilterState(qs(serialized))).toEqual(state);
   });
 
-  it('omits the default min_score (50) from the serialized form', () => {
+  it('omits the default min_score (30) from the serialized form', () => {
     const state: ListFilterState = {
       ...DEFAULT_LIST_FILTER_STATE,
       range: 'all',
-      minScore: 50,
+      minScore: 30,
     };
-    // range=all is non-default; minScore=50 is the default and drops out.
+    // range=all is non-default; minScore=30 is the default and drops out.
     expect(serializeListFilterState(state)).toBe('range=all');
   });
 

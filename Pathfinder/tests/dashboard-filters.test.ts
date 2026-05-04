@@ -104,7 +104,7 @@ describe('applyNonBranchFilters', () => {
 
   it('crossPoll bypasses minScore and range filters (demo signature beats with score=15 still surface)', () => {
     // Brasfield & Gorrie + Big-D leads in production sit at score 15-62
-    // — well below the dashboard's default minScore=50. Cross-poll mode
+    // — bg-low (15) sits below the dashboard's default minScore=30. Cross-poll mode
     // must still surface them, otherwise the demo's signature warm-intro
     // beats are filtered out by the score floor.
     const projects = [
