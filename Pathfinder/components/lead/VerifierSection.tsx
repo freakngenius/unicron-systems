@@ -75,7 +75,7 @@ export function VerifierSection({ project }: Props): React.ReactElement {
         await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
         try {
           const resp = await fetch(
-            `/api/leads/${encodeURIComponent(project.id)}/verifier/retry`,
+            `/pathfinder/api/leads/${encodeURIComponent(project.id)}/verifier/retry`,
             { method: 'GET', cache: 'no-store' },
           );
           if (!resp.ok) continue;
@@ -109,7 +109,7 @@ export function VerifierSection({ project }: Props): React.ReactElement {
     setRetrying(true);
     try {
       const resp = await fetch(
-        `/api/leads/${encodeURIComponent(project.id)}/verifier/retry`,
+        `/pathfinder/api/leads/${encodeURIComponent(project.id)}/verifier/retry`,
         { method: 'POST' },
       );
       if (!resp.ok && resp.status !== 202) {
