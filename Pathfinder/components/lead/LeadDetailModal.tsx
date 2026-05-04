@@ -6,11 +6,20 @@
 // view is presented as a 75%-viewport-wide, 90vh-tall card with 10px
 // rounded corners on a dim + blur backdrop. The shell handles:
 //
-//   - Close button (top-right ✕) → router back to dashboard root
-//   - Esc key → router back to dashboard root
+//   - Close button (top-right ✕) → router.back() (instant dismiss)
+//   - Esc key                    → router.back() (instant dismiss)
+//   - Backdrop click             → router.back() (instant dismiss)
 //   - Arrow Right / Arrow Down → next lead (cycles)
 //   - Arrow Left  / Arrow Up   → previous lead (cycles)
 //   - Body scroll lock while open
+//
+// Close uses router.back() rather than router.push('/'). This route is an
+// intercepting-route modal (app/@modal/(.)leads/[id]) that renders over
+// the still-mounted dashboard. router.back() pops the history entry,
+// dismissing the @modal slot instantly with zero server work — the
+// dashboard underneath is preserved in its existing state. Pushing '/'
+// instead would trigger a fresh server render of the (force-dynamic)
+// dashboard, which empirically takes ~30s.
 //
 // Neighbor IDs are server-fetched on the page route and passed as
 // `neighborIds`. When fewer than two leads in the set, arrow keys are
@@ -28,26 +37,20 @@ interface Props {
   neighborIds: string[];
   /** The LeadDetail tree to render inside the modal body. */
   children: React.ReactNode;
-  /**
-   * Override route for Close / Esc. Defaults to '/' — Next.js auto-prepends
-   * the basePath ('/pathfinder') so this resolves to the dashboard root
-   * '/pathfinder/'. Passing '/pathfinder' here would yield '/pathfinder/pathfinder'
-   * (404) because basePath is prepended to user-supplied URLs.
-   */
-  closeHref?: string;
 }
 
 export function LeadDetailModal({
   currentProjectId,
   neighborIds,
   children,
-  closeHref = '/',
 }: Props): React.ReactElement {
   const router = useRouter();
 
   const close = React.useCallback(() => {
-    router.push(closeHref);
-  }, [router, closeHref]);
+    // Pop the history entry — dismisses the intercepting-route @modal slot
+    // instantly. No server fetch, no dashboard re-render.
+    router.back();
+  }, [router]);
 
   const navigateToNeighbor = React.useCallback(
     (delta: 1 | -1) => {
