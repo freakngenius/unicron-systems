@@ -169,11 +169,11 @@ describe('POST /api/scoring/score', () => {
     );
     expect(res.status).toBe(200);
     const body = await res.json();
-    // 0 miles → geo 100; PLN → 55; no customers → 0; composite = 67
+    // Gate 17D: 0 miles → geo 100; PLN → 60; no customers → 0; composite = 68
     expect(body.geo_score).toBe(100);
-    expect(body.stage_score).toBe(55);
+    expect(body.stage_score).toBe(60);
     expect(body.customer_score).toBe(0);
-    expect(body.composite_score).toBe(67);
+    expect(body.composite_score).toBe(68);
     expect(body.warm_for_customer_id).toBeNull();
   });
 

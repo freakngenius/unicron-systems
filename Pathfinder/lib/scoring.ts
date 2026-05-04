@@ -16,18 +16,30 @@
 // Score formula (composite, 0–100):
 //   composite = round(0.5 * geo + 0.3 * stage + 0.2 * customer)
 //
-// Geo score (0–100):
-//   100 if dist <  50mi from nearest branch
-//   linear decay 100 → 0 across (50mi → coverage_radius_miles)
+// Geo score (0–100, Gate 17D — full-marks zone widened from 50 → 100mi):
+//   100 if dist < 100mi from nearest branch
+//   linear decay 100 → 0 across (100mi → coverage_radius_miles)
 //   0   if dist >= coverage_radius_miles
 //
-// Stage score (0–100):
-//   RFP → 90 · PRE → 75 · PLN → 55 · NWS → 35 · default → 50
+// Stage score (0–100, Gate 17D — boosted PRE / PLN / NWS / default to lift
+// medium-stage leads into the 30–50 score band, RFP unchanged):
+//   RFP → 90 · PRE → 85 · PLN → 60 · NWS → 40 · default → 55
 //
 // Customer score (0–100):
 //   100 if a customer is within 10mi of the project
 //   linear decay 100 → 0 across (10mi → 50mi)
 //   0   if no customer within 50mi
+//
+// Gate 17D rationale: pre-Gate-17D the ranker only landed 39 of 710 scored
+// projects ≥50, leaving the demo's 30–50 band sparse. Two levers:
+//   (a) widen the geo full-marks zone from 50 → 100mi so projects 50–100mi
+//       from a branch (a meaningful share of metro-region work) keep their
+//       full geo=100 instead of decaying;
+//   (b) boost PRE / PLN / NWS / default stage scores so non-RFP leads land
+//       in the actionable band. PRE is boosted most (75 → 85) because the
+//       pre-bid stage is where Zedcor can still influence scope.
+// RFP stays at 90 so the Houston flagship (TxDOT I-45, RFP near a branch
+// with customer adjacency) lands at composite ≥95 — the regression guard.
 //
 // Warm-intro signal:
 //   if the best-match customer (within 50mi) is served by a DIFFERENT branch
@@ -59,15 +71,22 @@ export interface ScoringOutput {
 
 const EARTH_RADIUS_MILES = 3958.7613;
 
+// Gate 17D — stage scores rebalanced. RFP unchanged (top); PRE / PLN /
+// NWS / default boosted so non-RFP leads land in the demo-actionable
+// band. See header comment for rationale.
 const STAGE_SCORES: Record<string, number> = {
   RFP: 90,
-  PRE: 75,
-  PLN: 55,
-  NWS: 35,
+  PRE: 85,
+  PLN: 60,
+  NWS: 40,
 };
-const STAGE_DEFAULT = 50;
+const STAGE_DEFAULT = 55;
 
-const NEAR_GEO_MILES = 50;     // full marks within this radius
+// Gate 17D — full-marks zone widened from 50 → 100mi. Projects 50–100mi
+// from a branch (large share of metro-region work) keep geo=100 instead
+// of decaying through the linear ramp, lifting their composite by
+// 0.5 × (100 − previousGeo) points.
+const NEAR_GEO_MILES = 100;     // full marks within this radius
 const NEAR_CUSTOMER_MILES = 10; // full marks for customer adjacency
 const FAR_CUSTOMER_MILES = 50;  // zero customer score beyond this
 
