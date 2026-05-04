@@ -111,15 +111,20 @@ describe('findWarmIntro', () => {
 });
 
 describe('computeGeoScore', () => {
-  it('100 within 50 miles', () => {
+  it('100 within 100 miles (Gate 17D — full-marks zone widened from 50 → 100)', () => {
     expect(computeGeoScore(0, 300)).toBe(100);
     expect(computeGeoScore(20, 300)).toBe(100);
     expect(computeGeoScore(49.9, 300)).toBe(100);
+    // Gate 17D additions — projects 50-100mi from branch now also score 100
+    expect(computeGeoScore(75, 300)).toBe(100);
+    expect(computeGeoScore(99.9, 300)).toBe(100);
   });
 
-  it('linearly decays between 50 and coverage radius', () => {
-    // halfway between 50 and 300 is 175; should be ~50
-    expect(computeGeoScore(175, 300)).toBeCloseTo(50, 0);
+  it('linearly decays between 100 and coverage radius', () => {
+    // halfway between 100 and 300 is 200; should be exactly 50
+    expect(computeGeoScore(200, 300)).toBeCloseTo(50, 0);
+    // 75% of the way (250) → 25
+    expect(computeGeoScore(250, 300)).toBeCloseTo(25, 0);
   });
 
   it('0 at or past coverage radius', () => {
@@ -128,22 +133,22 @@ describe('computeGeoScore', () => {
   });
 });
 
-describe('computeStageScore', () => {
+describe('computeStageScore (Gate 17D — boosted to lift mid-stage leads)', () => {
   it('maps known stages', () => {
-    expect(computeStageScore('RFP')).toBe(90);
-    expect(computeStageScore('PRE')).toBe(75);
-    expect(computeStageScore('PLN')).toBe(55);
-    expect(computeStageScore('NWS')).toBe(35);
+    expect(computeStageScore('RFP')).toBe(90); // unchanged — keep top
+    expect(computeStageScore('PRE')).toBe(85); // 75 → 85 (pre-bid is most actionable)
+    expect(computeStageScore('PLN')).toBe(60); // 55 → 60
+    expect(computeStageScore('NWS')).toBe(40); // 35 → 40
   });
 
   it('case-insensitive', () => {
     expect(computeStageScore('rfp')).toBe(90);
-    expect(computeStageScore('  Pre  ')).toBe(75);
+    expect(computeStageScore('  Pre  ')).toBe(85);
   });
 
-  it('null/unknown defaults to 50', () => {
-    expect(computeStageScore(null)).toBe(50);
-    expect(computeStageScore('XYZ')).toBe(50);
+  it('null/unknown defaults to 55 (Gate 17D — was 50)', () => {
+    expect(computeStageScore(null)).toBe(55);
+    expect(computeStageScore('XYZ')).toBe(55);
   });
 });
 
@@ -202,7 +207,7 @@ describe('scoreProject', () => {
     expect(out.in_coverage).toBe(false);
     expect(out.geo_score).toBe(0);
     expect(out.customer_score).toBe(0);
-    // Composite is driven entirely by stage = 55 weighted at 0.3 → ~17
+    // Gate 17D — composite driven entirely by stage = 60 (PLN) weighted at 0.3 → 18
     expect(out.composite_score).toBeLessThan(25);
   });
 
@@ -234,11 +239,36 @@ describe('scoreProject', () => {
     const project = { lat: 29.76, lon: -95.37, project_stage: 'PLN', project_value: null };
     const customers: { id: string; lat: number; lon: number; served_by_branch_id: string | null }[] = [];
     const out = scoreProject({ project, branches: BRANCHES, customers });
-    // 0 miles → geo 100; PLN → 55; no customers → 0
-    // composite = 0.5*100 + 0.3*55 + 0.2*0 = 50 + 16.5 + 0 = 66.5 → 67
+    // Gate 17D: 0 miles → geo 100; PLN → 60; no customers → 0
+    // composite = 0.5*100 + 0.3*60 + 0.2*0 = 50 + 18 + 0 = 68
     expect(out.geo_score).toBe(100);
-    expect(out.stage_score).toBe(55);
+    expect(out.stage_score).toBe(60);
     expect(out.customer_score).toBe(0);
-    expect(out.composite_score).toBe(67);
+    expect(out.composite_score).toBe(68);
+  });
+
+  it('Gate 17D regression guard — Houston flagship (RFP near branch + customer adjacency) scores ≥95', () => {
+    // Stand-in for the live TxDOT I-45 lead — RFP stage, project sits ~0mi
+    // from the Houston branch (29.7604, -95.3698) with a Zedcor customer
+    // within full-marks customer adjacency. Hard requirement: composite
+    // score must remain ≥95 after Gate 17D tuning. If this assertion ever
+    // breaks, halt the ranker rollout per the Gate 17D hard-halt list.
+    const project = {
+      lat: 29.7604,
+      lon: -95.3698,
+      project_stage: 'RFP',
+      project_value: null,
+    };
+    const customers = [
+      { id: 'c-zedcor-hou', lat: 29.77, lon: -95.36, served_by_branch_id: 'hou-002' },
+    ];
+    const out = scoreProject({ project, branches: BRANCHES, customers });
+    expect(out.nearest_branch_id).toBe('hou-002');
+    expect(out.geo_score).toBe(100);
+    expect(out.stage_score).toBe(90); // RFP still tops the stage table
+    expect(out.customer_score).toBe(100);
+    // 0.5*100 + 0.3*90 + 0.2*100 = 50 + 27 + 20 = 97
+    expect(out.composite_score).toBe(97);
+    expect(out.composite_score).toBeGreaterThanOrEqual(95);
   });
 });
