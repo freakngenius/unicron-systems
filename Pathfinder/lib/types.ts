@@ -77,6 +77,16 @@ export interface Project {
   verified?: boolean | null;
   verifier_notes?: string | null;
   verifier_pass_count?: number;
+  // Gate 18D — unverified context (migration 0125).
+  // failure_reason: 1-3 sentence per-check rationale, customer-facing.
+  // suggestions: 3-5 actionable next steps (data, who could provide it, alternative signals).
+  // attempt_count: total deeper-pass retries kicked off via the lead detail "Attempt
+  // Verification" button (not the cron cycles).
+  // last_attempt_at: powers the 60s server-side debounce.
+  verifier_failure_reason?: string | null;
+  verifier_suggestions?: string[] | null;
+  verifier_attempt_count?: number;
+  verifier_last_attempt_at?: string | null;
   // High-priority Slack alert dedup (added 0012_slack_workspaces).
   // null = never alerted; non-null = last alert ts. Alerts cron re-fires
   // when the value is null OR older than 7 days.
