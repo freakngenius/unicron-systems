@@ -595,12 +595,7 @@ export function Dashboard({
 
         {crossPoll && <CrossPollBanner count={warmLines.length} />}
         <MapLegend crossPoll={crossPoll} />
-        <ZoomControl
-          zoom={mapZoom}
-          onZoomIn={zoomIn}
-          onZoomOut={zoomOut}
-          left={crossPoll ? 720 : 580}
-        />
+        <ZoomControl zoom={mapZoom} onZoomIn={zoomIn} onZoomOut={zoomOut} />
         <CoordsHUD branch={selectedBranch} />
 
         {openProject && (
