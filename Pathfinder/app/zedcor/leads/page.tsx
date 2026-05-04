@@ -69,8 +69,16 @@ async function fetchScoreDistribution(): Promise<BranchScoreDistribution[]> {
   const branchById = new Map(branchRows.map((b) => [b.id, b]));
   const ids = branchRows.map((b) => b.id);
 
-  // 2. Pull last-7-day projects scoped to those branches in a single read.
-  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString();
+  // 2. Pull last-N-day projects scoped to those branches in a single read.
+  // Gate 17C — widened from 7 to 30 days so the demo opens with a richer
+  // score-distribution count per branch. Only this LIST query widens; the
+  // ingestor lookbacks (USASPENDING_LOOKBACK_DAYS / SAMGOV_LOOKBACK_DAYS in
+  // lib/ingestor.ts) and slack-alert / briefing windows stay at their
+  // original values.
+  const LEAD_LIST_LOOKBACK_DAYS = 30;
+  const lookbackCutoff = new Date(
+    Date.now() - LEAD_LIST_LOOKBACK_DAYS * 24 * 3600 * 1000,
+  ).toISOString();
   type Slim = { score: number | null; nearest_zedcor_branch_id: string | null };
   let projects: Slim[] = [];
   if (ids.length > 0) {
@@ -78,7 +86,7 @@ async function fetchScoreDistribution(): Promise<BranchScoreDistribution[]> {
       .from('projects')
       .select('score, nearest_zedcor_branch_id')
       .in('nearest_zedcor_branch_id', ids)
-      .gte('ingested_at', sevenDaysAgo)
+      .gte('ingested_at', lookbackCutoff)
       .limit(5000);
     projects = (projRes.data ?? []) as Slim[];
   }
