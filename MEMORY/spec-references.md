@@ -768,3 +768,15 @@ Operator setup: `MEMORY/operator-todos/2026-05-03-teams-user-setup.md` — Micro
 |---|---|---|
 | `tests/connectors/teams-user-connection.test.ts` | 9 | Multi-tenant isolation (user A's row never returned for user B), encrypt round-trip via stubbed pgcrypto RPCs, upsert revokes prior active row + inserts fresh row scoped on `(user_id, provider='teams', tenant_id, status='active')`, `markTeamsConnectionRevoked` with/without tenantId, `revokeTeamsTokenAtProvider` returns false on transport error / true on 2xx Microsoft Graph response. |
 
+---
+
+## Demo Polish UX Sprint — Gate 19 (stage filter dropdown)
+
+**State:** PR open. Implements the Gate 19 dispatch (right-rail multi-check stage filter with bid-window divider).
+
+#### Pathfinder/lib/leads/stage-normalize.ts
+**Implements:** Demo Polish UX Sprint Gate 19 — canonical 6-stage taxonomy used by the new right-rail stage filter dropdown.
+**Last verified against spec:** 2026-05-04 (Gate 19 dispatch).
+**Drift:** **intentional fork from `lib/stages.ts`.** The legacy file (5 codes: NWS / PLN / PRE / RFP / AWARDED) is the lead-detail label renderer and treats `solicitation` as a fallthrough. Gate 19 needs a 6-bucket view that (a) folds `solicitation` + `RFP` into a single `rfp_open` slug and (b) splits `pre-budget` (74 rows) from `PRE` (`pre_bid`, 6 rows) so the dropdown checkbox set matches the live data. `BID_WINDOW_DIVIDER_INDEX` marks where the post-award subcontract band starts so the popover renders the divider + italic note in the right place.
+**Tests:** `Pathfinder/tests/stage-normalize.test.ts` covers all 7 historical DB values, the case-/whitespace-insensitive normalizer, the null/empty/unknown fallbacks, and the canonical earliest→latest order. `Pathfinder/tests/dashboard-filters.test.ts` adds Gate 19 cases for the filter intersection (default null = pass-through, narrowed selection drops null-stage projects, Houston flagship `solicitation` survives the default `rfp_open` selection, and stage ∩ within-range Houston-only).
+
