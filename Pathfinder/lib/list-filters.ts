@@ -23,6 +23,8 @@
 // which is what we want for shared / bookmarked URLs that survive a
 // schema change.
 
+import { STAGE_NORMALIZED_ORDER, type NormalizedStage } from '@/lib/leads/stage-normalize';
+
 export type ListSortMode = 'score' | 'distance' | 'posted' | 'recent' | 'value';
 export type ListSortDir = 'asc' | 'desc';
 export type RangeMode = 'within' | 'outside' | 'all';
@@ -37,6 +39,10 @@ export interface ListFilterState {
   /** Legacy starred quick-filter, retained alongside the new range/score
    * controls. */
   filter: ListFilterMode;
+  /** Gate 19 — set of normalized stages to include. `null` means
+   * "no filter active" (= show all 6 stages). An explicit set narrows
+   * the right rail, the map markers, and the per-branch dock counts. */
+  stages: ReadonlySet<NormalizedStage> | null;
 }
 
 export const SCORE_FLOOR_STEPS = {
@@ -51,12 +57,14 @@ export const DEFAULT_LIST_FILTER_STATE: ListFilterState = {
   range: 'within',
   minScore: 30,
   filter: 'all',
+  stages: null,
 };
 
 const VALID_SORT: ReadonlySet<ListSortMode> = new Set(['score', 'distance', 'posted', 'recent', 'value']);
 const VALID_DIR: ReadonlySet<ListSortDir> = new Set(['asc', 'desc']);
 const VALID_RANGE: ReadonlySet<RangeMode> = new Set(['within', 'outside', 'all']);
 const VALID_FILTER: ReadonlySet<ListFilterMode> = new Set(['all', 'starred']);
+const VALID_STAGES: ReadonlySet<NormalizedStage> = new Set(STAGE_NORMALIZED_ORDER);
 
 /** Minimal `URLSearchParams`-compatible interface — `next/navigation`'s
  * `useSearchParams()` returns a `ReadonlyURLSearchParams` which exposes
@@ -107,7 +115,21 @@ export function parseListFilterState(query: QueryLike | null | undefined): ListF
   const snappedMinScore = minScoreRaw == null ? null : snapScoreFloor(Number(minScoreRaw));
   const minScore = snappedMinScore == null ? DEFAULT_LIST_FILTER_STATE.minScore : snappedMinScore;
 
-  return { sort, dir, range, minScore, filter };
+  // Stage filter — comma-joined slugs in the `stages` query param. Unknown
+  // slugs are dropped silently. An empty list (after filtering) is treated
+  // as "no filter active" so a stale URL doesn't render an empty grid.
+  // When the param is absent we leave `stages` as `null` (= show all).
+  const stagesRaw = query.get('stages');
+  let stages: ReadonlySet<NormalizedStage> | null = null;
+  if (stagesRaw != null) {
+    const valid = stagesRaw
+      .split(',')
+      .map((s) => s.trim())
+      .filter((s): s is NormalizedStage => VALID_STAGES.has(s as NormalizedStage));
+    stages = valid.length > 0 ? new Set(valid) : null;
+  }
+
+  return { sort, dir, range, minScore, filter, stages };
 }
 
 /** Serialize a ListFilterState into a `?` query string body, omitting
@@ -123,6 +145,12 @@ export function serializeListFilterState(state: ListFilterState): string {
   const effectiveMin = snappedMin == null ? DEFAULT_LIST_FILTER_STATE.minScore : snappedMin;
   if (effectiveMin !== DEFAULT_LIST_FILTER_STATE.minScore) {
     params.set('min_score', String(effectiveMin));
+  }
+  // Only emit `stages` when it actually narrows. `null` (default) and a
+  // full set both mean "show all"; both should serialize to nothing.
+  if (state.stages && state.stages.size > 0 && state.stages.size < STAGE_NORMALIZED_ORDER.length) {
+    const ordered = STAGE_NORMALIZED_ORDER.filter((s) => state.stages!.has(s));
+    params.set('stages', ordered.join(','));
   }
   return params.toString();
 }

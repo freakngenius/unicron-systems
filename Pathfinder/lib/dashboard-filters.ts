@@ -25,6 +25,7 @@
 import type { Project } from '@/lib/types';
 import type { ListFilterState } from '@/lib/list-filters';
 import type { SourceKey } from '@/components/TopBar';
+import { normalizeStage } from '@/lib/leads/stage-normalize';
 
 const SOURCE_FILTER_TO_DB: Record<Exclude<SourceKey, 'all'>, string> = {
   usa: 'usaspending',
@@ -52,7 +53,8 @@ export interface NonBranchFilterContext {
   source: SourceKey;
   crossPoll: boolean;
   hidden: ReadonlySet<string>;
-  state: Pick<ListFilterState, 'range' | 'minScore'>;
+  state: Pick<ListFilterState, 'range' | 'minScore'> &
+    Partial<Pick<ListFilterState, 'stages'>>;
   /** Org's max-supported distance threshold (miles). Used by the range
    * filter when `state.range !== 'all'`. */
   maxDistance: number;
@@ -144,6 +146,19 @@ export function applyNonBranchFilters(ctx: NonBranchFilterContext): Project[] {
 
   if (state.minScore > 0) {
     arr = arr.filter((p) => (p.score ?? 0) >= state.minScore);
+  }
+
+  // Gate 19 — stage filter. `null` = show all stages (default). When the
+  // operator narrows the set, projects whose project_stage doesn't
+  // normalize into a selected slug are dropped (including projects with
+  // a null/unrecognized stage value, since "I selected RFP open" should
+  // not surface a project with an unknown stage).
+  if (state.stages && state.stages.size > 0) {
+    const allow = state.stages;
+    arr = arr.filter((p) => {
+      const norm = normalizeStage(p.project_stage);
+      return norm != null && allow.has(norm);
+    });
   }
 
   return arr;
