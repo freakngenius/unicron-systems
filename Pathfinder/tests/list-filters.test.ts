@@ -69,6 +69,14 @@ describe('parseListFilterState', () => {
     });
   });
 
+  it('accepts sort=value for the Project Size sort mode (Gate 20)', () => {
+    expect(parseListFilterState(qs('sort=value')).sort).toBe('value');
+    // serializeListFilterState should round-trip the non-default sort
+    expect(
+      serializeListFilterState({ ...DEFAULT_LIST_FILTER_STATE, sort: 'value' }),
+    ).toBe('sort=value');
+  });
+
   it('falls back to defaults for unknown sort/range/dir/filter values', () => {
     const parsed = parseListFilterState(
       qs('sort=lol&dir=sideways&range=mars&filter=on-fire&min_score=abc'),

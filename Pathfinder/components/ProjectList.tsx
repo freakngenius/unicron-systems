@@ -67,7 +67,7 @@ const PF = {
 // Kept so server-side renders + tests don't blow up before the hook resolves.
 const HI_THRESHOLD_FALLBACK = 80;
 
-type SortMode = 'score' | 'distance' | 'posted' | 'recent';
+type SortMode = 'score' | 'distance' | 'posted' | 'recent' | 'value';
 type FilterMode = 'all' | 'starred';
 
 const SORT_LABELS: Record<SortMode, string> = {
@@ -75,6 +75,7 @@ const SORT_LABELS: Record<SortMode, string> = {
   distance: 'Distance',
   posted: 'Posted',
   recent: 'Most recent',
+  value: 'Project Size',
 };
 
 // Glossary copy for the sort-mode pills. Plain-language one-liners; no
@@ -84,6 +85,7 @@ const SORT_TOOLTIPS: Record<SortMode, string> = {
   distance: 'Sort by miles from the project to the nearest Zedcor branch — closest first.',
   posted: 'Sort by the date the source originally published the opportunity — newest first.',
   recent: 'Sort by when the Ranker most recently scored or rescored the opportunity — newest first.',
+  value: 'Sort by stated project value (project_value) — biggest dollars first. Projects without a stated value sort to the bottom.',
 };
 
 const RANGE_LABELS: Record<RangeMode, string> = {
@@ -188,28 +190,52 @@ export function ProjectList({
       arr = arr.filter((p) => (p.score ?? 0) >= minScore);
     }
 
-    if (sortMode === 'score') {
-      arr.sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
-    } else if (sortMode === 'distance') {
-      arr.sort(
-        (a, b) =>
-          (projectDistanceMiles(a) ?? Infinity) - (projectDistanceMiles(b) ?? Infinity),
+    if (sortMode === 'value') {
+      // Project Size — partition into "has value" / "no value" and sort
+      // only the valued half by the chosen direction. The unvalued half
+      // is appended afterward so projects with a null project_value
+      // always land at the bottom, regardless of asc/desc. (A null value
+      // means "unknown $", not "smallest $", so flipping direction
+      // shouldn't promote them above the priced opportunities.)
+      const withValue: Project[] = [];
+      const withoutValue: Project[] = [];
+      for (const p of arr) {
+        if (typeof p.project_value === 'number' && Number.isFinite(p.project_value)) {
+          withValue.push(p);
+        } else {
+          withoutValue.push(p);
+        }
+      }
+      withValue.sort((a, b) =>
+        sortDir === 'asc'
+          ? (a.project_value ?? 0) - (b.project_value ?? 0)
+          : (b.project_value ?? 0) - (a.project_value ?? 0),
       );
-    } else if (sortMode === 'posted') {
-      arr.sort((a, b) => {
-        const ta = a.posted_date ? Date.parse(a.posted_date) : 0;
-        const tb = b.posted_date ? Date.parse(b.posted_date) : 0;
-        return tb - ta;
-      });
+      arr = [...withValue, ...withoutValue];
     } else {
-      // Most recent — prefer ranked_at (touched whenever the Ranker scores or
-      // the Refresh button bumps a project) and fall back to ingested_at when
-      // no ranking has happened yet. Using ingested_at alone made the sort
-      // look static because the synthetic backfill writes everything at the
-      // same timestamp.
-      arr.sort((a, b) => mostRecentMs(b) - mostRecentMs(a));
+      if (sortMode === 'score') {
+        arr.sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+      } else if (sortMode === 'distance') {
+        arr.sort(
+          (a, b) =>
+            (projectDistanceMiles(a) ?? Infinity) - (projectDistanceMiles(b) ?? Infinity),
+        );
+      } else if (sortMode === 'posted') {
+        arr.sort((a, b) => {
+          const ta = a.posted_date ? Date.parse(a.posted_date) : 0;
+          const tb = b.posted_date ? Date.parse(b.posted_date) : 0;
+          return tb - ta;
+        });
+      } else {
+        // Most recent — prefer ranked_at (touched whenever the Ranker scores or
+        // the Refresh button bumps a project) and fall back to ingested_at when
+        // no ranking has happened yet. Using ingested_at alone made the sort
+        // look static because the synthetic backfill writes everything at the
+        // same timestamp.
+        arr.sort((a, b) => mostRecentMs(b) - mostRecentMs(a));
+      }
+      if (sortDir === 'asc') arr.reverse();
     }
-    if (sortDir === 'asc') arr.reverse();
     return arr;
   }, [projects, hidden, starred, filterMode, sortMode, sortDir, rangeMode, minScore, maxDistance]);
 
