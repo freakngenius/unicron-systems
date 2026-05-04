@@ -718,3 +718,53 @@ Total new: 50 tests. All green; full Pathfinder suite remains 809 passing.
 **Implements:** SPEC - HubSpot Bridge.md §"Schema" — lead_hubspot_deals + lead_hubspot_contacts.
 **Last verified against spec:** 2026-05-03.
 
+---
+
+## Gate 14A — Microsoft Teams user-level connector (PR #145)
+
+**State:** PR #145 open. Schema + connection routes + Settings tile only — Send-as-user (14B), inbound replies (14C), per-user channel posting (14D), Adaptive Cards for leads (14E) deferred.
+
+Operator setup: `MEMORY/operator-todos/2026-05-03-teams-user-setup.md` — Microsoft Entra app registration + Vercel env vars (`TEAMS_USER_CLIENT_ID`, `TEAMS_USER_CLIENT_SECRET`, `TEAMS_USER_TENANT_AUTHORITY`, `MULTI_TENANT_TEAMS_ENABLED`). Live status: `MEMORY/gate14-teams-live-status.md`.
+
+### Library files
+
+#### Pathfinder/lib/connectors/teams/user-oauth.ts
+**Implements:** Gate 14A dispatch §"Auth + data model" — multi-tenant Microsoft Entra v2.0 OAuth for the user-level Teams connector. Distinct from the existing `lib/connectors/teams/oauth.ts` (org-level Bot Framework path). Exports `buildAuthorizeUrl(state)`, `exchangeCode(code)`, `refreshToken(refresh)`, `decodeIdToken(idToken)`, `callbackUrl()`, `TEAMS_USER_SCOPES`. Reads `TEAMS_USER_CLIENT_ID` / `TEAMS_USER_CLIENT_SECRET` / `TEAMS_USER_TENANT_AUTHORITY` (defaults to `https://login.microsoftonline.com/common`). Scopes: `User.Read offline_access ChannelMessage.Send Chat.ReadWrite`. Tokens never logged — error messages carry only HTTP status + Microsoft's `error_description`.
+**Last verified against spec:** 2026-05-03.
+**Drift:** none — env var names match the dispatch verbatim.
+
+#### Pathfinder/lib/connectors/user-connection.ts (modified)
+**Drift:** **additive.** Widens `UserConnectionProvider` to include `'teams'`; adds `tenant_id` field on `UserConnection`. New helpers: `getActiveTeamsConnection`, `getTeamsConnectionTokens`, `upsertTeamsConnection` (soft-revokes prior active row scoped on `(user_id, provider='teams', tenant_id, status='active')` then inserts encrypted), `markTeamsConnectionRevoked`, `revokeTeamsTokenAtProvider` (best-effort `POST /me/revokeSignInSessions`). Multi-tenant invariant preserved: every Teams query filters by `(user_id, provider='teams', status='active')` with optional `tenant_id` scoping. Tokens encrypted via existing pgcrypto helpers (`CONNECTOR_TOKEN_KEY`).
+**Last verified against spec:** 2026-05-03.
+
+### Schema
+
+#### Pathfinder/supabase/migrations/0123_user_connections_teams.sql
+**Implements:** Gate 14A dispatch §"Auth + data model" — additive + idempotent. Widens `user_connections.provider` CHECK to include `'teams'` (drops any narrower variant via pg_constraint walk). Adds nullable `tenant_id text` column + `(user_id, provider, tenant_id) WHERE tenant_id IS NOT NULL` partial index for multi-tenant routing. NO DROP, no destructive ALTER on data. Re-runnable.
+**Last verified against spec:** 2026-05-03.
+**Drift:** none.
+
+### API routes
+
+| Route | Spec | Notes |
+|---|---|---|
+| `app/api/connectors/teams/install/route.ts` | Gate 14A — POST+GET → 302 to Microsoft consent | Mirrors `hubspot/install`. Operator-gated. Issues signed state with `connector_type: 'teams'` + `user_id`. |
+| `app/api/connectors/teams/callback/route.ts` | Gate 14A — exchange + encrypted upsert | Static path shadows generic `[type]/callback` for `teams`. Forks on `state.user_id`: present → user-level path; absent → 400 `org_level_unsupported_here` with pointer for when org-level Teams (PR #66/#69) ships. |
+| `app/api/connectors/teams/disconnect/route.ts` | Gate 14A — revoke + flip local | Best-effort `https://graph.microsoft.com/v1.0/me/revokeSignInSessions` then mark local `status='revoked'`. Idempotent. |
+| `app/api/connectors/teams/status/route.ts` | Gate 14A — per-user tile state | Mirrors `hubspot/status`. Surfaces `expired` when access token's `expires_at` is in the past. |
+
+### UI
+
+#### Pathfinder/components/settings/connectors/TeamsUserTile.tsx
+**Implements:** Gate 14A dispatch §"Sub-gates → Gate 14A → New code → TeamsUserTile". Mirrors `HubspotUserTile` byte-for-byte on the state machine (disconnected / connected / expired / error), localStorage-driven operator email resolution, server-state hydration via `/api/connectors/teams/status`. Brand colors `#4B53BC` primary / `#7B83EB` accent / `#c42424` revoke.
+**Last verified against spec:** 2026-05-03.
+
+#### Pathfinder/app/settings/connectors/page.tsx (modified)
+**Drift:** **additive, gated.** When `process.env.MULTI_TENANT_TEAMS_ENABLED === '1'`, slots `<TeamsUserTile />` via `tileOverrides.teams`. When unset (default), the legacy "Coming in Phase 2" stub modal renders unchanged — so the diff is safe to merge before Microsoft Entra app registration completes.
+
+### Tests
+
+| File | Tests | Covers |
+|---|---|---|
+| `tests/connectors/teams-user-connection.test.ts` | 9 | Multi-tenant isolation (user A's row never returned for user B), encrypt round-trip via stubbed pgcrypto RPCs, upsert revokes prior active row + inserts fresh row scoped on `(user_id, provider='teams', tenant_id, status='active')`, `markTeamsConnectionRevoked` with/without tenantId, `revokeTeamsTokenAtProvider` returns false on transport error / true on 2xx Microsoft Graph response. |
+

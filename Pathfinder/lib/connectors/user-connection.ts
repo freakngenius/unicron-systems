@@ -14,7 +14,7 @@
 
 import { supabaseAdmin } from '@/lib/supabase';
 
-export type UserConnectionProvider = 'gmail' | 'outlook' | 'hubspot';
+export type UserConnectionProvider = 'gmail' | 'outlook' | 'hubspot' | 'teams';
 export type UserConnectionStatus = 'active' | 'expired' | 'revoked';
 
 export interface UserConnection {
@@ -24,6 +24,8 @@ export interface UserConnection {
   email: string | null;
   portal_id: string | null;
   portal_name: string | null;
+  /** Azure AD tenant guid for Teams rows. Null for non-Teams providers. */
+  tenant_id: string | null;
   scope: string[] | null;
   connected_at: string;
   expires_at: string | null;
@@ -35,6 +37,22 @@ export interface UpsertHubspotConnectionInput {
   email: string | null;
   portal_id: string;
   portal_name: string | null;
+  access_token: string;
+  refresh_token: string | null;
+  expires_at: Date | null;
+  scope: string[];
+}
+
+export interface UpsertTeamsConnectionInput {
+  user_id: string;
+  email: string | null;
+  /** Azure AD tenant guid extracted from the id_token's `tid` claim. The
+   *  multi-tenant isolation boundary: every Teams query filters by
+   *  (user_id, provider='teams', tenant_id) so user A's tenant data is
+   *  never returned for user B. */
+  tenant_id: string;
+  /** Best-effort display name (e.g., "tenant:abcd1234" or upn-derived). */
+  tenant_name: string | null;
   access_token: string;
   refresh_token: string | null;
   expires_at: Date | null;
@@ -96,6 +114,7 @@ interface UserConnectionRow {
   email: string | null;
   portal_id: string | null;
   portal_name: string | null;
+  tenant_id: string | null;
   oauth_token_enc: unknown;
   oauth_refresh_token_enc: unknown;
   scope: string[] | null;
@@ -112,12 +131,19 @@ function rowToConnection(row: UserConnectionRow): UserConnection {
     email: row.email,
     portal_id: row.portal_id,
     portal_name: row.portal_name,
+    tenant_id: row.tenant_id ?? null,
     scope: row.scope,
     connected_at: row.connected_at,
     expires_at: row.expires_at,
     status: row.status,
   };
 }
+
+/** Column list shared by all SELECTs against user_connections. Including
+ *  tenant_id so Teams rows hydrate completely; harmless for other providers
+ *  where the column is null. */
+const USER_CONNECTION_COLS =
+  'id, user_id, provider, email, portal_id, portal_name, tenant_id, oauth_token_enc, oauth_refresh_token_enc, scope, connected_at, expires_at, status';
 
 /**
  * Look up the active HubSpot connection for the given user. Returns null
@@ -376,3 +402,226 @@ export async function revokeHubspotRefreshTokenAtProvider(refresh: string): Prom
     return false;
   }
 }
+
+// ============================================================================
+// Microsoft Teams (user-level) — Gate 14A
+//
+// Mirrors the HubSpot helpers above. The multi-tenant invariant for Teams is
+// (user_id, provider='teams', tenant_id, status='active') — including
+// tenant_id in the filter chain so user A's tenant data never returns when
+// querying user B (even if both happen to be on the same Azure tenant the
+// row-by-user_id filter still enforces isolation; tenant_id is the second
+// dimension Microsoft Graph routing keys on).
+// ============================================================================
+
+/**
+ * Look up the active Teams connection for the given user. Returns null
+ * when no active row exists. Multi-tenant boundary: filters on
+ * (user_id, provider='teams', status='active'). Caller may pass tenantId
+ * when they want to disambiguate between multiple tenants the same user
+ * has connected (rare today; the schema permits it).
+ */
+export async function getActiveTeamsConnection(
+  userId: string,
+  tenantId?: string,
+): Promise<UserConnection | null> {
+  const sb = admin() as unknown as {
+    from: (t: string) => {
+      select: (cols: string) => {
+        eq: (col: string, v: string) => SelectChain<UserConnectionRow>;
+      };
+    };
+  };
+  let chain: SelectChain<UserConnectionRow> = sb
+    .from('user_connections')
+    .select(USER_CONNECTION_COLS)
+    .eq('user_id', userId);
+  chain = chain.eq('provider', 'teams');
+  chain = chain.eq('status', 'active');
+  if (tenantId) chain = chain.eq('tenant_id', tenantId);
+  const res = await chain.order('connected_at', { ascending: false }).limit(1).maybeSingle();
+  if (res.error) {
+    throw new Error(`getActiveTeamsConnection failed for user ${userId}: ${res.error.message}`);
+  }
+  if (!res.data) return null;
+  return rowToConnection(res.data);
+}
+
+/**
+ * Decrypt access + refresh tokens for an active Teams connection. Used
+ * by API routes that call Microsoft Graph on behalf of the user. Returns
+ * null when no active connection exists.
+ */
+export async function getTeamsConnectionTokens(
+  userId: string,
+  tenantId?: string,
+): Promise<{ connection: UserConnection; access: string; refresh: string | null } | null> {
+  const sb = admin() as unknown as {
+    from: (t: string) => {
+      select: (cols: string) => {
+        eq: (col: string, v: string) => SelectChain<UserConnectionRow>;
+      };
+    };
+  };
+  let chain: SelectChain<UserConnectionRow> = sb
+    .from('user_connections')
+    .select(USER_CONNECTION_COLS)
+    .eq('user_id', userId);
+  chain = chain.eq('provider', 'teams');
+  chain = chain.eq('status', 'active');
+  if (tenantId) chain = chain.eq('tenant_id', tenantId);
+  const res = await chain.order('connected_at', { ascending: false }).limit(1).maybeSingle();
+  if (res.error) {
+    throw new Error(`getTeamsConnectionTokens failed for user ${userId}: ${res.error.message}`);
+  }
+  if (!res.data) return null;
+  if (!res.data.oauth_token_enc) {
+    throw new Error(`user_connection ${res.data.id} has no oauth_token_enc`);
+  }
+  const access = await decryptViaPg(res.data.oauth_token_enc);
+  const refresh = res.data.oauth_refresh_token_enc
+    ? await decryptViaPg(res.data.oauth_refresh_token_enc)
+    : null;
+  return { connection: rowToConnection(res.data), access, refresh };
+}
+
+/**
+ * Insert (or replace) the active Teams connection for a user+tenant.
+ * Existing active rows for the same (user_id, provider='teams', tenant_id)
+ * are marked status='revoked' so the partial-active uniqueness invariant
+ * holds. Tokens are encrypted via pgcrypto before write.
+ */
+export async function upsertTeamsConnection(
+  input: UpsertTeamsConnectionInput,
+): Promise<UserConnection> {
+  const access_enc = await encryptViaPg(input.access_token);
+  const refresh_enc = input.refresh_token ? await encryptViaPg(input.refresh_token) : null;
+
+  // Soft-revoke any existing active row for (user, provider, tenant).
+  type UpdateChain = {
+    eq: (col: string, v: string) => UpdateChain;
+    then: <T>(onfulfilled: (v: { error: { message: string } | null }) => T) => Promise<T>;
+  };
+  const sbUpdate = admin() as unknown as {
+    from: (t: string) => {
+      update: (v: { status: UserConnectionStatus }) => UpdateChain;
+    };
+  };
+  const updateChain = sbUpdate
+    .from('user_connections')
+    .update({ status: 'revoked' as UserConnectionStatus })
+    .eq('user_id', input.user_id)
+    .eq('provider', 'teams')
+    .eq('tenant_id', input.tenant_id)
+    .eq('status', 'active');
+  await Promise.resolve(updateChain);
+
+  // Insert the fresh row.
+  const sbInsert = admin() as unknown as {
+    from: (t: string) => {
+      insert: (rows: Record<string, unknown>) => {
+        select: (cols: string) => {
+          single: () => Promise<{
+            data: UserConnectionRow | null;
+            error: { message: string } | null;
+          }>;
+        };
+      };
+    };
+  };
+  const res = await sbInsert
+    .from('user_connections')
+    .insert({
+      user_id: input.user_id,
+      provider: 'teams',
+      email: input.email,
+      portal_id: null,
+      portal_name: input.tenant_name,
+      tenant_id: input.tenant_id,
+      oauth_token_enc: access_enc,
+      oauth_refresh_token_enc: refresh_enc,
+      scope: input.scope,
+      expires_at: input.expires_at ? input.expires_at.toISOString() : null,
+      status: 'active',
+    })
+    .select(USER_CONNECTION_COLS)
+    .single();
+  if (res.error || !res.data) {
+    throw new Error(
+      `upsertTeamsConnection failed for user ${input.user_id}: ${res.error?.message ?? 'no row returned'}`,
+    );
+  }
+  return rowToConnection(res.data);
+}
+
+/**
+ * Mark the active Teams connection(s) for a user as revoked. Idempotent —
+ * safe to call when no active row exists. Optionally scopes by tenant_id
+ * when revoking a specific tenant grant; without it, every active Teams
+ * row for the user is revoked.
+ */
+export async function markTeamsConnectionRevoked(
+  userId: string,
+  tenantId?: string,
+): Promise<void> {
+  const sb = admin() as unknown as {
+    from: (t: string) => {
+      update: (v: { status: UserConnectionStatus }) => {
+        eq: (col: string, v: string) => unknown;
+      };
+    };
+  };
+  type Chain = {
+    eq: (col: string, v: string) => Chain;
+    then: <T>(onfulfilled: (v: { error: { message: string } | null }) => T) => Promise<T>;
+  };
+  let q = sb
+    .from('user_connections')
+    .update({ status: 'revoked' as UserConnectionStatus })
+    .eq('user_id', userId) as unknown as Chain;
+  q = q.eq('provider', 'teams');
+  q = q.eq('status', 'active');
+  if (tenantId) q = q.eq('tenant_id', tenantId);
+  const res = await Promise.resolve(q);
+  if (res.error) {
+    throw new Error(`markTeamsConnectionRevoked failed for user ${userId}: ${res.error.message}`);
+  }
+}
+
+/**
+ * Best-effort revoke at Microsoft Graph. Calls
+ * `POST https://graph.microsoft.com/v1.0/me/revokeSignInSessions` with
+ * the user's access token; Microsoft revokes the user's session and
+ * issued refresh tokens for that app context. Returns true on 2xx,
+ * false otherwise. Caller should still mark the local row revoked
+ * regardless of the return value — local truth is what we control.
+ */
+export async function revokeTeamsTokenAtProvider(accessToken: string): Promise<boolean> {
+  try {
+    const res = await fetch('https://graph.microsoft.com/v1.0/me/revokeSignInSessions', {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${accessToken}`,
+        'content-type': 'application/json',
+      },
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+// ============================================================================
+// Internal: shared select-chain shape (used by Teams helpers above; the
+// HubSpot helpers above predate this and inline their own chain types —
+// preserved intentionally to keep the diff small).
+// ============================================================================
+type SelectChain<Row> = {
+  eq: (col: string, v: string) => SelectChain<Row>;
+  order: (col: string, opts: { ascending: boolean }) => SelectChain<Row>;
+  limit: (n: number) => SelectChain<Row>;
+  maybeSingle: () => Promise<{
+    data: Row | null;
+    error: { message: string } | null;
+  }>;
+};
