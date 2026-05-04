@@ -4,7 +4,8 @@
 //
 // LeadDetailModal shell behavior:
 //   - Renders the close button + position caption + cycle hint
-//   - Esc key → close (router.push to /pathfinder)
+//   - Esc key → close (router.push to '/' — basePath '/pathfinder' is
+//     auto-prepended by Next.js, yielding '/pathfinder/' at runtime)
 //   - Click on backdrop → close
 //   - Arrow Right / Down → next neighbor (cycles)
 //   - Arrow Left / Up → previous neighbor (cycles)
@@ -76,28 +77,33 @@ describe('LeadDetailModal — shell', () => {
 });
 
 describe('LeadDetailModal — close behavior', () => {
-  it('clicking close button pushes to /pathfinder by default', () => {
+  // Regression guard for Gate 12F: closeHref MUST be '/' (root-relative),
+  // not '/pathfinder'. Next.js auto-prepends basePath ('/pathfinder') to
+  // user-supplied URLs, so passing '/pathfinder' here yields the broken
+  // '/pathfinder/pathfinder' (404). The default must stay '/'.
+  it('clicking close button pushes to "/" by default (basePath auto-prepends to /pathfinder/)', () => {
     renderModal();
     fireEvent.click(screen.getByTestId('lead-detail-modal-close'));
-    expect(mockPush).toHaveBeenCalledWith('/pathfinder');
+    expect(mockPush).toHaveBeenCalledWith('/');
+    expect(mockPush).not.toHaveBeenCalledWith('/pathfinder');
   });
 
   it('clicking the backdrop closes the modal', () => {
     renderModal();
     fireEvent.click(screen.getByTestId('lead-detail-modal-backdrop'));
-    expect(mockPush).toHaveBeenCalledWith('/pathfinder');
+    expect(mockPush).toHaveBeenCalledWith('/');
   });
 
   it('Esc key closes the modal', () => {
     renderModal();
     fireEvent.keyDown(window, { key: 'Escape' });
-    expect(mockPush).toHaveBeenCalledWith('/pathfinder');
+    expect(mockPush).toHaveBeenCalledWith('/');
   });
 
   it('honors a custom closeHref override', () => {
-    renderModal({ closeHref: '/pathfinder/custom' });
+    renderModal({ closeHref: '/some/custom/path' });
     fireEvent.click(screen.getByTestId('lead-detail-modal-close'));
-    expect(mockPush).toHaveBeenCalledWith('/pathfinder/custom');
+    expect(mockPush).toHaveBeenCalledWith('/some/custom/path');
   });
 });
 
@@ -199,7 +205,7 @@ describe('LeadDetailModal — arrow-key cycling', () => {
     const ta = screen.getByTestId('composer-body');
     ta.focus();
     fireEvent.keyDown(ta, { key: 'Escape' });
-    expect(mockPush).toHaveBeenCalledWith('/pathfinder');
+    expect(mockPush).toHaveBeenCalledWith('/');
   });
 });
 

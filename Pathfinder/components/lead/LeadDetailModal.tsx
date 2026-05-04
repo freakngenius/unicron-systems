@@ -6,8 +6,8 @@
 // view is presented as a 75%-viewport-wide, 90vh-tall card with 10px
 // rounded corners on a dim + blur backdrop. The shell handles:
 //
-//   - Close button (top-right ✕) → router back to /pathfinder
-//   - Esc key → router back to /pathfinder
+//   - Close button (top-right ✕) → router back to dashboard root
+//   - Esc key → router back to dashboard root
 //   - Arrow Right / Arrow Down → next lead (cycles)
 //   - Arrow Left  / Arrow Up   → previous lead (cycles)
 //   - Body scroll lock while open
@@ -28,7 +28,12 @@ interface Props {
   neighborIds: string[];
   /** The LeadDetail tree to render inside the modal body. */
   children: React.ReactNode;
-  /** Override route for Close / Esc. Defaults to /pathfinder dashboard. */
+  /**
+   * Override route for Close / Esc. Defaults to '/' — Next.js auto-prepends
+   * the basePath ('/pathfinder') so this resolves to the dashboard root
+   * '/pathfinder/'. Passing '/pathfinder' here would yield '/pathfinder/pathfinder'
+   * (404) because basePath is prepended to user-supplied URLs.
+   */
   closeHref?: string;
 }
 
@@ -36,7 +41,7 @@ export function LeadDetailModal({
   currentProjectId,
   neighborIds,
   children,
-  closeHref = '/pathfinder',
+  closeHref = '/',
 }: Props): React.ReactElement {
   const router = useRouter();
 
