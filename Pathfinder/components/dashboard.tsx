@@ -120,17 +120,6 @@ export function Dashboard({
     [initialBranchesRaw],
   );
 
-  // Gate 17A — narrow the project corpus to active demo branches when in
-  // Houston-only mode. Off-mode (the default) returns initialProjects as is
-  // so the existing four-city behavior is byte-identical.
-  const projectsForDashboard = React.useMemo<Project[]>(() => {
-    if (!isHoustonOnlyMode()) return initialProjects;
-    const active = new Set(getActiveDemoBranchIds());
-    return initialProjects.filter(
-      (p) => p.nearest_branch_id != null && active.has(p.nearest_branch_id),
-    );
-  }, [initialProjects]);
-
   // Demo Polish UX § Gate 2 — index cross-pollination matches by lead id so
   // the filter + warm-intro overlay can do O(1) lookups. When a project has
   // multiple matches, the highest-confidence one wins (`indexMatchesByLead`
@@ -148,6 +137,28 @@ export function Dashboard({
   const [selectedBranchId, setSelectedBranchId] = React.useState<string | null>(null);
   const [source, setSource] = React.useState<SourceKey>('all');
   const [crossPoll, setCrossPoll] = React.useState(false);
+
+  // Gate 17A — narrow the project corpus to active demo branches when in
+  // Houston-only mode. Off-mode (the default) returns initialProjects as is
+  // so the existing four-city behavior is byte-identical.
+  //
+  // Gate 19 hot-fix — when the operator activates the top-bar Cross-
+  // Pollination filter chip, retain ALL cross-poll-matched projects
+  // regardless of branch so the chip can surface the full match set
+  // (12 matches across all 24 Zedcor branches). With the chip OFF the
+  // dashboard stays scoped to Houston-anchored leads, and the chip-ON
+  // path naturally bypasses minScore + range too via the existing
+  // applyNonBranchFilters cross-poll branch — together this restores
+  // the warm-intro view that Gate 17A inadvertently filtered out.
+  const projectsForDashboard = React.useMemo<Project[]>(() => {
+    if (!isHoustonOnlyMode()) return initialProjects;
+    const active = new Set(getActiveDemoBranchIds());
+    return initialProjects.filter((p) => {
+      if (p.nearest_branch_id != null && active.has(p.nearest_branch_id)) return true;
+      if (crossPoll && xpollLeadIds.has(p.id)) return true;
+      return false;
+    });
+  }, [initialProjects, xpollLeadIds, crossPoll]);
   const [openProjectId, setOpenProjectId] = React.useState<string | null>(null);
   // Demo Polish UX § Gate 7A flag — when on, every "open a project"
   // affordance navigates to the redesigned /leads/[projectId] page;
