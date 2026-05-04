@@ -23,6 +23,7 @@ import {
   HubspotUserClientError,
   type HubspotUserClient,
 } from '@/lib/hubspot/user-client';
+import { ensurePathfinderDealProperties } from '@/lib/hubspot/ensure-properties';
 import type { Project } from '@/lib/types';
 
 export type PushLeadDealOutcome =
@@ -285,6 +286,22 @@ export async function pushLeadDeal(input: PushLeadDealInput): Promise<PushLeadDe
     hubspotStageId: stageNormalized,
     hubspotPipelineId: process.env.HUBSPOT_DEAL_PIPELINE_ID ?? null,
   });
+
+  // Lazy-provision custom `pathfinder_*` properties on this portal.
+  // First push per portal pays a ~5-call schema bootstrap; cached
+  // process-locally after that. Failures here surface as a clear
+  // hubspot_error so we don't attempt a deal create that would 400 on
+  // PROPERTY_DOESNT_EXIST.
+  try {
+    await ensurePathfinderDealProperties(client, portalId);
+  } catch (err) {
+    const detail = err instanceof HubspotUserClientError ? err.message : String(err);
+    return {
+      ok: false,
+      reason: 'hubspot_error',
+      detail: `ensure custom properties failed: ${detail}`,
+    };
+  }
 
   let dealId: string;
   try {

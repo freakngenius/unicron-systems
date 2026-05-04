@@ -89,6 +89,11 @@ const fakeClient: HubspotUserClient = {
   findOrCreateContactByEmail: vi.fn(async () => ({ id: 'contact-NEW-1', created: true })),
   associateDealContact: vi.fn(async () => undefined),
   createNote: vi.fn(async () => ({ id: 'note-1' })),
+  // Gate 12F: lazy property-provisioning calls request() on cold portals.
+  // Returning a non-empty object short-circuits the GET-then-create flow
+  // (every property is treated as already present), so this orchestration
+  // suite stays focused on the deal/company/contact flow.
+  request: vi.fn(async () => ({ name: 'present' })) as unknown as HubspotUserClient['request'],
 };
 
 import { pushLeadDeal } from '../../lib/hubspot/lead-deal';

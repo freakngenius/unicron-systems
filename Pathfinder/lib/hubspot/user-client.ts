@@ -48,6 +48,15 @@ export interface HubspotUserClient {
   }) => Promise<{ id: string; created: boolean }>;
   associateDealContact: (dealId: string, contactId: string) => Promise<void>;
   createNote: (input: { dealId: string; body: string }) => Promise<{ id: string }>;
+  /** Lower-level HubSpot REST access. Used by ensure-properties to GET/POST
+   *  the properties + property-groups schema endpoints. Reuses the same
+   *  retry-on-429/5xx envelope as the named methods above so the
+   *  schema bootstrap inherits the same backoff guarantees. */
+  request: <T = unknown>(opts: {
+    method: 'GET' | 'POST' | 'PATCH' | 'PUT';
+    path: string;
+    body?: unknown;
+  }) => Promise<T>;
 }
 
 interface HubspotFetchOpts {
@@ -191,6 +200,16 @@ export function createUserClient(opts: {
         path: `/crm/v3/objects/deals/${encodeURIComponent(dealId)}/associations/contacts/${encodeURIComponent(contactId)}/deal_to_contact`,
         fetcher,
       });
+    },
+
+    async request(opts) {
+      const data = await callHubspot(accessToken, {
+        method: opts.method,
+        path: opts.path,
+        body: opts.body,
+        fetcher,
+      });
+      return data as never;
     },
 
     async createNote(input) {

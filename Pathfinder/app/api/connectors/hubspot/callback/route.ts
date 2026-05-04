@@ -20,6 +20,8 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { validateState } from '@/lib/connectors/oauth-state';
 import { exchangeCode } from '@/lib/connectors/hubspot/oauth';
 import { upsertHubspotConnection } from '@/lib/connectors/user-connection';
+import { ensurePathfinderDealProperties } from '@/lib/hubspot/ensure-properties';
+import { createUserClient } from '@/lib/hubspot/user-client';
 import { publicUrl } from '@/lib/public-url';
 
 export const dynamic = 'force-dynamic';
@@ -92,6 +94,17 @@ export async function GET(req: NextRequest) {
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return settingsRedirect({ error: 'persist_failed', detail: message.slice(0, 120) });
+  }
+
+  // Best-effort: warm the per-portal property schema so the first push
+  // from the UI doesn't pay the ~5-call bootstrap latency. Failures here
+  // are non-fatal — the push path will retry the ensure step itself.
+  try {
+    const client = createUserClient({ accessToken: exchange.access_token });
+    await ensurePathfinderDealProperties(client, exchange.hub_id);
+  } catch {
+    // swallow — connect is the user-visible action; ensure failure
+    // surfaces on the first push if it persists.
   }
 
   return settingsRedirect({ connected: 'hubspot' });
