@@ -78,6 +78,13 @@ const PROVIDERS: Record<ConnectorType, ProviderConfig> = {
       'crm.objects.companies.read',
       'crm.objects.companies.write',
       'crm.schemas.deals.read',
+      // crm.schemas.deals.write — required by lib/hubspot/ensure-properties.ts
+      // (gate 12F) which POSTs custom property + property-group definitions
+      // to a freshly-connected portal so the first deal push doesn't 400 on
+      // PROPERTY_DOESNT_EXIST. Must be enabled on the HubSpot dev app
+      // dashboard before this list change ships, otherwise install 400s
+      // with `scopes are missing`.
+      'crm.schemas.deals.write',
       'crm.schemas.contacts.read',
     ],
     scopeSeparator: ' ',
