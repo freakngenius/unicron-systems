@@ -18,7 +18,7 @@ import { Tooltip } from './Tooltip';
 
 // Width applied to every project-detail tooltip — Stage's full taxonomy
 // list (5 values) is the longest and reads correctly at 165px without
-// wrapping into >3 lines. Distance, Value, Posted all get the same width
+// wrapping into >3 lines. Distance, Project Size, Posted all get the same width
 // for visual consistency in the metrics row.
 const METRIC_TOOLTIP_WIDTH = 165;
 
@@ -26,7 +26,7 @@ const METRIC_TOOLTIP_WIDTH = 165;
 // stage / source taxonomies so the tooltip stays in sync as the data
 // model evolves — change `lib/stages.ts` and the tooltip updates.
 const METRIC_TOOLTIPS: Record<string, string> = {
-  Value: 'Estimated dollar value of the project as published on the source record.',
+  'Project Size': 'Estimated dollar value of the project as published on the source record.',
   Stage: `The project's current phase. Possible values: ${stagesEnumerated()}.`,
   Distance: "Distance from this project's location to the nearest Zedcor branch.",
   Posted: 'Date the source originally published this opportunity.',
@@ -238,7 +238,7 @@ export function ProjectModal({ project, branch, onClose }: ProjectModalProps) {
           {(() => {
             const posted = formatPostedDate(project.posted_date);
             return [
-              { label: 'Value', value, subtitle: null as string | null, accent: null as string | null },
+              { label: 'Project Size', value, subtitle: null as string | null, accent: null as string | null },
               { label: 'Stage', value: stage, subtitle: null, accent: null },
               { label: 'Distance', value: dist, subtitle: null, accent: null },
               { label: 'Posted', value: posted.top, subtitle: posted.subtitle, accent: null },

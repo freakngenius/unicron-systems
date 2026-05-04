@@ -201,7 +201,7 @@ describe('LeadDetail v2 — quick metrics strip cells', () => {
   it('shows the four canonical labels', () => {
     renderV2();
     const strip = screen.getByTestId('lead-detail-quick-metrics');
-    expect(strip).toHaveTextContent(/Value/i);
+    expect(strip).toHaveTextContent(/Project Size/i);
     expect(strip).toHaveTextContent(/Stage/i);
     expect(strip).toHaveTextContent(/Distance/i);
     expect(strip).toHaveTextContent(/Posted/i);
