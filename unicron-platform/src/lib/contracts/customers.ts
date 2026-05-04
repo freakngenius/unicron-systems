@@ -1,18 +1,39 @@
 // Wire types for the Customers tab (Phase 1 / Stream M3).
 //
-// Multi-tenant view of Pathfinder customer orgs. Stream M3 ships single-org
-// (Zedcor) per the schema gap captured in
-// MEMORY/operator-todos/2026-05-02-pathfinder-needs-org-table.md; the wire
-// types accommodate the eventual multi-org case without further churn.
+// Multi-tenant view of Pathfinder customer orgs. Originally shipped single-org
+// (Zedcor); 2026-05-04 added the persistence path that lets Architect-onboarded
+// orgs land here after Approve & Deploy. Pathfinder schema spec lives in
+// MEMORY/operator-todos/2026-05-04-pathfinder-needs-organizations-schema.md.
+
+import type { DecompositionArchitecture } from './architect';
 
 export type OrgStatus = 'active' | 'onboarding' | 'paused';
 
 export interface CustomerOrg {
+  /** Stable identifier — currently equal to slug; matches `customer_org_id` discriminator. */
   id: string;
+  /** URL slug; lowercase a-z, 0-9, hyphens. Unique. */
+  slug: string;
   display_name: string;
   status: OrgStatus;
   onboarded_at: string | null;
   primary_contact_email?: string;
+  /** Architect decomposition snapshot recorded at Approve & Deploy time. */
+  architecture?: DecompositionArchitecture | null;
+}
+
+export interface CreateCustomerOrgInput {
+  name: string;
+  slug: string;
+  architecture: DecompositionArchitecture | null;
+  primary_contact_email?: string;
+}
+
+export class SlugConflictError extends Error {
+  constructor(slug: string) {
+    super(`Slug "${slug}" is already taken`);
+    this.name = 'SlugConflictError';
+  }
 }
 
 export interface OrgHealthRollup {

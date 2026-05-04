@@ -1,5 +1,11 @@
 # 2026-05-02 — Pathfinder organization registry table
 
+> **SUPERSEDED 2026-05-04** by `2026-05-04-pathfinder-needs-organizations-schema.md`.
+> The newer schema uses uuid PK + separate `slug` and `customer_org_id` columns,
+> operator-only RLS (not anon-readable), and adds CRUD endpoints. That doc is
+> the active source of truth. Keeping this entry for historical context only.
+
+
 Discovered during Phase 1 / Stream M3 (Customer List + Health Dashboard) build. The M3 prompt anticipated a multi-tenant view with multiple customer orgs. Reality (verified via `Pathfinder/supabase/migrations/`):
 
 - `pathfinder.customers` exists but holds **facility-level customer records** (30 rows in production), not the tenant orgs of Pathfinder itself.
