@@ -4,16 +4,15 @@
 //
 // LeadDetailModal shell behavior:
 //   - Renders the close button + position caption + cycle hint
-//   - Esc key → close (router.push to '/' — basePath '/pathfinder' is
-//     auto-prepended by Next.js, yielding '/pathfinder/' at runtime)
-//   - Click on backdrop → close
+//   - Close / Esc / backdrop click → router.back() (instant dismiss of
+//     the intercepting-route @modal slot; no server fetch)
 //   - Arrow Right / Down → next neighbor (cycles)
 //   - Arrow Left / Up → previous neighbor (cycles)
 //   - Single-lead set → arrow keys are no-ops
 //   - Arrow keys do NOT trigger when focus is in an input/textarea
 //
 // next/navigation's useRouter is mocked at the test level so we can
-// assert push() calls without a real Next runtime.
+// assert back() / push() calls without a real Next runtime.
 
 import * as React from 'react';
 import { describe, it, expect, afterEach, vi, beforeEach } from 'vitest';
@@ -21,27 +20,27 @@ import { render, screen, cleanup, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 
 const mockPush = vi.fn();
+const mockBack = vi.fn();
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({ push: mockPush, back: vi.fn(), replace: vi.fn() }),
+  useRouter: () => ({ push: mockPush, back: mockBack, replace: vi.fn() }),
 }));
 
 import { LeadDetailModal } from '@/components/lead/LeadDetailModal';
 
 beforeEach(() => {
   mockPush.mockReset();
+  mockBack.mockReset();
 });
 afterEach(() => cleanup());
 
 function renderModal(opts: {
   current?: string;
   neighbors?: string[];
-  closeHref?: string;
 } = {}) {
   return render(
     <LeadDetailModal
       currentProjectId={opts.current ?? 'sam.gov:p2'}
       neighborIds={opts.neighbors ?? ['sam.gov:p1', 'sam.gov:p2', 'sam.gov:p3']}
-      closeHref={opts.closeHref}
     >
       <div data-testid="lead-detail-modal-content">child content</div>
     </LeadDetailModal>,
@@ -77,33 +76,29 @@ describe('LeadDetailModal — shell', () => {
 });
 
 describe('LeadDetailModal — close behavior', () => {
-  // Regression guard for Gate 12F: closeHref MUST be '/' (root-relative),
-  // not '/pathfinder'. Next.js auto-prepends basePath ('/pathfinder') to
-  // user-supplied URLs, so passing '/pathfinder' here yields the broken
-  // '/pathfinder/pathfinder' (404). The default must stay '/'.
-  it('clicking close button pushes to "/" by default (basePath auto-prepends to /pathfinder/)', () => {
+  // Regression guard for Gate 12G: close MUST use router.back() (history
+  // pop) and MUST NOT call router.push(). Pushing any URL re-renders the
+  // force-dynamic dashboard server-side (~30s in production); back() pops
+  // the intercepting-route history entry and dismisses instantly.
+  it('clicking close button calls router.back() and does NOT push', () => {
     renderModal();
     fireEvent.click(screen.getByTestId('lead-detail-modal-close'));
-    expect(mockPush).toHaveBeenCalledWith('/');
-    expect(mockPush).not.toHaveBeenCalledWith('/pathfinder');
+    expect(mockBack).toHaveBeenCalledTimes(1);
+    expect(mockPush).not.toHaveBeenCalled();
   });
 
-  it('clicking the backdrop closes the modal', () => {
+  it('clicking the backdrop calls router.back()', () => {
     renderModal();
     fireEvent.click(screen.getByTestId('lead-detail-modal-backdrop'));
-    expect(mockPush).toHaveBeenCalledWith('/');
+    expect(mockBack).toHaveBeenCalledTimes(1);
+    expect(mockPush).not.toHaveBeenCalled();
   });
 
-  it('Esc key closes the modal', () => {
+  it('Esc key calls router.back()', () => {
     renderModal();
     fireEvent.keyDown(window, { key: 'Escape' });
-    expect(mockPush).toHaveBeenCalledWith('/');
-  });
-
-  it('honors a custom closeHref override', () => {
-    renderModal({ closeHref: '/some/custom/path' });
-    fireEvent.click(screen.getByTestId('lead-detail-modal-close'));
-    expect(mockPush).toHaveBeenCalledWith('/some/custom/path');
+    expect(mockBack).toHaveBeenCalledTimes(1);
+    expect(mockPush).not.toHaveBeenCalled();
   });
 });
 
@@ -205,7 +200,7 @@ describe('LeadDetailModal — arrow-key cycling', () => {
     const ta = screen.getByTestId('composer-body');
     ta.focus();
     fireEvent.keyDown(ta, { key: 'Escape' });
-    expect(mockPush).toHaveBeenCalledWith('/');
+    expect(mockBack).toHaveBeenCalledTimes(1);
   });
 });
 
