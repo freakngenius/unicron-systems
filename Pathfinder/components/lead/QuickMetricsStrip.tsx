@@ -3,8 +3,10 @@
 // components/lead/QuickMetricsStrip.tsx — Demo Polish UX Gate 9A.
 //
 // 4-cell metrics strip rendered immediately under the LeadDetail header,
-// per SPEC - Lead Detail Page v2.md § 2. Cells: VALUE / STAGE / DISTANCE /
-// POSTED. Posted shows a two-line value (`X days ago` + `MM-DD-YY` subtitle).
+// per SPEC - Lead Detail Page v2.md § 2. Cells: PROJECT SIZE / STAGE /
+// DISTANCE / POSTED. Posted shows a two-line value (`X days ago` +
+// `MM-DD-YY` subtitle). Gate 15B aligned the first cell's label with
+// the ProjectFactsGrid (Gate 11D) — both now read "PROJECT SIZE".
 //
 // Ported from the equivalent block in components/ProjectModal.tsx so the
 // page-route lead detail and the modal-pattern lead detail share the same
@@ -40,7 +42,7 @@ export function QuickMetricsStrip({ project }: Props): React.ReactElement {
     value: string;
     subtitle: string | null;
   }> = [
-    { label: 'Value', value: formatValue(project.project_value), subtitle: null },
+    { label: 'Project Size', value: formatValue(project.project_value), subtitle: null },
     { label: 'Stage', value: stageLabel(project.project_stage), subtitle: null },
     { label: 'Distance', value: formatDistance(project.distance_miles), subtitle: null },
     { label: 'Posted', value: posted.top, subtitle: posted.subtitle },
