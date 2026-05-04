@@ -533,8 +533,9 @@ export function Dashboard({
           </GoogleMap>
         </div>
 
-        {/* Coverage focus ring — DOM overlay sized in viewport pixels so it
-            stays the same on-screen footprint regardless of zoom. */}
+        {/* Coverage radius — native google.maps.Circle drawn at the branch
+            lat/lng with a 300mi geographic radius. Pixel size scales with
+            zoom; the circle always covers the same physical area on the map. */}
         {!crossPoll && selectedBranch && (
           <CoverageCircle lat={selectedBranch.lat} lng={selectedBranch.lon} />
         )}
