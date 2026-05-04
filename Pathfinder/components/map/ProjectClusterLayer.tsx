@@ -51,6 +51,32 @@ export function ProjectClusterLayer({ markers, spiderfyZoom = 10 }: ProjectClust
     const clusterer = new MarkerClusterer({
       map,
       markers: built as unknown as ClustererMarker[],
+      // Cluster click → zoom-to-disaggregate. The library default does
+      // `map.fitBounds(cluster.bounds)`, but in Houston-only demo mode many
+      // leads share the exact same lat/lng (single permit / contract block),
+      // producing zero-area bounds — fitBounds is a no-op and the click
+      // appears to do nothing. We handle three cases explicitly:
+      //   1. zero-area bounds → bump zoom +2 so spiderfy spreads the stack;
+      //   2. real bounds → fitBounds with 80px padding;
+      //   3. missing bounds → pan + zoom +2 at the cluster position.
+      onClusterClick: (_event, cluster, mapInstance) => {
+        const z = mapInstance.getZoom() ?? spiderfyZoom;
+        const bumpZoom = Math.max(z + 2, spiderfyZoom + 1);
+        if (!cluster.bounds) {
+          mapInstance.panTo(cluster.position);
+          mapInstance.setZoom(bumpZoom);
+          return;
+        }
+        const ne = cluster.bounds.getNorthEast();
+        const sw = cluster.bounds.getSouthWest();
+        const zeroArea = ne.lat() === sw.lat() && ne.lng() === sw.lng();
+        if (zeroArea) {
+          mapInstance.panTo(cluster.position);
+          mapInstance.setZoom(bumpZoom);
+          return;
+        }
+        mapInstance.fitBounds(cluster.bounds, 80);
+      },
       renderer: {
         render: ({ count, position }) => {
           const size = 30 + Math.min(count, 50);
@@ -66,6 +92,10 @@ export function ProjectClusterLayer({ markers, spiderfyZoom = 10 }: ProjectClust
               scaledSize: new google.maps.Size(size, size),
               anchor: new google.maps.Point(size / 2, size / 2),
             },
+            // Cursor hint so the cluster reads as clickable. (The default
+            // marker cursor is the open hand; pointer makes the affordance
+            // explicit and matches branch / lead pin cursors.)
+            cursor: 'pointer',
             zIndex: 200,
           });
         },
@@ -73,8 +103,25 @@ export function ProjectClusterLayer({ markers, spiderfyZoom = 10 }: ProjectClust
     });
     clustererRef.current = clusterer;
 
+    // Re-spiderfy on zoom change. spiderfyOverlaps is computed once from
+    // the input `markers`, so the offset positions baked into `built[]`
+    // were calibrated for the zoom at construct time. After a cluster
+    // click bumps zoom past `spiderfyZoom`, the stacked markers need to
+    // spread out — without this listener they stay collinear and re-cluster.
+    // The next idle event (auto-fired by the clusterer's internal listener)
+    // will recompute clusters with the updated positions.
+    const zoomListener = map.addListener('zoom_changed', () => {
+      const newZoom = map.getZoom() ?? spiderfyZoom;
+      const respread = spiderfyOverlaps(markers, spiderfyZoom, newZoom);
+      respread.forEach((m, i) => {
+        const target = built[i];
+        if (target) target.setPosition({ lat: m.lat, lng: m.lng });
+      });
+    });
+
     const refs = refsRef.current;
     return () => {
+      google.maps.event.removeListener(zoomListener);
       clusterer.clearMarkers();
       built.forEach((m) => m.setMap(null));
       refs.clear();
