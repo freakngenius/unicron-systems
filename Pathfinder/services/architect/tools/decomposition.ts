@@ -531,6 +531,34 @@ export const finalizeProposalTool: ToolDef = {
         type: 'array',
         items: { type: 'string' },
       },
+      business_summary: {
+        type: 'object',
+        description:
+          'Plain-language summary surfaced above the technical decomposition. 1-3 sentences per field; use the customer\'s vocabulary; avoid system terms like "agent," "ingestion," "ranker."',
+        properties: {
+          lead_type: {
+            type: 'string',
+            description:
+              'One sentence describing the lead unit and its key attributes.',
+          },
+          business_area: {
+            type: 'string',
+            description:
+              'Which part of the customer\'s organization will use these leads, and to what end.',
+          },
+          problem_solved: {
+            type: 'string',
+            description:
+              'The operational pain being addressed; reference any specific constraints or context the customer mentioned.',
+          },
+          what_they_get: {
+            type: 'string',
+            description:
+              'The concrete deliverable in plain language (dashboard, alerts, briefs, drafts) — written so a non-technical stakeholder understands.',
+          },
+        },
+        required: ['lead_type', 'business_area', 'problem_solved', 'what_they_get'],
+      },
     },
     required: [
       'buyer',
@@ -542,6 +570,7 @@ export const finalizeProposalTool: ToolDef = {
       'layer_4_agents',
       'estimates',
       'open_questions',
+      'business_summary',
     ],
   },
   // Handler is unused — runtime captures the input directly when the tool

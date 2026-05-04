@@ -152,6 +152,16 @@ const validProposal = {
     architecture_confidence: 'high',
   },
   open_questions: [],
+  business_summary: {
+    lead_type:
+      'New commercial construction permits in Harris County valued above $250k where the GC has no permanent security vendor on file.',
+    business_area:
+      'Sales team for physical-security services — feeds the outreach pipeline that drives temporary on-site guard deals.',
+    problem_solved:
+      'Reps can\'t manually monitor every Harris County permit filing, and projects get awarded to incumbents before the rep hears about them.',
+    what_they_get:
+      'Daily ranked feed of qualified construction projects with GC contact, project value, and a draft outreach pitch they can review before sending.',
+  },
 };
 
 describe('runDecomposition — happy path', () => {
@@ -192,6 +202,42 @@ describe('runDecomposition — happy path', () => {
     expect(rows.sessions).toHaveLength(1);
     expect(rows.proposals).toHaveLength(1);
     expect(store.updateSession).toHaveBeenCalled();
+  });
+
+  it('includes a business_summary object with all four fields on a successful decomposition', async () => {
+    const { store, rows } = fakeStore();
+    setSessionStoreForTesting(store);
+
+    const client = makeMockClient([
+      mockMessage({
+        toolUses: [{ id: 't1', name: 'finalizeProposal', input: validProposal }],
+      }),
+    ]);
+
+    const result = await runDecomposition({
+      input: {
+        buyer_pain_prompt:
+          'I want to find construction sites in Houston that need temporary security guards.',
+      },
+      anthropic: client,
+    });
+
+    expect(result.status).toBe('completed');
+    expect(result.architecture.business_summary).toBeDefined();
+    const summary = result.architecture.business_summary;
+    expect(typeof summary.lead_type).toBe('string');
+    expect(summary.lead_type.length).toBeGreaterThan(0);
+    expect(typeof summary.business_area).toBe('string');
+    expect(summary.business_area.length).toBeGreaterThan(0);
+    expect(typeof summary.problem_solved).toBe('string');
+    expect(summary.problem_solved.length).toBeGreaterThan(0);
+    expect(typeof summary.what_they_get).toBe('string');
+    expect(summary.what_they_get.length).toBeGreaterThan(0);
+
+    // The summary persists into the architect_proposals.details jsonb so the
+    // customer-side dashboard can read it back later.
+    const proposalRow = rows.proposals[0] as { details: { business_summary?: unknown } };
+    expect(proposalRow.details.business_summary).toEqual(summary);
   });
 
   it('downgrades to confidence=low when finalize bypasses validateArchitecture', async () => {

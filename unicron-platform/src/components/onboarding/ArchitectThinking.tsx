@@ -6,12 +6,17 @@ import { postDecomposition } from '../../lib/architectClient';
 import { architectureToSystemConfig } from '../../lib/architectAdapters';
 import { listCustomerOrgs } from '../../lib/customersClient';
 import type {
+  BusinessSummary,
   DecompositionArchitecture,
   DecompositionResponse,
 } from '../../lib/contracts/architect';
 import type { SystemConfig } from '../../context/SystemContext';
 import { ArchitectureEditor } from './ArchitectureEditor';
 import { ApproveDeployModal, deriveDefaultName } from './ApproveDeployModal';
+import {
+  BusinessSummaryPanel,
+  type BusinessSummaryStatus,
+} from '../BusinessSummaryPanel';
 
 export type ApproveMeta = {
   name: string;
@@ -40,6 +45,9 @@ export function ArchitectThinking({ buyerPain, onApprove }: Props) {
   const [submitting, setSubmitting] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
   const [existingSlugs, setExistingSlugs] = useState<string[]>([]);
+  // Operator-edited business_summary; overrides response.architecture.business_summary
+  // until Approve/Deploy. Reset on each new decomposition.
+  const [summaryEdits, setSummaryEdits] = useState<BusinessSummary | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -51,6 +59,7 @@ export function ArchitectThinking({ buyerPain, onApprove }: Props) {
     setEditing(false);
     setPending(null);
     setServerError(null);
+    setSummaryEdits(null);
 
     postDecomposition({ buyerPain })
       .then((res) => {
@@ -105,23 +114,61 @@ export function ArchitectThinking({ buyerPain, onApprove }: Props) {
 
   const done = total > 0 && revealed >= total;
 
+  // Architecture passed forward on Approve/Apply must carry the operator's
+  // business_summary edits if any.
+  const composeArchitecture = (
+    base: DecompositionArchitecture,
+  ): DecompositionArchitecture => {
+    const summary = summaryEdits ?? base.business_summary;
+    return summary ? { ...base, business_summary: summary } : base;
+  };
+
   // APPLY EDITS commits the edited architecture as-is. The modal collects
   // name + slug before the deploy actually happens, so we stash the pending
   // architecture/config and let the modal drive the next step.
   const handleApply = (next: DecompositionArchitecture) => {
-    const nextConfig = architectureToSystemConfig(next, buyerPain);
-    setPending({ architecture: next, config: { ...nextConfig, status: 'live' } });
+    const composed = composeArchitecture(next);
+    const nextConfig = architectureToSystemConfig(composed, buyerPain);
+    setPending({ architecture: composed, config: { ...nextConfig, status: 'live' } });
     setServerError(null);
   };
 
   const handleApprove = () => {
     if (!response) return;
     setPending({
-      architecture: response.architecture,
+      architecture: composeArchitecture(response.architecture),
       config: { ...response.recommendedConfig, status: 'live' },
     });
     setServerError(null);
   };
+
+  const handleSummaryEdit = (
+    field: keyof BusinessSummary,
+    value: string,
+  ) => {
+    const baseline =
+      summaryEdits ??
+      response?.architecture.business_summary ?? {
+        lead_type: '',
+        business_area: '',
+        problem_solved: '',
+        what_they_get: '',
+      };
+    setSummaryEdits({ ...baseline, [field]: value });
+  };
+
+  const summaryToRender: BusinessSummary | null =
+    summaryEdits ?? response?.architecture.business_summary ?? null;
+  const summaryStatus: BusinessSummaryStatus = error
+    ? 'error'
+    : !response
+    ? 'loading'
+    : summaryToRender
+    ? 'ready'
+    : 'error';
+  const summaryErrorMessage = error
+    ? `Architect error: ${error}. Edit manually below or rerun decomposition.`
+    : undefined;
 
   const handleConfirm = async ({ name, slug }: { name: string; slug: string }) => {
     if (!pending) return;
@@ -158,7 +205,16 @@ export function ArchitectThinking({ buyerPain, onApprove }: Props) {
         </div>
       </div>
 
-      <div className="bg-bg-card border border-border-default rounded-lg p-6">
+      <div className="flex flex-col gap-6">
+        <BusinessSummaryPanel
+          summary={summaryToRender}
+          customerName={deriveDefaultName(buyerPain)}
+          onEdit={handleSummaryEdit}
+          status={summaryStatus}
+          errorMessage={summaryErrorMessage}
+        />
+
+        <div className="bg-bg-card border border-border-default rounded-lg p-6">
         <div className="mono text-[11px] uppercase tracking-[0.22em] text-accent-gold mb-4">
           {editing ? 'ARCHITECT · EDIT ARCHITECTURE' : 'ARCHITECT · DECOMPOSING'}
         </div>
@@ -212,6 +268,7 @@ export function ArchitectThinking({ buyerPain, onApprove }: Props) {
             </div>
           </>
         )}
+        </div>
       </div>
 
       {pending ? (

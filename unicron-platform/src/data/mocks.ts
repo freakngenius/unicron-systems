@@ -906,6 +906,16 @@ export const architectDecompositionMock: DecompositionApiResponse = {
       'Should the GeoMapper radius default to 25mi or 50mi for this vertical?',
       'Adjacent-need detection — extend Enricher or split into AdjacencyMapper?',
     ],
+    business_summary: {
+      lead_type:
+        'Large new commercial construction projects (value > $1M) in the Pittsburgh metro that don\'t already have a permanent security vendor on file with the GC.',
+      business_area:
+        'Sales team for distributors of temporary construction-site security — feeds the outreach pipeline that drives mobile-unit and patrol-service deals across Allegheny County.',
+      problem_solved:
+        'Reps can\'t manually monitor permit feeds, federal solicitations, and local construction news across every Pittsburgh-metro jurisdiction. Big projects get awarded to incumbents before the rep ever hears about them; geography mismatches eat outreach time.',
+      what_they_get:
+        'Daily ranked feed of qualified construction projects with GC contact, project value, and incumbency signal. AI-drafted personalized outreach (review-before-send). Friday weekly digest of the top opportunities.',
+    },
   },
   reasoning: [
     'Buyer is upstream of construction; their signal is large new builds without permanent security.',

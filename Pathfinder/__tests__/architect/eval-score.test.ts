@@ -43,6 +43,12 @@ function baseProposal(): DecompositionProposal {
       architecture_confidence: 'high',
     },
     open_questions: [],
+    business_summary: {
+      lead_type: 'New commercial construction permits in Harris County.',
+      business_area: 'Sales team for physical-security services.',
+      problem_solved: 'Reps can\'t monitor permit feeds at the jurisdiction level.',
+      what_they_get: 'Daily ranked feed of qualifying projects with draft outreach.',
+    },
   };
 }
 

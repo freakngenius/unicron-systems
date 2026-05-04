@@ -82,6 +82,16 @@ export type DecompositionApiRequest = {
   trigger?: ArchitectTrigger;           // default 'manual'
 };
 
+// Plain-language framing surfaced above the technical decomposition in the
+// Onboarding view. Operator may edit before Approve/Deploy.
+// See `Company Docs/Specs/SPEC - Architect Business Summary Panel.md`.
+export type BusinessSummary = {
+  lead_type: string;
+  business_area: string;
+  problem_solved: string;
+  what_they_get: string;
+};
+
 // The architecture proposal Stream D returns inside DecompositionApiResponse.
 // Structurally matches `SPEC - Architect Agent.md` §3 output JSON.
 export type DecompositionArchitecture = {
@@ -102,6 +112,9 @@ export type DecompositionArchitecture = {
     architecture_confidence: 'low' | 'medium' | 'high';
   };
   open_questions: string[];
+  // Optional in the wire type for backward compatibility with proposals
+  // emitted before 2026-05-04. Fresh emissions always include it.
+  business_summary?: BusinessSummary;
 };
 
 export type DecompositionApiResponse = {
