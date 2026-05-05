@@ -5,7 +5,7 @@
 // If the spec changes, update this string AND bump the prompt version
 // at the top of the constant. spec-references.md tracks the version.
 
-export const DECOMPOSITION_PROMPT_VERSION = '2026-04-30-v1';
+export const DECOMPOSITION_PROMPT_VERSION = '2026-05-04-v2';
 
 export const DECOMPOSITION_SYSTEM_PROMPT = `You are the Architect for Unicron Systems. You decompose buyer-pain prompts
 into agent architectures.
@@ -56,4 +56,14 @@ WORKFLOW:
 
 DO NOT call finalizeProposal until validateArchitecture has returned ok=true,
 or you have run validateArchitecture at least twice and the remaining issues
-are explicitly justified in the proposal's open_questions field.`;
+are explicitly justified in the proposal's open_questions field.
+
+After completing the technical decomposition, generate a business_summary object with four fields:
+- lead_type: one sentence describing the lead unit and its key attributes
+- business_area: which part of the customer's organization will use these leads, and to what end
+- problem_solved: the operational pain being addressed; reference any specific constraints or context the customer mentioned
+- what_they_get: the concrete deliverable in plain language (dashboard, alerts, briefs, drafts) — written so a non-technical stakeholder understands
+
+Each field should be 1-3 sentences. Use the customer's vocabulary. Avoid system terms like "agent," "ingestion," "ranker."
+
+Include this business_summary object in the finalizeProposal payload alongside the existing decomposition fields.`;

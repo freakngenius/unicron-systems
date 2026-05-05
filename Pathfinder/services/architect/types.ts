@@ -99,6 +99,16 @@ export interface DecompositionInput {
   trigger?: ArchitectTrigger;
 }
 
+// Plain-language summary surfaced above the technical decomposition in the
+// Onboarding view. Stable across architecture edits — operator can refine
+// before Approve/Deploy. See SPEC - Architect Business Summary Panel.md.
+export interface BusinessSummary {
+  lead_type: string;
+  business_area: string;
+  problem_solved: string;
+  what_they_get: string;
+}
+
 // What the Architect's `finalizeProposal` tool emits, validated server-side.
 export interface DecompositionProposal {
   buyer: string;
@@ -118,6 +128,7 @@ export interface DecompositionProposal {
     architecture_confidence: 'low' | 'medium' | 'high';
   };
   open_questions: string[];
+  business_summary: BusinessSummary;
 }
 
 export interface DecompositionResponse {
