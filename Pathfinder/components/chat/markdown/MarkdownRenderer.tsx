@@ -36,7 +36,38 @@ export type MarkdownRendererProps = {
    * pointing at `sources[N - 1]`.
    */
   sources?: ChatSourceCitation[];
+  /**
+   * When provided, inline backtick-wrapped tokens that match the
+   * Pathfinder lead-ID format become clickable chips that open the lead
+   * detail modal for that project.
+   */
+  onLeadClick?: (projectId: string) => void;
 };
+
+// ── Lead-ID detection ────────────────────────────────────────────────────
+//
+// Matches the two formats Pathfinder's agent outputs:
+//   source-prefixed — "harris:HC-METRO-2026-031", "sam.gov:SOLICIT-123"
+//   direct uppercase — "TxDOT-I45-2026-001" (≥ 3 hyphenated segments)
+// Checked against inline-code content only; fenced blocks are unaffected.
+
+const LEAD_ID_RE =
+  /^(?:[a-z][a-z0-9.]*:[A-Za-z0-9][A-Za-z0-9\-_]{4,}|[A-Z][A-Za-z0-9]*(?:-[A-Za-z0-9]+){2,})$/;
+
+// ── LeadIdChip — interactive inline lead-ID token ────────────────────────
+
+function LeadIdChip({ id, onClick }: { id: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={`Open lead: ${id}`}
+      className="rounded-sm border border-rule/15 bg-bgAlt px-1 py-[1px] font-mono text-[11.5px] text-ink cursor-pointer hover:bg-hi/10 hover:border-hi/40 transition-colors duration-100"
+    >
+      {id}
+    </button>
+  );
+}
 
 // ── Inline `[N]` → CitationChip transformer ──────────────────────────────
 
@@ -97,9 +128,11 @@ function nodeToText(node: React.ReactNode): string {
 function SmartTable({
   table,
   sources,
+  onLeadClick,
 }: {
   table: ParsedTable;
   sources: ChatSourceCitation[];
+  onLeadClick?: (id: string) => void;
 }) {
   const columns: { header: string; kind: CellKind }[] = React.useMemo(
     () =>
@@ -165,7 +198,7 @@ function SmartTable({
                         raw={raw}
                         idHint={col.kind === 'title' ? idHint : undefined}
                       >
-                        <InlineMarkdown text={raw} sources={sources} />
+                        <InlineMarkdown text={raw} sources={sources} onLeadClick={onLeadClick} />
                       </CellByKind>
                     </td>
                   );
@@ -184,20 +217,28 @@ function SmartTable({
 function InlineMarkdown({
   text,
   sources,
+  onLeadClick,
 }: {
   text: string;
   sources: ChatSourceCitation[];
+  onLeadClick?: (id: string) => void;
 }) {
   const components: Components = {
     p: ({ children }) => <>{sources.length > 0 ? replaceCitations(children, sources) : children}</>,
-    code: ({ children, ...rest }) => (
-      <code
-        {...rest}
-        className="rounded-sm border border-rule/15 bg-bgAlt px-1 py-[1px] font-mono text-[11px] text-ink"
-      >
-        {children}
-      </code>
-    ),
+    code: ({ children, ...rest }) => {
+      const id = nodeToText(children).trim();
+      if (onLeadClick && LEAD_ID_RE.test(id)) {
+        return <LeadIdChip id={id} onClick={() => onLeadClick(id)} />;
+      }
+      return (
+        <code
+          {...rest}
+          className="rounded-sm border border-rule/15 bg-bgAlt px-1 py-[1px] font-mono text-[11px] text-ink"
+        >
+          {children}
+        </code>
+      );
+    },
     a: ({ children, href, ...rest }) => (
       <a
         {...rest}
@@ -219,7 +260,7 @@ function InlineMarkdown({
 
 // ── Prose component overrides (everything not in a table) ────────────────
 
-function makeProseComponents(sources: ChatSourceCitation[]): Components {
+function makeProseComponents(sources: ChatSourceCitation[], onLeadClick?: (id: string) => void): Components {
   return {
     h1: ({ children, ...props }) => (
       <h1 {...props} className="mb-2 mt-4 text-[18px] font-semibold leading-[1.3] text-ink first:mt-0">
@@ -293,6 +334,10 @@ function makeProseComponents(sources: ChatSourceCitation[]): Components {
     code: ({ className, children, ...props }) => {
       const isFenced = /language-/.test(className ?? '');
       if (!isFenced) {
+        const id = nodeToText(children).trim();
+        if (onLeadClick && LEAD_ID_RE.test(id)) {
+          return <LeadIdChip id={id} onClick={() => onLeadClick(id)} />;
+        }
         return (
           <code
             {...props}
@@ -319,7 +364,7 @@ function makeProseComponents(sources: ChatSourceCitation[]): Components {
 
 // ── Public component ─────────────────────────────────────────────────────
 
-export function MarkdownRenderer({ content, streaming, sources = [] }: MarkdownRendererProps) {
+export function MarkdownRenderer({ content, streaming, sources = [], onLeadClick }: MarkdownRendererProps) {
   const safe = React.useMemo(() => {
     if (!streaming) {
       return { safe: content, trimmed: false, placeholder: null as null | 'table' | 'code' };
@@ -329,13 +374,13 @@ export function MarkdownRenderer({ content, streaming, sources = [] }: MarkdownR
 
   const segments = React.useMemo(() => segmentMarkdown(safe.safe), [safe.safe]);
 
-  const components = React.useMemo(() => makeProseComponents(sources), [sources]);
+  const components = React.useMemo(() => makeProseComponents(sources, onLeadClick), [sources, onLeadClick]);
 
   return (
     <div className="pf-md text-ink" data-testid="md-root">
       {segments.map((seg, i) => {
         if (seg.kind === 'table') {
-          return <SmartTable key={i} table={seg.table} sources={sources} />;
+          return <SmartTable key={i} table={seg.table} sources={sources} onLeadClick={onLeadClick} />;
         }
         return (
           <ReactMarkdown key={i} remarkPlugins={[remarkGfm]} components={components}>

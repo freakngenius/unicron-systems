@@ -677,6 +677,7 @@ export function Dashboard({
           branches={initialBranches}
           projects={projectsForDashboard}
           customers={initialCustomers}
+          onLeadClick={openLead}
         />
       </APIProvider>
     </div>
