@@ -34,6 +34,10 @@ export function MapLegend({ crossPoll }: MapLegendProps) {
         position: 'absolute',
         left: 272,
         bottom: 16,
+        // Cap at the right panel boundary so the legend never collides with
+        // the right rail on narrow viewports — items wrap to a second row
+        // instead of clipping. Right panel sits at right: 16 + ~360px.
+        maxWidth: 'calc(100vw - 272px - 360px - 32px)',
         background: PF.bg,
         border: `1px solid ${PF.ruleSoft}`,
         borderRadius: 5,
@@ -41,7 +45,9 @@ export function MapLegend({ crossPoll }: MapLegendProps) {
         padding: '10px 14px',
         display: 'flex',
         alignItems: 'center',
-        gap: 18,
+        flexWrap: 'wrap',
+        rowGap: 6,
+        columnGap: 18,
         zIndex: 4,
       }}
     >
@@ -88,7 +94,7 @@ export function MapLegend({ crossPoll }: MapLegendProps) {
             label="Customer"
             color={LABEL_MAGENTA}
           />
-          {/* Warm-intro — magenta diamond */}
+          {/* Warm-intro — magenta diamond (lead-level indicator) */}
           <LegendItem
             swatch={
               <span
@@ -104,9 +110,7 @@ export function MapLegend({ crossPoll }: MapLegendProps) {
             label="Warm-intro"
             color={LABEL_MAGENTA}
           />
-          {/* Demo Polish UX § Gate 2 — line tier legend.
-              Mirrors the WarmIntroLines styling so the demo can answer
-              "how does the system know?" with a glance. */}
+          {/* Gate 18A — explicit solid vs dashed match-tier lines. */}
           <LegendItem
             swatch={<LineSwatch tier="exact" />}
             label="Exact match"
@@ -124,33 +128,30 @@ export function MapLegend({ crossPoll }: MapLegendProps) {
 }
 
 function LineSwatch({ tier }: { tier: 'exact' | 'fuzzy' }) {
-  // Render a 14×3 swatch that mirrors the polyline style used on the map:
-  // solid stroke for `exact`, dashed reduced-opacity for `fuzzy`.
-  if (tier === 'exact') {
-    return (
-      <span
-        aria-hidden="true"
-        style={{
-          width: 16,
-          height: 2,
-          background: TIER_COLORS.magenta,
-          flexShrink: 0,
-          borderRadius: 1,
-        }}
-      />
-    );
-  }
+  // Inline SVG mirrors the WarmIntroLines polyline style: solid stroke for
+  // `exact`, dashed for `fuzzy`. Renders at exact pixel dimensions to keep
+  // the visual identical across browsers.
+  const isExact = tier === 'exact';
   return (
-    <span
+    <svg
+      width={18}
+      height={6}
+      viewBox="0 0 18 6"
       aria-hidden="true"
-      style={{
-        width: 16,
-        height: 2,
-        flexShrink: 0,
-        backgroundImage: `repeating-linear-gradient(to right, ${TIER_COLORS.magenta} 0 4px, transparent 4px 7px)`,
-        opacity: 0.55,
-      }}
-    />
+      style={{ flexShrink: 0, display: 'block' }}
+    >
+      <line
+        x1={0}
+        y1={3}
+        x2={18}
+        y2={3}
+        stroke={TIER_COLORS.magenta}
+        strokeWidth={isExact ? 2 : 1.5}
+        strokeLinecap="round"
+        strokeDasharray={isExact ? undefined : '3 2'}
+        opacity={isExact ? 1 : 0.7}
+      />
+    </svg>
   );
 }
 
@@ -201,9 +202,24 @@ function LegendItem({
   color?: string;
 }) {
   return (
-    <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+    <span
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 6,
+        flexShrink: 0,
+        whiteSpace: 'nowrap',
+      }}
+    >
       {swatch}
-      <span className="pf-label" style={{ fontSize: 9, color: color || PF.inkDim }}>
+      <span
+        className="pf-label"
+        style={{
+          fontSize: 9,
+          color: color || PF.inkDim,
+          whiteSpace: 'nowrap',
+        }}
+      >
         {label}
       </span>
     </span>

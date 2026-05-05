@@ -146,4 +146,20 @@ export type PathfinderEvents = {
     name: 'pathfinder/coverage.run.requested';
     data: { goal_id: string };
   };
+
+  /**
+   * Customer (or operator) clicked "Attempt Verification" on an unverified
+   * lead. The Verifier deeper-pass function picks this up, refetches the
+   * latest source data, re-runs the four checks, and writes
+   * verifier_failure_reason + verifier_suggestions back when it still
+   * can't verify. Gate 18D.
+   */
+  'pathfinder/verifier.retry.requested': {
+    name: 'pathfinder/verifier.retry.requested';
+    data: {
+      project_id: string;
+      attempt_count: number;
+      requested_at: string;
+    };
+  };
 };

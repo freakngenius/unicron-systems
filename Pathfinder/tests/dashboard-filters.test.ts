@@ -19,7 +19,7 @@ function p(over: Partial<Project> & { id: string }): Project {
     lat: null,
     lon: null,
     project_value: null,
-    project_stage: null,
+    project_stage: over.project_stage ?? null,
     posted_date: null,
     raw_payload: null,
     rationale: null,
@@ -189,6 +189,159 @@ describe('applyNonBranchFilters', () => {
       maxDistance: 250,
     });
     expect(out.map((x) => x.id)).toEqual(['b']);
+  });
+
+  // Gate 18E — branch-set membership for within/outside when a small
+  // demo set is in play (e.g. Houston-only mode).
+  describe('range filter with activeBranchIds (Gate 18E)', () => {
+    const houstonOnly = new Set(['hou-002']);
+
+    it('within + activeBranchIds=Houston keeps only Houston-attached leads', () => {
+      const projects = [
+        p({ id: 'h', nearest_branch_id: 'hou-002', distance_miles: 50 }),
+        p({ id: 'phx', nearest_branch_id: 'phx-005', distance_miles: 20 }),
+        p({ id: 'orphan', nearest_branch_id: null }),
+      ];
+      const out = applyNonBranchFilters({
+        projects,
+        source: 'all',
+        crossPoll: false,
+        hidden: empty,
+        state: { range: 'within', minScore: 0 },
+        maxDistance: 300,
+        activeBranchIds: houstonOnly,
+      });
+      expect(out.map((x) => x.id)).toEqual(['h']);
+    });
+
+    it('outside + activeBranchIds=Houston keeps everything NOT attached to Houston', () => {
+      const projects = [
+        p({ id: 'h', nearest_branch_id: 'hou-002', distance_miles: 50 }),
+        p({ id: 'phx', nearest_branch_id: 'phx-005', distance_miles: 5000 }),
+        p({ id: 'lax', nearest_branch_id: 'lax-008', distance_miles: 80 }),
+      ];
+      const out = applyNonBranchFilters({
+        projects,
+        source: 'all',
+        crossPoll: false,
+        hidden: empty,
+        state: { range: 'outside', minScore: 0 },
+        maxDistance: 300,
+        activeBranchIds: houstonOnly,
+      });
+      expect(out.map((x) => x.id).sort()).toEqual(['lax', 'phx']);
+    });
+
+    it('range=all + activeBranchIds keeps everything regardless of branch', () => {
+      const projects = [
+        p({ id: 'h', nearest_branch_id: 'hou-002' }),
+        p({ id: 'phx', nearest_branch_id: 'phx-005' }),
+        p({ id: 'orphan', nearest_branch_id: null }),
+      ];
+      const out = applyNonBranchFilters({
+        projects,
+        source: 'all',
+        crossPoll: false,
+        hidden: empty,
+        state: { range: 'all', minScore: 0 },
+        maxDistance: 300,
+        activeBranchIds: houstonOnly,
+      });
+      expect(out).toHaveLength(3);
+    });
+  });
+});
+
+// Gate 19 — stage filter intersects with the rest of the pipeline.
+describe('applyNonBranchFilters — stage filter (Gate 19)', () => {
+  it('keeps everything when stages is null (default = show all)', () => {
+    const projects = [
+      p({ id: 'a', project_stage: 'solicitation' }),
+      p({ id: 'b', project_stage: 'awarded' }),
+      p({ id: 'c', project_stage: null }),
+    ];
+    const out = applyNonBranchFilters({
+      projects,
+      source: 'all',
+      crossPoll: false,
+      hidden: empty,
+      state: { range: 'all', minScore: 0, stages: null },
+      maxDistance: 250,
+    });
+    expect(out).toHaveLength(3);
+  });
+
+  it('keeps only projects whose normalized stage is in the selection', () => {
+    const projects = [
+      p({ id: 'sol', project_stage: 'solicitation' }), // normalizes → rfp_open
+      p({ id: 'rfp', project_stage: 'RFP' }), // normalizes → rfp_open
+      p({ id: 'awd', project_stage: 'awarded' }),
+      p({ id: 'pln', project_stage: 'PLN' }),
+      p({ id: 'unk', project_stage: 'something-weird' }), // unrecognized → null
+    ];
+    const out = applyNonBranchFilters({
+      projects,
+      source: 'all',
+      crossPoll: false,
+      hidden: empty,
+      state: { range: 'all', minScore: 0, stages: new Set(['rfp_open']) },
+      maxDistance: 250,
+    });
+    expect(out.map((x) => x.id).sort()).toEqual(['rfp', 'sol']);
+  });
+
+  it('drops projects with a null project_stage when any stage filter is active', () => {
+    const projects = [
+      p({ id: 'rfp', project_stage: 'RFP' }),
+      p({ id: 'null-stage', project_stage: null }),
+    ];
+    const out = applyNonBranchFilters({
+      projects,
+      source: 'all',
+      crossPoll: false,
+      hidden: empty,
+      state: { range: 'all', minScore: 0, stages: new Set(['rfp_open']) },
+      maxDistance: 250,
+    });
+    expect(out.map((x) => x.id)).toEqual(['rfp']);
+  });
+
+  it('Houston flagship (project_stage="solicitation") survives the default rfp_open selection', () => {
+    // Hard constraint: TxDOT I-45 has stage='solicitation' which must
+    // normalize to 'rfp_open' and remain visible by default.
+    const flagship = p({ id: 'txdot', project_stage: 'solicitation', score: 95 });
+    const out = applyNonBranchFilters({
+      projects: [flagship],
+      source: 'all',
+      crossPoll: false,
+      hidden: empty,
+      state: {
+        range: 'all',
+        minScore: 0,
+        stages: new Set(['news_mention', 'planning', 'pre_budget', 'pre_bid', 'rfp_open', 'awarded']),
+      },
+      maxDistance: 250,
+    });
+    expect(out.map((x) => x.id)).toEqual(['txdot']);
+  });
+
+  it('intersects with the range filter (within Houston + rfp_open only)', () => {
+    const houstonOnly = new Set(['hou-002']);
+    const projects = [
+      p({ id: 'h-rfp', project_stage: 'RFP', nearest_branch_id: 'hou-002' }),
+      p({ id: 'h-awd', project_stage: 'awarded', nearest_branch_id: 'hou-002' }),
+      p({ id: 'phx-rfp', project_stage: 'RFP', nearest_branch_id: 'phx-005' }),
+    ];
+    const out = applyNonBranchFilters({
+      projects,
+      source: 'all',
+      crossPoll: false,
+      hidden: empty,
+      state: { range: 'within', minScore: 0, stages: new Set(['rfp_open']) },
+      maxDistance: 300,
+      activeBranchIds: houstonOnly,
+    });
+    expect(out.map((x) => x.id)).toEqual(['h-rfp']);
   });
 });
 

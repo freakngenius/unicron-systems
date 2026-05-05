@@ -40,7 +40,7 @@ import {
   applyBranchFilter,
   groupCountsByBranch,
 } from '@/lib/dashboard-filters';
-import { pickDemoBranches, getActiveDemoBranchIds, isHoustonOnlyMode } from '@/lib/demo-branches';
+import { pickDemoBranches, getActiveDemoBranchIds } from '@/lib/demo-branches';
 import { indexMatchesByLead } from '@/lib/cross-poll-fetch';
 import {
   BranchMarkerGM,
@@ -138,27 +138,20 @@ export function Dashboard({
   const [source, setSource] = React.useState<SourceKey>('all');
   const [crossPoll, setCrossPoll] = React.useState(false);
 
-  // Gate 17A — narrow the project corpus to active demo branches when in
-  // Houston-only mode. Off-mode (the default) returns initialProjects as is
-  // so the existing four-city behavior is byte-identical.
+  // Gate 18E — Houston-only mode no longer pre-filters the project corpus
+  // by branch. The right-panel filter pill (Within / Outside / All) now
+  // owns the active narrowing via applyNonBranchFilters' new
+  // activeBranchIds branch-set check:
+  //   - "Within Range" + Houston-only: leads attached to Houston (= within
+  //     300 mi of the only visible coverage circle).
+  //   - "Outside Range" + Houston-only: leads NOT attached to Houston, i.e.
+  //     the whole rest of the country shown on the map.
+  //   - "All": all leads regardless of branch proximity.
   //
-  // Gate 19 hot-fix — when the operator activates the top-bar Cross-
-  // Pollination filter chip, retain ALL cross-poll-matched projects
-  // regardless of branch so the chip can surface the full match set
-  // (12 matches across all 24 Zedcor branches). With the chip OFF the
-  // dashboard stays scoped to Houston-anchored leads, and the chip-ON
-  // path naturally bypasses minScore + range too via the existing
-  // applyNonBranchFilters cross-poll branch — together this restores
-  // the warm-intro view that Gate 17A inadvertently filtered out.
-  const projectsForDashboard = React.useMemo<Project[]>(() => {
-    if (!isHoustonOnlyMode()) return initialProjects;
-    const active = new Set(getActiveDemoBranchIds());
-    return initialProjects.filter((p) => {
-      if (p.nearest_branch_id != null && active.has(p.nearest_branch_id)) return true;
-      if (crossPoll && xpollLeadIds.has(p.id)) return true;
-      return false;
-    });
-  }, [initialProjects, xpollLeadIds, crossPoll]);
+  // Cross-poll mode keeps its full match set on top — the cross-poll
+  // branch in applyNonBranchFilters bypasses both minScore and range so
+  // the 12-match warm-intro view surfaces cleanly.
+  const projectsForDashboard = initialProjects;
   const [openProjectId, setOpenProjectId] = React.useState<string | null>(null);
   // Demo Polish UX § Gate 7A flag — when on, every "open a project"
   // affordance navigates to the redesigned /leads/[projectId] page;
@@ -314,6 +307,16 @@ export function Dashboard({
   const { config: orgGeoConfig } = useOrgGeoConfig();
   const maxDistance = orgGeoConfig.max_supported_distance_miles ?? 250;
 
+  // Gate 18E — when the dashboard is narrowed to a small set of demo
+  // branches (Houston-only or the four-city set), the range filter should
+  // respect the visible coverage circles rather than the lead's
+  // nearest_branch_id distance. Pass the active demo branch ids through
+  // so applyNonBranchFilters can do a branch-set membership check.
+  const activeBranchIdsSet = React.useMemo<ReadonlySet<string>>(
+    () => new Set(getActiveDemoBranchIds()),
+    [],
+  );
+
   const preBranchFiltered = React.useMemo<Project[]>(
     () =>
       applyNonBranchFilters({
@@ -324,8 +327,18 @@ export function Dashboard({
         state: filterState,
         maxDistance,
         crossPollLeadIds: xpollLeadIds,
+        activeBranchIds: activeBranchIdsSet,
       }),
-    [projectsForDashboard, source, crossPoll, hidden, filterState, maxDistance, xpollLeadIds],
+    [
+      projectsForDashboard,
+      source,
+      crossPoll,
+      hidden,
+      filterState,
+      maxDistance,
+      xpollLeadIds,
+      activeBranchIdsSet,
+    ],
   );
 
   const withBranchFiltered = React.useMemo<Project[]>(
@@ -370,6 +383,10 @@ export function Dashboard({
     }[] = [];
     for (const p of withBranchFiltered) {
       if (p.lat == null || p.lon == null) continue;
+      // Skip geo_unknown projects so warm-intro lines don't terminate
+      // at the geocoder's state-centroid fallback coordinate. Matches
+      // the projectClusterMarkers filter above.
+      if (p.geo_unknown === true) continue;
       const m = xpollByLeadId.get(p.id);
       if (!m || m.customer_lat == null || m.customer_lon == null) continue;
       out.push({
@@ -403,10 +420,15 @@ export function Dashboard({
   // the cluster count badges, the right-rail list, and the BranchDock
   // counts (per-branch from preBranchFiltered) all stay aligned with the
   // active filter set.
+  //
+  // geo_unknown projects are dropped from the map only — they share a
+  // state/region centroid that the geocoder fell back to, so rendering
+  // them produces a phantom cluster (e.g. 11 leads stacked on a single
+  // Texas centroid coordinate). The right-rail list still shows them.
   const projectClusterMarkers = React.useMemo<ClusterMarker[]>(() => {
     if (crossPoll) return [];
     return withBranchFiltered
-      .filter((p) => p.lat != null && p.lon != null)
+      .filter((p) => p.lat != null && p.lon != null && p.geo_unknown !== true)
       .map((p) => {
         const tier = projectTier({
           score: p.score,
@@ -595,12 +617,7 @@ export function Dashboard({
 
         {crossPoll && <CrossPollBanner count={warmLines.length} />}
         <MapLegend crossPoll={crossPoll} />
-        <ZoomControl
-          zoom={mapZoom}
-          onZoomIn={zoomIn}
-          onZoomOut={zoomOut}
-          left={crossPoll ? 720 : 580}
-        />
+        <ZoomControl zoom={mapZoom} onZoomIn={zoomIn} onZoomOut={zoomOut} />
         <CoordsHUD branch={selectedBranch} />
 
         {openProject && (

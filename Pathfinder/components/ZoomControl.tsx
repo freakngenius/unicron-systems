@@ -1,8 +1,9 @@
 'use client';
 
-// ZoomControl — bottom-of-map zoom widget. Mirrors the CoordsHUD chrome
-// (deep slate, blurred, monospaced) but adds two click targets for + / − and
-// surfaces the current zoom level. Sits to the right of the MapLegend.
+// ZoomControl — bottom-right zoom widget docked immediately left of the right
+// panel rail. Mirrors the CoordsHUD chrome (deep slate, blurred, monospaced)
+// with two click targets for + / − and a current zoom level readout. Repositioned
+// in Gate 18B from bottom-center, where it was colliding with the MapLegend.
 //
 // Zoom is map-only — modifies the SVG viewBox, NOT the page DOM scale, so the
 // surrounding UI panels stay put. Keyboard +/- shortcuts live in dashboard.tsx.
@@ -29,21 +30,29 @@ export interface ZoomControlProps {
   onZoomOut: () => void;
   /** Optional: shown next to the value. Defaults to nothing. */
   hint?: string;
-  /** Override the absolute `left` position. Defaults to immediately right of MapLegend. */
+  /** Override the absolute `left` position. When provided, anchors from the left
+   *  (legacy bottom-center placement). */
   left?: number;
+  /** Override the absolute `right` position. Used to dock immediately left of
+   *  the right panel rail. Defaults to 412 (right panel sits at right: 16 with
+   *  width 380, so 16 + 380 + 16 = 412). */
+  right?: number;
 }
 
-export function ZoomControl({ zoom, onZoomIn, onZoomOut, hint, left = 580 }: ZoomControlProps) {
+export function ZoomControl({ zoom, onZoomIn, onZoomOut, hint, left, right }: ZoomControlProps) {
   const atMin = zoom <= ZOOM_MIN + 1e-6;
   const atMax = zoom >= ZOOM_MAX - 1e-6;
+  // Anchor: use `left` only when explicitly provided; otherwise dock to the
+  // bottom-right corner, immediately left of the right panel.
+  const positionStyle: React.CSSProperties =
+    left !== undefined ? { left, bottom: 16 } : { right: right ?? 412, bottom: 16 };
   return (
     <div
       role="group"
       aria-label="Map zoom"
       style={{
         position: 'absolute',
-        left,
-        bottom: 16,
+        ...positionStyle,
         background: 'rgba(14,17,22,0.85)',
         backdropFilter: 'blur(6px)',
         WebkitBackdropFilter: 'blur(6px)',

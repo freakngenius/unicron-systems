@@ -38,6 +38,7 @@ describe('parseListFilterState', () => {
       range: 'within',
       minScore: 80,
       filter: 'all',
+      stages: null,
     });
   });
 
@@ -66,6 +67,7 @@ describe('parseListFilterState', () => {
       range: 'outside',
       minScore: 30,
       filter: 'starred',
+      stages: null,
     });
   });
 
@@ -105,6 +107,7 @@ describe('serializeListFilterState', () => {
       range: 'within',
       minScore: 80,
       filter: 'all',
+      stages: null,
     };
     // sort=score, dir=desc, range=within are defaults so the serialized
     // form drops them. min_score=80 is non-default so it's emitted.
@@ -120,6 +123,7 @@ describe('serializeListFilterState', () => {
       range: 'outside',
       minScore: 50,
       filter: 'starred',
+      stages: null,
     };
     const serialized = serializeListFilterState(state);
     expect(parseListFilterState(qs(serialized))).toEqual(state);
@@ -141,5 +145,59 @@ describe('serializeListFilterState', () => {
       minScore: 0,
     };
     expect(serializeListFilterState(state)).toBe('min_score=0');
+  });
+});
+
+// Gate 19 — stage filter URL state.
+describe('parseListFilterState — stages', () => {
+  it('returns stages=null when the query param is absent (default = show all)', () => {
+    expect(parseListFilterState(qs('')).stages).toBeNull();
+  });
+
+  it('parses a comma-joined stage subset', () => {
+    const parsed = parseListFilterState(qs('stages=news_mention,rfp_open'));
+    expect(parsed.stages).toBeInstanceOf(Set);
+    expect([...(parsed.stages ?? [])].sort()).toEqual(['news_mention', 'rfp_open']);
+  });
+
+  it('drops unknown slugs and trims whitespace', () => {
+    const parsed = parseListFilterState(qs('stages=news_mention, banana , awarded'));
+    expect([...(parsed.stages ?? [])].sort()).toEqual(['awarded', 'news_mention']);
+  });
+
+  it('treats an empty stages= value as "no filter active"', () => {
+    expect(parseListFilterState(qs('stages=')).stages).toBeNull();
+    expect(parseListFilterState(qs('stages=banana')).stages).toBeNull();
+  });
+});
+
+describe('serializeListFilterState — stages', () => {
+  it('omits stages when null (default)', () => {
+    expect(serializeListFilterState(DEFAULT_LIST_FILTER_STATE)).toBe('');
+  });
+
+  it('omits stages when the full set is selected (= no narrowing)', () => {
+    const allSix = new Set([
+      'news_mention',
+      'planning',
+      'pre_budget',
+      'pre_bid',
+      'rfp_open',
+      'awarded',
+    ] as const);
+    const state: ListFilterState = { ...DEFAULT_LIST_FILTER_STATE, stages: allSix };
+    expect(serializeListFilterState(state)).toBe('');
+  });
+
+  it('emits a canonical-order, comma-joined slug list when narrowed', () => {
+    // Insertion order is post-award then early; serializer must reorder to
+    // canonical earliest→latest so the URL is stable across clients.
+    const state: ListFilterState = {
+      ...DEFAULT_LIST_FILTER_STATE,
+      stages: new Set(['awarded', 'news_mention', 'rfp_open'] as const),
+    };
+    expect(serializeListFilterState(state)).toBe(
+      'stages=news_mention%2Crfp_open%2Cawarded',
+    );
   });
 });

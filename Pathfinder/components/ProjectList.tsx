@@ -41,6 +41,8 @@ import {
   SCORE_FLOOR_STEPS,
 } from '@/lib/list-filters';
 import { Tooltip } from './Tooltip';
+import { StageFilter } from './lead-list/StageFilter';
+import type { NormalizedStage } from '@/lib/leads/stage-normalize';
 
 // Fallback distance threshold used until /api/org-config resolves on mount.
 // Live value comes from pathfinder.org_geo_config (Z-F finish wires this in).
@@ -149,7 +151,7 @@ export function ProjectList({
     () => parseListFilterState(searchParams),
     [searchParams],
   );
-  const { sort: sortMode, dir: sortDir, range: rangeMode, minScore, filter: filterMode } = filterState;
+  const { sort: sortMode, dir: sortDir, range: rangeMode, minScore, filter: filterMode, stages: stageSelection } = filterState;
 
   const updateFilter = React.useCallback(
     (patch: Partial<ListFilterState>) => {
@@ -436,6 +438,11 @@ export function ProjectList({
               ))}
             </select>
           </Tooltip>
+          <StageFilter
+            selection={stageSelection}
+            onChange={(next: ReadonlySet<NormalizedStage> | null) => updateFilter({ stages: next })}
+            matchingCount={visibleProjects.length}
+          />
         </div>
         {/* Score floor slider */}
         <div
