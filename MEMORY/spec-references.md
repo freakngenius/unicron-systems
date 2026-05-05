@@ -780,3 +780,25 @@ Operator setup: `MEMORY/operator-todos/2026-05-03-teams-user-setup.md` — Micro
 **Drift:** **intentional fork from `lib/stages.ts`.** The legacy file (5 codes: NWS / PLN / PRE / RFP / AWARDED) is the lead-detail label renderer and treats `solicitation` as a fallthrough. Gate 19 needs a 6-bucket view that (a) folds `solicitation` + `RFP` into a single `rfp_open` slug and (b) splits `pre-budget` (74 rows) from `PRE` (`pre_bid`, 6 rows) so the dropdown checkbox set matches the live data. `BID_WINDOW_DIVIDER_INDEX` marks where the post-award subcontract band starts so the popover renders the divider + italic note in the right place.
 **Tests:** `Pathfinder/tests/stage-normalize.test.ts` covers all 7 historical DB values, the case-/whitespace-insensitive normalizer, the null/empty/unknown fallbacks, and the canonical earliest→latest order. `Pathfinder/tests/dashboard-filters.test.ts` adds Gate 19 cases for the filter intersection (default null = pass-through, narrowed selection drops null-stage projects, Houston flagship `solicitation` survives the default `rfp_open` selection, and stage ∩ within-range Houston-only).
 
+---
+
+## Architect Business Summary Panel
+
+**State:** PR #165 open. Implements `Company Docs/Specs/SPEC - Architect Business Summary Panel.md` — three-question framing rendered above the Architect decomposition stream in Metacron Onboarding, edits flow into the architecture JSON persisted on the customer org.
+
+#### Pathfinder/services/architect/types.ts
+**Implements:** SPEC §"Phase A — Architect agent". Adds the `BusinessSummary` type (lead type & business area / problem we solve / what they get) and lifts it to a required field on `DecompositionProposal` and `DecompositionArchitecture`.
+**Last verified against spec:** 2026-05-04.
+**Drift:** none.
+
+#### Pathfinder/services/architect/prompts/decomposition.ts
+**Implements:** SPEC §"Phase A — Architect agent → System prompt extension". Extends the decomposition system prompt verbatim from the spec with the four-field business-summary instruction; bumps the prompt version to `2026-05-04-v2` so Architect proposals record which prompt revision generated them (graceful v1 fallback for older proposals).
+**Last verified against spec:** 2026-05-04.
+**Drift:** none.
+
+#### Pathfinder/services/architect/tools/decomposition.ts
+**Implements:** SPEC §"Phase A — Architect agent → Tool schema". `finalizeProposal` tool `input_schema.required` now includes `business_summary` so the model cannot finalize without producing the three-question framing; the panel is guaranteed populated downstream.
+**Last verified against spec:** 2026-05-04.
+**Drift:** none.
+**Tests:** `Pathfinder/__tests__/architect/decomposition-session.test.ts` confirms `business_summary` is emitted on the output JSON and persisted into `architect_proposals.details`. `Pathfinder/__tests__/architect/eval-score.test.ts` updated for the new required field.
+
