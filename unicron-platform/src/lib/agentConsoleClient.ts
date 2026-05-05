@@ -120,6 +120,10 @@ export interface VerifyDispatchInput {
   id: string;
   verified_by_user_id: string;
   result_payload?: Record<string, unknown>;
+  /** Phase 1F bridge: operator email for the agent_verifications mirror row. */
+  verified_by_user_email?: string;
+  /** Phase 1F bridge: human-readable summary for the activity ticker. Falls back to result_payload.summary. */
+  summary?: string;
 }
 
 export async function verifyDispatch(input: VerifyDispatchInput): Promise<AgentDispatch> {
@@ -138,7 +142,34 @@ export async function verifyDispatch(input: VerifyDispatchInput): Promise<AgentD
     .select()
     .single();
   if (error) throw error;
-  return data as AgentDispatch;
+  const dispatch = data as AgentDispatch;
+
+  // Phase 1F bridge: mirror to pathfinder.agent_verifications for the customer
+  // activity ticker. Non-blocking — a write failure here must never surface to
+  // the operator or roll back the unicorn-side verify.
+  const bridgeSummary =
+    input.summary ??
+    (typeof input.result_payload?.summary === 'string'
+      ? input.result_payload.summary
+      : '');
+  if (bridgeSummary && dispatch.customer_org_id) {
+    supabase
+      .schema('pathfinder')
+      .from('agent_verifications')
+      .insert({
+        dispatch_id: dispatch.id,
+        customer_org_id: dispatch.customer_org_id,
+        agent_name: dispatch.agent_name,
+        verified_by_user_id: input.verified_by_user_id,
+        verified_by_user_email: input.verified_by_user_email ?? '',
+        summary: bridgeSummary,
+      })
+      .then(({ error: bridgeErr }) => {
+        if (bridgeErr) console.error('[Phase1F] agent_verifications write failed:', bridgeErr);
+      });
+  }
+
+  return dispatch;
 }
 
 export interface RejectDispatchInput {
