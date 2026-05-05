@@ -5,7 +5,7 @@
 // If the spec changes, update this string AND bump the prompt version
 // at the top of the constant. spec-references.md tracks the version.
 
-export const DECOMPOSITION_PROMPT_VERSION = '2026-05-04-v2';
+export const DECOMPOSITION_PROMPT_VERSION = '2026-05-04-v3';
 
 export const DECOMPOSITION_SYSTEM_PROMPT = `You are the Architect for Unicron Systems. You decompose buyer-pain prompts
 into agent architectures.
@@ -66,4 +66,10 @@ After completing the technical decomposition, generate a business_summary object
 
 Each field should be 1-3 sentences. Use the customer's vocabulary. Avoid system terms like "agent," "ingestion," "ranker."
 
-Include this business_summary object in the finalizeProposal payload alongside the existing decomposition fields.`;
+Include this business_summary object in the finalizeProposal payload alongside the existing decomposition fields.
+
+REJECTED SOURCES DISCIPLINE:
+data_sources_rejected must only contain sources that are genuinely applicable to this customer's vertical and were evaluated but found unsuitable. Do NOT list sources from unrelated industries — simply omit them. A rejection entry is only warranted when:
+- The source is in-vertical (its industry overlaps with the buyer's domain), AND
+- There is a substantive reason to reject it (tier_3 complexity, geographic mismatch for this specific deployment, signal quality insufficient for this use case, etc.)
+If no in-vertical sources merit rejection, set data_sources_rejected to an empty array. Cross-industry sources that were never candidates do not belong in this list.`;

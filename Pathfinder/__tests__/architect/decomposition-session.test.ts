@@ -19,7 +19,7 @@ import {
   setSessionStoreForTesting,
   type SessionStore,
 } from '@/services/architect/runtime/session-store';
-import { runDecomposition } from '@/services/architect/sessions/decomposition';
+import { runDecomposition, filterRejectedSources } from '@/services/architect/sessions/decomposition';
 import type { AnthropicClient } from '@/services/architect/runtime/agent-loop';
 
 function mockMessage(opts: {
@@ -266,6 +266,41 @@ describe('runDecomposition — happy path', () => {
     expect(result.status).toBe('completed');
     expect(result.architecture.estimates.architecture_confidence).toBe('low');
     expect(result.architecture.open_questions.some((q) => /validation:/.test(q))).toBe(true);
+  });
+});
+
+describe('filterRejectedSources', () => {
+  it('strips cross-vertical sources from rejected list', () => {
+    // Proposed: public-property-records (real_estate, restoration, insurance, public_adjusting)
+    const proposed = [{ type: 'public-property-records', jurisdictions: ['CA'], expected_daily_volume: 50 }];
+    // Rejected: mix of in-vertical (fema-disaster-declarations has restoration overlap)
+    // and cross-vertical (harris-county-permits is construction/security only)
+    const rejected = [
+      { type: 'fema-disaster-declarations', reason: 'signal volume too low for this metro' },
+      { type: 'harris-county-permits', reason: 'not relevant' },
+      { type: 'pacer-bankruptcy', reason: 'wrong vertical' },
+      { type: 'unknown-source-xyz', reason: 'some reason' },
+    ];
+    const result = filterRejectedSources(rejected, proposed);
+    // fema-disaster-declarations shares 'restoration' with public-property-records → kept
+    expect(result.some((r) => r.type === 'fema-disaster-declarations')).toBe(true);
+    // harris-county-permits industries: construction, security, restoration — 'restoration' overlaps → kept
+    expect(result.some((r) => r.type === 'harris-county-permits')).toBe(true);
+    // pacer-bankruptcy industries: credit, collections, restructuring — no overlap → dropped
+    expect(result.some((r) => r.type === 'pacer-bankruptcy')).toBe(false);
+    // unknown source not in catalog → dropped
+    expect(result.some((r) => r.type === 'unknown-source-xyz')).toBe(false);
+  });
+
+  it('returns rejected as-is when no proposed sources are in the catalog', () => {
+    const rejected = [{ type: 'sec-edgar', reason: 'not relevant' }];
+    const result = filterRejectedSources(rejected, [{ type: 'unknown-proposed', jurisdictions: [], expected_daily_volume: 0 }]);
+    expect(result).toEqual(rejected);
+  });
+
+  it('returns empty array when rejected is empty', () => {
+    const proposed = [{ type: 'harris-county-permits', jurisdictions: ['TX-Harris'], expected_daily_volume: 80 }];
+    expect(filterRejectedSources([], proposed)).toEqual([]);
   });
 });
 

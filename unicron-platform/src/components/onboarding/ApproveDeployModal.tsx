@@ -12,6 +12,8 @@ type Props = {
   serverError: string | null;
   onCancel: () => void;
   onConfirm: (input: { name: string; slug: string }) => void;
+  /** Called on every name keystroke so parent can sync to BusinessSummaryPanel. */
+  onNameChange?: (name: string) => void;
 };
 
 /**
@@ -40,6 +42,7 @@ export function ApproveDeployModal({
   serverError,
   onCancel,
   onConfirm,
+  onNameChange,
 }: Props) {
   const [name, setName] = useState(defaultName);
   const [slug, setSlug] = useState(slugify(defaultName));
@@ -108,7 +111,10 @@ export function ApproveDeployModal({
             data-testid="approve-deploy-name-input"
             type="text"
             value={name}
-            onChange={(e) => setName(e.target.value)}
+            onChange={(e) => {
+              setName(e.target.value);
+              onNameChange?.(e.target.value);
+            }}
             disabled={submitting}
             className="bg-bg-base border border-border-default rounded-md px-3 py-2 mono text-[13px] text-text-primary focus:outline-none focus:border-accent-gold/60 disabled:opacity-40"
           />

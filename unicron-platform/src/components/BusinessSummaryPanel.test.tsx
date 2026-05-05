@@ -122,6 +122,29 @@ describe('<BusinessSummaryPanel />', () => {
     );
   });
 
+  it('shows fallback headline when customerName is empty', () => {
+    render(
+      <BusinessSummaryPanel
+        summary={baseSummary}
+        customerName=""
+        onEdit={vi.fn()}
+      />,
+    );
+    expect(screen.getByText('WHAT THE CUSTOMER GETS')).toBeInTheDocument();
+  });
+
+  it('renders customer names containing special characters without splitting', () => {
+    render(
+      <BusinessSummaryPanel
+        summary={baseSummary}
+        customerName="Realberry is a $3.6B"
+        onEdit={vi.fn()}
+      />,
+    );
+    // toUpperCase() preserves $ and . — the panel must not split on them.
+    expect(screen.getByText('WHAT REALBERRY IS A $3.6B GETS')).toBeInTheDocument();
+  });
+
   it('cancels an in-progress edit on Escape and discards the draft', () => {
     const onEdit = vi.fn();
     render(
