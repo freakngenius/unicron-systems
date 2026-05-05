@@ -49,6 +49,24 @@ const PANEL_WIDTH = 420;
 // basePath-aware API root — production runs under /pathfinder.
 const API_ROOT = '/pathfinder/api/chat';
 
+// Read the operator email out of localStorage so the chat client can
+// forward it as `x-operator-email`. The server uses this header to scope
+// HubSpot reads (Gate 22) — without it the chat falls back to the basic-
+// auth username, which can differ from the operator email used during
+// HubSpot OAuth install (per operator-email memory note). Returning null
+// when localStorage is empty keeps the request shape stable and the
+// server safely defers to its basic-auth fallback path.
+function readOperatorEmail(): string | null {
+  if (typeof window === 'undefined') return null;
+  const v = window.localStorage.getItem('pf_email');
+  return v && v.trim().length > 0 ? v.trim() : null;
+}
+
+function chatHeaders(extra: Record<string, string> = {}): Record<string, string> {
+  const op = readOperatorEmail();
+  return op ? { ...extra, 'x-operator-email': op } : { ...extra };
+}
+
 export interface IntelligenceChatProps {
   open: boolean;
   onClose: () => void;
@@ -112,7 +130,7 @@ export function IntelligenceChat({
       try {
         const res = await fetch(
           `${API_ROOT}?contextKey=${encodeURIComponent(contextKey)}&fallback=recent`,
-          { credentials: 'include' },
+          { credentials: 'include', headers: chatHeaders() },
         );
         if (!res.ok) return;
         const json = (await res.json()) as {
@@ -196,7 +214,7 @@ export function IntelligenceChat({
       try {
         await fetch(`${API_ROOT}/reset`, {
           method: 'POST',
-          headers: { 'content-type': 'application/json' },
+          headers: chatHeaders({ 'content-type': 'application/json' }),
           credentials: 'include',
           body: JSON.stringify({ threadId: thread.id }),
         });
@@ -230,7 +248,7 @@ export function IntelligenceChat({
       try {
         const res = await fetch(API_ROOT, {
           method: 'POST',
-          headers: { 'content-type': 'application/json' },
+          headers: chatHeaders({ 'content-type': 'application/json' }),
           credentials: 'include',
           body: JSON.stringify({
             contextKey,
@@ -358,7 +376,7 @@ export function IntelligenceChat({
       try {
         const res = await fetch(`${API_ROOT}/actions`, {
           method: 'POST',
-          headers: { 'content-type': 'application/json' },
+          headers: chatHeaders({ 'content-type': 'application/json' }),
           credentials: 'include',
           body: JSON.stringify({ threadId: thread.id, action, params }),
         });
