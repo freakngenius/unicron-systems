@@ -26,6 +26,12 @@ import {
   draftOutreach,
   type IterationIntent,
 } from '@/lib/chat/outreach-drafter';
+import {
+  summarizeHubSpotForChat,
+  type HubSpotChatContext,
+  type HubSpotConnectionSnapshot,
+  type HubSpotDealRowSnapshot,
+} from '@/lib/chat/hubspot-context';
 import type {
   Branch,
   ChatContextSnapshot,
@@ -270,9 +276,113 @@ interface Hydrated {
     most_recent_site_date: string | null;
     national_account: boolean;
   }>;
+  // Gate 22 — HubSpot integration state for the current user (NOT the
+  // org). Always scoped to userEmail in the loader so the chat never
+  // surfaces another tenant's deals or connection.
+  hubspot: HubSpotChatContext;
 }
 
-async function hydrateContext(snapshot: ChatContextSnapshot): Promise<Hydrated> {
+// Gate 22 — Stalled-deal threshold. Deals with no last_activity_at OR
+// last_activity_at older than this window count as stalled. 14 days
+// matches Kyle's "no activity in N days" framing in the Gate 22 spec.
+const HUBSPOT_STALLED_DAYS = 14;
+const HUBSPOT_RECENT_DEAL_LIMIT = 10;
+const HUBSPOT_BY_STAGE_DEAL_LIMIT = 500;
+
+async function loadHubSpotForUser(userId: string): Promise<HubSpotChatContext> {
+  const admin = supabaseAdmin();
+
+  // Connection — explicit column list, NEVER select oauth_token_enc /
+  // oauth_refresh_token_enc. Multi-tenant filter on user_id is the
+  // primary isolation boundary.
+  const { data: connRow } = await admin
+    .from('user_connections')
+    .select('provider, status, portal_id, portal_name, connected_at, expires_at')
+    .eq('user_id', userId)
+    .eq('provider', 'hubspot')
+    .order('connected_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const connection: HubSpotConnectionSnapshot | null = connRow
+    ? {
+        provider: 'hubspot',
+        status: (connRow as { status: string }).status,
+        portal_id: ((connRow as { portal_id?: string | null }).portal_id ?? null),
+        portal_name: ((connRow as { portal_name?: string | null }).portal_name ?? null),
+        connected_at: ((connRow as { connected_at?: string | null }).connected_at ?? null),
+        expires_at: ((connRow as { expires_at?: string | null }).expires_at ?? null),
+      }
+    : null;
+
+  if (!connection) {
+    return {
+      connection: null,
+      totalDeals: 0,
+      byStage: {},
+      recent: [],
+      stalledCount: 0,
+      stalledOlderThan: null,
+    };
+  }
+
+  // Deals — every read filters on user_id. We pull a bounded window
+  // (HUBSPOT_BY_STAGE_DEAL_LIMIT) and tally locally so the chat doesn't
+  // round-trip per stage. For pilot scale (single user, < 500 pushed
+  // deals) this is well below the row threshold where pagination helps.
+  const { data: dealRows } = await admin
+    .from('lead_hubspot_deals')
+    .select(
+      'project_id, hubspot_deal_id, hubspot_deal_url, pushed_at, last_synced_at, current_stage, current_stage_label, current_amount, current_owner_name, last_activity_at, status',
+    )
+    .eq('user_id', userId)
+    .order('pushed_at', { ascending: false })
+    .limit(HUBSPOT_BY_STAGE_DEAL_LIMIT);
+
+  const deals = ((dealRows ?? []) as Array<Record<string, unknown>>).map((r): HubSpotDealRowSnapshot => ({
+    project_id: String(r.project_id ?? ''),
+    hubspot_deal_id: String(r.hubspot_deal_id ?? ''),
+    hubspot_deal_url: (r.hubspot_deal_url as string | null) ?? null,
+    pushed_at: String(r.pushed_at ?? ''),
+    last_synced_at: (r.last_synced_at as string | null) ?? null,
+    current_stage: (r.current_stage as string | null) ?? null,
+    current_stage_label: (r.current_stage_label as string | null) ?? null,
+    current_amount:
+      typeof r.current_amount === 'string'
+        ? Number.parseFloat(r.current_amount)
+        : (r.current_amount as number | null) ?? null,
+    current_owner_name: (r.current_owner_name as string | null) ?? null,
+    last_activity_at: (r.last_activity_at as string | null) ?? null,
+    status: String(r.status ?? 'active'),
+  }));
+
+  const stalledCutoff = new Date(Date.now() - HUBSPOT_STALLED_DAYS * 24 * 60 * 60 * 1000);
+  const stalledIso = stalledCutoff.toISOString();
+  let stalledCount = 0;
+  const byStage: Record<string, number> = {};
+  for (const d of deals) {
+    if (d.status !== 'active' && d.status !== 'won' && d.status !== 'lost' && d.status !== 'archived' && d.status !== 'error') {
+      // Defensive — pass-through unknown statuses are still counted but
+      // don't blow up the bucket.
+    }
+    const stageKey = d.current_stage_label ?? d.current_stage ?? 'unknown';
+    byStage[stageKey] = (byStage[stageKey] ?? 0) + 1;
+    if (d.status === 'won' || d.status === 'lost' || d.status === 'archived') continue;
+    if (!d.last_activity_at || new Date(d.last_activity_at) < stalledCutoff) {
+      stalledCount += 1;
+    }
+  }
+
+  return {
+    connection,
+    totalDeals: deals.length,
+    byStage,
+    recent: deals.slice(0, HUBSPOT_RECENT_DEAL_LIMIT),
+    stalledCount,
+    stalledOlderThan: stalledIso,
+  };
+}
+
+async function hydrateContext(snapshot: ChatContextSnapshot, userId: string): Promise<Hydrated> {
   const admin = supabaseAdmin();
   const projectId = snapshot.openProjectId;
   const branchId = snapshot.selectedBranchId;
@@ -339,7 +449,17 @@ async function hydrateContext(snapshot: ChatContextSnapshot): Promise<Hydrated> 
     }));
   }
 
-  return { project, branch, warmCustomer, filteredProjects, allBranches, crossPollination };
+  const hubspot = await loadHubSpotForUser(userId);
+
+  return {
+    project,
+    branch,
+    warmCustomer,
+    filteredProjects,
+    allBranches,
+    crossPollination,
+    hubspot,
+  };
 }
 
 // ── Provenance footer parsing (Sonar emits `TABLES: ...` at end) ─────────
@@ -377,6 +497,7 @@ function buildSonarSystemPrompt(args: {
     `- When the question is about Zedcor's own pipeline, prefer the structured PATHFINDER context over web search results.`,
     `- When the question is about external context (news, contractor history, market trends), use web search and cite sources.`,
     `- When you don't have data to answer, say so plainly. Never fabricate.`,
+    `- When the question is about HubSpot (connection state, pushed leads, deal stages, sync status, stalled deals), read the HUBSPOT INTEGRATION CONTEXT block below. The block is already scoped to the asking user; if it says "not connected", say exactly that and link to /pathfinder/settings/connectors. Do not invent counts.`,
     ``,
     `At the very end of your response, on its own line, write "TABLES:" followed by a comma-separated list of pathfinder.* tables you reasoned over (e.g., "TABLES: projects, branches"). The host strips this line for display and renders it as a structured provenance footer. If you used no internal tables, write "TABLES: (none)".`,
     ``,
@@ -437,6 +558,9 @@ function buildSonarSystemPrompt(args: {
   lines.push(`FILTERED PROJECTS (top ${compactFiltered.length}): ${JSON.stringify(compactFiltered)}`);
   lines.push(`SOURCE FILTER: ${args.snapshot.sourceFilter} | CROSS-POLL: ${args.snapshot.crossPoll}`);
   lines.push(`TOTAL PROJECTS IN VIEW: ${args.snapshot.totalProjects}`);
+  lines.push('');
+  lines.push('── HUBSPOT INTEGRATION CONTEXT (scoped to current user) ──');
+  lines.push(summarizeHubSpotForChat(args.hydrated.hubspot));
   if (args.history.length > 0) {
     const compactHistory = args.history.slice(-HISTORY_TURN_LIMIT).map((m) => ({
       role: m.role,
@@ -508,7 +632,7 @@ export async function POST(req: NextRequest): Promise<Response> {
         controller.enqueue(sseChunk({ type: 'meta', threadId: thread.id, kind }));
 
         // 4. Dispatch.
-        const hydrated = await hydrateContext(body.contextSnapshot);
+        const hydrated = await hydrateContext(body.contextSnapshot, userEmail);
         const history = await loadHistory(thread.id, HISTORY_TURN_LIMIT);
 
         if (kind === 'sonar_unconfigured') {
