@@ -45,9 +45,10 @@ export interface ChatMessageProps {
   message: ChatMessageRow;
   threadId: string;
   onAction: (action: string, params: Record<string, unknown>) => void;
+  onLeadClick?: (projectId: string) => void;
 }
 
-export function ChatMessage({ message, threadId, onAction }: ChatMessageProps) {
+export function ChatMessage({ message, threadId, onAction, onLeadClick }: ChatMessageProps) {
   if (message.kind === 'outreach_draft' && message.payload?.bundle) {
     return (
       <OutreachBundleCard
@@ -64,12 +65,12 @@ export function ChatMessage({ message, threadId, onAction }: ChatMessageProps) {
   if (message.kind === 'error') {
     return <ErrorBubble text={message.content} />;
   }
-  return <TextBubble message={message} />;
+  return <TextBubble message={message} onLeadClick={onLeadClick} />;
 }
 
 // ── Text bubble ────────────────────────────────────────────────────────────
 
-function TextBubble({ message }: { message: ChatMessageRow }) {
+function TextBubble({ message, onLeadClick }: { message: ChatMessageRow; onLeadClick?: (projectId: string) => void }) {
   const isUser = message.role === 'user';
   const sources = (message.payload?.sources as ChatSourceCitation[] | undefined) ?? [];
   const tables = (message.payload?.tables as string[] | undefined) ?? [];
@@ -111,6 +112,7 @@ function TextBubble({ message }: { message: ChatMessageRow }) {
           content={message.content}
           streaming={streaming}
           sources={sources}
+          onLeadClick={onLeadClick}
         />
       )}
       {(sources.length > 0 || tables.length > 0) && (
