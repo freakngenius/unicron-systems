@@ -32,6 +32,8 @@ import {
   type HubSpotConnectionSnapshot,
   type HubSpotDealRowSnapshot,
 } from '@/lib/chat/hubspot-context';
+import { getOperatorEmail } from '@/lib/connectors/auth';
+import { getHubspotConnectionStatus } from '@/lib/connectors/connection-status';
 import type {
   Branch,
   ChatContextSnapshot,
@@ -292,27 +294,23 @@ const HUBSPOT_BY_STAGE_DEAL_LIMIT = 500;
 async function loadHubSpotForUser(userId: string): Promise<HubSpotChatContext> {
   const admin = supabaseAdmin();
 
-  // Connection — explicit column list, NEVER select oauth_token_enc /
-  // oauth_refresh_token_enc. Multi-tenant filter on user_id is the
-  // primary isolation boundary.
-  const { data: connRow } = await admin
-    .from('user_connections')
-    .select('provider, status, portal_id, portal_name, connected_at, expires_at')
-    .eq('user_id', userId)
-    .eq('provider', 'hubspot')
-    .order('connected_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  const connection: HubSpotConnectionSnapshot | null = connRow
-    ? {
-        provider: 'hubspot',
-        status: (connRow as { status: string }).status,
-        portal_id: ((connRow as { portal_id?: string | null }).portal_id ?? null),
-        portal_name: ((connRow as { portal_name?: string | null }).portal_name ?? null),
-        connected_at: ((connRow as { connected_at?: string | null }).connected_at ?? null),
-        expires_at: ((connRow as { expires_at?: string | null }).expires_at ?? null),
-      }
-    : null;
+  // Connection: read through the unified connection-status helper so the
+  // chat agent's view agrees with the Settings tile and the lead-detail
+  // Push surface. The helper filters on (user_id, provider='hubspot',
+  // status='active') and never reads the oauth_token_enc /
+  // oauth_refresh_token_enc columns.
+  const status = await getHubspotConnectionStatus(userId);
+  const connection: HubSpotConnectionSnapshot | null =
+    status.status === 'none'
+      ? null
+      : {
+          provider: 'hubspot',
+          status: status.status,
+          portal_id: status.portalId,
+          portal_name: status.portalName,
+          connected_at: status.connectedAt,
+          expires_at: status.expiresAt,
+        };
 
   if (!connection) {
     return {
@@ -632,7 +630,20 @@ export async function POST(req: NextRequest): Promise<Response> {
         controller.enqueue(sseChunk({ type: 'meta', threadId: thread.id, kind }));
 
         // 4. Dispatch.
-        const hydrated = await hydrateContext(body.contextSnapshot, userEmail);
+        // Identity resolution for HubSpot lookups — the rows in
+        // pathfinder.user_connections / pathfinder.lead_hubspot_deals
+        // were written under the OPERATOR email (getCurrentUserId →
+        // getOperatorEmail at install time + push time). The chat's
+        // basic-auth userEmail can differ from the operator email per
+        // the operator-allowlist memory note (e.g., kyle@demystified.ai
+        // for /settings vs kyle@freakngenius.com for git/basic-auth).
+        // Prefer operator email when the chat client sent the
+        // x-operator-email header; fall back to basic-auth so chat keeps
+        // working for non-operator users (who simply have no HubSpot
+        // rows to surface).
+        const operatorEmail = getOperatorEmail(req);
+        const hubspotUserId = operatorEmail ?? userEmail;
+        const hydrated = await hydrateContext(body.contextSnapshot, hubspotUserId);
         const history = await loadHistory(thread.id, HISTORY_TURN_LIMIT);
 
         if (kind === 'sonar_unconfigured') {

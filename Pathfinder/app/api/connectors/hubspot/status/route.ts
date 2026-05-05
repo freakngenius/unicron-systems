@@ -11,7 +11,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 
 import { getCurrentUserId } from '@/lib/connectors/auth';
-import { getActiveHubspotConnection } from '@/lib/connectors/user-connection';
+import { getHubspotConnectionStatus } from '@/lib/connectors/connection-status';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -22,9 +22,9 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ state: 'disconnected' }, { status: 200 });
   }
 
-  let connection;
+  let status;
   try {
-    connection = await getActiveHubspotConnection(userId);
+    status = await getHubspotConnectionStatus(userId);
   } catch (err) {
     return NextResponse.json(
       { state: 'error', error: err instanceof Error ? err.message : String(err) },
@@ -32,23 +32,20 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  if (!connection) {
+  if (status.status === 'none') {
     return NextResponse.json({ state: 'disconnected' }, { status: 200 });
   }
 
   // Surface 'expired' if the access token's expires_at is in the past.
   // Refresh-token recovery happens via the cron in Gate 10E; for now the
   // tile shows a Reconnect affordance.
-  const now = Date.now();
-  const expiresAtMs = connection.expires_at ? Date.parse(connection.expires_at) : null;
-  const isExpired = expiresAtMs !== null && expiresAtMs <= now;
-  const state = isExpired ? 'expired' : 'connected';
+  const state = status.expired ? 'expired' : 'connected';
 
   return NextResponse.json({
     state,
-    portal_id: connection.portal_id,
-    portal_name: connection.portal_name,
-    connected_at: connection.connected_at,
-    expires_at: connection.expires_at,
+    portal_id: status.portalId,
+    portal_name: status.portalName,
+    connected_at: status.connectedAt,
+    expires_at: status.expiresAt,
   });
 }
