@@ -428,6 +428,10 @@ export function IntelligenceChat({
         width: PANEL_WIDTH,
         background: PF.bg,
         borderLeft: `1px solid ${PF.ruleSoft}`,
+        // Gate 23 — round only the left edges so the panel docks flush
+        // against the right side of the viewport (right corners stay sharp).
+        borderTopLeftRadius: 10,
+        borderBottomLeftRadius: 10,
         boxShadow: '-12px 0 32px rgba(10,10,10,0.08)',
         display: 'flex',
         flexDirection: 'column',
@@ -435,6 +439,7 @@ export function IntelligenceChat({
         transition: 'transform 220ms ease-out',
         zIndex: 80,
         pointerEvents: open ? 'auto' : 'none',
+        overflow: 'hidden',
       }}
     >
       <Header

@@ -1,13 +1,14 @@
 'use client';
 
-// ChatInput — textarea + suggested-prompt chips. Enter submits,
+// ChatInput — textarea + the SUGGESTIONS list. Enter submits,
 // Shift+Enter inserts a newline. Disabled while the panel is streaming
-// an assistant response. Suggested chips come from
-// lib/chat/context#suggestedPrompts and rotate as the dashboard view
-// changes.
+// an assistant response.
+//
+// Gate 23 — consolidated the prior chip-row + bullet-list into a single
+// 5-item SUGGESTIONS list with one branch-aware prompt. Default branch
+// is Houston (DEMO_HOUSTON_ONLY=1 demo flagship).
 
 import * as React from 'react';
-import { suggestedPrompts } from '@/lib/chat/context';
 import type { Branch, ChatContextSnapshot } from '@/lib/types';
 
 const PF = {
@@ -19,45 +20,33 @@ const PF = {
   bgAlt: '#f6f7f9',
 } as const;
 
-// Demo-canned questions surfaced as quick-action buttons. The branch
-// token in `template` is replaced by the currently selected demo branch
-// (default Nashville). Questions without a branch token render the
-// `template` verbatim. Verbatim list comes from TUESDAY DEMO PLAN.md
-// item 11; do not edit copy without checking that doc.
-const DEMO_QUESTIONS: ReadonlyArray<{
-  label: string;
-  template: string;
-  hasBranch: boolean;
-}> = [
+// Gate 23 — single consolidated list of 5 suggestions in the exact
+// order specified. Suggestion #2 carries `{branch}`; the rest render
+// verbatim. Click dispatches the rendered text via onSubmit.
+const SUGGESTIONS: ReadonlyArray<{ template: string; hasBranch: boolean }> = [
   {
-    label: 'Top 5 in {branch}',
-    template: 'What are my top 5 leads in {branch} this week?',
-    hasBranch: true,
-  },
-  {
-    label: 'Match Zedcor customers',
-    template: 'Which leads match an existing Zedcor customer relationship?',
+    template: 'What are the newest leads within the last 3 days?',
     hasBranch: false,
   },
   {
-    label: 'Rejected in {branch}',
-    template: 'What leads got rejected in {branch} and why?',
+    template: 'Show me top leads in {branch}.',
     hasBranch: true,
   },
   {
-    label: 'Avg value, score 90+ in {branch}',
-    template:
-      "What's the average project value of leads above score 90 in {branch}?",
-    hasBranch: true,
+    template: 'Which bid windows are about to expire?',
+    hasBranch: false,
   },
   {
-    label: 'National account involved',
-    template: 'Show me leads where a national account is involved.',
+    template: 'Give me an update on my leads in Hubspot.',
+    hasBranch: false,
+  },
+  {
+    template: "Summarize this week's pipeline for me.",
     hasBranch: false,
   },
 ];
 
-const DEFAULT_DEMO_BRANCH = 'Nashville';
+const DEFAULT_DEMO_BRANCH = 'Houston';
 
 export interface ChatInputProps {
   disabled: boolean;
@@ -69,11 +58,10 @@ export interface ChatInputProps {
 export function ChatInput({ disabled, snapshot, onSubmit, branches }: ChatInputProps) {
   const [value, setValue] = React.useState('');
   const taRef = React.useRef<HTMLTextAreaElement | null>(null);
-  const chips = React.useMemo(() => suggestedPrompts(snapshot), [snapshot]);
 
-  // Default the demo-question branch token to the currently selected
+  // Default the suggestion branch token to the currently selected
   // branch (if any, and if it's a known branch name) — otherwise fall
-  // back to Nashville per the demo script.
+  // back to Houston per the demo flagship.
   const selectedBranchName = React.useMemo(() => {
     if (!snapshot.selectedBranchId || !branches) return null;
     const b = branches.find((x) => x.id === snapshot.selectedBranchId);
@@ -84,10 +72,8 @@ export function ChatInput({ disabled, snapshot, onSubmit, branches }: ChatInputP
     selectedBranchName ?? DEFAULT_DEMO_BRANCH,
   );
 
-  // Re-sync the demo branch when the dashboard selection changes, but
-  // only if the user hasn't manually picked a different branch in the
-  // dropdown. Simple approach: always follow the dashboard selection
-  // when one exists; users can still override via the dropdown.
+  // Re-sync the suggestion branch when the dashboard selection changes.
+  // Users can still override via the dropdown.
   React.useEffect(() => {
     if (selectedBranchName) setDemoBranch(selectedBranchName);
   }, [selectedBranchName]);
@@ -96,7 +82,7 @@ export function ChatInput({ disabled, snapshot, onSubmit, branches }: ChatInputP
     const fromProps = (branches ?? [])
       .map((b) => b.name)
       .filter((n): n is string => Boolean(n));
-    // Always include Nashville so the demo defaults work even if the
+    // Always include Houston so the demo defaults work even if the
     // workspace's branch list is loading or empty.
     const set = new Set<string>([DEFAULT_DEMO_BRANCH, ...fromProps]);
     return Array.from(set).sort((a, b) =>
@@ -104,7 +90,7 @@ export function ChatInput({ disabled, snapshot, onSubmit, branches }: ChatInputP
     );
   }, [branches]);
 
-  const renderDemoQuestion = React.useCallback(
+  const renderSuggestion = React.useCallback(
     (template: string) => template.replace(/\{branch\}/g, demoBranch),
     [demoBranch],
   );
@@ -142,13 +128,12 @@ export function ChatInput({ disabled, snapshot, onSubmit, branches }: ChatInputP
         background: PF.bg,
       }}
     >
-      {/* Demo-canned quick-action questions (TUESDAY DEMO PLAN.md item
-          11). Visually distinct row above the suggested-prompt chips so
-          the demo presenter can fire any of the 5 vetted questions
-          without typing. Click dispatches through the same onSubmit
-          path the textarea uses. */}
+      {/* Gate 23 — single consolidated SUGGESTIONS list. 5 prompts in
+          fixed order; suggestion #2 dynamically reflects the selected
+          branch. Each row click dispatches the rendered text via
+          onSubmit (preserving existing send flow). */}
       <div
-        data-testid="chat-demo-questions"
+        data-testid="chat-suggestions"
         style={{
           display: 'flex',
           flexDirection: 'column',
@@ -170,7 +155,7 @@ export function ChatInput({ disabled, snapshot, onSubmit, branches }: ChatInputP
             className="pf-meta"
             style={{ color: PF.inkFaint, fontSize: 9, letterSpacing: '0.08em' }}
           >
-            DEMO QUESTIONS
+            SUGGESTIONS
           </span>
           <label
             style={{
@@ -184,7 +169,7 @@ export function ChatInput({ disabled, snapshot, onSubmit, branches }: ChatInputP
           >
             <span>Branch</span>
             <select
-              aria-label="Demo question branch"
+              aria-label="Suggestion branch"
               value={demoBranch}
               disabled={disabled}
               onChange={(e) => setDemoBranch(e.target.value)}
@@ -206,86 +191,53 @@ export function ChatInput({ disabled, snapshot, onSubmit, branches }: ChatInputP
             </select>
           </label>
         </div>
-        <div
+        <ul
           style={{
+            margin: 0,
+            padding: 0,
+            listStyle: 'none',
             display: 'flex',
-            flexWrap: 'wrap',
-            gap: 6,
+            flexDirection: 'column',
+            gap: 4,
           }}
         >
-          {DEMO_QUESTIONS.map((q) => {
-            const rendered = renderDemoQuestion(q.template);
-            const label = q.hasBranch
-              ? q.label.replace(/\{branch\}/g, demoBranch)
-              : q.label;
+          {SUGGESTIONS.map((s) => {
+            const rendered = renderSuggestion(s.template);
             return (
-              <button
-                key={q.template}
-                type="button"
-                title={rendered}
-                aria-label={`Ask: ${rendered}`}
-                disabled={disabled}
-                onClick={() => {
-                  if (disabled) return;
-                  onSubmit(rendered);
-                }}
-                style={{
-                  font: '500 10.5px/1.2 var(--font-inter), system-ui, sans-serif',
-                  padding: '5px 8px',
-                  border: `1px solid ${PF.ruleSoft}`,
-                  borderRadius: 3,
-                  background: disabled ? PF.bgAlt : PF.bg,
-                  color: PF.ink,
-                  cursor: disabled ? 'not-allowed' : 'pointer',
-                  opacity: disabled ? 0.55 : 1,
-                  textAlign: 'left',
-                }}
-              >
-                {label}
-              </button>
+              <li key={s.template}>
+                <button
+                  type="button"
+                  title={rendered}
+                  aria-label={`Ask: ${rendered}`}
+                  disabled={disabled}
+                  onClick={() => {
+                    if (disabled) return;
+                    onSubmit(rendered);
+                  }}
+                  style={{
+                    width: '100%',
+                    font: '500 11.5px/1.35 var(--font-inter), system-ui, sans-serif',
+                    padding: '6px 10px',
+                    border: `1px solid ${PF.ruleSoft}`,
+                    borderRadius: 4,
+                    background: disabled ? PF.bgAlt : PF.bg,
+                    color: PF.ink,
+                    cursor: disabled ? 'not-allowed' : 'pointer',
+                    opacity: disabled ? 0.55 : 1,
+                    textAlign: 'left',
+                    whiteSpace: 'normal',
+                    overflowWrap: 'break-word',
+                  }}
+                >
+                  {rendered}
+                </button>
+              </li>
             );
           })}
-        </div>
+        </ul>
       </div>
 
-      {/* Suggested-prompt chips. Wrap onto multiple lines as needed. */}
-      <div
-        className="pf-scrollbar"
-        style={{
-          display: 'flex',
-          flexWrap: 'wrap',
-          gap: 6,
-          marginBottom: 10,
-          maxHeight: 64,
-          overflowY: 'auto',
-        }}
-      >
-        {chips.map((c) => (
-          <button
-            key={c}
-            type="button"
-            className="pf-pill"
-            style={{
-              fontSize: 10,
-              padding: '4px 8px',
-              cursor: disabled ? 'not-allowed' : 'pointer',
-              opacity: disabled ? 0.55 : 1,
-              textTransform: 'none',
-              letterSpacing: '0.01em',
-              fontFamily: 'var(--font-inter), system-ui, sans-serif',
-            }}
-            onClick={() => {
-              if (disabled) return;
-              setValue(c);
-              taRef.current?.focus();
-            }}
-          >
-            {c}
-          </button>
-        ))}
-      </div>
-
-      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <textarea
           ref={taRef}
           value={value}
@@ -300,9 +252,11 @@ export function ChatInput({ disabled, snapshot, onSubmit, branches }: ChatInputP
             flex: 1,
             resize: 'none',
             minHeight: 36,
-            padding: '8px 10px',
+            // Gate 23 — pill-shaped input. 9999px guarantees the radius
+            // is half the height regardless of auto-grow up to 6 lines.
+            borderRadius: 9999,
+            padding: '8px 16px',
             border: `1px solid ${PF.ruleSoft}`,
-            borderRadius: 4,
             font: '400 13px var(--font-inter), system-ui, sans-serif',
             color: PF.ink,
             background: disabled ? PF.bgAlt : PF.bg,
