@@ -241,6 +241,7 @@ async function loadHistory(threadId: string, limit: number): Promise<ChatMessage
     .from('chat_messages')
     .select('*')
     .eq('thread_id', threadId)
+    .is('cleared_at', null)
     .order('created_at', { ascending: false })
     .limit(limit);
   // Reverse so oldest-first for prompt construction.
@@ -757,6 +758,7 @@ export async function GET(req: NextRequest): Promise<Response> {
       .from('chat_messages')
       .select('*')
       .eq('thread_id', thread.id)
+      .is('cleared_at', null)
       .order('created_at', { ascending: true })
       .limit(MESSAGES_GET_LIMIT);
     messages = ((data ?? []) as ChatMessage[]) ?? [];

@@ -12,6 +12,8 @@
 //      append the response as a new system message in the local list.
 //   4. On context change while open: re-fetch the thread for the new
 //      contextKey, fade out current messages, fade in the new ones.
+//   5. On reset: POST /api/chat/reset to soft-delete server messages,
+//      then clear local state so a fresh conversation can begin.
 //
 // Spec: Pathfinder/Pathfinder-Feature-Specs.md § "P0 Feature 1".
 // Plan: docs/PLAN-P0-01-INTELLIGENCE-CHAT.md.
@@ -79,17 +81,24 @@ export function IntelligenceChat({
   );
   const [streaming, setStreaming] = React.useState(false);
   const [latencyHint, setLatencyHint] = React.useState<number | null>(null);
+  const [showResetConfirm, setShowResetConfirm] = React.useState(false);
   const scrollRef = React.useRef<HTMLDivElement | null>(null);
 
-  // Keyboard: Escape closes the panel.
+  // Keyboard: Escape closes the reset modal if open, otherwise closes the panel.
   React.useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') {
+        if (showResetConfirm) {
+          setShowResetConfirm(false);
+        } else {
+          onClose();
+        }
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [open, onClose]);
+  }, [open, onClose, showResetConfirm]);
 
   // Hydrate thread when context changes (and on open).
   React.useEffect(() => {
@@ -175,6 +184,26 @@ export function IntelligenceChat({
     },
     [thread],
   );
+
+  // Soft-delete server messages then clear local state.
+  const handleReset = React.useCallback(async () => {
+    setShowResetConfirm(false);
+    if (thread) {
+      try {
+        await fetch(`${API_ROOT}/reset`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ threadId: thread.id }),
+        });
+      } catch {
+        // Best-effort — local state clears regardless.
+      }
+    }
+    setMessages([]);
+    setResumed(null);
+    setLatencyHint(null);
+  }, [thread]);
 
   // Send a user turn; consume the SSE stream.
   const sendMessage = React.useCallback(
@@ -386,7 +415,13 @@ export function IntelligenceChat({
         pointerEvents: open ? 'auto' : 'none',
       }}
     >
-      <Header onClose={onClose} latencyHint={latencyHint} streaming={streaming} />
+      <Header
+        onClose={onClose}
+        onReset={() => setShowResetConfirm(true)}
+        latencyHint={latencyHint}
+        streaming={streaming}
+        hasMessages={messages.length > 0}
+      />
       <ChatContextIndicator label={contextLabel} resumedFrom={resumed} />
 
       <div
@@ -423,18 +458,29 @@ export function IntelligenceChat({
         onSubmit={sendMessage}
         branches={branches}
       />
+
+      {showResetConfirm && (
+        <ResetConfirmModal
+          onConfirm={handleReset}
+          onCancel={() => setShowResetConfirm(false)}
+        />
+      )}
     </div>
   );
 }
 
 function Header({
   onClose,
+  onReset,
   latencyHint,
   streaming,
+  hasMessages,
 }: {
   onClose: () => void;
+  onReset: () => void;
   latencyHint: number | null;
   streaming: boolean;
+  hasMessages: boolean;
 }) {
   return (
     <div
@@ -463,6 +509,17 @@ function Header({
           {latencyHint < 1000 ? `${latencyHint}ms` : `${(latencyHint / 1000).toFixed(1)}s`}
         </span>
       )}
+      {hasMessages && !streaming && (
+        <button
+          type="button"
+          onClick={onReset}
+          aria-label="Reset conversation"
+          className="pf-pill"
+          style={{ padding: '4px 7px', fontSize: 10, color: PF.inkDim }}
+        >
+          Reset
+        </button>
+      )}
       <button
         type="button"
         onClick={onClose}
@@ -472,6 +529,84 @@ function Header({
       >
         ✕
       </button>
+    </div>
+  );
+}
+
+function ResetConfirmModal({
+  onConfirm,
+  onCancel,
+}: {
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Clear conversation"
+      style={{
+        position: 'absolute',
+        inset: 0,
+        background: 'rgba(10,10,10,0.45)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 90,
+      }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onCancel();
+      }}
+    >
+      <div
+        style={{
+          background: PF.bg,
+          borderRadius: 10,
+          padding: '22px 20px 18px',
+          width: 300,
+          boxShadow: '0 8px 32px rgba(10,10,10,0.18)',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 14,
+        }}
+      >
+        <div
+          className="pf-h2"
+          style={{ fontSize: 14, fontWeight: 600, color: PF.ink }}
+        >
+          Clear conversation?
+        </div>
+        <p
+          className="pf-meta"
+          style={{ color: PF.inkDim, fontSize: 12, lineHeight: 1.5, margin: 0 }}
+        >
+          Your chat history with this session will be removed. Map view, filters, and lead data stay unchanged.
+        </p>
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+          <button
+            type="button"
+            onClick={onCancel}
+            className="pf-pill"
+            style={{ padding: '5px 12px', fontSize: 12 }}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            className="pf-pill"
+            style={{
+              padding: '5px 12px',
+              fontSize: 12,
+              background: PF.ink,
+              color: PF.bg,
+              border: 'none',
+            }}
+          >
+            Clear chat
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
