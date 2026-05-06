@@ -89,10 +89,31 @@ export function AtriumLayout({ activeTab, onTabChange, children }: Props) {
         </div>
       </header>
 
+      {/* Mobile tab strip (visible < md) */}
+      <nav className="md:hidden flex overflow-x-auto border-b border-border-default bg-bg-panel px-2 py-1 gap-1 shrink-0">
+        {TABS.map((tab) => {
+          const active = tab.id === activeTab;
+          return (
+            <button
+              key={tab.id}
+              onClick={() => onTabChange(tab.id)}
+              className={[
+                'shrink-0 px-3 py-1.5 rounded-md mono text-[10px] uppercase tracking-[0.14em] transition-colors whitespace-nowrap',
+                active
+                  ? 'bg-bg-card text-text-primary'
+                  : 'text-text-secondary hover:text-text-primary hover:bg-bg-card/50',
+              ].join(' ')}
+            >
+              {tab.label}
+            </button>
+          );
+        })}
+      </nav>
+
       {/* Body */}
       <div className="atrium-body flex flex-1 min-h-0">
-        {/* Sidebar nav */}
-        <nav className="atrium-nav w-44 shrink-0 border-r border-border-default bg-bg-panel py-4 flex flex-col gap-1 px-2">
+        {/* Sidebar nav (hidden on mobile) */}
+        <nav className="atrium-nav hidden md:flex w-44 shrink-0 border-r border-border-default bg-bg-panel py-4 flex-col gap-1 px-2">
           {TABS.map((tab) => {
             const active = tab.id === activeTab;
             return (
@@ -113,7 +134,7 @@ export function AtriumLayout({ activeTab, onTabChange, children }: Props) {
         </nav>
 
         {/* Main content */}
-        <main className="atrium-content flex-1 overflow-auto p-6">
+        <main className="atrium-content flex-1 overflow-auto p-4 md:p-6">
           {children}
         </main>
       </div>
