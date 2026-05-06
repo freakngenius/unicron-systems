@@ -31,6 +31,7 @@ import {
   type DecompositionProposal,
   type DecompositionResponse,
 } from '@/services/architect/types';
+import { SOURCE_CATALOG } from '@/services/architect/tools/source-catalog';
 
 const DECOMPOSITION_MODEL = process.env.PF_ARCHITECT_DECOMPOSITION_MODEL ?? 'claude-sonnet-4-6';
 const DECOMPOSITION_MAX_TURNS = 12;
@@ -141,6 +142,17 @@ export async function runDecomposition(
     } else {
       proposal = candidate as DecompositionProposal;
     }
+    // Strip cross-vertical noise from the rejected list regardless of
+    // validation outcome.
+    if (proposal) {
+      proposal = {
+        ...proposal,
+        data_sources_rejected: filterRejectedSources(
+          proposal.data_sources_rejected ?? [],
+          proposal.data_sources_proposed ?? [],
+        ),
+      };
+    }
   }
 
   const status =
@@ -218,6 +230,29 @@ function buildInitialUserMessage(input: DecompositionInput): string {
     'Decompose this into a vertical_configuration proposal following the workflow in your system prompt. Use the tools available. Call finalizeProposal when complete.',
   );
   return lines.join('\n');
+}
+
+/**
+ * Strip cross-vertical noise from data_sources_rejected.
+ * Derives the customer's relevant industries from the proposed sources (which
+ * the Architect chose because they match the vertical). Only keeps rejected
+ * entries whose SOURCE_CATALOG industries overlap with the proposed set.
+ * Unknown source types (not in catalog) are dropped — they're either
+ * hallucinated or out-of-catalog, and shouldn't surface to operators.
+ */
+export function filterRejectedSources(
+  rejected: DecompositionProposal['data_sources_rejected'],
+  proposed: DecompositionProposal['data_sources_proposed'],
+): DecompositionProposal['data_sources_rejected'] {
+  const proposedTypes = new Set(proposed.map((s) => s.type));
+  const proposedEntries = SOURCE_CATALOG.filter((s) => proposedTypes.has(s.type));
+  const relevantIndustries = new Set(proposedEntries.flatMap((s) => s.industries));
+  if (relevantIndustries.size === 0) return rejected;
+  return rejected.filter((r) => {
+    const entry = SOURCE_CATALOG.find((s) => s.type === r.type);
+    if (!entry) return false;
+    return entry.industries.some((i) => relevantIndustries.has(i));
+  });
 }
 
 function shortBody(p: DecompositionProposal): string {

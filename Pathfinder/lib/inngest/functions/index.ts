@@ -19,3 +19,5 @@ export { hubspotReconCron } from './hubspot-recon-cron';
 // Demo Polish UX Gate 18D — Verifier deeper pass (lead detail "Attempt
 // Verification" button).
 export { verifierRetry } from './verifier-retry';
+// Sprint 0 — Nervous System Foundation. Placeholder; Sprint 1 wires real ingest skill.
+export { ingestRouter } from './ingest-router';

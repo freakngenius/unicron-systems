@@ -17,6 +17,7 @@ import {
   sourceOnboarder,
   coverageExpansionEstimate,
   coverageExpansionRun,
+  ingestRouter,
 } from '@/lib/inngest/functions';
 
 export const { GET, POST, PUT } = serve({
@@ -32,6 +33,7 @@ export const { GET, POST, PUT } = serve({
     sourceOnboarder,
     coverageExpansionEstimate,
     coverageExpansionRun,
+    ingestRouter,
   ],
 });
 

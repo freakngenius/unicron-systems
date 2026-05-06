@@ -48,6 +48,9 @@ export function ArchitectThinking({ buyerPain, onApprove }: Props) {
   // Operator-edited business_summary; overrides response.architecture.business_summary
   // until Approve/Deploy. Reset on each new decomposition.
   const [summaryEdits, setSummaryEdits] = useState<BusinessSummary | null>(null);
+  // Customer display name — starts blank (panel shows fallback "WHAT THE CUSTOMER GETS")
+  // and updates live as the operator types in the ApproveDeployModal name field.
+  const [customerDisplayName, setCustomerDisplayName] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -208,7 +211,7 @@ export function ArchitectThinking({ buyerPain, onApprove }: Props) {
       <div className="flex flex-col gap-6">
         <BusinessSummaryPanel
           summary={summaryToRender}
-          customerName={deriveDefaultName(buyerPain)}
+          customerName={customerDisplayName}
           onEdit={handleSummaryEdit}
           status={summaryStatus}
           errorMessage={summaryErrorMessage}
@@ -282,6 +285,7 @@ export function ArchitectThinking({ buyerPain, onApprove }: Props) {
             setPending(null);
           }}
           onConfirm={handleConfirm}
+          onNameChange={setCustomerDisplayName}
         />
       ) : null}
     </div>
