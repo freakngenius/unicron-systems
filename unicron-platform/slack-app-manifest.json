@@ -1,0 +1,42 @@
+{
+  "display_information": {
+    "name": "Unicron Orchestrator",
+    "description": "Unicron's AI orchestration layer — DM it to dispatch agents, create action items, and query the nervous system.",
+    "background_color": "#1a1a1a"
+  },
+  "features": {
+    "bot_user": { "display_name": "Orchestrator", "always_online": true },
+    "slash_commands": [
+      {
+        "command": "/orchestrator",
+        "description": "Orchestrator commands: status, escalations, memory <query>, dri <id> <member>",
+        "usage_hint": "status | escalations | memory <query> | dri <id> <member>",
+        "should_escape": false,
+        "url": "https://atrium.unicron.systems/api/slack/commands"
+      }
+    ]
+  },
+  "oauth_config": {
+    "scopes": {
+      "bot": [
+        "chat:write",
+        "app_mentions:read",
+        "im:read",
+        "im:write",
+        "channels:history",
+        "groups:history",
+        "users:read",
+        "commands"
+      ]
+    }
+  },
+  "settings": {
+    "event_subscriptions": {
+      "request_url": "https://atrium.unicron.systems/api/slack/events",
+      "bot_events": ["message.im", "app_mention", "member_joined_channel"]
+    },
+    "interactivity": { "is_enabled": false },
+    "org_deploy_enabled": false,
+    "socket_mode_enabled": false
+  }
+}
