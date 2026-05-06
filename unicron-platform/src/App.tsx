@@ -15,6 +15,12 @@ import { EvalDashboardView } from './views/eval-dashboard/EvalDashboardView';
 import { SignInGate } from './components/auth/SignInGate';
 import { useAuth } from './lib/auth';
 import type { CustomerOrg } from './lib/contracts/customers';
+import { AtriumApp } from './atrium/AtriumApp';
+
+// Host-based routing: atrium.unicron.systems → Atrium; everything else → Metacron.
+const isAtrium =
+  typeof window !== 'undefined' &&
+  window.location.hostname === 'atrium.unicron.systems';
 
 function Shell() {
   const [tab, setTab] = useState<TabId>('onboarding');
@@ -90,6 +96,9 @@ function AuthedShell() {
 }
 
 export default function App() {
+  if (isAtrium) {
+    return <AtriumApp />;
+  }
   return (
     <SignInGate>
       <AuthedShell />
