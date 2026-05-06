@@ -12,6 +12,13 @@ export default {
           gold: '#FBBF24',
           violet: '#8B5CF6',
           magenta: '#EC4899',
+          orange: '#FF6B2B',  // Unicron brand orange — Sprint 2+
+        },
+        status: {
+          green: '#22C55E',
+          yellow: '#F59E0B',
+          red: '#EF4444',
+          blue: '#3B82F6',
         },
       },
       fontFamily: {
