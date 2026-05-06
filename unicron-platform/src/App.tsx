@@ -17,10 +17,13 @@ import { useAuth } from './lib/auth';
 import type { CustomerOrg } from './lib/contracts/customers';
 import { AtriumApp } from './atrium/AtriumApp';
 
-// Host-based routing: atrium.unicron.systems → Atrium; everything else → Metacron.
+// Host-based routing: any hostname starting with "atrium." → Atrium shell;
+// everything else (unicron-platform.vercel.app, unicron.systems, localhost) → Metacron.
+// Using startsWith('atrium.') covers both production (atrium.unicron.systems) and
+// Vercel preview deployments that carry the atrium subdomain.
 const isAtrium =
   typeof window !== 'undefined' &&
-  window.location.hostname === 'atrium.unicron.systems';
+  window.location.hostname.startsWith('atrium.');
 
 function Shell() {
   const [tab, setTab] = useState<TabId>('onboarding');
