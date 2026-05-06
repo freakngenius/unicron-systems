@@ -1,6 +1,7 @@
-// app/api/ingest/route.ts — Sprint 1 Stream C
+// app/api/ingest/route.ts — Sprint 2 Stream D
 //
 // Real ingest handler. Replaces the Sprint 0 echo stub.
+// Sprint 2: adds routing for `manual` and `voice_memo` source types.
 //
 // Auth: x-unicron-api-key header must match UNICRON_INGEST_API_KEY env var.
 // Input: Zod-validated JSON body with source_type discriminator.
@@ -9,6 +10,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
 import { ingestCall, type IngestCallInput, type IngestCallResult } from '@/lib/ingest/skills/ingest-call';
+import { ingestManual, type ManualIngestInput, type ManualIngestResult } from '@/lib/ingest/skills/ingest-manual';
+import { ingestVoiceMemo, type VoiceMemoInput, type VoiceMemoResult } from '@/lib/ingest/skills/ingest-voice-memo';
 
 // ─── Zod schemas ─────────────────────────────────────────────────────────────
 
@@ -36,8 +39,32 @@ const callPayloadSchema = z.object({
   metadata: metadataSchema,
 });
 
+const manualPayloadSchema = z.object({
+  source_type: z.literal('manual'),
+  source_id: z.string(),
+  source_url: z.string().nullable(),
+  raw_content: z.string().min(1),
+  participants: z.array(participantSchema),
+  captured_at: z.string().datetime(),
+  captured_by: capturedBySchema,
+  metadata: metadataSchema,
+});
+
+// voice_memo allows empty raw_content (audio-only uploads have no transcript yet)
+const voiceMemoPayloadSchema = z.object({
+  source_type: z.literal('voice_memo'),
+  source_id: z.string(),
+  source_url: z.string().nullable(),
+  raw_content: z.string().default(''), // empty string OK — audio-only path returns ABSTAIN
+  audio_stored_url: z.string().optional(),
+  participants: z.array(participantSchema),
+  captured_at: z.string().datetime(),
+  captured_by: capturedBySchema,
+  metadata: metadataSchema,
+});
+
 const otherPayloadSchema = z.object({
-  source_type: z.enum(['slack', 'email', 'voice_memo', 'apple_note', 'manual']),
+  source_type: z.enum(['slack', 'email', 'apple_note']),
   source_id: z.string(),
   source_url: z.string().nullable(),
   raw_content: z.string().min(1),
@@ -49,6 +76,8 @@ const otherPayloadSchema = z.object({
 
 const ingestPayloadSchema = z.discriminatedUnion('source_type', [
   callPayloadSchema,
+  manualPayloadSchema,
+  voiceMemoPayloadSchema,
   otherPayloadSchema,
 ]);
 
@@ -200,6 +229,117 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     // bounce before any DB/vault write occurs.
     const records = result as Extract<IngestCallResult, { status: 'records' }>;
     const vaultPath = `Calls/${data.captured_at.split('T')[0]}-${source_id}.md`;
+
+    await auditLog('ingest_records_written', {
+      source_id,
+      source_type,
+      ledger_id: records.ledger_row.id,
+      vault_doc_path: vaultPath,
+      action_item_count: records.action_items.length,
+    });
+
+    return NextResponse.json({
+      status: 'records',
+      ledger_id: records.ledger_row.id,
+      vault_doc_path: vaultPath,
+      action_item_ids: records.action_items.map((ai) => ai.id),
+    });
+  }
+
+  // ── manual ────────────────────────────────────────────────────────────────
+
+  if (source_type === 'manual') {
+    const input: ManualIngestInput = {
+      source_type: 'manual',
+      source_id,
+      source_url: data.source_url,
+      raw_content: data.raw_content,
+      participants: data.participants,
+      captured_at: data.captured_at,
+      captured_by: data.captured_by,
+      metadata: data.metadata as ManualIngestInput['metadata'],
+    };
+
+    let result: ManualIngestResult;
+    try {
+      result = await ingestManual(input);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error('[ingest] ingestManual threw', { source_id, err: msg });
+      await auditLog('ingest_manual_error', { source_id, error: msg });
+      return NextResponse.json({ error: 'Ingest skill failed', detail: msg }, { status: 500 });
+    }
+
+    if (result.status === 'NO_SIGNAL') {
+      await auditLog('ingest_no_signal', { source_id, source_type, reason: result.reason });
+      return NextResponse.json({ status: result.status, reason: result.reason });
+    }
+
+    const records = result as Extract<ManualIngestResult, { status: 'records' }>;
+    const vaultPath = `raw/inbox/manual-${data.captured_at.split('T')[0]}-${source_id.slice(0, 8)}.md`;
+
+    await auditLog('ingest_records_written', {
+      source_id,
+      source_type,
+      ledger_id: records.ledger_row.id,
+      vault_doc_path: vaultPath,
+      action_item_count: records.action_items.length,
+    });
+
+    return NextResponse.json({
+      status: 'records',
+      ledger_id: records.ledger_row.id,
+      vault_doc_path: vaultPath,
+      action_item_ids: records.action_items.map((ai) => ai.id),
+    });
+  }
+
+  // ── voice_memo ────────────────────────────────────────────────────────────
+
+  if (source_type === 'voice_memo') {
+    const voiceData = data as z.infer<typeof voiceMemoPayloadSchema>;
+    const input: VoiceMemoInput = {
+      source_type: 'voice_memo',
+      source_id,
+      source_url: voiceData.source_url,
+      raw_content: voiceData.raw_content ?? '',
+      audio_stored_url: voiceData.audio_stored_url,
+      captured_at: voiceData.captured_at,
+      captured_by: voiceData.captured_by,
+      metadata: voiceData.metadata as VoiceMemoInput['metadata'],
+    };
+
+    let result: VoiceMemoResult;
+    try {
+      result = await ingestVoiceMemo(input);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error('[ingest] ingestVoiceMemo threw', { source_id, err: msg });
+      await auditLog('ingest_voice_memo_error', { source_id, error: msg });
+      return NextResponse.json({ error: 'Ingest skill failed', detail: msg }, { status: 500 });
+    }
+
+    if (result.status === 'ABSTAIN') {
+      await auditLog('ingest_abstain', {
+        source_id,
+        source_type,
+        reason: result.reason,
+        sprint_note: result.sprint_note,
+      });
+      return NextResponse.json({
+        status: result.status,
+        reason: result.reason,
+        sprint_note: result.sprint_note,
+      });
+    }
+
+    if (result.status === 'NO_SIGNAL') {
+      await auditLog('ingest_no_signal', { source_id, source_type, reason: result.reason });
+      return NextResponse.json({ status: result.status, reason: result.reason });
+    }
+
+    const records = result as Extract<VoiceMemoResult, { status: 'records' }>;
+    const vaultPath = `raw/inbox/manual-${data.captured_at.split('T')[0]}-${source_id.slice(0, 8)}.md`;
 
     await auditLog('ingest_records_written', {
       source_id,
