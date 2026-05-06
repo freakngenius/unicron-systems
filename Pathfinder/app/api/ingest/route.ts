@@ -1,18 +1,16 @@
-// app/api/ingest/route.ts — Sprint 0 Foundation (Nervous System)
+// app/api/ingest/route.ts — Sprint 1 Stream C
 //
-// Shared ingest endpoint for the Unicron Nervous System.
-// Sprint 0: stub that validates the payload shape, checks the API key,
-// and returns a 200 echo. Real ingest skill (ledger write, vault doc,
-// action items, Taboo Keeper validation) is Sprint 1.
+// Real ingest handler. Replaces the Sprint 0 echo stub.
 //
 // Auth: x-unicron-api-key header must match UNICRON_INGEST_API_KEY env var.
-// Input: JSON body per SPEC section 7.3 ingest skill contract.
-//
-// UNICRON_INGEST_API_KEY must be set in Vercel dashboard before deploying.
-// Local dev: add to .env.local. Value in .env.example is a placeholder.
+// Input: Zod-validated JSON body with source_type discriminator.
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+
+import { ingestCall, type IngestCallInput, type IngestCallResult } from '@/lib/ingest/skills/ingest-call';
+
+// ─── Zod schemas ─────────────────────────────────────────────────────────────
 
 const participantSchema = z.object({
   team_member_id: z.string().optional(),
@@ -25,22 +23,126 @@ const capturedBySchema = z.object({
   id: z.string().uuid(),
 });
 
-const ingestPayloadSchema = z.object({
-  source_type: z.enum(['call', 'slack', 'email', 'voice_memo', 'apple_note', 'manual']),
+const metadataSchema = z.record(z.unknown()).optional();
+
+const callPayloadSchema = z.object({
+  source_type: z.literal('call'),
   source_id: z.string(),
   source_url: z.string().nullable(),
   raw_content: z.string().min(1),
   participants: z.array(participantSchema),
   captured_at: z.string().datetime(),
   captured_by: capturedBySchema,
+  metadata: metadataSchema,
 });
 
-export async function POST(req: NextRequest) {
+const otherPayloadSchema = z.object({
+  source_type: z.enum(['slack', 'email', 'voice_memo', 'apple_note', 'manual']),
+  source_id: z.string(),
+  source_url: z.string().nullable(),
+  raw_content: z.string().min(1),
+  participants: z.array(participantSchema),
+  captured_at: z.string().datetime(),
+  captured_by: capturedBySchema,
+  metadata: metadataSchema,
+});
+
+const ingestPayloadSchema = z.discriminatedUnion('source_type', [
+  callPayloadSchema,
+  otherPayloadSchema,
+]);
+
+type IngestPayload = z.infer<typeof ingestPayloadSchema>;
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+/**
+ * Write a row to the nervous_system.audit_log table via a direct Supabase
+ * REST call. Best-effort: failures are logged but never propagate to callers.
+ */
+async function auditLog(
+  action: string,
+  payload: Record<string, unknown>,
+): Promise<void> {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) {
+    console.warn('[ingest] audit_log skipped — missing Supabase env vars');
+    return;
+  }
+  try {
+    await fetch(`${url}/rest/v1/audit_log?schema=nervous_system`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: key,
+        Authorization: `Bearer ${key}`,
+        // Notify PostgREST we want the nervous_system schema
+        'Accept-Profile': 'nervous_system',
+        'Content-Profile': 'nervous_system',
+      },
+      body: JSON.stringify({
+        table_name: 'ingest',
+        action,
+        actor_id: '9696088f-b3c5-4536-a4c6-c7a40312ad6b', // system actor
+        payload: { ...payload, _written_by: 'api/ingest route.ts' },
+      }),
+    });
+  } catch (err) {
+    console.error('[ingest] audit_log write failed (best-effort)', err);
+  }
+}
+
+/**
+ * Post a message to #orchestrator-escalations when a Taboo Keeper bounce
+ * occurs. Sprint 2 will wire this properly via the Slack connector framework.
+ * For now: best-effort post if SLACK_BOT_TOKEN + SLACK_ESCALATION_CHANNEL_ID
+ * are set; otherwise log only.
+ */
+async function notifyEscalation(
+  reason: string,
+  matched_taboo: string,
+  source_id: string,
+  source_type: string,
+): Promise<void> {
+  const token = process.env.SLACK_BOT_TOKEN;
+  const channel = process.env.SLACK_ESCALATION_CHANNEL_ID ?? 'orchestrator-escalations';
+  if (!token) {
+    console.warn('[ingest] Taboo bounce escalation not posted — SLACK_BOT_TOKEN not set', {
+      reason,
+      matched_taboo,
+      source_id,
+      source_type,
+    });
+    return;
+  }
+  try {
+    await fetch('https://slack.com/api/chat.postMessage', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        channel,
+        text: `*Ingest Bounce* — Taboo Keeper blocked a write.\n*Source:* \`${source_type}/${source_id}\`\n*Reason:* ${reason}\n*Matched taboo:* \`${matched_taboo}\``,
+      }),
+    });
+  } catch (err) {
+    console.error('[ingest] Slack escalation post failed (best-effort)', err);
+  }
+}
+
+// ─── Route handler ────────────────────────────────────────────────────────────
+
+export async function POST(req: NextRequest): Promise<NextResponse> {
+  // ── Auth ──────────────────────────────────────────────────────────────────
   const apiKey = req.headers.get('x-unicron-api-key');
   if (!apiKey || apiKey !== process.env.UNICRON_INGEST_API_KEY) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
+  // ── Parse body ────────────────────────────────────────────────────────────
   let body: unknown;
   try {
     body = await req.json();
@@ -52,13 +154,77 @@ export async function POST(req: NextRequest) {
   if (!parsed.success) {
     return NextResponse.json(
       { error: 'Validation failed', issues: parsed.error.issues },
-      { status: 400 }
+      { status: 400 },
     );
   }
 
-  return NextResponse.json({
-    status: 'received',
-    echo: parsed.data,
-    note: 'Ingest skill not yet implemented; Sprint 1',
-  });
+  const data: IngestPayload = parsed.data;
+  const { source_type, source_id } = data;
+
+  // ── Dispatch by source_type ───────────────────────────────────────────────
+
+  if (source_type === 'call') {
+    const input: IngestCallInput = {
+      source_type: 'call',
+      source_id,
+      source_url: data.source_url,
+      raw_content: data.raw_content,
+      participants: data.participants,
+      captured_at: data.captured_at,
+      captured_by: data.captured_by,
+      metadata: data.metadata,
+    };
+
+    let result: IngestCallResult;
+    try {
+      result = await ingestCall(input);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error('[ingest] runIngestCall threw', { source_id, err: msg });
+      await auditLog('ingest_call_error', { source_id, error: msg });
+      return NextResponse.json({ error: 'Ingest skill failed', detail: msg }, { status: 500 });
+    }
+
+    // NO_SIGNAL or ABSTAIN — log and return
+    if (result.status === 'NO_SIGNAL' || result.status === 'ABSTAIN') {
+      await auditLog(`ingest_${result.status.toLowerCase()}`, {
+        source_id,
+        source_type,
+        reason: result.reason,
+      });
+      return NextResponse.json({ status: result.status, reason: result.reason });
+    }
+
+    // records path — ingestCall handles writes + taboo internally
+    // Sprint 2 TODO: expose a pre-write taboo gate in ingestCall so route can
+    // bounce before any DB/vault write occurs.
+    const records = result as Extract<IngestCallResult, { status: 'records' }>;
+    const vaultPath = `Calls/${data.captured_at.split('T')[0]}-${source_id}.md`;
+
+    await auditLog('ingest_records_written', {
+      source_id,
+      source_type,
+      ledger_id: records.ledger_row.id,
+      vault_doc_path: vaultPath,
+      action_item_count: records.action_items.length,
+    });
+
+    return NextResponse.json({
+      status: 'records',
+      ledger_id: records.ledger_row.id,
+      vault_doc_path: vaultPath,
+      action_item_ids: records.action_items.map((ai) => ai.id),
+    });
+  }
+
+  // ── Unimplemented source types ─────────────────────────────────────────────
+  await auditLog('ingest_source_not_implemented', { source_id, source_type });
+  console.log(`[ingest] source_type ${source_type} not yet implemented`);
+  return NextResponse.json(
+    {
+      status: 'pending',
+      note: `Source type ${source_type} not yet implemented. Sprint 2+ will add.`,
+    },
+    { status: 202 },
+  );
 }
