@@ -4,30 +4,11 @@
 //
 // Auth: x-unicron-api-key header must match UNICRON_INGEST_API_KEY env var.
 // Input: Zod-validated JSON body with source_type discriminator.
-//
-// STREAM B DEPENDENCY:
-//   Imports below marked [STREAM-B] come from lib/ingest/__stubs.ts during
-//   development. After sprint/1-ingest merges, delete __stubs.ts and remap
-//   these imports to their real paths:
-//     runIngestCall  → @/lib/ingest/skills/ingest-call
-//     checkTaboo     → @/lib/taboo-keeper
-//     writeIngestRecords → @/lib/ingest/base
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
-// [STREAM-B] Replace with real imports after sprint/1-ingest merges:
-//   import { runIngestCall, type IngestCallInput } from '@/lib/ingest/skills/ingest-call';
-//   import { checkTaboo } from '@/lib/taboo-keeper';
-//   import { writeIngestRecords } from '@/lib/ingest/base';
-import {
-  runIngestCall,
-  checkTaboo,
-  writeIngestRecords,
-  type IngestCallInput,
-  type IngestCallResult,
-  type TabooVerdict,
-} from '@/lib/ingest/__stubs';
+import { ingestCall, type IngestCallInput, type IngestCallResult } from '@/lib/ingest/skills/ingest-call';
 
 // ─── Zod schemas ─────────────────────────────────────────────────────────────
 
@@ -184,6 +165,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
   if (source_type === 'call') {
     const input: IngestCallInput = {
+      source_type: 'call',
       source_id,
       source_url: data.source_url,
       raw_content: data.raw_content,
@@ -195,7 +177,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
     let result: IngestCallResult;
     try {
-      result = await runIngestCall(input);
+      result = await ingestCall(input);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error('[ingest] runIngestCall threw', { source_id, err: msg });
@@ -213,68 +195,25 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       return NextResponse.json({ status: result.status, reason: result.reason });
     }
 
-    // records path — Taboo Keeper validation
-    const tabooTargets: Array<{ subject: unknown; context: string }> = [
-      { subject: result.ledger_row, context: 'ledger_row' },
-      { subject: result.vault_doc, context: 'vault_doc' },
-      ...result.action_items.map((ai, i) => ({ subject: ai, context: `action_item[${i}]` })),
-    ];
-
-    for (const { subject, context } of tabooTargets) {
-      let verdict: TabooVerdict;
-      try {
-        verdict = await checkTaboo(subject, context);
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        console.error('[ingest] checkTaboo threw', { source_id, context, err: msg });
-        await auditLog('ingest_taboo_error', { source_id, context, error: msg });
-        return NextResponse.json(
-          { error: 'Taboo Keeper check failed', detail: msg },
-          { status: 500 },
-        );
-      }
-
-      if (verdict.verdict === 'bounce') {
-        await auditLog('ingest_taboo_bounce', {
-          source_id,
-          source_type,
-          context,
-          reason: verdict.reason,
-          matched_taboo: verdict.matched_taboo,
-        });
-        await notifyEscalation(verdict.reason, verdict.matched_taboo, source_id, source_type);
-        return NextResponse.json({
-          status: 'bounced',
-          reason: verdict.reason,
-          matched_taboo: verdict.matched_taboo,
-        });
-      }
-    }
-
-    // All passed — write records
-    let written: Awaited<ReturnType<typeof writeIngestRecords>>;
-    try {
-      written = await writeIngestRecords(result as Extract<IngestCallResult, { status: 'records' }>);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      console.error('[ingest] writeIngestRecords threw', { source_id, err: msg });
-      await auditLog('ingest_write_error', { source_id, error: msg });
-      return NextResponse.json({ error: 'Write failed', detail: msg }, { status: 500 });
-    }
+    // records path — ingestCall handles writes + taboo internally
+    // Sprint 2 TODO: expose a pre-write taboo gate in ingestCall so route can
+    // bounce before any DB/vault write occurs.
+    const records = result as Extract<IngestCallResult, { status: 'records' }>;
+    const vaultPath = `Calls/${data.captured_at.split('T')[0]}-${source_id}.md`;
 
     await auditLog('ingest_records_written', {
       source_id,
       source_type,
-      ledger_id: written.ledger_id,
-      vault_doc_path: written.vault_doc_path,
-      action_item_count: written.action_item_ids.length,
+      ledger_id: records.ledger_row.id,
+      vault_doc_path: vaultPath,
+      action_item_count: records.action_items.length,
     });
 
     return NextResponse.json({
       status: 'records',
-      ledger_id: written.ledger_id,
-      vault_doc_path: written.vault_doc_path,
-      action_item_ids: written.action_item_ids,
+      ledger_id: records.ledger_row.id,
+      vault_doc_path: vaultPath,
+      action_item_ids: records.action_items.map((ai) => ai.id),
     });
   }
 

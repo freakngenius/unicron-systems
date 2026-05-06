@@ -3,28 +3,23 @@
 // Unit tests for the real /api/ingest POST handler.
 //
 // Strategy:
-//   - Mock @/lib/ingest/__stubs so we can control what runIngestCall,
-//     checkTaboo, and writeIngestRecords return without touching Supabase.
+//   - Mock @/lib/ingest/skills/ingest-call so we can control what ingestCall
+//     returns without touching Supabase or the Anthropic API.
 //   - Mock fetch globally to swallow audit_log writes.
-//   - Test all auth / NO_SIGNAL / ABSTAIN / bounce / records paths.
+//   - Test all auth / NO_SIGNAL / ABSTAIN / records paths.
 //
-// NOTE: After Stream B merges, the mock target changes from
-//   @/lib/ingest/__stubs  →  actual B module paths
-// The test structure stays identical.
+// Note: taboo pre-write bounce is not tested here because ingestCall handles
+// writes internally. A Sprint 2 TODO exists to expose a pre-write gate.
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
-// ─── Mock Stream B stubs ──────────────────────────────────────────────────────
+// ─── Mock ingestCall ──────────────────────────────────────────────────────────
 
-const mockRunIngestCall = vi.fn();
-const mockCheckTaboo = vi.fn();
-const mockWriteIngestRecords = vi.fn();
+const mockIngestCall = vi.fn();
 
-vi.mock('@/lib/ingest/__stubs', () => ({
-  runIngestCall: (...args: unknown[]) => mockRunIngestCall(...args),
-  checkTaboo: (...args: unknown[]) => mockCheckTaboo(...args),
-  writeIngestRecords: (...args: unknown[]) => mockWriteIngestRecords(...args),
+vi.mock('@/lib/ingest/skills/ingest-call', () => ({
+  ingestCall: (...args: unknown[]) => mockIngestCall(...args),
 }));
 
 // ─── Suppress Supabase and Slack network calls ────────────────────────────────
@@ -136,8 +131,8 @@ describe('POST /api/ingest — validation', () => {
 });
 
 describe('POST /api/ingest — call / NO_SIGNAL', () => {
-  it('returns 200 { status: NO_SIGNAL, reason } and does not call writeIngestRecords', async () => {
-    mockRunIngestCall.mockResolvedValueOnce({
+  it('returns 200 { status: NO_SIGNAL, reason } and does not call ingestCall for records', async () => {
+    mockIngestCall.mockResolvedValueOnce({
       status: 'NO_SIGNAL',
       reason: 'Not enough signal to extract anything meaningful.',
     });
@@ -149,14 +144,13 @@ describe('POST /api/ingest — call / NO_SIGNAL', () => {
     const body = await res.json();
     expect(body.status).toBe('NO_SIGNAL');
     expect(body.reason).toBe('Not enough signal to extract anything meaningful.');
-    expect(mockCheckTaboo).not.toHaveBeenCalled();
-    expect(mockWriteIngestRecords).not.toHaveBeenCalled();
+    expect(mockIngestCall).toHaveBeenCalledTimes(1);
   });
 });
 
 describe('POST /api/ingest — call / ABSTAIN', () => {
   it('returns 200 { status: ABSTAIN, reason } and does not write records', async () => {
-    mockRunIngestCall.mockResolvedValueOnce({
+    mockIngestCall.mockResolvedValueOnce({
       status: 'ABSTAIN',
       reason: 'Confidence too low to trust extraction.',
     });
@@ -168,91 +162,17 @@ describe('POST /api/ingest — call / ABSTAIN', () => {
     const body = await res.json();
     expect(body.status).toBe('ABSTAIN');
     expect(body.reason).toContain('Confidence');
-    expect(mockWriteIngestRecords).not.toHaveBeenCalled();
-  });
-});
-
-describe('POST /api/ingest — call / Taboo Keeper bounce', () => {
-  it('returns 200 { status: bounced } and does not call writeIngestRecords', async () => {
-    mockRunIngestCall.mockResolvedValueOnce({
-      status: 'records',
-      ledger_row: { call_id: 'call-001', summary: 'Sensitive content here' },
-      vault_doc: { path: 'calls/call-001.md', content: 'Sensitive' },
-      action_items: [],
-      signals: [],
-    });
-
-    // First checkTaboo call (ledger_row) returns a bounce
-    mockCheckTaboo.mockResolvedValueOnce({
-      verdict: 'bounce',
-      reason: 'Contains PII that should not be written.',
-      matched_taboo: 'pii_ssn',
-    });
-
-    const { POST } = await import('@/app/api/ingest/route');
-    const res = await POST(makeRequest(validCallBody));
-
-    expect(res.status).toBe(200);
-    const body = await res.json();
-    expect(body.status).toBe('bounced');
-    expect(body.reason).toBe('Contains PII that should not be written.');
-    expect(body.matched_taboo).toBe('pii_ssn');
-    expect(mockWriteIngestRecords).not.toHaveBeenCalled();
-  });
-
-  it('checks action items and bounces if one matches a taboo', async () => {
-    mockRunIngestCall.mockResolvedValueOnce({
-      status: 'records',
-      ledger_row: { call_id: 'call-002' },
-      vault_doc: { path: 'calls/call-002.md', content: 'Fine' },
-      action_items: [
-        { title: 'Safe action' },
-        { title: 'Dangerous action' },
-      ],
-      signals: [],
-    });
-
-    // ledger_row passes, vault_doc passes, first action_item passes, second bounces
-    mockCheckTaboo
-      .mockResolvedValueOnce({ verdict: 'pass' })   // ledger_row
-      .mockResolvedValueOnce({ verdict: 'pass' })   // vault_doc
-      .mockResolvedValueOnce({ verdict: 'pass' })   // action_item[0]
-      .mockResolvedValueOnce({
-        verdict: 'bounce',
-        reason: 'Action item references a banned project.',
-        matched_taboo: 'banned_project_ref',
-      });
-
-    const { POST } = await import('@/app/api/ingest/route');
-    const res = await POST(makeRequest(validCallBody));
-
-    expect(res.status).toBe(200);
-    const body = await res.json();
-    expect(body.status).toBe('bounced');
-    expect(body.matched_taboo).toBe('banned_project_ref');
-    expect(mockWriteIngestRecords).not.toHaveBeenCalled();
-    // Should have called checkTaboo 4 times: ledger + vault + 2 action items
-    expect(mockCheckTaboo).toHaveBeenCalledTimes(4);
   });
 });
 
 describe('POST /api/ingest — call / records (happy path)', () => {
   it('returns 200 { status: records, ledger_id, vault_doc_path, action_item_ids }', async () => {
-    mockRunIngestCall.mockResolvedValueOnce({
+    mockIngestCall.mockResolvedValueOnce({
       status: 'records',
-      ledger_row: { call_id: 'call-003', summary: 'Good call' },
-      vault_doc: { path: 'calls/call-003.md', content: 'Transcript here' },
-      action_items: [{ title: 'Follow up with Alice' }],
-      signals: [{ type: 'customer_pain', score: 0.9 }],
-    });
-
-    // All Taboo checks pass
-    mockCheckTaboo.mockResolvedValue({ verdict: 'pass' });
-
-    mockWriteIngestRecords.mockResolvedValueOnce({
-      ledger_id: 'ledger-uuid-001',
-      vault_doc_path: 'calls/call-003.md',
-      action_item_ids: ['ai-uuid-001'],
+      ledger_row: { id: 'ledger-uuid-001' },
+      vault_doc: { commit_sha: 'abc123def456' },
+      action_items: [{ id: 'ai-uuid-001' }],
+      signals: [],
     });
 
     const { POST } = await import('@/app/api/ingest/route');
@@ -262,11 +182,9 @@ describe('POST /api/ingest — call / records (happy path)', () => {
     const body = await res.json();
     expect(body.status).toBe('records');
     expect(body.ledger_id).toBe('ledger-uuid-001');
-    expect(body.vault_doc_path).toBe('calls/call-003.md');
+    expect(body.vault_doc_path).toBe('Calls/2026-05-06-call-001.md');
     expect(body.action_item_ids).toEqual(['ai-uuid-001']);
-    // checkTaboo called: 1 ledger + 1 vault + 1 action item = 3
-    expect(mockCheckTaboo).toHaveBeenCalledTimes(3);
-    expect(mockWriteIngestRecords).toHaveBeenCalledTimes(1);
+    expect(mockIngestCall).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -280,8 +198,7 @@ describe('POST /api/ingest — unimplemented source types', () => {
     expect(body.status).toBe('pending');
     expect(body.note).toContain('slack');
     expect(body.note).toContain('Sprint 2+');
-    // runIngestCall should NOT have been called
-    expect(mockRunIngestCall).not.toHaveBeenCalled();
+    expect(mockIngestCall).not.toHaveBeenCalled();
   });
 
   it('returns 202 for email source_type', async () => {
