@@ -179,8 +179,12 @@ async function slackPost(channelId: string, text: string): Promise<void> {
     body: JSON.stringify({ channel: channelId, text }),
   });
 
-  if (!res.ok) {
-    console.error(`[orchestrator] slackPost failed: ${res.status}`);
+  // Slack always returns HTTP 200; errors are in the JSON body
+  const body = await res.json() as { ok: boolean; error?: string };
+  if (!body.ok) {
+    console.error(`[orchestrator] slackPost failed: ${body.error} channel=${channelId}`);
+  } else {
+    console.log(`[orchestrator] slackPost ok channel=${channelId}`);
   }
 }
 
@@ -219,7 +223,9 @@ export async function orchestratorProcess(
   const { slack_user_id, channel_id, message_text } = input;
 
   // 1. Map Slack user to team_member
+  console.log(`[orchestrator] resolving slack_user_id=${slack_user_id} channel=${channel_id}`);
   const member = await resolveTeamMember(slack_user_id);
+  console.log(`[orchestrator] member resolved: ${member ? member.name : 'null'}`);
   if (!member) {
     const reply = 'Access denied. DM Kyle if you should have Orchestrator access.';
     await slackPost(channel_id, reply);
