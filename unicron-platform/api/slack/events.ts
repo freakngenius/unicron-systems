@@ -85,15 +85,18 @@ async function dispatchToInngest(payload: SlackCallbackPayload): Promise<void> {
   const event = payload.event;
   if (!event) return;
 
-  const inngestBaseUrl = process.env.INNGEST_API_BASE_URL;
-  const inngestEventKey = process.env.INNGEST_EVENT_KEY;
+  const inngestBaseUrl = process.env.INNGEST_API_BASE_URL?.trim();
+  const inngestEventKey = process.env.INNGEST_EVENT_KEY?.trim();
 
   if (!inngestBaseUrl || !inngestEventKey) {
     console.error('[slack/events] INNGEST_API_BASE_URL or INNGEST_EVENT_KEY not set — skipping dispatch');
     return;
   }
 
-  const res = await fetch(`${inngestBaseUrl}/e/${inngestEventKey}`, {
+  const url = `${inngestBaseUrl}/e/${inngestEventKey}`;
+  console.log(`[slack/events] dispatching to Inngest: ${url.slice(0, 40)}...`);
+
+  const res = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -109,8 +112,11 @@ async function dispatchToInngest(payload: SlackCallbackPayload): Promise<void> {
     }),
   });
 
-  if (!res.ok) {
-    console.error(`[slack/events] Inngest dispatch failed: ${res.status} ${await res.text()}`);
+  if (res.ok) {
+    console.log(`[slack/events] Inngest dispatch ok: ${res.status}`);
+  } else {
+    const body = await res.text();
+    console.error(`[slack/events] Inngest dispatch failed: ${res.status} ${body}`);
   }
 }
 
@@ -149,10 +155,13 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     return;
   }
 
-  // Acknowledge Slack immediately; dispatch to Inngest fire-and-forget.
-  dispatchToInngest(payload).catch((err: unknown) => {
+  // Dispatch to Inngest before responding — ensures the fetch completes before
+  // the serverless function terminates. Still within Slack's 3s window (<500ms).
+  try {
+    await dispatchToInngest(payload);
+  } catch (err: unknown) {
     console.error('[slack/events] Inngest dispatch error', err);
-  });
+  }
 
   res.writeHead(200, { 'Content-Type': 'text/plain' });
   res.end('OK');
