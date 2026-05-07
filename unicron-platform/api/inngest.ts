@@ -8,13 +8,13 @@
 // bodyParser must be disabled so Inngest can read the raw request stream directly.
 
 import { serve } from 'inngest/node';
-import { inngest } from '../lib/inngest/client.ts';
+import { inngest } from '../lib/inngest/client';
 import {
   orchestratorRun,
   analystRun,
   elderRun,
   tabooKeeperRun,
-} from '../lib/agents/inngest-fns.ts';
+} from '../lib/agents/inngest-fns';
 
 // Disable Vercel's automatic JSON body parsing — inngest/node reads the raw stream.
 export const config = { api: { bodyParser: false } };
