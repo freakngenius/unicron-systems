@@ -22,7 +22,7 @@ import { writeAgentMemory } from './runtime.js';
 const anthropic = new Anthropic();
 
 const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.VITE_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
