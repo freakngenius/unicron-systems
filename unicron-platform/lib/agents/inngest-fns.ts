@@ -30,7 +30,7 @@ export const orchestratorRun = inngest.createFunction(
   async ({ event, step }) => {
     // Drop events older than 5 minutes — drains flood queues without spamming Slack.
     // event.ts is Unix ms when Inngest received the event.
-    const ageMs = Date.now() - event.ts;
+    const ageMs = event.ts != null ? Date.now() - event.ts : 0;
     if (ageMs > 5 * 60 * 1000) {
       console.log(`[orchestrator-run] skipping stale event age=${Math.round(ageMs / 1000)}s`);
       return { status: 'skipped', reason: 'stale', age_s: Math.round(ageMs / 1000) };
