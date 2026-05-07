@@ -10,7 +10,7 @@
 //   elder/run                 → elderRun          (placeholder — Sprint 3)
 //   taboo-keeper/validate     → tabooKeeperRun    (placeholder — Sprint 3 wires full module)
 
-import { inngest } from '../inngest/client.ts';
+import { inngest } from '../inngest/client';
 
 // ---------------------------------------------------------------------------
 // Orchestrator
@@ -28,7 +28,7 @@ export const orchestratorRun = inngest.createFunction(
   },
   { event: 'orchestrator/slack.event' },
   async ({ event, step }) => {
-    const { orchestratorProcess } = await import('./orchestrator.ts');
+    const { orchestratorProcess } = await import('./orchestrator');
 
     return step.run('orchestrator-process', () =>
       orchestratorProcess(event.data as Parameters<typeof orchestratorProcess>[0])
