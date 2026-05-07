@@ -2,22 +2,37 @@
 // Handles Slack event callbacks: message.im (DM), app_mention, member_joined_channel.
 //
 // Flow:
-//   1. Immediately answer url_verification challenges (no signature check needed per Slack docs).
-//   2. Verify HMAC-SHA256 signature for all other requests.
-//   3. Return HTTP 200 to Slack within 3 seconds; dispatch real work to Inngest fire-and-forget.
+//   1. Read raw body bytes from stream (bodyParser disabled — required for HMAC verification).
+//   2. Immediately answer url_verification challenges.
+//   3. Verify HMAC-SHA256 signature for all other requests.
+//   4. Return HTTP 200 to Slack within 3 seconds; dispatch real work to Inngest fire-and-forget.
 
 import { createHmac } from 'crypto';
-import type { VercelRequest, VercelResponse } from '@vercel/node';
+import type { IncomingMessage, ServerResponse } from 'http';
+
+// Disable Vercel's JSON body parser — we need the raw bytes to verify Slack's HMAC signature.
+// If Vercel pre-parses the body, JSON.stringify(req.body) diverges from the original bytes
+// and the signature check always fails.
+export const config = { api: { bodyParser: false } };
+
+// ---------------------------------------------------------------------------
+// Raw body reader
+// ---------------------------------------------------------------------------
+
+function readRawBody(req: IncomingMessage): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    req.on('data', (chunk: Buffer) => chunks.push(chunk));
+    req.on('end', () => resolve(Buffer.concat(chunks).toString('utf-8')));
+    req.on('error', reject);
+  });
+}
 
 // ---------------------------------------------------------------------------
 // Signature verification
 // ---------------------------------------------------------------------------
 
-/**
- * Verify the Slack request signature using HMAC-SHA256.
- * See https://api.slack.com/authentication/verifying-requests-from-slack
- */
-function verifySlackSignature(req: VercelRequest, rawBody: string): boolean {
+function verifySlackSignature(req: IncomingMessage, rawBody: string): boolean {
   const timestamp = Array.isArray(req.headers['x-slack-request-timestamp'])
     ? req.headers['x-slack-request-timestamp'][0]
     : req.headers['x-slack-request-timestamp'];
@@ -28,20 +43,17 @@ function verifySlackSignature(req: VercelRequest, rawBody: string): boolean {
   if (!timestamp || !slackSig) return false;
 
   // Reject requests older than 5 minutes (replay-attack guard)
-  const fiveMinutes = 5 * 60;
-  if (Math.abs(Date.now() / 1000 - parseInt(timestamp, 10)) > fiveMinutes) return false;
+  if (Math.abs(Date.now() / 1000 - parseInt(timestamp, 10)) > 5 * 60) return false;
 
   const signingSecret = process.env.SLACK_SIGNING_SECRET;
   if (!signingSecret) {
-    console.error('SLACK_SIGNING_SECRET is not set');
+    console.error('[slack/events] SLACK_SIGNING_SECRET not set');
     return false;
   }
 
   const sigBase = `v0:${timestamp}:${rawBody}`;
-  const hmac = createHmac('sha256', signingSecret);
-  const computed = `v0=${hmac.update(sigBase).digest('hex')}`;
+  const computed = `v0=${createHmac('sha256', signingSecret).update(sigBase).digest('hex')}`;
 
-  // Constant-time comparison to prevent timing attacks
   if (computed.length !== slackSig.length) return false;
   let diff = 0;
   for (let i = 0; i < computed.length; i++) {
@@ -77,15 +89,13 @@ async function dispatchToInngest(payload: SlackCallbackPayload): Promise<void> {
   const inngestEventKey = process.env.INNGEST_EVENT_KEY;
 
   if (!inngestBaseUrl || !inngestEventKey) {
-    console.error('INNGEST_API_BASE_URL or INNGEST_EVENT_KEY is not set — skipping dispatch');
+    console.error('[slack/events] INNGEST_API_BASE_URL or INNGEST_EVENT_KEY not set — skipping dispatch');
     return;
   }
 
-  await fetch(`${inngestBaseUrl}/e/${inngestEventKey}`, {
+  const res = await fetch(`${inngestBaseUrl}/e/${inngestEventKey}`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       name: 'orchestrator/slack.event',
       data: {
@@ -98,55 +108,52 @@ async function dispatchToInngest(payload: SlackCallbackPayload): Promise<void> {
       },
     }),
   });
+
+  if (!res.ok) {
+    console.error(`[slack/events] Inngest dispatch failed: ${res.status} ${await res.text()}`);
+  }
 }
 
 // ---------------------------------------------------------------------------
 // Handler
 // ---------------------------------------------------------------------------
 
-export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
+export default async function handler(req: IncomingMessage, res: ServerResponse): Promise<void> {
   if (req.method !== 'POST') {
-    res.status(405).json({ ok: false, error: 'method not allowed' });
+    res.writeHead(405, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ ok: false, error: 'method not allowed' }));
     return;
   }
 
-  // Vercel parses the body automatically; we need the raw string for signature
-  // verification. Reconstruct it from req.body (already parsed by Vercel middleware).
-  const rawBody =
-    typeof req.body === 'string'
-      ? req.body
-      : Buffer.isBuffer(req.body)
-        ? req.body.toString('utf-8')
-        : JSON.stringify(req.body);
+  const rawBody = await readRawBody(req);
 
   let payload: SlackCallbackPayload;
   try {
-    payload = typeof req.body === 'object' && req.body !== null
-      ? (req.body as SlackCallbackPayload)
-      : JSON.parse(rawBody);
+    payload = JSON.parse(rawBody) as SlackCallbackPayload;
   } catch {
-    res.status(400).json({ ok: false, error: 'invalid JSON body' });
+    res.writeHead(400, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ ok: false, error: 'invalid JSON body' }));
     return;
   }
 
   // Slack URL verification challenge — answer before signature check (no sig present)
   if (payload.type === 'url_verification') {
-    res.status(200).json({ challenge: payload.challenge });
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ challenge: payload.challenge }));
     return;
   }
 
-  // All other requests must have a valid signature
   if (!verifySlackSignature(req, rawBody)) {
-    res.status(401).json({ ok: false, error: 'signature verification failed' });
+    res.writeHead(401, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ ok: false, error: 'signature verification failed' }));
     return;
   }
 
-  // Acknowledge Slack immediately; dispatch to Inngest in the background.
-  // We intentionally do NOT await the dispatch before returning 200 — Slack
-  // requires a response within 3 seconds.
+  // Acknowledge Slack immediately; dispatch to Inngest fire-and-forget.
   dispatchToInngest(payload).catch((err: unknown) => {
-    console.error('Inngest dispatch failed', err);
+    console.error('[slack/events] Inngest dispatch error', err);
   });
 
-  res.status(200).send('OK');
+  res.writeHead(200, { 'Content-Type': 'text/plain' });
+  res.end('OK');
 }
