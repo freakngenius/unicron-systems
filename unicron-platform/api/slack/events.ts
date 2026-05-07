@@ -45,13 +45,13 @@ function verifySlackSignature(req: IncomingMessage, rawBody: string): boolean {
   // Reject requests older than 5 minutes (replay-attack guard)
   if (Math.abs(Date.now() / 1000 - parseInt(timestamp, 10)) > 5 * 60) return false;
 
-  const signingSecret = process.env.SLACK_SIGNING_SECRET;
+  const signingSecret = process.env.SLACK_SIGNING_SECRET?.trim();
   if (!signingSecret) {
     console.error('[slack/events] SLACK_SIGNING_SECRET not set');
     return false;
   }
 
-  const sigBase = `v0:${timestamp}:${rawBody}`;
+  const sigBase = `v0:${timestamp.trim()}:${rawBody}`;
   const computed = `v0=${createHmac('sha256', signingSecret).update(sigBase).digest('hex')}`;
 
   if (computed.length !== slackSig.length) return false;
