@@ -23,8 +23,7 @@ const anthropic = new Anthropic();
 
 const supabase = createClient(
   process.env.VITE_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  { db: { schema: 'nervous_system' } }
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
 // ---------------------------------------------------------------------------
@@ -92,16 +91,20 @@ interface TeamMember {
 
 /**
  * Map a Slack user ID to a nervous_system.team_members row.
- * The config JSONB column stores { ingest_accounts: { slack_user_id: "..." } }.
+ * Uses the public.resolve_team_member_by_slack RPC function (SECURITY DEFINER)
+ * because the nervous_system schema is not exposed via PostgREST directly.
  */
 async function resolveTeamMember(slackUserId: string): Promise<TeamMember | null> {
-  const { data } = await supabase
-    .from('team_members')
-    .select('id, name, email')
-    .filter('config->ingest_accounts->>slack_user_id', 'eq', slackUserId)
-    .single<TeamMember>();
+  const { data, error } = await supabase
+    .rpc('resolve_team_member_by_slack', { p_slack_user_id: slackUserId });
 
-  return data ?? null;
+  if (error) {
+    console.error('[orchestrator] resolveTeamMember rpc error:', error.message);
+    return null;
+  }
+
+  const rows = data as TeamMember[] | null;
+  return rows && rows.length > 0 ? rows[0] : null;
 }
 
 // ---------------------------------------------------------------------------
