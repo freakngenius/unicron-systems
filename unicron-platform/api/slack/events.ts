@@ -68,6 +68,8 @@ function verifySlackSignature(req: IncomingMessage, rawBody: string): boolean {
 
 interface SlackEventPayload {
   type: string;
+  subtype?: string;
+  bot_id?: string;
   user?: string;
   channel?: string;
   text?: string;
@@ -84,6 +86,14 @@ interface SlackCallbackPayload {
 async function dispatchToInngest(payload: SlackCallbackPayload): Promise<void> {
   const event = payload.event;
   if (!event) return;
+
+  // Ignore bot-originated messages to prevent infinite self-loops.
+  // The orchestrator posts replies to Slack, which triggers new message.im events.
+  // Without this guard those replies re-enter the pipeline forever.
+  if (event.subtype === 'bot_message' || event.bot_id) {
+    console.log('[slack/events] ignoring bot message — skipping dispatch');
+    return;
+  }
 
   const inngestBaseUrl = process.env.INNGEST_API_BASE_URL?.trim();
   const inngestEventKey = process.env.INNGEST_EVENT_KEY?.trim();
