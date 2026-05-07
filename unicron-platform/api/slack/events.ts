@@ -81,10 +81,9 @@ async function dispatchToInngest(payload: SlackCallbackPayload): Promise<void> {
     return;
   }
 
-  await fetch(`${inngestBaseUrl}/e/orchestrator/slack.event`, {
+  await fetch(`${inngestBaseUrl}/e/${inngestEventKey}`, {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${inngestEventKey}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
