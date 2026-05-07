@@ -17,7 +17,7 @@
 
 import Anthropic from '@anthropic-ai/sdk';
 import { createClient } from '@supabase/supabase-js';
-import { writeAgentMemory } from './runtime';
+import { writeAgentMemory } from './runtime.js';
 
 const anthropic = new Anthropic();
 
