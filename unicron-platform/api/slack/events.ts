@@ -131,6 +131,14 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     return;
   }
 
+  // Slack retries failed deliveries with X-Slack-Retry-Num header.
+  // Acknowledge immediately so retries don't re-process and flood users.
+  if (req.headers['x-slack-retry-num']) {
+    res.writeHead(200, { 'Content-Type': 'text/plain' });
+    res.end('OK');
+    return;
+  }
+
   const rawBody = await readRawBody(req);
 
   let payload: SlackCallbackPayload;
