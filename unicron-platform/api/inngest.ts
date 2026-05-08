@@ -12,6 +12,10 @@ import { inngest } from '../lib/inngest/client.js';
 import {
   orchestratorRun,
   analystRun,
+  analystNightlyCron,
+  analystWeeklyCron,
+  analystMonthlyCron,
+  analystQuarterlyCron,
   elderRun,
   tabooKeeperRun,
 } from '../lib/agents/inngest-fns.js';
@@ -21,5 +25,17 @@ export const config = { api: { bodyParser: false } };
 
 export default serve({
   client: inngest,
-  functions: [orchestratorRun, analystRun, elderRun, tabooKeeperRun],
+  functions: [
+    // Orchestrator (Sprint 2)
+    orchestratorRun,
+    // Analyst (Sprint 3)
+    analystRun,
+    analystNightlyCron,
+    analystWeeklyCron,
+    analystMonthlyCron,
+    analystQuarterlyCron,
+    // Elder + Taboo Keeper (Sprint 3 Stream B — placeholder shells)
+    elderRun,
+    tabooKeeperRun,
+  ],
 });
