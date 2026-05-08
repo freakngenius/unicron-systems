@@ -48,6 +48,7 @@ interface SkillRow {
   description: string;
   domain: string;
   active: boolean;
+  refusal_gate: boolean;
 }
 
 interface FeedEvent {
@@ -64,56 +65,6 @@ interface FeedEvent {
 const THROTTLE_MS = 30_000;
 const DEDUPE_WINDOW_MS = 5 * 60_000;
 const FEED_MAX = 20;
-
-const SKILL_DOMAINS: {
-  label: string;
-  key: string;
-  names: string[];
-  sprint: number;
-}[] = [
-  {
-    label: 'Memory',
-    key: 'memory',
-    names: ['Vault Cleanup', 'Daily Digest', 'Vault Search'],
-    sprint: 3,
-  },
-  {
-    label: 'Productivity',
-    key: 'productivity',
-    names: ['Morning Brief', 'Inbox Triage', 'Quick Capture'],
-    sprint: 3,
-  },
-  {
-    label: 'Research',
-    key: 'research',
-    names: ['Deep Research', 'LightRAG Query', 'Morning Trend'],
-    sprint: 3,
-  },
-  {
-    label: 'Discovery',
-    key: 'discovery',
-    names: ['Schedule Call', 'Extract Signals'],
-    sprint: 4,
-  },
-  {
-    label: 'Sales',
-    key: 'sales',
-    names: ['Pipeline Stage', 'Generate Proposal'],
-    sprint: 4,
-  },
-  {
-    label: 'Marketing',
-    key: 'marketing',
-    names: ['Blog Post', 'Social Post'],
-    sprint: 6,
-  },
-  {
-    label: 'Operations',
-    key: 'operations',
-    names: ['Onboard Member', 'Propose Taboo Edit'],
-    sprint: 3,
-  },
-];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -764,16 +715,59 @@ interface SkillDispatchState {
   error: string | null;
 }
 
+// Future-sprint placeholder skills not yet in the DB (Sprint 4+).
+// Shown as disabled stubs until seeded.
+const FUTURE_SKILL_STUBS: { label: string; key: string; names: string[]; sprint: number }[] = [
+  {
+    label: 'Productivity',
+    key: 'productivity',
+    names: ['Morning Brief', 'Inbox Triage', 'Quick Capture'],
+    sprint: 3,
+  },
+  {
+    label: 'Research',
+    key: 'research',
+    names: ['Deep Research', 'LightRAG Query', 'Morning Trend'],
+    sprint: 3,
+  },
+  {
+    label: 'Discovery',
+    key: 'discovery',
+    names: ['Schedule Call', 'Extract Signals'],
+    sprint: 4,
+  },
+  {
+    label: 'Sales',
+    key: 'sales',
+    names: ['Pipeline Stage', 'Generate Proposal'],
+    sprint: 4,
+  },
+  {
+    label: 'Marketing',
+    key: 'marketing',
+    names: ['Blog Post', 'Social Post'],
+    sprint: 6,
+  },
+];
+
+function formatSkillName(name: string): string {
+  return name.split('-').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+}
+
 function useSkills() {
   const [skills, setSkills] = useState<SkillRow[]>([]);
   useEffect(() => {
-    const sb = getSupabase();
-    sb
-      .schema('nervous_system')
-      .from('skills')
-      .select('id, name, description, domain, active')
-      .returns<SkillRow[]>()
-      .then(({ data }) => setSkills(data ?? []));
+    // Use ns_list_skills() RPC — nervous_system schema is not exposed via
+    // standard PostgREST routing, consistent with orchestrator access pattern.
+    fetch('/api/atrium/skills')
+      .then((r) => r.json() as Promise<SkillRow[]>)
+      .then((data) => setSkills(Array.isArray(data) ? data : []))
+      .catch(() => {
+        // Fallback: direct Supabase RPC if Vercel function unavailable (dev)
+        const sb = getSupabase();
+        sb.rpc('ns_list_skills')
+          .then(({ data }) => setSkills((data as SkillRow[] | null) ?? []));
+      });
   }, []);
   return skills;
 }
@@ -787,23 +781,31 @@ function SkillsSurface() {
     error: null,
   });
 
-  // Build lookup: slug → active
-  const activeMap = new Map(skills.map((s) => [s.name.toLowerCase().replace(/\s+/g, '-'), s.active]));
+  // Group DB skills by domain
+  const byDomain = skills.reduce<Record<string, SkillRow[]>>((acc, s) => {
+    (acc[s.domain] ??= []).push(s);
+    return acc;
+  }, {});
 
-  async function handleRun() {
-    if (!state.prompt.trim() || state.running) return;
+  // Build set of DB-registered skill names for stub deduplication
+  const registeredNames = new Set(skills.map((s) => s.name));
+
+  async function handleRun(skillName?: string) {
+    const prompt = skillName ?? state.prompt;
+    if (!prompt.trim() || state.running) return;
+    if (skillName) setState((s) => ({ ...s, prompt: skillName }));
     setState((s) => ({ ...s, running: true, result: null, error: null }));
     try {
       const res = await fetch('/api/skills/dispatch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: state.prompt }),
+        body: JSON.stringify({ skill_name: skillName ?? null, prompt }),
       });
       const json: { status?: string; sprint?: number } = await res.json().catch(() => ({}));
       setState((s) => ({
         ...s,
         running: false,
-        result: json.status ?? 'skill_dispatch_not_yet_implemented',
+        result: json.status ?? 'dispatched',
       }));
     } catch (e) {
       setState((s) => ({
@@ -843,7 +845,7 @@ function SkillsSurface() {
           />
           <div className="flex flex-col gap-2">
             <button
-              onClick={handleRun}
+              onClick={() => void handleRun()}
               disabled={!state.prompt.trim() || state.running}
               className="mono text-[11px] uppercase tracking-[0.14em] bg-[#FF6B2B] text-white px-4 py-2 rounded-lg hover:bg-[#e55a1a] transition-colors disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
             >
@@ -870,51 +872,72 @@ function SkillsSurface() {
         )}
       </div>
 
-      {/* Domain grid */}
+      {/* Domain grid — DB-registered skills (Sprint 3, active) */}
       <div className="px-5 py-4 space-y-4">
-        {SKILL_DOMAINS.map((domain) => (
-          <div key={domain.key}>
-            <div className="mono text-[9px] uppercase tracking-[0.22em] text-[rgba(229,229,231,0.35)] mb-2 hidden sm:block">
-              {domain.label}:
+        {Object.entries(byDomain).map(([domain, domainSkills]) => (
+          <div key={domain}>
+            <div className="mono text-[9px] uppercase tracking-[0.22em] text-[rgba(229,229,231,0.35)] mb-2">
+              {domain}:
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
-              {domain.names.map((skillName) => {
-                const slug = skillName.toLowerCase().replace(/\s+/g, '-');
-                const active = activeMap.get(slug) ?? false;
-                return (
-                  <button
-                    key={skillName}
-                    disabled={!active}
-                    title={active ? skillName : `Coming in Sprint ${domain.sprint}`}
-                    onClick={() =>
-                      active &&
-                      setState((s) => ({ ...s, prompt: skillName }))
-                    }
-                    className={[
-                      'text-left px-3 py-2 rounded-lg border mono text-[11px] tracking-[0.08em] transition-colors',
-                      active
-                        ? 'border-[#2A2A2E] text-[#E5E5E7] hover:border-[#FF6B2B] hover:text-[#FF6B2B] cursor-pointer'
-                        : 'border-[#1F1F23] text-[rgba(229,229,231,0.25)] cursor-not-allowed',
-                    ].join(' ')}
-                  >
-                    {skillName}
-                    {!active && (
-                      <span className="ml-1 mono text-[8px] text-[rgba(229,229,231,0.2)]">
-                        S{domain.sprint}
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
+              {domainSkills.map((skill) => (
+                <button
+                  key={skill.id}
+                  title={skill.description}
+                  onClick={() => void handleRun(skill.name)}
+                  disabled={state.running}
+                  className="text-left px-3 py-2 rounded-lg border mono text-[11px] tracking-[0.08em] transition-colors border-[#2A2A2E] text-[#E5E5E7] hover:border-[#FF6B2B] hover:text-[#FF6B2B] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {formatSkillName(skill.name)}
+                  {skill.refusal_gate && (
+                    <span
+                      className="ml-1 mono text-[8px] text-orange-400"
+                      title="Requires human approval before running"
+                    >
+                      &#x1F6E1;
+                    </span>
+                  )}
+                </button>
+              ))}
             </div>
           </div>
         ))}
+
+        {/* Future-sprint stubs — shown only if not yet in the DB */}
+        {FUTURE_SKILL_STUBS.map((domain) => {
+          const unstubbed = domain.names.filter(
+            (n) => !registeredNames.has(n.toLowerCase().replace(/\s+/g, '-')),
+          );
+          if (unstubbed.length === 0) return null;
+          return (
+            <div key={domain.key}>
+              <div className="mono text-[9px] uppercase tracking-[0.22em] text-[rgba(229,229,231,0.25)] mb-2">
+                {domain.label}:
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+                {unstubbed.map((skillName) => (
+                  <button
+                    key={skillName}
+                    disabled
+                    title={`Coming in Sprint ${domain.sprint}`}
+                    className="text-left px-3 py-2 rounded-lg border mono text-[11px] tracking-[0.08em] transition-colors border-[#1F1F23] text-[rgba(229,229,231,0.25)] cursor-not-allowed"
+                  >
+                    {skillName}
+                    <span className="ml-1 mono text-[8px] text-[rgba(229,229,231,0.2)]">
+                      S{domain.sprint}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          );
+        })}
       </div>
 
       {/* Footer stats */}
       <div className="px-5 py-3 border-t border-[#1F1F23] flex items-center gap-6">
         {[
-          { label: 'Forecast · 5H', value: '—' },
+          { label: 'Registered', value: skills.length > 0 ? String(skills.length) : '—' },
           { label: 'Recent Runs', value: '—' },
           { label: 'Vault Pulse', value: '—' },
         ].map((stat) => (
