@@ -7,7 +7,7 @@
 // Slack: SLACK_ORCHESTRATOR_BOT_TOKEN; channels via env vars
 
 import { createClient } from '@supabase/supabase-js';
-import { writeAgentMemory, loadAgentMemory } from './runtime.js';
+import { writeAgentMemory } from './runtime.js';
 
 // ---------------------------------------------------------------------------
 // Shared clients
