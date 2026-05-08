@@ -157,47 +157,65 @@ export const analystQuarterlyCron = inngest.createFunction(
 );
 
 // ---------------------------------------------------------------------------
-// Elder — Sprint 3 placeholder
+// Elder — Sprint 3 Stream B
 // ---------------------------------------------------------------------------
 
 /**
- * Elder agent: long-term pattern recognition across the ledger.
- * Logic ships in Sprint 3.
+ * Elder agent: continuity advisory — checks decisions against prior commitments.
+ * Triggered via event: elder/advise
+ * Event data: { decision_type: string, scope: string, summary: string }
  */
 export const elderRun = inngest.createFunction(
-  {
-    id: 'elder-run',
-    name: 'Elder Run',
-    retries: 1,
-  },
-  { event: 'elder/run' },
-  async () => ({
-    status: 'not_yet_implemented',
-    sprint: 3,
-    note: 'Elder agent logic ships in Sprint 3',
-  })
+  { id: 'elder-run', name: 'Elder Run', retries: 1 },
+  { event: 'elder/advise' },
+  async ({ event }) => {
+    const { elderAdvise } = await import('./elder.js');
+    const { decision_type, scope, summary } = event.data as {
+      decision_type: string;
+      scope: string;
+      summary: string;
+    };
+    return elderAdvise(decision_type, scope, summary);
+  }
 );
 
 // ---------------------------------------------------------------------------
-// Taboo Keeper — Sprint 3 placeholder
+// Taboo Keeper — Sprint 3 Stream B
 // ---------------------------------------------------------------------------
 
 /**
- * Taboo Keeper Inngest function: validates actions against the taboo list.
- * The core validation function already lives at Pathfinder/lib/taboo-keeper.ts.
- * This shell allows the Orchestrator to trigger Taboo Keeper validation as a
- * separate Inngest step in Sprint 3 (currently inlined in orchestrator.ts).
+ * Taboo Keeper registered as an auditable Inngest agent.
+ * Validates an intent against the live taboo register (wiki/memory/taboos.md).
+ * Triggered via event: taboo-keeper/validate
+ * Event data: { intent: string, taboos: string }
+ *
+ * Replicates the same claude-haiku-4-5 check used inline in orchestrator.ts
+ * so the Taboo Keeper runs as a first-class registered agent with full Inngest
+ * audit trail.
  */
 export const tabooKeeperRun = inngest.createFunction(
-  {
-    id: 'taboo-keeper-run',
-    name: 'Taboo Keeper Run',
-    retries: 0,
-  },
+  { id: 'taboo-keeper-run', name: 'Taboo Keeper Validate', retries: 0 },
   { event: 'taboo-keeper/validate' },
-  async () => ({
-    status: 'not_yet_implemented',
-    sprint: 3,
-    note: 'validateAction() lives in Pathfinder/lib/taboo-keeper.ts; wired as standalone Inngest fn in Sprint 3',
-  })
+  async ({ event }) => {
+    const { intent, taboos } = event.data as { intent: string; taboos: string };
+    if (!taboos) return { verdict: 'pass' };
+
+    const Anthropic = (await import('@anthropic-ai/sdk')).default;
+    const anthropic = new Anthropic();
+
+    const msg = await anthropic.messages.create({
+      model: 'claude-haiku-4-5',
+      max_tokens: 200,
+      system: `You are a taboo checker. Given an intent and a list of taboos, return JSON: {"verdict":"pass"|"bounce","reason":"..."}.\nTaboos:\n${taboos}`,
+      messages: [{ role: 'user', content: `Intent: ${intent}` }],
+    });
+
+    try {
+      const text = msg.content[0].type === 'text' ? msg.content[0].text : '{}';
+      const match = text.match(/\{.*\}/s);
+      return match ? JSON.parse(match[0]) : { verdict: 'pass' };
+    } catch {
+      return { verdict: 'pass' };
+    }
+  }
 );
