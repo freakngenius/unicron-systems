@@ -37,6 +37,8 @@ interface SkillRow {
   domain: string;
   active: boolean;
   refusal_gate: boolean;
+  // config is an opaque JSON column — we only read ui_trigger here
+  config?: { ui_trigger?: boolean } | null;
 }
 
 interface FeedEvent {
@@ -727,37 +729,50 @@ function GlobalSearch({ open, onClose }: { open: boolean; onClose: () => void })
 
 // ─── SkillsSurface — Sprint 4: 2-col mobile, 4-col desktop ───────────────────
 
+interface TriageItem {
+  id: string;
+  source_type: string;
+  content_summary: string | null;
+  confidence: number | null;
+  created_at: string;
+  score: number;
+}
+
 interface SkillDispatchState {
   prompt: string;
   result: string | null;
   running: boolean;
   error: string | null;
+  // Productivity skill results
+  runningSlug: string | null;
+  triageItems: TriageItem[] | null;
+  triageMessage: string | null;
 }
 
+// Slugs that route to /api/atrium/skills/run instead of /api/skills/dispatch
+const PRODUCTIVITY_SLUGS = new Set(['morning-brief', 'inbox-triage']);
+
+// Future-sprint placeholder skills not yet in the DB.
+// Shown as disabled stubs until seeded.
+// Sprint 4: Productivity domain is now live — removed from stubs.
 const FUTURE_SKILL_STUBS: { label: string; key: string; names: string[]; sprint: number }[] = [
-  {
-    label: 'Productivity',
-    key: 'productivity',
-    names: ['Morning Brief', 'Inbox Triage', 'Quick Capture'],
-    sprint: 3,
-  },
   {
     label: 'Research',
     key: 'research',
     names: ['Deep Research', 'LightRAG Query', 'Morning Trend'],
-    sprint: 3,
+    sprint: 5,
   },
   {
     label: 'Discovery',
     key: 'discovery',
     names: ['Schedule Call', 'Extract Signals'],
-    sprint: 4,
+    sprint: 5,
   },
   {
     label: 'Sales',
     key: 'sales',
     names: ['Pipeline Stage', 'Generate Proposal'],
-    sprint: 4,
+    sprint: 5,
   },
   {
     label: 'Marketing',
@@ -786,13 +801,16 @@ function useSkills() {
   return skills;
 }
 
-function SkillsSurface() {
+function SkillsSurface({ onOpenQuickCapture }: { onOpenQuickCapture?: () => void }) {
   const skills = useSkills();
   const [state, setState] = useState<SkillDispatchState>({
     prompt: '',
     result: null,
     running: false,
     error: null,
+    runningSlug: null,
+    triageItems: null,
+    triageMessage: null,
   });
 
   const byDomain = skills.reduce<Record<string, SkillRow[]>>((acc, s) => {
@@ -802,11 +820,124 @@ function SkillsSurface() {
 
   const registeredNames = new Set(skills.map((s) => s.name));
 
+  async function handleSkillClick(skill: SkillRow) {
+    if (state.running) return;
+
+    // quick-capture: UI trigger — open the modal directly, no API call
+    if (skill.name === 'quick-capture' || skill.config?.ui_trigger === true) {
+      onOpenQuickCapture?.();
+      return;
+    }
+
+    // Productivity slugs: route to /api/atrium/skills/run
+    if (PRODUCTIVITY_SLUGS.has(skill.name)) {
+      setState((s) => ({
+        ...s,
+        running: true,
+        runningSlug: skill.name,
+        result: null,
+        error: null,
+        triageItems: null,
+        triageMessage: null,
+      }));
+      try {
+        const res = await fetch('/api/atrium/skills/run', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ skill_slug: skill.name }),
+        });
+        const json = await res.json().catch(() => ({})) as Record<string, unknown>;
+        if (!res.ok) {
+          setState((s) => ({
+            ...s,
+            running: false,
+            runningSlug: null,
+            error: (json.error as string | undefined) ?? `${skill.name} failed (${res.status})`,
+          }));
+          return;
+        }
+        if (skill.name === 'morning-brief') {
+          setState((s) => ({
+            ...s,
+            running: false,
+            runningSlug: null,
+            result: (json.message as string | undefined) ?? 'Morning brief sent.',
+          }));
+        } else if (skill.name === 'inbox-triage') {
+          setState((s) => ({
+            ...s,
+            running: false,
+            runningSlug: null,
+            triageItems: (json.items as TriageItem[] | undefined) ?? [],
+            triageMessage: (json.message as string | undefined) ?? null,
+          }));
+        } else {
+          setState((s) => ({
+            ...s,
+            running: false,
+            runningSlug: null,
+            result: 'done',
+          }));
+        }
+      } catch (e) {
+        setState((s) => ({
+          ...s,
+          running: false,
+          runningSlug: null,
+          error: e instanceof Error ? e.message : 'Unknown error',
+        }));
+      }
+      return;
+    }
+
+    // Default: route to legacy /api/skills/dispatch
+    const prompt = skill.name;
+    setState((s) => ({
+      ...s,
+      prompt,
+      running: true,
+      runningSlug: skill.name,
+      result: null,
+      error: null,
+      triageItems: null,
+      triageMessage: null,
+    }));
+    try {
+      const res = await fetch('/api/skills/dispatch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ skill_name: skill.name, prompt }),
+      });
+      const json: { status?: string; sprint?: number } = await res.json().catch(() => ({}));
+      setState((s) => ({
+        ...s,
+        running: false,
+        runningSlug: null,
+        result: json.status ?? 'dispatched',
+      }));
+    } catch (e) {
+      setState((s) => ({
+        ...s,
+        running: false,
+        runningSlug: null,
+        error: e instanceof Error ? e.message : 'Unknown error',
+      }));
+    }
+  }
+
   async function handleRun(skillName?: string) {
     const prompt = skillName ?? state.prompt;
     if (!prompt.trim() || state.running) return;
     if (skillName) setState((s) => ({ ...s, prompt: skillName }));
-    setState((s) => ({ ...s, running: true, result: null, error: null }));
+    setState((s) => ({
+      ...s,
+      running: true,
+      runningSlug: skillName ?? null,
+      result: null,
+      error: null,
+      triageItems: null,
+      triageMessage: null,
+    }));
     try {
       const res = await fetch('/api/skills/dispatch', {
         method: 'POST',
@@ -814,14 +945,32 @@ function SkillsSurface() {
         body: JSON.stringify({ skill_name: skillName ?? null, prompt }),
       });
       const json: { status?: string; sprint?: number } = await res.json().catch(() => ({}));
-      setState((s) => ({ ...s, running: false, result: json.status ?? 'dispatched' }));
+      setState((s) => ({
+        ...s,
+        running: false,
+        runningSlug: null,
+        result: json.status ?? 'dispatched',
+      }));
     } catch (e) {
       setState((s) => ({
         ...s,
         running: false,
+        runningSlug: null,
         error: e instanceof Error ? e.message : 'Unknown error',
       }));
     }
+  }
+
+  function clearState() {
+    setState({
+      prompt: '',
+      result: null,
+      running: false,
+      error: null,
+      runningSlug: null,
+      triageItems: null,
+      triageMessage: null,
+    });
   }
 
   function handleKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
@@ -860,19 +1009,60 @@ function SkillsSurface() {
               {state.running ? '…' : 'Run →'}
             </button>
             <button
-              onClick={() => setState({ prompt: '', result: null, running: false, error: null })}
+              onClick={clearState}
               className="mono text-[11px] uppercase tracking-[0.14em] px-3 sm:px-4 py-2 rounded-lg border border-[#1F1F23] text-[rgba(229,229,231,0.5)] hover:text-[#E5E5E7] hover:border-[#2A2A2E] transition-colors"
             >
               Clear
             </button>
           </div>
         </div>
+
+        {/* Morning Brief result — preformatted message */}
         {state.result && (
           <div className="mt-3 bg-[#1A1A1D] border border-[#1F1F23] rounded-lg px-3 py-2">
             <div className="mono text-[10px] uppercase tracking-[0.14em] text-[rgba(229,229,231,0.5)] mb-1">Result</div>
-            <div className="mono text-[12px] text-[#E5E5E7]">{state.result}</div>
+            <div className="mono text-[12px] text-[#E5E5E7] whitespace-pre-wrap">{state.result}</div>
           </div>
         )}
+
+        {/* Inbox Triage result — ordered list */}
+        {state.triageItems !== null && (
+          <div className="mt-3 bg-[#1A1A1D] border border-[#1F1F23] rounded-lg px-3 py-2">
+            <div className="mono text-[10px] uppercase tracking-[0.14em] text-[rgba(229,229,231,0.5)] mb-2">
+              Inbox Triage — Top {state.triageItems.length} Items
+            </div>
+            {state.triageMessage && state.triageItems.length === 0 ? (
+              <div className="mono text-[12px] text-[rgba(229,229,231,0.5)]">{state.triageMessage}</div>
+            ) : (
+              <div className="space-y-2">
+                {state.triageItems.map((item, idx) => (
+                  <div key={item.id} className="flex items-start gap-2">
+                    <div className="mono text-[9px] text-[rgba(229,229,231,0.35)] w-4 shrink-0 pt-0.5">
+                      {idx + 1}.
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="mono text-[12px] text-[#E5E5E7] truncate">
+                        {item.content_summary ?? `(${item.source_type} · no summary)`}
+                      </div>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="mono text-[9px] uppercase tracking-[0.1em] text-[rgba(229,229,231,0.4)]">
+                          {item.source_type}
+                        </span>
+                        <span className="mono text-[9px] text-[rgba(229,229,231,0.3)]">
+                          score {item.score.toFixed(2)}
+                        </span>
+                        <span className="mono text-[9px] text-[rgba(229,229,231,0.3)]">
+                          {formatRelativeTime(item.created_at)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {state.error && (
           <div className="mt-3 bg-[#EF4444]/10 border border-[#EF4444]/30 rounded-lg px-3 py-2">
             <div className="mono text-[11px] text-[#EF4444]">{state.error}</div>
@@ -880,7 +1070,7 @@ function SkillsSurface() {
         )}
       </div>
 
-      {/* Domain grid — Sprint 4: 2-col on mobile, up to 4-col on desktop */}
+      {/* Domain grid — DB-registered skills */}
       <div className="px-4 sm:px-5 py-4 space-y-4">
         {Object.entries(byDomain).map(([domain, domainSkills]) => (
           <div key={domain}>
@@ -889,25 +1079,42 @@ function SkillsSurface() {
             </div>
             {/* 2-col mobile, 3-col sm, 4-col lg */}
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-1.5">
-              {domainSkills.map((skill) => (
-                <button
-                  key={skill.id}
-                  title={skill.description}
-                  onClick={() => void handleRun(skill.name)}
-                  disabled={state.running}
-                  className="text-left px-3 py-2 rounded-lg border mono text-[11px] tracking-[0.08em] transition-colors border-[#2A2A2E] text-[#E5E5E7] hover:border-[#FF6B2B] hover:text-[#FF6B2B] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {formatSkillName(skill.name)}
-                  {skill.refusal_gate && (
-                    <span
-                      className="ml-1 mono text-[8px] text-orange-400"
-                      title="Requires human approval before running"
-                    >
-                      &#x1F6E1;
-                    </span>
-                  )}
-                </button>
-              ))}
+              {domainSkills.map((skill) => {
+                const isThisRunning = state.running && state.runningSlug === skill.name;
+                const isUiTrigger =
+                  skill.name === 'quick-capture' || skill.config?.ui_trigger === true;
+                return (
+                  <button
+                    key={skill.id}
+                    title={
+                      isUiTrigger
+                        ? 'Opens Quick Capture modal'
+                        : skill.description
+                    }
+                    onClick={() => void handleSkillClick(skill)}
+                    disabled={state.running && !isUiTrigger}
+                    className={[
+                      'text-left px-3 py-2 rounded-lg border mono text-[11px] tracking-[0.08em] transition-colors',
+                      isThisRunning
+                        ? 'border-[#FF6B2B] text-[#FF6B2B] opacity-70 cursor-wait'
+                        : 'border-[#2A2A2E] text-[#E5E5E7] hover:border-[#FF6B2B] hover:text-[#FF6B2B] cursor-pointer',
+                      state.running && !isUiTrigger
+                        ? 'disabled:opacity-50 disabled:cursor-not-allowed'
+                        : '',
+                    ].join(' ')}
+                  >
+                    {isThisRunning ? '…' : formatSkillName(skill.name)}
+                    {skill.refusal_gate && !isThisRunning && (
+                      <span
+                        className="ml-1 mono text-[8px] text-orange-400"
+                        title="Requires human approval before running"
+                      >
+                        &#x1F6E1;
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
           </div>
         ))}
@@ -1087,7 +1294,7 @@ export function Now({ name }: Props) {
       {/* Sprint 4 mobile: extra bottom margin to clear the FAB */}
       <section className="mb-24 sm:mb-8">
         <SectionLabel>Skills</SectionLabel>
-        <SkillsSurface />
+        <SkillsSurface onOpenQuickCapture={() => setCaptureOpen(true)} />
       </section>
 
       {/* ─── Modals ─── */}
