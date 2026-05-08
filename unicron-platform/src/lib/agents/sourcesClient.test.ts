@@ -9,7 +9,6 @@ beforeEach(() => {
   vi.stubEnv('VITE_SUPABASE_URL', 'https://example.supabase.co');
   vi.stubEnv('VITE_SUPABASE_ANON_KEY', 'anon');
   vi.stubEnv('VITE_SOURCE_BAN_ENABLED', 'false');
-  vi.stubEnv('VITE_PATHFINDER_API_URL', '');
 });
 
 afterEach(() => {
@@ -38,7 +37,6 @@ describe('sourcesClient.toggleBan — graceful fallback (UI-only mode)', () => {
 describe('sourcesClient.toggleBan — real mode', () => {
   beforeEach(() => {
     vi.stubEnv('VITE_SOURCE_BAN_ENABLED', 'true');
-    vi.stubEnv('VITE_PATHFINDER_API_URL', 'https://pathfinder.example');
     __resetEnvForTests();
   });
 
@@ -55,9 +53,9 @@ describe('sourcesClient.toggleBan — real mode', () => {
 
     expect(fetchSpy).toHaveBeenCalledTimes(1);
     const [url, init] = fetchSpy.mock.calls[0] as unknown as [string, RequestInit];
-    expect(url).toBe('https://pathfinder.example/api/sources/src-9/ban-status');
+    expect(url).toBe('/api/internal/sources');
     expect(init.method).toBe('POST');
-    expect(JSON.parse(init.body as string)).toEqual({ ban_status: 'banned' });
+    expect(JSON.parse(init.body as string)).toEqual({ source_id: 'src-9', ban_status: 'banned' });
     expect(res).toEqual({ ok: true, source_id: 'src-9', ban_status: 'banned' });
   });
 

@@ -5,8 +5,8 @@
 // the write path falls back to localStorage so the demo flow stays continuous.
 //
 // Modes:
-//   - `VITE_CUSTOMER_PERSISTENCE_ENABLED=true` AND `VITE_PATHFINDER_API_URL` set:
-//     real path — POST/GET against Pathfinder's /api/organizations.
+//   - `VITE_CUSTOMER_PERSISTENCE_ENABLED=true`:
+//     real path — POST/GET via the server-side proxy at /api/internal/organizations.
 //   - Otherwise: mock-mode — merges `customersMock` with locally-persisted
 //     orgs in `localStorage`. Slug uniqueness still enforced.
 //
@@ -41,15 +41,7 @@ function dbEnabled(): boolean {
 }
 
 export function customerPersistenceEnabled(): boolean {
-  return (
-    import.meta.env.VITE_CUSTOMER_PERSISTENCE_ENABLED === 'true' &&
-    Boolean(pathfinderApiUrl())
-  );
-}
-
-function pathfinderApiUrl(): string | undefined {
-  const url = import.meta.env.VITE_PATHFINDER_API_URL as string | undefined;
-  return url && url.length > 0 ? url.replace(/\/$/, '') : undefined;
+  return import.meta.env.VITE_CUSTOMER_PERSISTENCE_ENABLED === 'true';
 }
 
 const SLUG_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$/;
@@ -117,8 +109,7 @@ export function __resetLocalCustomerOrgsForTests(): void {
  */
 export async function listCustomerOrgs(): Promise<CustomerOrg[]> {
   if (customerPersistenceEnabled()) {
-    const base = pathfinderApiUrl()!;
-    const res = await fetch(`${base}/api/organizations`, {
+    const res = await fetch('/api/internal/organizations', {
       method: 'GET',
       headers: { accept: 'application/json' },
     });
@@ -141,9 +132,8 @@ export async function getCustomerOrgBySlug(
   slug: string,
 ): Promise<CustomerOrg | null> {
   if (customerPersistenceEnabled()) {
-    const base = pathfinderApiUrl()!;
     const res = await fetch(
-      `${base}/api/organizations/${encodeURIComponent(slug)}`,
+      `/api/internal/organizations?slug=${encodeURIComponent(slug)}`,
       { method: 'GET', headers: { accept: 'application/json' } },
     );
     if (res.status === 404) return null;
@@ -174,8 +164,7 @@ export async function createCustomerOrg(
   }
 
   if (customerPersistenceEnabled()) {
-    const base = pathfinderApiUrl()!;
-    const res = await fetch(`${base}/api/organizations`, {
+    const res = await fetch('/api/internal/organizations', {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
