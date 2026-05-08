@@ -10,7 +10,7 @@
 -- This migration is additive only — no DROP, no destructive ALTER.
 
 INSERT INTO nervous_system.skills
-  (name, description, domain, type, inputs, outputs, schedule_cron, refusal_gate, budget_usd_per_run, skill_path)
+  (name, description, domain, type, inputs_schema, outputs_schema, schedule_cron, refusal_gate, budget_usd_per_run, skill_md_path)
 VALUES
   (
     'morning-brief',
@@ -46,11 +46,10 @@ ON CONFLICT (name) DO UPDATE SET
   description        = EXCLUDED.description,
   domain             = EXCLUDED.domain,
   type               = EXCLUDED.type,
-  inputs             = EXCLUDED.inputs,
-  outputs            = EXCLUDED.outputs,
+  inputs_schema      = EXCLUDED.inputs_schema,
+  outputs_schema     = EXCLUDED.outputs_schema,
   schedule_cron      = EXCLUDED.schedule_cron,
   refusal_gate       = EXCLUDED.refusal_gate,
   budget_usd_per_run = EXCLUDED.budget_usd_per_run,
-  skill_path         = EXCLUDED.skill_path,
-  active             = true,
-  updated_at         = now();
+  skill_md_path      = EXCLUDED.skill_md_path,
+  active             = true;
