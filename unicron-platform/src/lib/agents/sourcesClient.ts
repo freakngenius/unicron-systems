@@ -3,11 +3,11 @@
 // Wave 2 Stream W2-C scope: ban / unban a source. Banned sources are
 // excluded from active ingestion lists in Pathfinder.
 //
-// Backend contract (Pathfinder):
-//   POST /api/sources/:id/ban-status   { ban_status: 'active' | 'banned' }
+// Backend contract (server-side proxy):
+//   POST /api/internal/sources   { source_id, ban_status: 'active' | 'banned' }
+//   Proxy forwards to Pathfinder POST /api/sources/:id/ban-status server-side.
 //
-// When `VITE_PATHFINDER_API_URL` is unset OR
-// `VITE_SOURCE_BAN_ENABLED` is not 'true', the client gracefully degrades:
+// When `VITE_SOURCE_BAN_ENABLED` is not 'true', the client gracefully degrades:
 // it returns a successful optimistic response without hitting the network so
 // the UI half can ship ahead of the backend route. See
 // MEMORY/operator-todos/2026-05-03-pathfinder-needs-data-sources-ban-status-column.md
@@ -28,18 +28,10 @@ export type ToggleBanResponse = {
   ban_status: BanStatus;
 };
 
-function pathfinderUrl(): string | undefined {
-  const url = import.meta.env.VITE_PATHFINDER_API_URL as string | undefined;
-  return url && url.length > 0 ? url : undefined;
-}
-
 function realEnabled(): boolean {
   // Reads getEnv() so unit tests can stub via __resetEnvForTests.
   void getEnv();
-  return (
-    (import.meta.env.VITE_SOURCE_BAN_ENABLED as string | undefined) === 'true' &&
-    Boolean(pathfinderUrl())
-  );
+  return (import.meta.env.VITE_SOURCE_BAN_ENABLED as string | undefined) === 'true';
 }
 
 export async function toggleBan(req: ToggleBanRequest): Promise<ToggleBanResponse> {
@@ -49,11 +41,10 @@ export async function toggleBan(req: ToggleBanRequest): Promise<ToggleBanRespons
     return { ok: true, source_id: req.source_id, ban_status: req.ban_status };
   }
 
-  const base = pathfinderUrl()!.replace(/\/$/, '');
-  const res = await fetch(`${base}/api/sources/${encodeURIComponent(req.source_id)}/ban-status`, {
+  const res = await fetch('/api/internal/sources', {
     method: 'POST',
     headers: { 'content-type': 'application/json', accept: 'application/json' },
-    body: JSON.stringify({ ban_status: req.ban_status }),
+    body: JSON.stringify({ source_id: req.source_id, ban_status: req.ban_status }),
   });
   if (!res.ok) {
     const body = await res.text().catch(() => '');
