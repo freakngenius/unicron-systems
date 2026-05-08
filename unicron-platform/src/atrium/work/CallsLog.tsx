@@ -97,8 +97,7 @@ function useCallDetail(callId: string | null) {
           setActionItems(data ?? []);
           setLoading(false);
         }
-      })
-      .catch(() => {
+      }, () => {
         if (!cancelled) setLoading(false);
       });
 
