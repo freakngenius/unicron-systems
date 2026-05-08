@@ -7,6 +7,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { createClient } from '@supabase/supabase-js';
 import { writeAgentMemory } from './runtime.js';
+import { logToolDispatch } from './autonomous-dispatch-log.js';
 
 const anthropic = new Anthropic();
 
@@ -14,6 +15,28 @@ const supabase = createClient(
   process.env.VITE_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
+
+// ---------------------------------------------------------------------------
+// Autonomous tool set
+// ---------------------------------------------------------------------------
+
+/**
+ * Tools in this set execute directly without human relay.
+ * All are pure reads or safe bounded writes (no destructive / one-way actions).
+ * dispatch_claude_code is intentionally excluded — always relay-to-human.
+ */
+const SAFE_AUTONOMOUS_TOOLS = new Set([
+  'create_action_item',
+  'list_action_items',
+  'get_team_member',
+  'get_recent_calls',
+  'get_continuity_log',
+  'query_ledger',
+  'reassign_dri',
+  'semantic_search',
+  'get_kanban_cards',
+  'send_slack_message',
+]);
 
 // ---------------------------------------------------------------------------
 // System prompt
@@ -48,7 +71,7 @@ Available tools (use liberally):
 - list_action_items(filters) — filterable action_items query
 - create_action_item(payload) — Taboo-validated action item creation
 - reassign_dri(action_item_id, new_dri) — Taboo-validated reassignment
-- dispatch_claude_code(prompt, surface) — generate or dispatch a paste-ready Claude Code prompt
+- dispatch_claude_code(directive, surface) — for production code/schema changes only — generates paste-ready Claude Code prompt for Kyle to review and run. ALL other tools execute directly.
 - send_slack_message(channel, text) — post to a Slack channel
 - get_kanban_cards(workspace, status) — read Notion kanban via Notion MCP
 - get_recent_calls(participant, limit) — recent calls for a person
@@ -246,6 +269,36 @@ async function tabooCheck(intent: string, taboos: string): Promise<TabooResult> 
 }
 
 // ---------------------------------------------------------------------------
+// Autonomous dispatch audit log
+// ---------------------------------------------------------------------------
+
+/**
+ * Write a structured audit log row for every Orchestrator tool dispatch.
+ * Wraps logToolDispatch with safe-tool classification and truncated summaries.
+ */
+async function autonomousDispatchAuditLog(
+  toolName: string,
+  input: Record<string, unknown>,
+  result: string,
+  memberId: string,
+  autonomous: boolean
+): Promise<void> {
+  try {
+    await logToolDispatch({
+      toolName,
+      inputSummary: JSON.stringify(input),
+      resultSummary: result,
+      requestedByMemberId: memberId,
+      autonomous,
+      tabooPassed: true,
+    });
+  } catch (err) {
+    // Non-fatal — log error but do not surface to caller
+    console.error('[orchestrator] autonomousDispatchAuditLog failed:', err instanceof Error ? err.message : String(err));
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Team member resolution
 // ---------------------------------------------------------------------------
 
@@ -294,7 +347,7 @@ async function slackPost(channelId: string, text: string): Promise<void> {
 // Tool execution
 // ---------------------------------------------------------------------------
 
-async function executeTool(
+async function executeToolCore(
   name: string,
   input: Record<string, unknown>,
   taboos: string
@@ -385,7 +438,10 @@ async function executeTool(
       }
 
       case 'dispatch_claude_code': {
-        const prompt = `# Claude Code Directive — ${input.surface as string}
+        const prompt = `# 🤖 Orchestrator Autonomous Dispatch Request
+# Run in a Claude Code session to execute.
+
+# Claude Code Directive — ${input.surface as string}
 
 ## Task
 ${input.directive as string}
@@ -482,6 +538,56 @@ Work from the existing codebase. Follow all conventions in CLAUDE.md. Create a P
   }
 }
 
+/**
+ * Public tool executor — wraps executeToolCore with:
+ *   1. Taboo Keeper gate: every tool call is checked before execution.
+ *   2. Audit log: writes a row to audit_log after every dispatch, recording
+ *      whether the tool ran autonomously or requires human relay.
+ */
+async function executeTool(
+  name: string,
+  input: Record<string, unknown>,
+  taboos: string,
+  memberId: string
+): Promise<string> {
+  // 1. Taboo gate — runs before every tool execution, not just state-mutating ones.
+  const intentSummary = `Tool: ${name} — input: ${JSON.stringify(input).slice(0, 200)}`;
+  const tabooResult = await tabooCheck(intentSummary, taboos);
+
+  if (tabooResult.verdict === 'bounce') {
+    const errorResult = JSON.stringify({
+      error: `Taboo Keeper bounced: ${tabooResult.reason ?? 'No reason provided'}`,
+      bounced: true,
+      tool: name,
+    });
+    // Audit log for bounced tool (tabooPassed=false)
+    try {
+      await logToolDispatch({
+        toolName: name,
+        inputSummary: JSON.stringify(input),
+        resultSummary: errorResult,
+        requestedByMemberId: memberId,
+        autonomous: false,
+        tabooPassed: false,
+        tabooReason: tabooResult.reason,
+      });
+    } catch (auditErr) {
+      console.error('[orchestrator] audit log failed (bounce):', auditErr instanceof Error ? auditErr.message : String(auditErr));
+    }
+    console.warn(`[orchestrator] taboo bounce for tool=${name}: ${tabooResult.reason}`);
+    return errorResult;
+  }
+
+  // 2. Execute the tool
+  const result = await executeToolCore(name, input, taboos);
+
+  // 3. Audit log for executed tool
+  const autonomous = SAFE_AUTONOMOUS_TOOLS.has(name);
+  await autonomousDispatchAuditLog(name, input, result, memberId, autonomous);
+
+  return result;
+}
+
 // ---------------------------------------------------------------------------
 // Agent loop
 // ---------------------------------------------------------------------------
@@ -489,7 +595,7 @@ Work from the existing codebase. Follow all conventions in CLAUDE.md. Create a P
 async function runOrchestratorAgent(
   member: TeamMember,
   messageText: string,
-  taboos: string
+  taboos: string,
 ): Promise<string> {
   const messages: Anthropic.MessageParam[] = [
     { role: 'user', content: `[From: ${member.name}]\n\n${messageText}` },
@@ -524,7 +630,8 @@ async function runOrchestratorAgent(
           const result = await executeTool(
             block.name,
             block.input as Record<string, unknown>,
-            taboos
+            taboos,
+            member.id
           );
           console.log(`[orchestrator] result: ${block.name}`, result.slice(0, 100));
           return {
