@@ -12,6 +12,7 @@ import { useAuth } from '../lib/auth';
 import { AtriumLogin } from './AtriumLogin';
 import { AtriumLayout, AtriumPlaceholder, type AtriumTab } from './AtriumLayout';
 import { AtriumNow } from './AtriumNow';
+import { System } from './System';
 
 const ATRIUM_ENABLED = import.meta.env.VITE_ATRIUM_ENABLED === 'true';
 
@@ -65,6 +66,8 @@ export function AtriumApp() {
     <AtriumLayout activeTab={activeTab} onTabChange={setActiveTab}>
       {activeTab === 'now' ? (
         <AtriumNow name={displayName} />
+      ) : activeTab === 'system' ? (
+        <System />
       ) : (
         <AtriumPlaceholder
           tab={activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}
