@@ -1,9 +1,16 @@
-// app/api/ingest/route.ts — Sprint 2 Stream D
+// app/api/ingest/route.ts — Sprint 2 Stream D / Sprint 4 Stream B
 //
 // Real ingest handler. Replaces the Sprint 0 echo stub.
 // Sprint 2: adds routing for `manual` and `voice_memo` source types.
+// Sprint 4: adds per-team-member API key lookup + `apple_note` routing.
 //
-// Auth: x-unicron-api-key header must match UNICRON_INGEST_API_KEY env var.
+// Auth:
+//   1. Check x-unicron-api-key header.
+//   2. Look up in nervous_system.team_members where config->>'ingest_api_key' matches.
+//      If found, captured_by is overridden to that team_member's id.
+//   3. Fall back to UNICRON_INGEST_API_KEY env var (shared key, backward compat).
+//   4. Neither matches → 401.
+//
 // Input: Zod-validated JSON body with source_type discriminator.
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -12,6 +19,7 @@ import { z } from 'zod';
 import { ingestCall, type IngestCallInput, type IngestCallResult } from '@/lib/ingest/skills/ingest-call';
 import { ingestManual, type ManualIngestInput, type ManualIngestResult } from '@/lib/ingest/skills/ingest-manual';
 import { ingestVoiceMemo, type VoiceMemoInput, type VoiceMemoResult } from '@/lib/ingest/skills/ingest-voice-memo';
+import { ingestAppleNote, type AppleNoteIngestInput, type AppleNoteIngestResult } from '@/lib/ingest/skills/ingest-apple-note';
 
 // ─── Zod schemas ─────────────────────────────────────────────────────────────
 
@@ -63,8 +71,19 @@ const voiceMemoPayloadSchema = z.object({
   metadata: metadataSchema,
 });
 
+const appleNotePayloadSchema = z.object({
+  source_type: z.literal('apple_note'),
+  source_id: z.string(),
+  source_url: z.string().nullable(),
+  raw_content: z.string().min(1),
+  participants: z.array(participantSchema),
+  captured_at: z.string().datetime(),
+  captured_by: capturedBySchema,
+  metadata: metadataSchema,
+});
+
 const otherPayloadSchema = z.object({
-  source_type: z.enum(['slack', 'email', 'apple_note']),
+  source_type: z.enum(['slack', 'email']),
   source_id: z.string(),
   source_url: z.string().nullable(),
   raw_content: z.string().min(1),
@@ -78,6 +97,7 @@ const ingestPayloadSchema = z.discriminatedUnion('source_type', [
   callPayloadSchema,
   manualPayloadSchema,
   voiceMemoPayloadSchema,
+  appleNotePayloadSchema,
   otherPayloadSchema,
 ]);
 
@@ -162,12 +182,68 @@ async function notifyEscalation(
   }
 }
 
+// ─── Per-team-member key lookup ───────────────────────────────────────────────
+
+interface TeamMemberKeyMatch {
+  id: string
+  name: string
+}
+
+/**
+ * Look up a team member by their ingest_api_key stored in config jsonb.
+ * Uses the Supabase REST API with Accept-Profile: nervous_system.
+ * Returns null if not found or if Supabase env vars are missing.
+ */
+async function lookupTeamMemberByKey(apiKey: string): Promise<TeamMemberKeyMatch | null> {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !serviceKey) return null;
+
+  try {
+    const encoded = encodeURIComponent(apiKey);
+    const res = await fetch(
+      `${url}/rest/v1/team_members?select=id,name&config->>ingest_api_key=eq.${encoded}&limit=1`,
+      {
+        headers: {
+          apikey: serviceKey,
+          Authorization: `Bearer ${serviceKey}`,
+          'Accept-Profile': 'nervous_system',
+        },
+      }
+    );
+    if (!res.ok) return null;
+    const rows = (await res.json()) as TeamMemberKeyMatch[];
+    return rows.length > 0 ? rows[0] : null;
+  } catch (err) {
+    console.error('[ingest] team_member key lookup failed (best-effort)', err);
+    return null;
+  }
+}
+
 // ─── Route handler ────────────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
   // ── Auth ──────────────────────────────────────────────────────────────────
+  //
+  // Priority:
+  //   1. Per-team-member key from nervous_system.team_members.config->>'ingest_api_key'
+  //      If found, captured_by is overridden to that team_member's id.
+  //   2. Shared env var UNICRON_INGEST_API_KEY (backward compat).
+  //   3. Neither → 401.
+  //
   const apiKey = req.headers.get('x-unicron-api-key');
-  if (!apiKey || apiKey !== process.env.UNICRON_INGEST_API_KEY) {
+  if (!apiKey) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  let capturedByOverride: { type: 'human'; id: string } | null = null;
+
+  const teamMember = await lookupTeamMemberByKey(apiKey);
+  if (teamMember) {
+    // Per-member key matched — track who sent this
+    capturedByOverride = { type: 'human', id: teamMember.id };
+  } else if (apiKey !== process.env.UNICRON_INGEST_API_KEY) {
+    // Not a per-member key, not the shared key → reject
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -190,6 +266,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const data: IngestPayload = parsed.data;
   const { source_type, source_id } = data;
 
+  // Apply per-member key override: if the caller's key matched a team_member,
+  // treat captured_by as that member (human), ignoring whatever was in the body.
+  const effectiveCapturedBy = capturedByOverride ?? data.captured_by;
+
   // ── Dispatch by source_type ───────────────────────────────────────────────
 
   if (source_type === 'call') {
@@ -200,7 +280,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       raw_content: data.raw_content,
       participants: data.participants,
       captured_at: data.captured_at,
-      captured_by: data.captured_by,
+      captured_by: effectiveCapturedBy,
       metadata: data.metadata,
     };
 
@@ -256,7 +336,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       raw_content: data.raw_content,
       participants: data.participants,
       captured_at: data.captured_at,
-      captured_by: data.captured_by,
+      captured_by: effectiveCapturedBy,
       metadata: data.metadata as ManualIngestInput['metadata'],
     };
 
@@ -305,7 +385,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       raw_content: voiceData.raw_content ?? '',
       audio_stored_url: voiceData.audio_stored_url,
       captured_at: voiceData.captured_at,
-      captured_by: voiceData.captured_by,
+      captured_by: effectiveCapturedBy,
       metadata: voiceData.metadata as VoiceMemoInput['metadata'],
     };
 
@@ -354,6 +434,58 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       ledger_id: records.ledger_row.id,
       vault_doc_path: vaultPath,
       action_item_ids: records.action_items.map((ai) => ai.id),
+    });
+  }
+
+  // ── apple_note ────────────────────────────────────────────────────────────
+
+  if (source_type === 'apple_note') {
+    const noteData = data as z.infer<typeof appleNotePayloadSchema>;
+    const input: AppleNoteIngestInput = {
+      source_type: 'apple_note',
+      source_id,
+      source_url: noteData.source_url,
+      raw_content: noteData.raw_content,
+      participants: noteData.participants,
+      captured_at: noteData.captured_at,
+      captured_by: effectiveCapturedBy,
+      metadata: noteData.metadata as AppleNoteIngestInput['metadata'],
+    };
+
+    let result: AppleNoteIngestResult;
+    try {
+      result = await ingestAppleNote(input);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error('[ingest] ingestAppleNote threw', { source_id, err: msg });
+      await auditLog('ingest_apple_note_error', { source_id, error: msg });
+      return NextResponse.json({ error: 'Ingest skill failed', detail: msg }, { status: 500 });
+    }
+
+    if (result.status === 'NO_SIGNAL') {
+      await auditLog('ingest_no_signal', { source_id, source_type, reason: result.reason });
+      return NextResponse.json({ status: result.status, reason: result.reason });
+    }
+
+    const records = result as Extract<AppleNoteIngestResult, { status: 'records' }>;
+    const vaultPath = `raw/inbox/apple-note-${noteData.captured_at.split('T')[0]}-${source_id.slice(0, 8)}.md`;
+
+    await auditLog('ingest_records_written', {
+      source_id,
+      source_type,
+      ledger_id: records.ledger_row.id,
+      vault_doc_path: vaultPath,
+      action_item_count: records.action_items.length,
+      inbox: records.inbox,
+      captured_by_team_member: capturedByOverride?.id ?? null,
+    });
+
+    return NextResponse.json({
+      status: 'records',
+      ledger_id: records.ledger_row.id,
+      vault_doc_path: vaultPath,
+      action_item_ids: records.action_items.map((ai) => ai.id),
+      inbox: records.inbox,
     });
   }
 
