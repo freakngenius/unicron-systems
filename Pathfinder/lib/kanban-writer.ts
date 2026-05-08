@@ -150,7 +150,6 @@ async function createNotionCard(
   // Other columns depend on the actual DB schema — using select/text types
   // that are standard in a kanban template. If column names differ in the
   // live Notion DB, adjust the keys here.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const properties: Record<string, any> = {
     Name: {
       title: [{ type: 'text', text: { content: item.title } }],
