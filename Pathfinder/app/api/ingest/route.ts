@@ -1,10 +1,12 @@
-// app/api/ingest/route.ts — Sprint 2 Stream D
+// app/api/ingest/route.ts — Sprint 4 Stream A
 //
 // Real ingest handler. Replaces the Sprint 0 echo stub.
 // Sprint 2: adds routing for `manual` and `voice_memo` source types.
+// Sprint 4: adds multipart/form-data handling for voice_memo audio uploads.
 //
 // Auth: x-unicron-api-key header must match UNICRON_INGEST_API_KEY env var.
 // Input: Zod-validated JSON body with source_type discriminator.
+//        For voice_memo: also accepts multipart/form-data with `audio` file field.
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
@@ -162,6 +164,45 @@ async function notifyEscalation(
   }
 }
 
+// ─── Multipart voice memo helper ──────────────────────────────────────────────
+
+/**
+ * Parse a multipart/form-data voice_memo upload.
+ * Extracts the audio file as a Buffer plus metadata fields.
+ * Returns null if the request cannot be parsed.
+ */
+async function parseVoiceMemoMultipart(
+  req: NextRequest,
+): Promise<{ audioBuffer: Buffer; mimeType: string; fields: Record<string, string> } | null> {
+  let formData: FormData;
+  try {
+    formData = await req.formData();
+  } catch {
+    return null;
+  }
+
+  const audioEntry = formData.get('audio');
+  if (!audioEntry || typeof audioEntry === 'string') {
+    return null;
+  }
+
+  // audioEntry is a File or Blob (FormDataEntryValue that is not a string)
+  const audioFileLike = audioEntry as unknown as { arrayBuffer(): Promise<ArrayBuffer>; type?: string };
+  const arrayBuf = await audioFileLike.arrayBuffer();
+  const audioBuffer = Buffer.from(arrayBuf);
+  const mimeType = audioFileLike.type ?? 'audio/m4a';
+
+  // Extract remaining string fields
+  const fields: Record<string, string> = {};
+  for (const [key, value] of formData.entries()) {
+    if (key !== 'audio' && typeof value === 'string') {
+      fields[key] = value;
+    }
+  }
+
+  return { audioBuffer, mimeType, fields };
+}
+
 // ─── Route handler ────────────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
@@ -171,7 +212,102 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  // ── Parse body ────────────────────────────────────────────────────────────
+  const contentType = req.headers.get('content-type') ?? '';
+
+  // ── Multipart path: voice_memo audio upload ───────────────────────────────
+  if (contentType.includes('multipart/form-data')) {
+    const parsed = await parseVoiceMemoMultipart(req);
+    if (!parsed) {
+      return NextResponse.json({ error: 'Failed to parse multipart form data' }, { status: 400 });
+    }
+
+    const { audioBuffer, mimeType, fields } = parsed;
+
+    // Validate required metadata fields
+    const sourceId = fields['source_id'];
+    const capturedAt = fields['captured_at'];
+    const capturedByRaw = fields['captured_by'];
+
+    if (!sourceId || !capturedAt || !capturedByRaw) {
+      return NextResponse.json(
+        { error: 'Multipart voice_memo upload requires source_id, captured_at, and captured_by fields' },
+        { status: 400 },
+      );
+    }
+
+    let capturedBy: { type: 'human' | 'agent'; id: string };
+    try {
+      capturedBy = JSON.parse(capturedByRaw) as { type: 'human' | 'agent'; id: string };
+    } catch {
+      return NextResponse.json({ error: 'captured_by must be valid JSON' }, { status: 400 });
+    }
+
+    const durationSeconds = fields['duration_seconds'] ? Number(fields['duration_seconds']) : undefined;
+
+    const input: VoiceMemoInput = {
+      source_type: 'voice_memo',
+      source_id: sourceId,
+      source_url: fields['source_url'] ?? null,
+      raw_content: '',
+      audio_buffer: audioBuffer,
+      audio_stored_url: fields['audio_stored_url'],
+      captured_at: capturedAt,
+      captured_by: capturedBy,
+      metadata: {
+        mime_type: mimeType,
+        duration_seconds: durationSeconds,
+      },
+    };
+
+    let result: VoiceMemoResult;
+    try {
+      result = await ingestVoiceMemo(input);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error('[ingest] ingestVoiceMemo (multipart) threw', { source_id: sourceId, err: msg });
+      await auditLog('ingest_voice_memo_error', { source_id: sourceId, error: msg });
+      return NextResponse.json({ error: 'Ingest skill failed', detail: msg }, { status: 500 });
+    }
+
+    if (result.status === 'ABSTAIN') {
+      await auditLog('ingest_abstain', {
+        source_id: sourceId,
+        source_type: 'voice_memo',
+        reason: result.reason,
+        sprint_note: result.sprint_note,
+      });
+      return NextResponse.json({
+        status: result.status,
+        reason: result.reason,
+        sprint_note: result.sprint_note,
+      });
+    }
+
+    if (result.status === 'NO_SIGNAL') {
+      await auditLog('ingest_no_signal', { source_id: sourceId, source_type: 'voice_memo', reason: result.reason });
+      return NextResponse.json({ status: result.status, reason: result.reason });
+    }
+
+    const records = result as Extract<VoiceMemoResult, { status: 'records' }>;
+    const vaultPath = `raw/inbox/voice-${capturedAt.split('T')[0]}-${sourceId.slice(0, 8)}.md`;
+
+    await auditLog('ingest_records_written', {
+      source_id: sourceId,
+      source_type: 'voice_memo',
+      ledger_id: records.ledger_row.id,
+      vault_doc_path: vaultPath,
+      action_item_count: records.action_items.length,
+    });
+
+    return NextResponse.json({
+      status: 'records',
+      ledger_id: records.ledger_row.id,
+      vault_doc_path: vaultPath,
+      action_item_ids: records.action_items.map((ai) => ai.id),
+    });
+  }
+
+  // ── Parse JSON body (all other source types + JSON voice_memo) ────────────
   let body: unknown;
   try {
     body = await req.json();
