@@ -1,0 +1,261 @@
+# PROMPT — Sprint 6: Atrium Marketing + Products + Library + Wiki
+
+Dispatched by the Master Conductor. Self-contained.
+
+**Project root:** `/Users/keka/Dropbox/Projects/Unicron Systems/`
+
+**Reference SPECs:** `Company Docs/Specs/SPEC - Unicron Nervous System.md`, `Company Docs/Specs/SPEC - Nervous System Addendum 2 (Skills + Karpathy + Refero).md`, `Company Docs/Atrium/Specs/SPEC - Atrium (Internal Cockpit).md`
+
+This sprint accomplishes:
+1. Atrium **Marketing tab**: campaigns, content, analytics, brand assets (read from disk at Dropbox path)
+2. Atrium **Products tab**: Pathfinder analytics + KPIs, Metacron analytics + KPIs
+3. Atrium **Library tab**: **Wiki view loads `wiki/_master-index.md` first** (per Addendum 2 section 2.4 index-first pattern), Repo view (vault search), Templates
+4. Wiki content authoring: write all 11 wiki pages from SPEC section 14.1, plus author the comprehensive `_schema.md` updates if Sprint 1's bootstrap version needs expansion
+5. Activate skills surface buttons for Marketing skills: `draft-blog-post`, `draft-social-post`, `generate-positioning-deck`, `update-manifesto-page`
+
+## Parallel streams
+
+- **Stream A** (worktree `unicron-platform-worktrees/sprint6-marketing-tab`): Marketing tab UI (Task 1) with Refero references
+- **Stream B** (worktree `unicron-platform-worktrees/sprint6-products-tab`): Products tab UI + KPI files in vault (Task 2)
+- **Stream C** (worktree `unicron-platform-worktrees/sprint6-library-tab`): Library tab UI (Wiki, Repo, Templates) with index-first rendering (Task 3, 5, 6)
+- **Stream D** (worktree `unicron-knowledge-worktrees/sprint6-wiki-content`): author all 11 wiki pages (Task 4 + Task 4 expansion); these are content-only commits, no app code
+- **Stream E** (worktree `unicron-platform-worktrees/sprint6-skills-marketing`): register Marketing skills + activate buttons
+
+---
+
+## Pre-conditions
+
+- Sprint 5 verified
+- Atrium People and Money tabs operational
+- Email ingest, multi-fork sprints, bounded peer attention all live
+
+---
+
+## Kanban hygiene — start
+
+Card "Sprint 6 — Marketing + Products + Library + Wiki" → In Process. DRI: Kyle. Surface: Architecture. Verify Criteria: "Atrium Marketing, Products, Library tabs functional. Wiki has 11 authored pages plus auto-generated What's Connected. Library search returns vault docs by tag and semantic search. Both Vercel projects healthy."
+
+---
+
+## Tasks
+
+### Task 1 — Atrium Marketing tab
+
+Path: `unicron-platform/src/atrium/Marketing.tsx` and sub-components
+
+**1.1 Campaigns** (`Campaigns.tsx`)
+- Add `nervous_system.campaigns` table (id, name, status, goal, channels, start_date, end_date, target_metric, owner_team_member_id, notes, ttl_days)
+- List active and recent campaigns
+- Per campaign: KPIs against goals, content artifacts produced, attribution
+
+**1.2 Content** (`Content.tsx`)
+- List of published artifacts: blog posts, social posts, manifesto pages, website pages
+- Source: query vault for docs with `type: content` frontmatter; supplement with manual entries
+- Per artifact: publish date, channel, traction (views, engagements, conversions where measurable)
+
+**1.3 Analytics** (`Analytics.tsx`)
+- Site traffic (PostHog/Plausible/GA when connected; show "not yet connected" placeholder otherwise)
+- Conversion funnels (when connected)
+- Social reach (manual entry or social platform connectors)
+- Attribution by channel
+
+**1.4 Brand assets** (`BrandAssets.tsx`)
+- Browsable thumbnail gallery for `/Users/keka/Dropbox/Projects/Unicron Systems/Brand/` (read from disk via server-side endpoint that lists files; no vault migration per SPEC)
+- Folders: Images, Source (PSDs), Manifesto Pages, Presentation
+- Click for full asset, download, link
+
+### Task 2 — Atrium Products tab
+
+Path: `unicron-platform/src/atrium/Products.tsx` and sub-components
+
+**2.1 Pathfinder** (`Pathfinder.tsx`)
+- Active tenants list (read from Pathfinder's own tenant table; cross-schema query)
+- Per tenant: agent run health, leads ranked, cross-pollination signals, customer-zero (Zedcor) usage stats
+- KPIs against goals (read from `vault/Products/pathfinder/kpis.md`; create stub file if missing)
+- Embed existing Pathfinder analytics pages where they exist
+
+**2.2 Metacron** (`Metacron.tsx`)
+- Agent fleet across tenants (galaxy view from existing Metacron primitives)
+- Architect proposals approved this week (from Metacron's architect_proposals table or equivalent)
+- Configuration changes per tenant
+- KPIs against goals (read from `vault/Products/metacron/kpis.md`; create stub)
+
+**2.3 KPI definition**
+- Each product carries its KPI set in `vault/Products/<product>/kpis.md`
+- Atrium reads the KPI file via vault clone access and renders against current measurements
+- Editing KPIs is a vault PR (gate-protected)
+
+### Task 3 — Atrium Library tab — Wiki view
+
+Path: `unicron-platform/src/atrium/Library.tsx` with sub-views Wiki and Repo
+
+**3.1 Wiki view** (`LibraryWiki.tsx`)
+- Sidebar: list of wiki pages from `vault/Memory/wiki/*.md`
+- Main content area: render selected wiki page as markdown with table of contents, syntax highlighting, internal links via [[wikilinks]]
+- Search within wiki (full-text)
+- Edit affordance per page based on `editable` frontmatter:
+  - `editable: open` — direct edit in Atrium with markdown editor; commit goes through audit log
+  - `editable: pr` — opens vault PR with proposed content; reviewer is the other peer-tier member
+  - `editable: auto` — read-only with "regenerated nightly by Analyst" note
+
+### Task 4 — Author wiki pages
+
+Write all 11 pages in `vault/Memory/wiki/`:
+
+**4.1 welcome.md** (`editable: open`)
+- One paragraph: what Unicron Systems is, what the Nervous System is, what Atrium is
+- Reading order: Welcome → How You Participate → Quick Start → Glossary
+
+**4.2 what-this-is.md** (`editable: pr`)
+- Unicron Systems as a 2-3 person company building Pathfinder + Metacron
+- The Nervous System frame
+- The biomimetic philosophy from `vault/Vision/manifesto.md`
+
+**4.3 how-it-works.md** (`editable: pr`)
+- Substrate: Supabase ledger, knowledge vault, agents, refusal gate
+- Surfaces: Slack, Notion, Atrium, Cowork
+- Loops: capture, direction, judgment, reflection
+- Agent roles: Orchestrator, Analyst, Elder, Taboo Keeper, Specialists
+- Diagram (Mermaid or rendered SVG)
+
+**4.4 how-you-participate.md** (`editable: pr`)
+- Daily rhythm: morning briefing, mid-day directives, evening review
+- DM the Orchestrator: how to phrase intent, what to expect back
+- Mobile capture: quick capture button, voice memos, Slack DM
+- Verified column: human-only, why
+- Override authority: when and how
+
+**4.5 whats-connected.md** (`editable: auto`)
+- Auto-generated by Analyst nightly: queries `nervous_system.connected_services` and `nervous_system.agents`
+- Lists every service with status, owner, cost
+- Manual edits flagged with `<!-- protected -->` blocks survive regeneration
+
+**4.6 best-practices.md** (`editable: pr`)
+- Direct with intent, not steps
+- Move cards to Verified after real review
+- Approve overrides only with reasons that make sense in writing
+- Add memory only when it generalizes
+- Don't replicate truth from external systems
+- Push back on the system when it's wrong
+
+**4.7 quick-start.md** (`editable: pr`)
+- 30-minute onboarding checklist for new team members
+- Confirm Slack, Atrium, Notion access
+- Read taboos.md, seven_generations.md, recent continuity entries
+- File first action item
+- DM Orchestrator with introduction
+
+**4.8 adding-a-team-member.md** (`editable: pr`)
+- DM Orchestrator: "Onboard [Name] as [role]"
+- Orchestrator's automated steps
+- What humans must do (introductions, context handoffs)
+
+**4.9 editing-the-system.md** (`editable: pr`)
+- How to propose a taboo edit
+- How to reconfigure an agent
+- How to add a scheduled job
+- How to update DRI defaults
+- The refusal-gate workflow
+
+**4.10 glossary.md** (`editable: open`)
+- Plain-language definitions for: ledger, vault, signal, decay, TTL, DRI, refusal gate, Taboo Keeper, Elder, Orchestrator, Analyst, Specialist, mycelium, beehive, ant colony, starling, slime mold, seven generations, R3/R4/R5, ABSTAIN, NO_SIGNAL, break-off, stigmergy
+
+**4.11 faq.md** (`editable: open`)
+- Common questions: "What does the system do without me?" "When should I check Atrium?" "How do I know if my action item is real?" "What if I want to undo something?" "How do I find the SPEC for X?" "How do I add a new connector?"
+
+For each page: write the actual content, not just headings. Reference relevant SPEC sections, manifesto pages, or vault docs as evidence.
+
+### Task 5 — Atrium Library — Repo view
+
+`LibraryRepo.tsx`:
+- All vault docs organized by folder
+- Tag-based search (frontmatter.tags field)
+- Semantic search via pgvector RPC
+- Recent docs surface at top
+- "My recent" filter
+
+### Task 6 — Atrium Library — Templates
+
+`LibraryTemplates.tsx`:
+- Click to instantiate a new vault doc
+- Templates: PRD, SPEC, Prompt, Retro, Decision
+- Each lands in `vault/Inbox/` with frontmatter prefilled (date, type, dri=current_user, status=draft)
+
+### Task 7 — Wiki editing endpoints
+
+- `POST /api/atrium/wiki/:slug/edit` — for `editable: open` pages, direct commit via service-role
+- `POST /api/atrium/wiki/:slug/propose-edit` — for `editable: pr` pages, opens vault PR
+- All Taboo-checked, audit-logged
+
+### Task 8 — Analyst regenerates `whats-connected.md`
+
+Update Analyst nightly cron to regenerate `vault/Memory/wiki/whats-connected.md`:
+- Query `nervous_system.connected_services` and `nervous_system.agents`
+- Render markdown with status, owner, cost columns
+- Preserve `<!-- protected -->` blocks for manual additions
+
+### Task 9 — Multi-Vercel verification
+
+- All four tabs (Marketing, Products, Library) render with real data
+- Wiki pages all 11 render (plus auto-generated What's Connected)
+- Library Repo search returns results for tag and semantic queries
+- Brand assets gallery loads from disk
+- Pathfinder and Metacron product KPI files exist and render
+- Both Vercel projects healthy
+
+### Task 10 — Continuity log entry
+
+---
+
+## Hard halt conditions
+
+- Brand assets disk read fails (path or permission issue)
+- Wiki page edit endpoint introduces unauthorized commits
+- Library search performance under 500ms threshold
+- Either Vercel project fails to build
+
+---
+
+## Auto-merge criteria
+
+- Marketing tab all 4 sub-views render
+- Products tab all 2 sub-views render with real KPI files
+- Library tab Wiki view renders all 11 pages plus What's Connected
+- Library Repo view returns search results
+- Library Templates instantiate correctly
+- Wiki editing endpoints Taboo-checked
+- Both Vercel projects healthy
+- PR description verbatim evidence
+
+---
+
+## Auto-revert triggers
+
+- Wiki edit endpoint allows non-allowlisted commits
+- What's Connected regeneration overwrites manual edits without `protected` block respect
+
+---
+
+## Done criteria
+
+1. Atrium Marketing tab fully functional
+2. Atrium Products tab fully functional with KPI files in vault
+3. Atrium Library tab with Wiki, Repo, Templates all functional
+4. All 11 wiki pages authored with real content
+5. What's Connected auto-regenerates nightly
+6. Wiki editing routes through Taboo Keeper
+7. Both Vercel projects healthy
+8. Continuity log appended
+
+---
+
+## Out of scope
+
+- PWA wrapping (Sprint 7)
+- Notification preferences UI (Sprint 7)
+- Audit log viewer in Atrium (Sprint 7)
+- Decay heatmap visualization (Sprint 7)
+- Scheduled jobs UI (Sprint 7)
+- Final polish (Sprint 7)
+
+Begin.

@@ -1,0 +1,416 @@
+{
+  "current_sprint": 5,
+  "last_completed_sprint": 4,
+  "last_completed_at": "2026-05-08T06:45:00Z",
+  "active_sprint_status": "in_process",
+  "sprint_5_started_at": "2026-05-09T01:51:00Z",
+  "sprint_5_streams_dispatched_at": "2026-05-09T01:52:00Z",
+  "sprint_5_streams_complete_at": "2026-05-09T02:10:00Z",
+  "sprint_5_closeout": {
+    "status": "Review",
+    "note": "All 7 stream PRs open and pending Kyle squash-merge. 0 new TS errors across all streams. unicron-platform build clean at 177 modules. Vercel deploy is manual (not GitHub-connected). Supabase migrations require manual apply. Continuity log appended.",
+    "prs": [
+      "https://github.com/freakngenius/unicron-systems/pull/220",
+      "https://github.com/freakngenius/unicron-systems/pull/221",
+      "https://github.com/freakngenius/unicron-systems/pull/222",
+      "https://github.com/freakngenius/unicron-systems/pull/223",
+      "https://github.com/freakngenius/unicron-systems/pull/224",
+      "https://github.com/freakngenius/unicron-systems/pull/225",
+      "https://github.com/freakngenius/unicron-systems/pull/226"
+    ],
+    "closed_at": "2026-05-09T02:10:00Z"
+  },
+  "sprint_5_pending_manual": [
+    "Squash-merge PRs #220–#226 (gh pr merge --squash, no --delete-branch)",
+    "Apply migration: Pathfinder/supabase/migrations/20260510_ingest_processed_email.sql (ingest_processed table)",
+    "Apply migration: unicron-platform/supabase/migrations/20260510_sprint_runs.sql (sprint_runs table)",
+    "Apply migration: unicron-platform/supabase/migrations/20260510_connected_services.sql (connected_services table)",
+    "Apply migration: unicron-platform/supabase/migrations/20260510_seed_connected_services.sql (5 seeded services)",
+    "Apply migration: unicron-platform/supabase/migrations/20260510_seed_sprint5_research_sales_skills.sql (10 skills + status+run_endpoint columns)",
+    "Apply migration: unicron-platform/supabase/migrations/20260510_seed_sprint5_llm_council_skill.sql (llm-council-deliberate skill row)",
+    "Apply migration: Pathfinder/supabase/migrations/20260510_seed_sprint5_deep_research_skill.sql (guarded — no-op until skills table exists)",
+    "Add Pathfinder Vercel env vars: GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, GMAIL_REFRESH_TOKEN_KYLE",
+    "Add unicron-platform Vercel env var: VITE_PATHFINDER_INTERNAL_URL (for skills run proxy to Pathfinder)",
+    "Deploy unicron-platform: vercel --prod from clean main checkout after all PRs merged",
+    "Smoke test: receive email at kyle@unicron.systems → trigger email/daily-ingest → ledger row with source_type=email",
+    "Smoke test: POST /api/atrium/council-deliberate → 200 + winner/synthesis fields",
+    "Smoke test: POST /api/skills/deep-research {topic:'public adjuster industry'} → DeepResearchResult",
+    "Smoke test: atrium.unicron.systems/people → all 5 sub-views render, drag customer card → status updates",
+    "Smoke test: atrium.unicron.systems/money → Accounts shows 5 seeded services, Runway computes",
+    "Smoke test: Home tab Skills → Research + Sales sections, deep-research Run modal works"
+  ],
+  "sprint_5_kanban": {
+    "sprint_card_id": "35c785c6-7e72-8141-ba1c-cb3bbdce7f2c",
+    "sprint_card_url": "https://www.notion.so/Sprint-5-Email-Multi-Fork-Atrium-People-and-Money-35c785c67e728141ba1ccb3bbdce7f2c",
+    "sprint_card_status": "In Process",
+    "stream_cards": {
+      "A": { "id": "35c785c6-7e72-81a2-a872-e95ec13ae744", "title": "Sprint 5 — Stream A: Email Ingest Skill + Daily Cron", "status": "Review", "pr": "https://github.com/freakngenius/unicron-systems/pull/221", "sha": "2cbfb68", "note": "Gmail OAuth2 cron at 16:00 UTC. Spam filter + customer attribution + dedup + auto-revert gate. ingest_processed migration. Zero new TS errors." },
+      "B": { "id": "35c785c6-7e72-8167-9b1d-ffdd1729f591", "title": "Sprint 5 — Stream B: LLM Council Specialist Agent + Multi-Fork Integration", "status": "Review", "pr": "https://github.com/freakngenius/unicron-systems/pull/220", "sha": "0b6856d", "note": "3-stage deliberation shipped. ScoringAgent interface exported for Stream D. Migration uses confirmed skill column schema. Zero new TS errors." },
+      "C": { "id": "35c785c6-7e72-81be-b022-f80f3ebbdf6c", "title": "Sprint 5 — Stream C: Deep Research Skill + Wiki Integration", "status": "Review", "pr": "https://github.com/freakngenius/unicron-systems/pull/222", "sha": "5889b0c", "note": "4-pass autoresearch. vault/Memory/wiki/research/<slug>/ output. RPC key auth on POST endpoint. Guarded skill migration. Zero new TS errors." },
+      "D": { "id": "35c785c6-7e72-8199-8ac1-e74bdb43d43e", "title": "Sprint 5 — Stream D: Multi-Fork Sprint Contract + Bounded Peer Attention", "status": "Review", "pr": "https://github.com/freakngenius/unicron-systems/pull/223", "sha": "6d8cfa2", "note": "ScoringAgent canonical exports. runMultiFork with llm-council dynamic import fallback. Realtime peer-attention channels. sprint_runs migration. Cowork skill doc. broadcastToPeers adds to_agent_id (correct deviation). Zero new TS errors." },
+      "E": { "id": "35c785c6-7e72-8178-b7f9-cfb5e89cf7a6", "title": "Sprint 5 — Stream E: Atrium People Tab", "status": "Review", "pr": "https://github.com/freakngenius/unicron-systems/pull/226", "sha": "3fe7c71", "note": "10 files / 2757 insertions. HTML5 drag pipeline (7 stages, optimistic+rollback). CustomerHealthCard, TeamMyDay capacity heatmap, Network vault frontmatter, Hiring kanban. Taboo defaults allow on 404. Graceful degradation when tables absent. 0 new TS errors." },
+      "F": { "id": "35c785c6-7e72-81e6-af4b-e4fdcf8f0021", "title": "Sprint 5 — Stream F: Atrium Money Tab + Connected Services", "status": "Review", "pr": "https://github.com/freakngenius/unicron-systems/pull/225", "sha": "2d6ffd6", "note": "12 files / 2150 insertions. All 5 sub-views. SVG burn-down (matches v3). Runway sentinel row. connected_services table + 5 seeds. Taboo+audit on writes. 0 new TS errors. Vercel deploy is manual (not GitHub-connected)." },
+      "G": { "id": "35c785c6-7e72-81a0-a5ec-cb8a187b4f24", "title": "Sprint 5 — Stream G: Research/Sales/Discovery Skills + Activate Buttons", "status": "Review", "pr": "https://github.com/freakngenius/unicron-systems/pull/224", "sha": "8093a3d", "note": "10 skills seeded. Schema corrected (name as unique key, status+run_endpoint columns added). 3 active run routes + 7 scaffolded 202s. 3 run modals in Now.tsx. ns_list_skills() updated. Build clean. Zero TS errors." }
+    }
+  },
+  "preflight_completed_at": "2026-05-06T17:10:08Z",
+  "preflight_checks": {
+    "sprint0_verified": "PASS — Status=Verified, promoted by Kyle at ~2026-05-06T16:58Z",
+    "sprint1_verified": "PASS — Status=Verified, confirmed by Kyle at start of this session",
+    "artifacts_unicron_knowledge": "PASS — repo exists with all vault directories",
+    "artifacts_supabase_schema": "PASS — 7 tables with RLS; nervous_system.skills added in Sprint 2",
+    "artifacts_memory_files": "PASS — taboos.md, elder/continuity.md, elder/seven_generations.md present",
+    "artifacts_ingest_route": "PASS — real handler active; manual + voice_memo added in Sprint 2",
+    "artifacts_inngest_router": "PASS — orchestratorRun + 3 placeholder shells added in Sprint 2",
+    "production_pathfinder": "PASS",
+    "production_metacron": "PASS",
+    "mcps_available": "PASS",
+    "no_active_sprint_cards": "PASS"
+  },
+  "sprint_1_started_at": "2026-05-06T17:10:08Z",
+  "sprint_1_streams_complete_at": "2026-05-06T17:37:00Z",
+  "sprint_1_closeout": {
+    "status": "Deployed",
+    "note": "All PRs merged. atrium.unicron.systems HTTP 200. Awaiting Kyle Verified promotion.",
+    "closed_at": "2026-05-06T18:38:00Z",
+    "atrium_domain_added_at": "2026-05-06T18:37:00Z"
+  },
+  "sprint_1_kanban": {
+    "sprint_card_id": "358785c6-7e72-81e6-a8b7-ccbc5e4a408a",
+    "sprint_card_url": "https://www.notion.so/358785c67e7281e6a8b7ccbc5e4a408a",
+    "sprint_card_status": "Deployed"
+  },
+  "sprint_2_started_at": "2026-05-06T18:39:00Z",
+  "sprint_2_streams_dispatched_at": "2026-05-06T18:40:00Z",
+  "sprint_2_streams_complete_at": "2026-05-06T18:55:00Z",
+  "sprint_2_closeout": {
+    "status": "Deployed",
+    "note": "All PRs merged 2026-05-06T22:03Z. nervous_system.skills table applied (17 stubs). unicron-platform deployed to Vercel (dpl_FgZm313ntYzXBpeDsqjtuoSprdsK, aliased atrium.unicron.systems). Continuity log appended. Google Calendar deferred to Sprint 5 — stub in place. Slack setup pending Kyle manual steps.",
+    "closed_at": "2026-05-06T22:16:00Z",
+    "vercel_deployment_id": "dpl_FgZm313ntYzXBpeDsqjtuoSprdsK",
+    "vercel_deployment_url": "https://unicron-platform-eag3413uy-kekas-projects-89ac4317.vercel.app",
+    "google_oauth_deferred_to": "Sprint 7",
+    "google_calendar_stub": "CalendarStub component in Now.tsx — 'Calendar integration — Sprint 5'"
+  },
+  "sprint_2_kanban": {
+    "sprint_card_id": "358785c6-7e72-814f-8c41-d72ca57fab92",
+    "sprint_card_url": "https://www.notion.so/358785c67e72814f8c41d72ca57fab92",
+    "sprint_card_status": "Deployed",
+    "stream_cards": {
+      "A": {
+        "id": "358785c6-7e72-813b-93de-d9e992fe4a1f",
+        "url": "https://www.notion.so/358785c67e72813b93ded9e992fe4a1f",
+        "title": "Sprint 2 — Stream A: Slack Channels + App + Event Handler + Commands",
+        "status": "Deployed",
+        "pr": "https://github.com/freakngenius/unicron-systems/pull/186",
+        "sha": "d4c5807",
+        "merged_at": "2026-05-06T22:03:24Z"
+      },
+      "B": {
+        "id": "358785c6-7e72-8176-a36e-d2b1e8897f46",
+        "url": "https://www.notion.so/358785c67e728176a36ed2b1e8897f46",
+        "title": "Sprint 2 — Stream B: Orchestrator Agent + Persistent Agent Runtime",
+        "status": "Deployed",
+        "pr": "https://github.com/freakngenius/unicron-systems/pull/187",
+        "sha": "5c5326e",
+        "merged_at": "2026-05-06T22:03:32Z"
+      },
+      "C": {
+        "id": "358785c6-7e72-8189-904f-fadc4f394880",
+        "url": "https://www.notion.so/358785c67e728189904ffadc4f394880",
+        "title": "Sprint 2 — Stream C: Atrium Home Tab + Skills Surface + Mobile",
+        "status": "Deployed",
+        "pr": "https://github.com/freakngenius/unicron-systems/pull/188",
+        "sha": "f3c43a4",
+        "merged_at": "2026-05-06T22:03:40Z"
+      },
+      "D": {
+        "id": "358785c6-7e72-811e-8fcb-cc2ffa279a33",
+        "url": "https://www.notion.so/358785c67e72811e8fcbcc2ffa279a33",
+        "title": "Sprint 2 — Stream D: Quick Capture Server-Side Wiring",
+        "status": "Deployed",
+        "pr": "https://github.com/freakngenius/unicron-systems/pull/189",
+        "sha": "1b60879",
+        "merged_at": "2026-05-06T22:03:48Z"
+      },
+      "fix_atrium": {
+        "title": "fix(atrium): correct production deployment + harden hostname detection",
+        "status": "Deployed",
+        "pr": "https://github.com/freakngenius/unicron-systems/pull/190",
+        "sha": "413efe0",
+        "merged_at": "2026-05-06T22:03:16Z"
+      }
+    }
+  },
+  "sprint_2_pending_manual": [
+    "Create 6 Slack channels per unicron-platform/docs/slack-setup.md (#orchestrator-feed, #orchestrator-escalations, #pathfinder-action-items, #metacron-action-items, #internal-action-items, #sales-action-items)",
+    "Create Slack app 'Unicron Orchestrator' at api.slack.com using unicron-platform/slack-app-manifest.json",
+    "Add Vercel env vars to unicron-platform: SLACK_SIGNING_SECRET, SLACK_ORCHESTRATOR_BOT_TOKEN, SLACK_ESCALATIONS_CHANNEL_ID, GITHUB_VAULT_TOKEN, VITE_UNICRON_INGEST_API_KEY",
+    "Smoke test: DM Orchestrator 'Hello' from Kyle's Slack account → parsed reply",
+    "Smoke test: open atrium.unicron.systems → Now tab with live status pulse and activity feed"
+  ],
+  "sprint_3_started_at": "2026-05-08T04:14:00Z",
+  "sprint_3_streams_complete_at": "2026-05-08T04:31:30Z",
+  "sprint_3_kanban": {
+    "sprint_card_id": "35a785c6-7e72-815a-a4cf-d48949a35cdd",
+    "sprint_card_url": "https://www.notion.so/Sprint-3-Analyst-Elder-Atrium-System-Tab-35a785c67e72815aa4cfd48949a35cdd",
+    "sprint_card_status": "Deployed",
+    "stream_cards": {
+      "A": {
+        "id": "35a785c6-7e72-81a7-8b79-cdb2af8a1b6b",
+        "title": "Sprint 3 — Stream A: Analyst Agent + Scheduled Jobs + Master Index",
+        "status": "Deployed",
+        "pr": "https://github.com/freakngenius/unicron-systems/pull/206",
+        "sha": "d838703",
+        "merged_at": "2026-05-08T04:28:41Z"
+      },
+      "B": {
+        "id": "35a785c6-7e72-81f1-b1e5-dff4ee8e3155",
+        "title": "Sprint 3 — Stream B: Elder Agent + Taboo Keeper Promotion + Verify Gate",
+        "status": "Deployed",
+        "pr": "https://github.com/freakngenius/unicron-systems/pull/207",
+        "sha": "b1ae7d5",
+        "merged_at": "2026-05-08T04:28:44Z"
+      },
+      "C": {
+        "id": "35a785c6-7e72-81bb-9ea7-d114f89a25f3",
+        "title": "Sprint 3 — Stream C: Orchestrator Autonomous Dispatch",
+        "status": "Deployed",
+        "pr": "https://github.com/freakngenius/unicron-systems/pull/208",
+        "sha": "ea16a55",
+        "merged_at": "2026-05-08T04:28:46Z"
+      },
+      "D": {
+        "id": "35a785c6-7e72-815a-9c27-cadf6f3c92f8",
+        "title": "Sprint 3 — Stream D: Atrium System Tab UI",
+        "status": "Deployed",
+        "pr": "https://github.com/freakngenius/unicron-systems/pull/209",
+        "sha": "6f56d5d",
+        "merged_at": "2026-05-08T04:31:25Z"
+      },
+      "E": {
+        "id": "35a785c6-7e72-819e-b998-e517f5123162",
+        "title": "Sprint 3 — Stream E: Skills Registry + SKILL.md Files",
+        "status": "Deployed",
+        "pr": "https://github.com/freakngenius/unicron-systems/pull/210",
+        "sha": "08a1611",
+        "merged_at": "2026-05-08T04:31:30Z"
+      },
+      "fix_analyst_import": {
+        "title": "fix(analyst): remove unused loadAgentMemory import — build break",
+        "status": "Deployed",
+        "pr": "https://github.com/freakngenius/unicron-systems/pull/211",
+        "sha": "bad2d61",
+        "merged_at": "2026-05-08T04:40:55Z"
+      }
+    }
+  },
+  "sprint_3_closeout": {
+    "status": "Deployed",
+    "note": "All 5 stream PRs merged + build hotfix (#211 unused import). Deployed to Vercel (dpl_EPKmuLXtXhnzmurZM3DBU5teQSGk). 3 Supabase migrations require manual apply by Kyle. Awaiting Kyle Verified promotion.",
+    "streams_merged_at": "2026-05-08T04:31:30Z",
+    "hotfix_pr": "https://github.com/freakngenius/unicron-systems/pull/211",
+    "closed_at": "2026-05-08T04:50:00Z",
+    "vercel_deployment_id": "dpl_EPKmuLXtXhnzmurZM3DBU5teQSGk",
+    "vercel_deployment_url": "https://unicron-platform-6he4xm8kf-kekas-projects-89ac4317.vercel.app"
+  },
+  "sprint_3_pending_manual": [
+    "Apply Supabase migration: unicron-platform/supabase/migrations/20260508_register_sprint3_agents.sql (registers Taboo Keeper + Elder in nervous_system.agents)",
+    "Apply Supabase migration: unicron-platform/supabase/migrations/20260508_ns_list_agents.sql (creates ns_list_agents() RPC)",
+    "Apply Supabase migration: unicron-platform/supabase/migrations/20260508_seed_sprint3_skills.sql (seeds 9 skills + ns_list_skills() RPC)",
+    "Smoke test: trigger analystRun event via Inngest dashboard → verify decayTick + dailyDigest execute",
+    "Smoke test: POST /api/atrium/elder-advise {decision_type:'tactical',scope:'test',summary:'test'} → 200 + advisory JSON",
+    "Smoke test: open atrium.unicron.systems/system → System tab loads with Agents/Taboos/Refusal Log/Services sub-tabs",
+    "Smoke test: atrium.unicron.systems → Home tab shows live skills grid grouped by domain"
+  ],
+  "sprint_4_started_at": "2026-05-08T05:00:00Z",
+  "sprint_4_streams_dispatched_at": "2026-05-08T05:15:00Z",
+  "sprint_4_streams_complete_at": "2026-05-08T06:45:00Z",
+  "sprint_4_kanban": {
+    "sprint_card_id": "35a785c6-7e72-814c-9591-c70a7a5c44f1",
+    "sprint_card_url": "https://www.notion.so/35a785c67e72814c9591c70a7a5c44f1",
+    "sprint_card_status": "Deployed",
+    "stream_cards": {
+      "A": {
+        "id": "35a785c6-7e72-812a-83e1-fc4d643d4a01",
+        "url": "https://www.notion.so/Sprint-4-Stream-A-Voice-Memo-Ingest-Skill-Whisper-35a785c67e72812a83e1fc4d643d4a01",
+        "title": "Sprint 4 — Stream A: Voice Memo Ingest Skill + Whisper",
+        "status": "Deployed",
+        "pr": "https://github.com/freakngenius/unicron-systems/pull/215",
+        "branch": "feat/sprint4-voice-ingest",
+        "worktree": "Pathfinder-worktrees/sprint4-voice-ingest",
+        "note": "19 tests passing. Confidence floor 0.4 for voice memos requires ingest-call.ts change — documented as follow-up."
+      },
+      "B": {
+        "id": "35a785c6-7e72-81ca-82aa-f4257875f03c",
+        "url": "https://www.notion.so/Sprint-4-Stream-B-Apple-Notes-API-Keys-iOS-Shortcuts-35a785c67e7281ca82aaf4257875f03c",
+        "title": "Sprint 4 — Stream B: Apple Notes + API Keys + iOS Shortcuts",
+        "status": "Deployed",
+        "pr": "https://github.com/freakngenius/unicron-systems/pull/212",
+        "sha": "ee134c3",
+        "branch": "feat/sprint4-notes-keys",
+        "worktree": "Pathfinder-worktrees/sprint4-notes-keys",
+        "note": "Per-team-member key lookup with shared key fallback. iOS Shortcut specs as .md files (Apple binary format not committable). Pre-existing build failures (react-markdown, vis.gl, shiki) confirmed on parent commit."
+      },
+      "C": {
+        "id": "35a785c6-7e72-8181-b1ce-d05e5f0cbdcb",
+        "url": "https://www.notion.so/Sprint-4-Stream-C-Atrium-Now-Tab-Finalization-Mobile-35a785c67e728181b1ced05e5f0cbdcb",
+        "title": "Sprint 4 — Stream C: Atrium Now Tab Finalization + Mobile",
+        "status": "Deployed",
+        "pr": "https://github.com/freakngenius/unicron-systems/pull/213",
+        "sha": "c609624",
+        "branch": "feat/sprint4-now-mobile",
+        "worktree": "unicron-platform-worktrees/sprint4-now-mobile",
+        "note": "Vite build clean (807ms), 0 TS errors. Browser test recommended at 320px/375px for FAB z-index."
+      },
+      "D": {
+        "id": "35a785c6-7e72-814f-9edf-fcaf63bc79a8",
+        "url": "https://www.notion.so/Sprint-4-Stream-D-Atrium-Work-Tab-5-sub-views-Edit-Endpoints-35a785c67e72814f9edffcaf63bc79a8",
+        "title": "Sprint 4 — Stream D: Atrium Work Tab (5 sub-views) + Edit Endpoints",
+        "status": "Deployed",
+        "pr": "https://github.com/freakngenius/unicron-systems/pull/214",
+        "sha": "e68b720",
+        "branch": "feat/sprint4-work-tab",
+        "worktree": "unicron-platform-worktrees/sprint4-work-tab",
+        "note": "2370 insertions. Requires env vars: VITE_PATHFINDER_INTERNAL_URL, VITE_UNICRON_INTERNAL_API_KEY (unicron-platform), UNICRON_INTERNAL_API_KEY (Pathfinder) before end-to-end action item editing works."
+      },
+      "E": {
+        "id": "35a785c6-7e72-818f-8bc7-f5090cd7596c",
+        "url": "https://www.notion.so/Sprint-4-Stream-E-Productivity-Skills-Registry-Activate-Buttons-35a785c67e72818f8bc7f5090cd7596c",
+        "title": "Sprint 4 — Stream E: Productivity Skills Registry + Activate Buttons",
+        "status": "Deployed",
+        "pr": "https://github.com/freakngenius/unicron-systems/pull/216",
+        "branch": "feat/sprint4-skills-productivity",
+        "worktree": "unicron-platform-worktrees/sprint4-skills-productivity",
+        "note": "Migration: 20260508_seed_sprint4_productivity_skills.sql. Skills endpoint at unicron-platform/api/atrium/skills/run.ts. quick-capture is UI-trigger only (opens QuickCapture modal)."
+      },
+      "fix_kanban_eslint": {
+        "title": "fix(pathfinder): remove unknown eslint-disable rule from kanban-writer — build break",
+        "status": "In review (committed to Stream A + B branches)",
+        "note": "1-line deletion of eslint-disable-next-line @typescript-eslint/no-explicit-any. Applied to both Pathfinder worktrees before dispatch. Will merge with those stream PRs."
+      }
+    }
+  },
+  "sprint_4_smoke_completed_at": "2026-05-08T17:54:12Z",
+  "sprint_4_smoke_results": {
+    "A": {
+      "status": "blocked",
+      "test": "voice_memo_ingest_whisper",
+      "audit_log_id": "fb12b7d0-edcf-46c8-99b1-d0860437fa43",
+      "gap": "Pathfinder Basic Auth middleware gates /api/ingest — needs BASIC_AUTH_USER+BASIC_AUTH_PASS. Vercel deploy READY at a665b28."
+    },
+    "B": {
+      "status": "blocked",
+      "test": "apple_note_per_member_key_keenan",
+      "audit_log_id": "ebe4d64d-52b5-4702-b96d-d636151144c8",
+      "gap": "Same Basic Auth gate as A. Keenan key confirmed in DB (76434b0f), endpoint unreachable without creds."
+    },
+    "C": {
+      "status": "partial",
+      "test": "atrium_now_tab_mobile_375px",
+      "audit_log_id": "fcf56d9b-1276-40d0-92d2-0185588dded4",
+      "gap": "atrium.unicron.systems HTTP 200. Visual verification (FAB, status pulse stacking) needs authenticated browser session."
+    },
+    "D": {
+      "status": "partial",
+      "test": "atrium_work_tab_5subviews_patch",
+      "audit_log_id": "42dc1874-0b4b-4a6b-96b9-475cc317031d",
+      "gap": "atrium.unicron.systems HTTP 200. Work tab render + PATCH needs session + unconfirmed env vars."
+    },
+    "E": {
+      "status": "partial",
+      "test": "productivity_skills_registry_run",
+      "audit_log_id": "c0ea0243-d8f7-4d30-be14-66c9cf8af74a",
+      "gap": "Skills API 200 with 12 skills incl. all 3 productivity. Run endpoint 401 (session required). TS2591 warning-only, not runtime block."
+    }
+  },
+  "sprint_4_bug_fixes": [
+    {
+      "title": "TS2591 warning on api/atrium/skills/run.ts (missing @types/node)",
+      "notion_url": "https://www.notion.so/35a785c67e7281208d2fee11e5780d27",
+      "priority": "Low",
+      "filed_at": "2026-05-08T17:48:00Z"
+    }
+  ],
+  "sprint_4_pending_manual": [
+    "Merge PRs #212, #213, #214, #215, #216 (Kyle review + squash merge, keep branches)",
+    "Apply Supabase migration: unicron-platform/supabase/migrations/20260508_seed_sprint4_productivity_skills.sql",
+    "Set Vercel env vars for action item editing: VITE_PATHFINDER_INTERNAL_URL + VITE_UNICRON_INTERNAL_API_KEY (unicron-platform), UNICRON_INTERNAL_API_KEY (Pathfinder)",
+    "Distribute per-team-member API keys to Keenan and Curtis (generate via Supabase: INSERT config->ingest_api_key into nervous_system.team_members)",
+    "Install iOS Shortcuts from Pathfinder/scripts/ios-shortcuts/ specs on team members' phones",
+    "Smoke test: POST multipart audio to /api/ingest with x-source-type: voice_memo → transcript + ledger row",
+    "Smoke test: POST text to /api/ingest with x-source-type: apple_note + per-user key → ledger row",
+    "Smoke test: atrium.unicron.systems → Now tab mobile at 375px → status pulse stacks, FAB shows",
+    "Smoke test: atrium.unicron.systems/work → Work tab renders all 5 sub-views",
+    "Smoke test: Work tab Action Items → reassign DRI → Taboo Keeper passes → audit_log entry",
+    "Smoke test: Productivity skill Run buttons → morning-brief + inbox-triage return results",
+    "Browser test recommended for Now tab FAB z-index at 320px (noted by Stream C agent)"
+  ],
+  "halts_observed": [
+    {
+      "sprint": "pre-flight",
+      "halt_at": "2026-05-06T17:00:00Z",
+      "condition": "Sprint 0 artifacts incomplete",
+      "resolved_at": "2026-05-06T17:30:00Z",
+      "resolution": "PR #181 merged"
+    },
+    {
+      "sprint": "pre-flight",
+      "halt_at": "2026-05-06T17:30:00Z",
+      "condition": "Sprint 0 kanban not Verified",
+      "resolved_at": "2026-05-06T17:59:26Z",
+      "resolution": "Kyle promoted Sprint 0 to Verified"
+    },
+    {
+      "sprint": "pre-flight",
+      "halt_at": "2026-05-06T18:00:00Z",
+      "condition": "Pathfinder build broken — missing zod dep",
+      "resolved_at": "2026-05-06T17:10:08Z",
+      "resolution": "PR #182 merged"
+    },
+    {
+      "sprint": "sprint_4_preflight",
+      "halt_at": "2026-05-08T05:00:00Z",
+      "condition": "Pathfinder build broken — eslint-disable referencing unknown @typescript-eslint/no-explicit-any rule in kanban-writer.ts",
+      "resolved_at": "2026-05-08T05:15:00Z",
+      "resolution": "Conductor applied 1-line fix directly to both Pathfinder worktrees (Stream A sha efa09b0, Stream B sha 0305e90) before dispatching agents"
+    }
+  ],
+  "non_critical_issues": [
+    {
+      "issue": "Slack channels not yet created — manual step documented in unicron-platform/docs/slack-setup.md",
+      "workaround": "Code complete and deployed; channels must be created before Slack app can be installed and smoke tested",
+      "impact": "Sprint 2 smoke tests (DM Orchestrator) blocked until Kyle completes Slack setup"
+    },
+    {
+      "issue": "Google Calendar integration deferred — not yet set up",
+      "workaround": "Now tab shows 'Calendar not connected' hint. Full integration targeting Sprint 5.",
+      "impact": "Calendar sub-section of Now tab attention scoring shows placeholder"
+    },
+    {
+      "issue": "Sprint 3 Supabase migrations require manual apply (3 files)",
+      "workaround": "SQL files at unicron-platform/supabase/migrations/20260508_*.sql — Kyle to apply via Supabase dashboard or CLI",
+      "impact": "Until applied: (1) Taboo Keeper + Elder not in nervous_system.agents, (2) ns_list_agents() RPC missing → Agents Galaxy shows empty, (3) ns_list_skills() RPC missing → Home tab skills grid empty"
+    },
+    {
+      "issue": "Sprint 4 Supabase migration requires manual apply",
+      "workaround": "SQL file at unicron-platform/supabase/migrations/20260508_seed_sprint4_productivity_skills.sql",
+      "impact": "Until applied: Productivity skills not in nervous_system.skills table → Run buttons disabled"
+    },
+    {
+      "issue": "Voice memo confidence floor 0.4 (spec) vs 0.5 (ingestCall hardcode)",
+      "workaround": "ingestCall uses 0.5 floor; voice memos pass through at the same threshold as calls. Documented in ingest-voice-memo.ts.",
+      "impact": "Slightly more voice memo content may be filtered vs spec intent. Follow-up: modify ingestCall to accept configurable confidence_floor."
+    },
+    {
+      "issue": "Action item editing env vars not yet set",
+      "workaround": "Work tab displays data read-only; edit actions will 401 until VITE_PATHFINDER_INTERNAL_URL + UNICRON_INTERNAL_API_KEY vars are added to both Vercel projects",
+      "impact": "Bulk reassign/close/defer in Work tab Action Items view will fail until env vars are set"
+    },
+    {
+      "issue": "Pre-existing Pathfinder build failures (react-markdown, @vis.gl/react-google-maps, shiki)",
+      "workaround": "Failures exist on origin/main (bad2d61) before Sprint 4 branches. Not introduced by any Sprint 4 stream.",
+      "impact": "Vercel Pathfinder builds may show warnings; functional correctness unaffected"
+    }
+  ]
+}

@@ -1,0 +1,265 @@
+# PROMPT — Sprint 5: Email Ingest + Multi-Fork Sprints + Atrium People + Money Tabs
+
+Dispatched by the Master Conductor. Self-contained.
+
+**Project root:** `/Users/keka/Dropbox/Projects/Unicron Systems/`
+
+**Reference SPECs:** `Company Docs/Specs/SPEC - Unicron Nervous System.md`, `Company Docs/Specs/SPEC - Nervous System Addendum 2 (Skills + Karpathy + Refero).md`, `Company Docs/Specs/SPEC - Atrium (Internal Cockpit).md`
+
+This sprint accomplishes:
+1. Email ingest skill (Gmail MCP)
+2. Multi-fork sprint contract (slime mold pruning) formalized as a Cowork skill
+3. **LLM Council specialist agent** per Addendum 2 section 2.7 (3-stage parallel-response → anonymized review → Chairman synthesis); used by multi-fork sprints for scoring and by verify gate for irreversible decisions on demand
+4. **`deep-research` skill** per Addendum 2 section 2.8 (autoresearch pattern: 8-15 page synthesized brief in `wiki/research/<topic>/`, span-level citations)
+5. Bounded peer attention: configure Cowork peer subscriptions per SPEC section 16
+6. Atrium **People tab**: customers pipeline, team my-day, network, hiring (when active)
+7. Atrium **Money tab**: accounts, runway, revenue, expenses, cost spike alerts
+8. Activate skills surface buttons for: `deep-research`, `llm-council-deliberate`, `light-rag-query`, `morning-trend-scan`, `competitor-watch`, `schedule-discovery-call`, `extract-vertical-signals`, `draft-follow-up-email`, `track-pipeline-stage`, `generate-proposal`
+
+## Parallel streams
+
+- **Stream A** (worktree `Pathfinder-worktrees/sprint5-email-ingest`): Email ingest skill + scheduled cron (Task 1)
+- **Stream B** (worktree `unicron-platform-worktrees/sprint5-llm-council`): LLM Council specialist agent + integration into multi-fork (Task 2-new + Task 3-new)
+- **Stream C** (worktree `Pathfinder-worktrees/sprint5-deep-research`): `deep-research` skill (autoresearch pattern) + `wiki/research/` integration (Task 4-new)
+- **Stream D** (worktree `unicron-platform-worktrees/sprint5-multi-fork`): Multi-fork sprint contract Cowork skill + bounded peer attention config (Tasks 2, 3)
+- **Stream E** (worktree `unicron-platform-worktrees/sprint5-people-tab`): Atrium People tab (Task 5)
+- **Stream F** (worktree `unicron-platform-worktrees/sprint5-money-tab`): Atrium Money tab + connected_services seed (Task 6)
+- **Stream G** (worktree `unicron-platform-worktrees/sprint5-skills-research-sales`): register Research/Sales/Discovery skills + activate buttons (Task 7-new)
+
+Apply Refero design references for People and Money tab visual language, consistent with Sprint 2/4 design tokens.
+
+---
+
+## Pre-conditions
+
+- Sprint 4 verified
+- Voice memo, Apple Notes ingest operational
+- Atrium Now and Work tabs live and mobile
+
+---
+
+## Kanban hygiene — start
+
+Card "Sprint 5 — Email + Multi-Fork + Atrium People and Money" → In Process. DRI: Kyle. Surface: Architecture. Verify Criteria: "Email ingest produces ledger rows. Multi-fork sprint can run with N=3 candidates and prune to 1. Atrium People and Money tabs fully functional. Both Vercel projects healthy."
+
+---
+
+## Tasks
+
+### Task 1 — Email ingest skill
+
+Path: `Pathfinder/lib/ingest/skills/ingest-email.ts`
+
+Logic:
+1. Daily cron (08:00 PT) scans designated email accounts (kyle@, keenan@, curtis@, team@unicron.systems) via Gmail MCP
+2. Filter: emails received in last 24 hours, not yet ingested (track in `nervous_system.ingest_processed` table or use a `processed_at` field)
+3. For each: extract decisions, action items, insights using same structured-output prompt as call ingest, adjusted for email context
+4. Skip mass/promotional email (heuristic: from-domain blacklist, unsubscribe headers, etc.)
+5. Return one of `records | NO_SIGNAL | ABSTAIN`
+
+Per-customer attribution: if email mentions a customer by name in body or subject, attach `customer_id` to ledger row.
+
+### Task 2 — Multi-fork sprint contract
+
+Path: `Pathfinder/lib/sprint-fork.ts` (and Cowork skill at `Cowork/skills/multi-fork-sprint.md` per skill plugin convention)
+
+Contract:
+- Sprint declares scoring function before launch (judge agent identifier OR hard metric)
+- N parallel Claude Code prompts dispatched (default N=3) via `Task` tool
+- Each runs in its own worktree (using-git-worktrees skill)
+- Each produces a candidate diff and self-evaluation
+- Scoring agent ranks candidates
+- Pruning rule: keep top K (default K=1), archive losers with reasons in `vault/Memory/sprint_forks/<sprint_id>/`
+- Reinforcement: winning approach's pattern logged as a `signal` of type `PATTERN`
+
+Expose as a Cowork skill so future Cowork chats can request multi-fork sprints with one invocation.
+
+### Task 3 — Bounded peer attention configuration
+
+Configure Cowork peer subscriptions per SPEC section 16:
+- Each Cowork chat declares peer watches in its session-start memory load
+- Persistent agents declare in `agents.config.watches_*`
+- Implement Supabase Realtime channel with topic filtering for agent peer attention
+- Each Cowork chat reads peer's last `vault/Memory/cowork/<chat_name>/latest.md` at session start
+
+Document the subscription rules table in `vault/Memory/wiki/how-it-works.md` (stub for Sprint 6).
+
+### Task 4 — Sprint runs tracking table
+
+Add `nervous_system.sprint_runs` table for Atrium Sprints view in Work tab:
+
+```sql
+CREATE TABLE IF NOT EXISTS nervous_system.sprint_runs (
+  id uuid primary key default uuid_generate_v4(),
+  sprint_name text not null,
+  sprint_prompt_path text,
+  surface text,
+  status text default 'in_process' check (status in ('in_process','deployed','review','bug_fixes','verified','halted')),
+  started_at timestamptz default now(),
+  completed_at timestamptz,
+  evidence_link text,
+  kanban_card_id text,
+  fork_count integer default 1,
+  fork_winner_id uuid,
+  log_tail jsonb default '[]'::jsonb,
+  created_by jsonb,
+  ttl_days integer default 90,
+  last_touched timestamptz default now()
+);
+```
+
+Update Conductor and per-sprint prompts to write/update this table at sprint start and end (retroactive entries for Sprints 0-4 acceptable).
+
+### Task 5 — Atrium People tab
+
+Path: `unicron-platform/src/atrium/People.tsx` and sub-components
+
+**5.1 Customers pipeline** (`CustomersPipeline.tsx`)
+- Drag-drop kanban view of `nervous_system.customers` rows by status
+- Stages: Cold, Discovery, Proposal, Contract, Onboarding, Active, Churned
+- Per-customer card: name, primary contact, last contact date, next action item
+- Drag updates `customers.status`; audit logged
+
+**5.2 Per-customer health card** (drill-in from pipeline)
+- Usage frequency (active tenants only; pulled from product analytics — Pathfinder for Zedcor)
+- Engagement depth (counts of Slack threads, calls, emails about this customer in last 30 days)
+- Last contact date and channel
+- Contract milestones
+- Sentiment signal (Analyst-derived from ledger sentiment scores)
+- Recent activity feed (filtered ledger by `customer_id`)
+- Action items related (filtered action_items by `customer_id`)
+
+**5.3 Team my-day views** (`TeamMyDay.tsx`)
+- List of team_members with avatars, roles
+- Click into member: their open DRIs, calendar today, last digest read state, pending Verified reviews, action items requested-by and requested-of
+- Capacity heatmap: visual indicator weighted by priority and due date
+
+**5.4 Network** (`Network.tsx`)
+- Advisors, warm contacts, contributors as a list (data sourced from `vault/Memory/people/<name>.md` if present, plus a future `nervous_system.contacts` table — start lightweight with vault-only)
+- Last-touch dates per contact (from ledger `participants` unless explicit `nervous_system.contacts` table is added)
+- "Who introduced who" lightweight graph
+
+**5.5 Hiring** (`Hiring.tsx`)
+- Pipeline (Sourced, Screening, Interview, Offer, Accepted, Declined)
+- Hidden when no active candidates (gated by env or empty data)
+
+### Task 6 — Atrium Money tab
+
+Path: `unicron-platform/src/atrium/Money.tsx` and sub-components
+
+**6.1 Accounts** (`Accounts.tsx`)
+- Read from `nervous_system.connected_services` table (add this table as part of Sprint 5):
+```sql
+CREATE TABLE IF NOT EXISTS nervous_system.connected_services (
+  id uuid primary key default uuid_generate_v4(),
+  name text not null,
+  category text,
+  status text default 'unknown' check (status in ('healthy','degraded','broken','unknown')),
+  monthly_cost_usd numeric,
+  last_billed_at date,
+  last_health_check_at timestamptz,
+  owner_team_member_id uuid references nervous_system.team_members(id),
+  config_url text,
+  notes text
+);
+```
+- Render as a list with status, cost, owner, link to provider
+- Auto-detect status via Sprint 3 services-health logic (extends here)
+- Replace Notion accounts page (link to migrate manually)
+
+**6.2 Runway** (`Runway.tsx`)
+- Cash on hand (manual entry initially; link to bank when connector exists)
+- Monthly burn (sum of `connected_services.monthly_cost_usd` + manually entered payroll)
+- Runway months (cash / burn)
+- Burn-down chart (Recharts)
+
+**6.3 Revenue** (`Revenue.tsx`)
+- MRR/ARR if Stripe connected; otherwise show "no revenue connector configured"
+- Per-customer revenue (when connector exists)
+- Pipeline-weighted forecast (customers in Proposal/Contract stages × probability)
+
+**6.4 Expenses** (`Expenses.tsx`)
+- Categorized monthly view: infrastructure, services, payroll, contractors, marketing, other
+- Auto-imported from `connected_services` where automatic; manual entry forms otherwise
+- "Manual" badge on hand-entered fields
+
+**6.5 Cost spike alerts** (`CostSpikes.tsx`)
+- Analyst flags abnormal spend per category (>2x rolling 30-day average)
+- Render as list with timestamp, category, baseline, spike value
+- Click for detail and acknowledge
+
+### Task 7 — Server endpoints for People + Money edits
+
+- `PATCH /api/atrium/customers/:id` — update status, notes (Taboo-checked)
+- `POST /api/atrium/customers` — create new customer (Taboo-checked)
+- `PATCH /api/atrium/connected-services/:id` — update cost, status, notes (Taboo-checked)
+- `POST /api/atrium/connected-services` — register new service (Taboo-checked)
+- All audit-logged
+
+### Task 8 — Multi-Vercel verification
+
+- Email smoke test: receive a test email at kyle@unicron.systems; verify ingest skill produces ledger row within 24 hours of next cron, or trigger cron manually for immediate test
+- Multi-fork smoke test: run a small multi-fork sprint with N=2 candidates and a hard-metric scorer; verify pruning and reinforcement
+- Atrium People tab renders all sub-views with real data
+- Atrium Money tab renders accounts (seed at least 5 services so the view is populated: Supabase, Vercel, OpenAI, Anthropic, Slack)
+- Customer status drag from Atrium updates `customers.status` via Taboo Keeper
+- Both Vercel projects healthy
+
+### Task 9 — Continuity log entry
+
+---
+
+## Hard halt conditions
+
+- Gmail MCP unavailable; email ingest cannot run
+- Multi-fork sprint cannot dispatch parallel Claude Code runs (worktree contention or quota)
+- Customers pipeline drag breaks `customers.status` integrity
+- Either Vercel project fails to build
+
+---
+
+## Auto-merge criteria
+
+- Email ingest skill operational, daily cron scheduled
+- Multi-fork sprint contract callable; smoke test passes
+- Bounded peer attention configured per SPEC section 16
+- `nervous_system.sprint_runs` and `nervous_system.connected_services` tables exist
+- Atrium People tab all 5 sub-views functional
+- Atrium Money tab all 5 sub-views functional, seeded with 5+ services
+- Edit endpoints all Taboo-checked
+- Both Vercel projects healthy
+- PR description verbatim evidence
+
+---
+
+## Auto-revert triggers
+
+- Email ingest spam-floods the ledger (>100 rows in a day from email source)
+- Multi-fork sprint dispatches uncontrolled (>5 forks at once)
+- Customers pipeline drag corrupts data
+
+---
+
+## Done criteria
+
+1. Email ingest skill operational
+2. Multi-fork sprint contract usable as Cowork skill
+3. Bounded peer attention configured for all Cowork chats
+4. `sprint_runs` and `connected_services` tables exist and seeded
+5. Atrium People tab fully functional
+6. Atrium Money tab fully functional with seed services
+7. Edit endpoints Taboo-checked
+8. Both Vercel projects healthy
+9. Continuity log appended
+
+---
+
+## Out of scope
+
+- Atrium Marketing, Products, Library tabs (Sprint 6)
+- Wiki content authoring (Sprint 6)
+- PWA (Sprint 7)
+- Notification preferences UI (Sprint 7)
+- Audit log viewer (Sprint 7)
+
+Begin.

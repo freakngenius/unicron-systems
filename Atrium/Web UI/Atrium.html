@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Atrium — Unicron Internal Cockpit</title>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500&family=Inter+Tight:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="tokens.css"/>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script type="text/babel" src="components.jsx"></script>
+<script type="text/babel" src="shell.jsx"></script>
+<script type="text/babel" src="tweaks-panel.jsx"></script>
+<script type="text/babel" src="screens/now.jsx"></script>
+<script type="text/babel" src="screens/work-people-money.jsx"></script>
+<script type="text/babel" src="screens/rest.jsx"></script>
+
+<script type="text/babel">
+const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+  "viewport": "desktop",
+  "accent": "#C76FA8",
+  "showTweaks": true
+}/*EDITMODE-END*/;
+
+const App = () => {
+  const [active, setActive] = React.useState("now");
+  const [cmdK, setCmdK] = React.useState(false);
+  const [capture, setCapture] = React.useState(false);
+  const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
+  const mobile = t.viewport === "mobile";
+
+  React.useEffect(() => {
+    const onKey = e => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") { e.preventDefault(); setCmdK(s => !s); }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  React.useEffect(() => {
+    document.documentElement.style.setProperty("--accent", t.accent);
+  }, [t.accent]);
+
+  const Screen = (() => {
+    switch (active) {
+      case "now": return <NowScreen mobile={mobile}/>;
+      case "people": return <PeopleScreen/>;
+      case "work": return mobile ? <WorkScreenMobile/> : <WorkScreen/>;
+      case "money": return <MoneyScreen/>;
+      case "marketing": return <MarketingScreen/>;
+      case "products": return <ProductsScreen/>;
+      case "system": return <SystemScreen/>;
+      case "library": return <LibraryScreen/>;
+      default: return null;
+    }
+  })();
+
+  // Mobile placeholder for non-Home/Work tabs
+  const showMobilePlaceholder = mobile && !["now","work"].includes(active);
+
+  // Frame around design
+  const frameStyle = mobile ? {
+    width: 375, height: 760, margin: "auto",
+    border: "1px solid var(--border-default)", borderRadius: 28,
+    overflow: "hidden", background: "var(--bg-ground)",
+    boxShadow: "0 30px 80px rgba(0,0,0,0.5)",
+    display: "flex", flexDirection: "column", position: "relative",
+  } : {
+    width: "100%", height: "100vh", display: "flex", flexDirection: "column",
+  };
+
+  const outer = mobile ? {
+    minHeight: "100vh",
+    background: "radial-gradient(ellipse at top, rgba(232,118,58,0.04), transparent 70%), var(--bg-ground)",
+    display: "flex", alignItems: "center", justifyContent: "center", padding: 24,
+    overflow: "auto",
+  } : { height: "100vh" };
+
+  return (
+    <div style={outer}>
+      <div style={frameStyle} data-screen-label={mobile ? `Mobile — ${active}` : `Desktop — ${active}`}>
+        {!mobile && (
+          <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
+            <Rail active={active} setActive={setActive} mobile={false}/>
+            <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, background: "var(--bg-ground)" }}>
+              <Header onCmdK={() => setCmdK(true)} onCapture={() => setCapture(true)} mobile={false}/>
+              <div style={{ flex: 1, overflow: "auto", display: "flex", flexDirection: "column" }}>
+                {Screen}
+              </div>
+            </div>
+          </div>
+        )}
+        {mobile && (
+          <>
+            <Header onCmdK={() => setCmdK(true)} onCapture={() => setCapture(true)} mobile={true}/>
+            <div style={{ flex: 1, overflow: "auto", background: "var(--bg-ground)" }}>
+              {showMobilePlaceholder ? (
+                <div style={{ padding: 24, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", textAlign: "center", paddingBottom: 76 }}>
+                  <I.Globe size={28} style={{ color: "var(--text-lo)" }}/>
+                  <div style={{ fontFamily: "var(--font-display)", fontSize: "var(--text-xl)", color: "var(--text-hi)", marginTop: 14 }}>
+                    Open on desktop
+                  </div>
+                  <div style={{ fontSize: "var(--text-sm)", color: "var(--text-md)", marginTop: 8, maxWidth: 260 }}>
+                    The {active} tab is dense. We've kept Home and Work mobile-fluent — others want a wider screen.
+                  </div>
+                  <Btn variant="primary" size="sm" style={{ marginTop: 18 }}>Send link to laptop</Btn>
+                </div>
+              ) : Screen}
+            </div>
+            <Rail active={active} setActive={setActive} mobile={true}/>
+          </>
+        )}
+        <CmdK open={cmdK} onClose={() => setCmdK(false)}/>
+        <QuickCapture open={capture} onClose={() => setCapture(false)}/>
+      </div>
+
+      <TweaksPanel title="Tweaks">
+        <TweakSection title="Viewport">
+          <TweakRadio value={t.viewport} options={[{value:"desktop",label:"Desktop"},{value:"mobile",label:"Mobile"}]} onChange={v => setTweak("viewport", v)}/>
+        </TweakSection>
+        <TweakSection title="Brand accent">
+          <TweakColor value={t.accent} options={["#E8763A","#D26A33","#C76FA8","#6F95D6","#4FB286"]} onChange={v => setTweak("accent", v)}/>
+        </TweakSection>
+        <TweakSection title="Jump to screen">
+          <TweakSelect value={active} options={NAV.map(n => ({ value: n.id, label: n.label }))} onChange={setActive}/>
+        </TweakSection>
+        <TweakSection title="Quick actions">
+          <TweakButton onClick={() => setCmdK(true)}>Open ⌘K</TweakButton>
+          <TweakButton onClick={() => setCapture(true)}>Open Quick Capture</TweakButton>
+        </TweakSection>
+      </TweaksPanel>
+    </div>
+  );
+};
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+
+</body>
+</html>

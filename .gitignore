@@ -60,6 +60,10 @@ next-env.d.ts
 /Pathfinder-worktrees/
 /Phase2-worktrees/
 /unicron-platform-worktrees/
+/unicron-knowledge-worktrees/
+
+# per-operator handoff docs — contain plaintext API keys, never commit
+/Customers/_team_handoffs/
 
 # Cowork session artifacts (per-developer, not part of repo)
 .claude/
