@@ -5,43 +5,11 @@ import {
   postArchitectDiscover,
 } from './architectModesClient';
 
-describe('architectModesClient (mock-mode)', () => {
+describe('architectModesClient', () => {
   beforeEach(() => {
-    vi.stubEnv('VITE_ARCHITECT_API_ENABLED', 'false');
-  });
-  afterEach(() => {
-    vi.unstubAllEnvs();
-  });
-
-  it('postArchitectDecompose returns the architecture fixture', async () => {
-    const res = await postArchitectDecompose({ buyer_pain_prompt: 'test prompt over 10 chars' });
-    expect(res.architecture.buyer).toMatch(/distributors of/);
-    expect(res.architecture.data_sources_proposed.length).toBeGreaterThan(0);
-    expect(res.status).toBe('completed');
-  });
-
-  it('postArchitectTune returns the tuning proposals fixture', async () => {
-    const res = await postArchitectTune({ vertical_id: 'pathfinder-default' });
-    expect(res.proposals.length).toBeGreaterThan(0);
-    expect(res.proposals[0].type).toBe('tuning_suggestion');
-  });
-
-  it('postArchitectDiscover returns the source candidates fixture', async () => {
-    const res = await postArchitectDiscover({ vertical_id: 'pathfinder-default' });
-    expect(res.proposals.length).toBeGreaterThan(0);
-    res.proposals.forEach((p) => expect(p.type).toBe('source_discovery'));
-  });
-});
-
-describe('architectModesClient (real-mode)', () => {
-  beforeEach(() => {
-    vi.stubEnv('VITE_ARCHITECT_API_ENABLED', 'true');
-    vi.stubEnv('VITE_ARCHITECT_API_URL', 'https://example.test');
-    vi.stubEnv('VITE_ARCHITECT_API_TOKEN', 'tok-1');
     vi.stubGlobal('fetch', vi.fn());
   });
   afterEach(() => {
-    vi.unstubAllEnvs();
     vi.unstubAllGlobals();
   });
 

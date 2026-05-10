@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { AgentModalShell } from '../../components/agent-console/AgentModalShell';
 import { AgentLiveExecution } from '../../components/agent-console/AgentLiveExecution';
 import { AgentHistoryGrid } from '../../components/agent-console/AgentHistoryGrid';
@@ -16,11 +16,7 @@ import {
   postArchitectTune,
   postArchitectDiscover,
 } from '../../lib/architectModesClient';
-import type {
-  AgentDispatch,
-  AgentDispatchEvent,
-  AgentDispatchEventType,
-} from '../../lib/contracts/agentConsole';
+import type { AgentDispatch } from '../../lib/contracts/agentConsole';
 import type {
   DecompositionApiResponse,
   TuningApiResponse,
@@ -73,19 +69,12 @@ type Phase =
   | { kind: 'rejected'; dispatch: AgentDispatch; result: Result | null }
   | { kind: 'failed'; error: string };
 
-const ARCHITECT_API_MOCK = import.meta.env.VITE_ARCHITECT_API_ENABLED !== 'true';
 const ORG_ID = 'pathfinder-default';
 
 export function ArchitectModal({ onClose, bridge = REAL_BRIDGE }: Props) {
   const [mode, setMode] = useState<ArchitectMode>('decomposition');
   const [phase, setPhase] = useState<Phase>({ kind: 'idle' });
   const [committing, setCommitting] = useState(false);
-  const [mockEvents, setMockEvents] = useState<AgentDispatchEvent[]>([]);
-  const cancelRef = useRef<(() => void) | null>(null);
-
-  useEffect(() => () => cancelRef.current?.(), []);
-
-  const isMockRuntime = ARCHITECT_API_MOCK && bridge === REAL_BRIDGE;
 
   const status =
     phase.kind === 'idle'
@@ -112,60 +101,31 @@ export function ArchitectModal({ onClose, bridge = REAL_BRIDGE }: Props) {
     fetchResult: () => Promise<Result>,
   ) => {
     setPhase({ kind: 'dispatching' });
-    setMockEvents([]);
     try {
-      const dispatch = isMockRuntime
-        ? synthesizeDispatch(mode, inputPayload)
-        : await bridge.createDispatch({
-            agent_name: architectAgent.name,
-            customer_org_id: ORG_ID,
-            input_payload: { mode, ...inputPayload, summary: summarizeForTile(mode, inputPayload) },
-          });
+      const dispatch = await bridge.createDispatch({
+        agent_name: architectAgent.name,
+        customer_org_id: ORG_ID,
+        input_payload: { mode, ...inputPayload, summary: summarizeForTile(mode, inputPayload) },
+      });
       setPhase({ kind: 'running', dispatch, mode });
 
-      // Architect endpoints return reasoning at completion (no SSE). We
-      // animate by streaming a synthesized timeline of "thinking" events
-      // while the actual fetch resolves in parallel.
-      const fetchPromise = fetchResult().catch((e) => {
-        setPhase({ kind: 'failed', error: e instanceof Error ? e.message : String(e) });
-        return null as Result | null;
+      // Architect endpoints return reasoning at completion (no SSE). Once
+      // the fetch resolves we append each reasoning line as a real event
+      // so AgentLiveExecution renders the output before flipping to the
+      // result panel.
+      const result = await fetchResult();
+      for (const line of resultReasoning(result)) {
+        void bridge.appendEvent({
+          dispatch_id: dispatch.id,
+          event_type: 'reasoning',
+          payload: { text: line },
+        });
+      }
+      setPhase({
+        kind: 'awaiting_review',
+        dispatch: { ...dispatch, status: 'awaiting_review' },
+        result,
       });
-
-      cancelRef.current = streamThinking(
-        bridge,
-        dispatch.id,
-        isMockRuntime,
-        (e) => setMockEvents((prev) => [...prev, e]),
-        async () => {
-          const result = await fetchPromise;
-          if (!result) return;
-          // Append each reasoning line as a final event so the live panel
-          // shows the actual output before flipping to result panel.
-          for (const line of resultReasoning(result)) {
-            const event: AgentDispatchEvent = {
-              id: cryptoRandomId(),
-              dispatch_id: dispatch.id,
-              event_type: 'reasoning',
-              payload: { text: line },
-              created_at: new Date().toISOString(),
-            };
-            if (isMockRuntime) {
-              setMockEvents((prev) => [...prev, event]);
-            } else {
-              void bridge.appendEvent({
-                dispatch_id: dispatch.id,
-                event_type: 'reasoning',
-                payload: { text: line },
-              });
-            }
-          }
-          setPhase({
-            kind: 'awaiting_review',
-            dispatch: { ...dispatch, status: 'awaiting_review' },
-            result,
-          });
-        },
-      );
     } catch (e) {
       setPhase({ kind: 'failed', error: e instanceof Error ? e.message : String(e) });
     }
@@ -175,20 +135,11 @@ export function ArchitectModal({ onClose, bridge = REAL_BRIDGE }: Props) {
     if (phase.kind !== 'awaiting_review') return;
     setCommitting(true);
     try {
-      const verified = isMockRuntime
-        ? {
-            ...phase.dispatch,
-            status: 'verified' as const,
-            verified_by_user_id: 'operator-mock',
-            verified_at: new Date().toISOString(),
-            cost_usd: phase.result.data.cost_usd,
-            duration_ms: phase.result.data.duration_ms,
-          }
-        : await bridge.verifyDispatch({
-            id: phase.dispatch.id,
-            verified_by_user_id: 'operator-mock',
-            result_payload: { mode: phase.result.mode, summary: summarizeResult(phase.result) },
-          });
+      const verified = await bridge.verifyDispatch({
+        id: phase.dispatch.id,
+        verified_by_user_id: 'operator-mock',
+        result_payload: { mode: phase.result.mode, summary: summarizeResult(phase.result) },
+      });
       setPhase({ kind: 'verified', dispatch: verified, result: phase.result });
     } catch (e) {
       setPhase({ kind: 'failed', error: e instanceof Error ? e.message : String(e) });
@@ -245,11 +196,7 @@ export function ArchitectModal({ onClose, bridge = REAL_BRIDGE }: Props) {
               LIVE EXECUTION · {mode.toUpperCase()}
             </span>
             {phase.kind === 'running' ? (
-              isMockRuntime ? (
-                <MockLiveExecutionView events={mockEvents} />
-              ) : (
-                <AgentLiveExecution dispatchId={phase.dispatch.id} />
-              )
+              <AgentLiveExecution dispatchId={phase.dispatch.id} />
             ) : (
               <p className="mono text-[11px] uppercase tracking-[0.18em] text-text-primary/40">
                 DISPATCHING…
@@ -684,103 +631,13 @@ function DiscoveryResult({ data }: { data: DiscoveryApiResponse }) {
 }
 
 // ---------------------------------------------------------------------------
-// Helpers — synthetic dispatch, mock event timeline, layout primitives.
+// Helpers — payload summarizers + layout primitives.
 // ---------------------------------------------------------------------------
-
-const THINKING_TIMELINE: ReadonlyArray<{
-  delayMs: number;
-  event_type: 'reasoning' | 'tool_call' | 'tool_result' | 'partial_output' | 'decision';
-  payload: Record<string, unknown>;
-}> = [
-  { delayMs: 200, event_type: 'reasoning', payload: { text: 'Loading buyer/vertical context.' } },
-  { delayMs: 400, event_type: 'tool_call', payload: { tool: 'load-context', args: {} } },
-  { delayMs: 500, event_type: 'tool_result', payload: { ok: true } },
-  { delayMs: 300, event_type: 'reasoning', payload: { text: 'Composing reasoning chain.' } },
-];
-
-function streamThinking(
-  bridge: ArchitectBridge,
-  dispatchId: string,
-  isMockRuntime: boolean,
-  onLocalEvent: (event: AgentDispatchEvent) => void,
-  onComplete: () => void | Promise<void>,
-): () => void {
-  let cancelled = false;
-  const timers: ReturnType<typeof setTimeout>[] = [];
-  let cursor = 0;
-  const tick = () => {
-    if (cancelled) return;
-    const entry = THINKING_TIMELINE[cursor];
-    if (!entry) {
-      void onComplete();
-      return;
-    }
-    cursor += 1;
-    timers.push(
-      setTimeout(() => {
-        if (cancelled) return;
-        if (isMockRuntime) {
-          onLocalEvent({
-            id: cryptoRandomId(),
-            dispatch_id: dispatchId,
-            event_type: entry.event_type,
-            payload: entry.payload,
-            created_at: new Date().toISOString(),
-          });
-        } else {
-          void bridge.appendEvent({
-            dispatch_id: dispatchId,
-            event_type: entry.event_type,
-            payload: entry.payload,
-          });
-        }
-        tick();
-      }, entry.delayMs),
-    );
-  };
-  tick();
-  return () => {
-    cancelled = true;
-    timers.forEach(clearTimeout);
-  };
-}
 
 function resultReasoning(result: Result): string[] {
   if (result.mode === 'decomposition') return result.data.reasoning;
   if (result.mode === 'tuning') return [result.data.summary];
   return [result.data.summary];
-}
-
-function cryptoRandomId(): string {
-  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
-    return crypto.randomUUID();
-  }
-  return `evt-${Math.random().toString(36).slice(2)}-${Date.now()}`;
-}
-
-function synthesizeDispatch(
-  mode: ArchitectMode,
-  inputPayload: Record<string, unknown>,
-): AgentDispatch {
-  const now = new Date().toISOString();
-  return {
-    id: cryptoRandomId(),
-    agent_name: architectAgent.name,
-    customer_org_id: ORG_ID,
-    dispatched_by_user_id: null,
-    input_payload: { mode, ...inputPayload, summary: summarizeForTile(mode, inputPayload) },
-    status: 'running',
-    result_payload: null,
-    rejection_reason: null,
-    verified_by_user_id: null,
-    verified_at: null,
-    cost_usd: null,
-    duration_ms: null,
-    agent_run_id: null,
-    parent_dispatch_id: null,
-    created_at: now,
-    updated_at: now,
-  };
 }
 
 function summarizeForTile(mode: ArchitectMode, input: Record<string, unknown>): string {
@@ -803,72 +660,6 @@ function summarizeResult(result: Result): string {
     return `${result.data.proposals.length} tuning proposals · ${result.data.rejected.length} rejected`;
   }
   return `${result.data.proposals.length} candidates · ${result.data.rejected.length} rejected`;
-}
-
-function MockLiveExecutionView({ events }: { events: AgentDispatchEvent[] }) {
-  const TYPE_LABEL: Record<AgentDispatchEventType, string> = {
-    reasoning: 'REASONING',
-    tool_call: 'TOOL CALL',
-    tool_result: 'TOOL RESULT',
-    partial_output: 'PARTIAL OUTPUT',
-    decision: 'DECISION',
-    error: 'ERROR',
-  };
-  const TYPE_TONE: Record<AgentDispatchEventType, string> = {
-    reasoning: 'text-text-primary/60',
-    tool_call: 'text-accent-gold',
-    tool_result: 'text-emerald-400',
-    partial_output: 'text-text-primary/80',
-    decision: 'text-text-primary',
-    error: 'text-rose-400',
-  };
-  return (
-    <div className="flex flex-col gap-2 font-mono text-[12px]" data-testid="agent-live-execution">
-      {events.length === 0 ? (
-        <div className="mono text-[11px] uppercase tracking-[0.18em] text-text-primary/40">
-          NO EVENTS YET
-        </div>
-      ) : (
-        events.map((event) => (
-          <div
-            key={event.id}
-            data-testid="agent-live-execution-event"
-            data-event-type={event.event_type}
-            className="flex flex-col gap-1 border-l border-border-default pl-3"
-          >
-            <div className="flex items-baseline gap-3">
-              <span
-                className={[
-                  'mono text-[10px] uppercase tracking-[0.18em]',
-                  TYPE_TONE[event.event_type],
-                ].join(' ')}
-              >
-                {TYPE_LABEL[event.event_type]}
-              </span>
-              <span className="mono text-[10px] text-text-primary/30">
-                {new Date(event.created_at).toLocaleTimeString()}
-              </span>
-            </div>
-            <pre className="whitespace-pre-wrap text-[12px] text-text-primary/80">
-              {formatPayload(event.payload)}
-            </pre>
-          </div>
-        ))
-      )}
-    </div>
-  );
-}
-
-function formatPayload(payload: Record<string, unknown>): string {
-  if (typeof payload === 'object' && payload !== null && 'text' in payload) {
-    const text = (payload as { text?: unknown }).text;
-    if (typeof text === 'string') return text;
-  }
-  try {
-    return JSON.stringify(payload, null, 2);
-  } catch {
-    return String(payload);
-  }
 }
 
 function FieldRow({

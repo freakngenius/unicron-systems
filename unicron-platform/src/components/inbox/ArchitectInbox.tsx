@@ -11,10 +11,9 @@ import type { Proposal, ProposalCategory } from '../../lib/contracts/architect';
 type Filter = 'all' | ProposalCategory;
 
 // TODO[stream-d-contract,src/components/inbox/ArchitectInbox.tsx:fallbackApply]:
-// When VITE_ARCHITECT_API_ENABLED=true, the server-side approve handler
-// owns the SystemContext mutation; the response carries the new
-// SystemConfig. Until D ships we fall back to client-side apply with
-// hardcoded category-keyed handlers (matches the pre-C3 demo behavior).
+// The server-side approve handler owns the SystemContext mutation; the
+// response carries the new SystemConfig. The legacy pre-C3 client-side
+// fallback path has been removed alongside the env-flag gates.
 
 export function ArchitectInbox() {
   const [items, setItems] = useState<Proposal[]>([]);
