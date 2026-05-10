@@ -703,6 +703,49 @@ function ActivityFeed() {
   );
 }
 
+// ─── HeroStrip — N-2: sentiment headline + context sentence ──────────────────
+
+function HeroStrip() {
+  const { agentStatus, agentCount, escalationCount, budgetPct, decayCount, loading } = usePulseData();
+
+  const headline = loading
+    ? ' '
+    : escalationCount > 0
+    ? 'There are escalations to address.'
+    : budgetPct !== null && budgetPct > 80
+    ? 'Budget pressure is high.'
+    : agentStatus === 'red'
+    ? 'The agent fleet needs attention.'
+    : decayCount > 2
+    ? 'Knowledge decay is accumulating.'
+    : 'The company is calm.';
+
+  const context = loading
+    ? ''
+    : ([
+        agentCount > 0 ? `${agentCount} agent${agentCount !== 1 ? 's' : ''} active` : null,
+        escalationCount > 0 ? `${escalationCount} escalation${escalationCount !== 1 ? 's' : ''}` : null,
+        budgetPct !== null ? `budget at ${budgetPct}%` : null,
+        decayCount > 0 ? `${decayCount} decay alert${decayCount !== 1 ? 's' : ''}` : null,
+      ] as (string | null)[])
+        .filter(Boolean)
+        .join(' · ');
+
+  return (
+    <div className="w-full bg-[#141416] border border-[#1F1F23] rounded-xl px-5 py-4">
+      <div
+        className="mono font-medium text-[#E5E5E7] leading-tight mb-1"
+        style={{ fontSize: 'clamp(16px, 3vw, 22px)' }}
+      >
+        {loading ? <span className="opacity-0">placeholder</span> : headline}
+      </div>
+      {context && (
+        <div className="mono text-[12px] text-[rgba(229,229,231,0.5)]">{context}</div>
+      )}
+    </div>
+  );
+}
+
 // ─── ActivityTab — N-4: filter bar + timeframe + expandable rows ──────────────
 
 const KNOWN_SOURCES = Object.keys(SOURCE_TYPE_ICONS);
@@ -2091,6 +2134,9 @@ export function Now({ name }: Props) {
               </button>
             </div>
           </div>
+
+          {/* ─── N-2: Hero strip ─── */}
+          <HeroStrip />
 
           {/* ─── Status Pulse ─── */}
           <section>
