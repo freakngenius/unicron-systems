@@ -71,14 +71,9 @@ function useSprints() {
 
     async function load() {
       try {
+        // PGRST106 fix: use ns_list_audit_log_sprints RPC
         const { data, error: err } = await sb
-          .schema('nervous_system')
-          .from('audit_log')
-          .select('id, action, table_name, record_id, actor, metadata, created_at')
-          .like('action', 'sprint_%')
-          .order('created_at', { ascending: false })
-          .limit(500)
-          .returns<AuditRow[]>();
+          .rpc('ns_list_audit_log_sprints', { p_limit: 500 });
 
         if (err) throw err;
         const rows = data ?? [];

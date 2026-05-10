@@ -46,15 +46,9 @@ function useDecisions(typeFilter: string) {
 
     async function load() {
       try {
-        let query = sb
-          .schema('nervous_system')
-          .from('ledger')
-          .select('id, source_type, content_summary, metadata, created_at')
-          .eq('source_type', 'elder_decision')
-          .order('created_at', { ascending: false })
-          .limit(100);
-
-        const { data, error: err } = await query.returns<DecisionRow[]>();
+        // PGRST106 fix: use ns_list_ledger_decisions RPC
+        const { data, error: err } = await sb
+          .rpc('ns_list_ledger_decisions', { p_limit: 100 });
         if (err) throw err;
 
         const rows = data ?? [];

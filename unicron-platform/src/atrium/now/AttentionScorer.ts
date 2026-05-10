@@ -24,13 +24,9 @@ export interface ScoredItem {
 
 async function fetchEscalations(): Promise<ScoredItem[]> {
   const sb = getSupabase();
+  // PGRST106 fix: use ns_list_action_items_escalations RPC
   const { data } = await sb
-    .schema('nervous_system')
-    .from('action_items')
-    .select('id, title, description, priority, due_at, break_off_signal_id')
-    .in('status', ['open', 'in_progress'])
-    .or('priority.eq.irreversible,break_off_signal_id.not.is.null')
-    .limit(10);
+    .rpc('ns_list_action_items_escalations', { p_limit: 10 });
 
   return (data ?? []).map((row) => ({
     id: row.id,
@@ -45,15 +41,10 @@ async function fetchEscalations(): Promise<ScoredItem[]> {
 
 async function fetchRecentIngestCalls(): Promise<ScoredItem[]> {
   const sb = getSupabase();
-  // Ledger entries tagged as calls with high confidence (confidence field in metadata)
+  // PGRST106 fix: use ns_list_ledger_recent_calls RPC
+  const since48h = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
   const { data } = await sb
-    .schema('nervous_system')
-    .from('ledger')
-    .select('id, source_type, content_summary, created_at, metadata')
-    .eq('source_type', 'call')
-    .gte('created_at', new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString())
-    .order('created_at', { ascending: false })
-    .limit(5);
+    .rpc('ns_list_ledger_recent_calls', { p_since: since48h, p_limit: 5 });
 
   return (data ?? [])
     .filter((row) => {
@@ -71,15 +62,10 @@ async function fetchRecentIngestCalls(): Promise<ScoredItem[]> {
 
 async function fetchActiveSprintEvents(): Promise<ScoredItem[]> {
   const sb = getSupabase();
-  // audit_log entries with action starting with 'sprint_'
+  // PGRST106 fix: use ns_list_audit_log_sprint_events RPC
+  const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
   const { data } = await sb
-    .schema('nervous_system')
-    .from('audit_log')
-    .select('id, action, table_name, created_at')
-    .like('action', 'sprint_%')
-    .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
-    .order('created_at', { ascending: false })
-    .limit(5);
+    .rpc('ns_list_audit_log_sprint_events', { p_since: since24h, p_limit: 5 });
 
   return (data ?? []).map((row) => ({
     id: row.id,
@@ -92,15 +78,9 @@ async function fetchActiveSprintEvents(): Promise<ScoredItem[]> {
 
 async function fetchHealthAlerts(): Promise<ScoredItem[]> {
   const sb = getSupabase();
-  // High-priority action_items not assigned to any DRI — likely customer health signals
+  // PGRST106 fix: use ns_list_action_items_health_alerts RPC
   const { data } = await sb
-    .schema('nervous_system')
-    .from('action_items')
-    .select('id, title, description, priority, due_at')
-    .in('status', ['open', 'in_progress'])
-    .in('priority', ['high', 'irreversible'])
-    .is('dri', null)
-    .limit(5);
+    .rpc('ns_list_action_items_health_alerts', { p_limit: 5 });
 
   return (data ?? []).map((row) => ({
     id: row.id,

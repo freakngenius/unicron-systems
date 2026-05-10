@@ -85,19 +85,12 @@ function useCallsLog(searchQuery: string) {
 
     async function load() {
       try {
-        let query = sb
-          .schema('nervous_system')
-          .from('ledger')
-          .select('id, source_type, content_summary, raw_content, metadata, created_at, customer')
-          .in('source_type', ['call', 'voice_memo'])
-          .order('created_at', { ascending: false })
-          .limit(100);
-
-        if (searchQuery.trim()) {
-          query = query.ilike('content_summary', `%${searchQuery.trim()}%`);
-        }
-
-        const { data, error: err } = await query.returns<LedgerRow[]>();
+        // PGRST106 fix: use ns_list_ledger_calls RPC
+        const { data, error: err } = await sb
+          .rpc('ns_list_ledger_calls', {
+            p_search: searchQuery.trim() || null,
+            p_limit: 100,
+          });
         if (err) throw err;
         if (!cancelled) setCalls(data ?? []);
       } catch (e) {
@@ -123,14 +116,11 @@ function useCallDetail(callId: string | null) {
     let cancelled = false;
     setLoading(true);
 
+    // PGRST106 fix: use ns_list_action_items_by_ledger RPC
     getSupabase()
-      .schema('nervous_system')
-      .from('action_items')
-      .select('id, title, priority, status')
-      .eq('ledger_id', callId)
-      .returns<ActionItemRow[]>()
+      .rpc('ns_list_action_items_by_ledger', { p_ledger_id: callId })
       .then(({ data }) => {
-        if (!cancelled) { setActionItems(data ?? []); setLoading(false); }
+        if (!cancelled) { setActionItems((data as ActionItemRow[] | null) ?? []); setLoading(false); }
       }, () => { if (!cancelled) setLoading(false); });
 
     return () => { cancelled = true; };

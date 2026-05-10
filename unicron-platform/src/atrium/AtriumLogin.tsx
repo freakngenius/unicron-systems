@@ -17,23 +17,13 @@ const ALLOWLIST: string[] = (import.meta.env.VITE_ATRIUM_EMAIL_ALLOWLIST ?? '')
   .filter(Boolean);
 
 async function upsertTeamMember(email: string, name: string | undefined) {
-  const supabase = getSupabase();
-  // Check for existing row
-  const { data: existing } = await supabase
-    .schema('nervous_system')
-    .from('team_members')
-    .select('id')
-    .eq('email', email)
-    .maybeSingle();
-
-  if (!existing) {
-    await supabase.schema('nervous_system').from('team_members').insert({
-      email,
-      name: name ?? email.split('@')[0],
-      role: null,
-      active: true,
-    });
-  }
+  // PGRST106 fix: nervous_system is not in PostgREST db-schemas.
+  // Use public.ns_upsert_team_member() SECURITY DEFINER RPC instead.
+  await getSupabase().rpc('ns_upsert_team_member', {
+    p_email: email,
+    p_name:  name ?? email.split('@')[0],
+    p_role:  null,
+  });
 }
 
 export function AtriumLogin() {

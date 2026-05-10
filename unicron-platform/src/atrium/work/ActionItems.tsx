@@ -71,23 +71,23 @@ function useActionItems() {
     setError(null);
     const sb = getSupabase();
     try {
+      // PGRST106 fix: nervous_system not in PostgREST db-schemas.
+      // ns_list_action_items() returns dri_name in place of the team_members(name) join.
       const { data, error: err } = await sb
-        .schema('nervous_system')
-        .from('action_items')
-        .select('*, team_members(name)')
-        .order('created_at', { ascending: false })
-        .limit(200)
-        .returns<ActionItemRow[]>();
+        .rpc('ns_list_action_items', { p_limit: 200 });
 
       if (err) throw err;
-      setItems(data ?? []);
 
-      const { data: memberData } = await sb
-        .schema('nervous_system')
-        .from('team_members')
-        .select('id, name, email')
-        .returns<TeamMember[]>();
-      setMembers(memberData ?? []);
+      // Map flat dri_name back to the nested team_members shape the component expects
+      const mapped: ActionItemRow[] = ((data as Array<ActionItemRow & { dri_name: string | null }>) ?? [])
+        .map((row) => ({
+          ...row,
+          team_members: row.dri_name ? { name: row.dri_name } : null,
+        }));
+      setItems(mapped);
+
+      const { data: memberData } = await sb.rpc('ns_list_team_members');
+      setMembers((memberData as TeamMember[] | null) ?? []);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load action items');
     } finally {
