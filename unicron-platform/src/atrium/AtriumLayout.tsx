@@ -266,8 +266,16 @@ export function AtriumLayout({ activeTab, onTabChange, children }: Props) {
 
   return (
     <div className="atrium-shell min-h-screen bg-bg-base text-text-primary flex flex-col">
+      {/* Skip to main content — keyboard a11y */}
+      <a
+        href="#atrium-main"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[300] focus:px-3 focus:py-2 focus:bg-bg-elevated focus:border focus:border-border-default focus:rounded-md focus:mono focus:text-[11px] focus:text-text-primary focus:outline-none"
+      >
+        Skip to main content
+      </a>
+
       {/* Header */}
-      <header className="flex items-center gap-3 px-4 py-2.5 border-b border-border-default bg-bg-panel sticky top-0 z-50">
+      <header className="flex items-center gap-3 px-4 py-2.5 border-b border-border-default bg-bg-panel sticky top-0 z-50" role="banner">
         {/* Greeting + date (desktop) */}
         <div className="hidden md:flex items-baseline gap-2 flex-shrink-0">
           <span className="mono text-[13px] font-semibold text-text-primary">{greeting}, {firstName}</span>
@@ -285,7 +293,9 @@ export function AtriumLayout({ activeTab, onTabChange, children }: Props) {
         {/* ⌘K search button (desktop) */}
         <button
           onClick={() => setCmdkOpen(true)}
-          className="hidden md:flex items-center gap-2 bg-bg-card border border-border-default rounded-md px-3 py-1.5 mono text-[11px] text-text-secondary hover:border-border-hover transition-colors w-[220px]"
+          className="hidden md:flex items-center gap-2 bg-bg-card border border-border-default rounded-md px-3 py-1.5 mono text-[11px] text-text-secondary hover:border-border-hover transition-colors w-[220px] focus:outline-none focus:ring-2 focus:ring-zinc-500"
+          aria-label="Open search palette"
+          aria-keyshortcuts="Meta+k"
         >
           <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
             <circle cx="5.5" cy="5.5" r="4" stroke="currentColor" strokeWidth="1.3"/>
@@ -298,8 +308,8 @@ export function AtriumLayout({ activeTab, onTabChange, children }: Props) {
         {/* Mic+Plus capture button */}
         <button
           onClick={() => setCaptureOpen(true)}
-          className="flex items-center gap-1 bg-bg-card border border-border-default rounded-md px-2.5 py-1.5 text-text-secondary hover:border-accent-gold hover:text-accent-gold transition-colors"
-          aria-label="Quick capture"
+          className="flex items-center gap-1 bg-bg-card border border-border-default rounded-md px-2.5 py-1.5 text-text-secondary hover:border-accent-gold hover:text-accent-gold transition-colors focus:outline-none focus:ring-2 focus:ring-zinc-500"
+          aria-label="Quick capture — voice or text note"
         >
           <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
             <rect x="4" y="1" width="5" height="8" rx="2.5" stroke="currentColor" strokeWidth="1.3"/>
@@ -328,7 +338,7 @@ export function AtriumLayout({ activeTab, onTabChange, children }: Props) {
       {/* Body */}
       <div className="atrium-body flex flex-1 min-h-0">
         {/* Sidebar nav (hidden on mobile) — 64px icon-only rail */}
-        <nav className="atrium-nav hidden md:flex w-16 shrink-0 border-r border-border-default bg-bg-panel py-3 flex-col items-center">
+        <nav className="atrium-nav hidden md:flex w-16 shrink-0 border-r border-border-default bg-bg-panel py-3 flex-col items-center" aria-label="Atrium main navigation">
           {/* Gradient A logo tile */}
           <div
             className="w-8 h-8 rounded-lg flex items-center justify-center mono text-[13px] font-bold text-white mb-4 flex-shrink-0"
@@ -345,9 +355,10 @@ export function AtriumLayout({ activeTab, onTabChange, children }: Props) {
                 <button
                   key={tab.id}
                   onClick={() => onTabChange(tab.id)}
-                  className="relative group flex items-center justify-center w-full h-9 rounded-md transition-colors hover:bg-bg-card/60"
+                  className="relative group flex items-center justify-center w-full h-9 rounded-md transition-colors hover:bg-bg-card/60 focus:outline-none focus:ring-2 focus:ring-zinc-500"
                   style={{ background: active ? 'rgba(229,229,231,0.06)' : undefined }}
                   aria-label={tab.label}
+                  aria-current={active ? 'page' : undefined}
                 >
                   {/* 2px orange active bar */}
                   {active && (
@@ -370,21 +381,23 @@ export function AtriumLayout({ activeTab, onTabChange, children }: Props) {
         </nav>
 
         {/* Main content — pb-20 on mobile clears the 60px bottom nav */}
-        <main className="atrium-content flex-1 overflow-auto p-4 md:p-6 pb-20 md:pb-6">
+        <main className="atrium-content flex-1 overflow-auto p-4 md:p-6 pb-20 md:pb-6" id="atrium-main">
           {children}
         </main>
       </div>
 
       {/* Mobile bottom tab bar (visible < md) */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 h-[60px] bg-bg-panel border-t border-border-default flex items-stretch z-50">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 h-[60px] bg-bg-panel border-t border-border-default flex items-stretch z-50" aria-label="Atrium mobile navigation">
         {MOBILE_TABS.slice(0, 2).map((id) => {
           const active = id === activeTab;
           return (
             <button
               key={id}
               onClick={() => onTabChange(id)}
+              aria-label={tabLabel(id)}
+              aria-current={active ? 'page' : undefined}
               className={[
-                'relative flex-1 flex flex-col items-center justify-center gap-0.5 mono text-[9px] uppercase tracking-[0.14em] transition-colors',
+                'relative flex-1 flex flex-col items-center justify-center gap-0.5 mono text-[9px] uppercase tracking-[0.14em] transition-colors focus:outline-none focus:ring-2 focus:ring-zinc-500',
                 active ? 'text-accent-gold' : 'text-text-secondary',
               ].join(' ')}
             >
@@ -415,8 +428,10 @@ export function AtriumLayout({ activeTab, onTabChange, children }: Props) {
             <button
               key={id}
               onClick={() => onTabChange(id)}
+              aria-label={tabLabel(id)}
+              aria-current={active ? 'page' : undefined}
               className={[
-                'relative flex-1 flex flex-col items-center justify-center gap-0.5 mono text-[9px] uppercase tracking-[0.14em] transition-colors',
+                'relative flex-1 flex flex-col items-center justify-center gap-0.5 mono text-[9px] uppercase tracking-[0.14em] transition-colors focus:outline-none focus:ring-2 focus:ring-zinc-500',
                 active ? 'text-accent-gold' : 'text-text-secondary',
               ].join(' ')}
             >
