@@ -1,11 +1,15 @@
-// System.tsx — Sprint 3 Stream D + SY-1
+// System.tsx — Sprint 3 Stream D + SY-1 + Sprint 7 Stream C
 // Atrium System tab root. 10 sub-sections per v3-system.jsx spec.
+// Sprint 7 Stream C: AuditLog, DecayHeatmap, ScheduledJobs wired to live DB.
 
-import React, { useState } from 'react';
+import { useState } from 'react';
 import AgentsGalaxy from './system/AgentsGalaxy';
 import TaboosViewer from './system/TaboosViewer';
 import RefusalLog from './system/RefusalLog';
 import ServicesHealth from './system/ServicesHealth';
+import AuditLogComponent from './system/AuditLog';
+import DecayHeatmapComponent from './system/DecayHeatmap';
+import ScheduledJobsComponent from './system/ScheduledJobs';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -29,16 +33,6 @@ const VOICE_SERVICES = [
   { name: 'Deepgram',   status: 'ok',   latency: '118ms', quota: '22%', errRate: '0.1%', note: undefined                   },
 ];
 
-const DECAY_TOPICS = [
-  { topic: 'Pricing FAQ',     weeks: [10,20,28,40,55,62,70,72,78,84,88,92] },
-  { topic: 'ICP v1',          weeks: [12,18,24,32,40,48,56,64,72,78,82,86] },
-  { topic: 'Onboarding',      weeks: [22,32,38,44,50,56,62,68,72,76,80,84] },
-  { topic: 'Pathfinder docs', weeks: [55,42,30,22,18,14,12,10, 9, 8, 8, 8] },
-  { topic: 'Metacron design', weeks: [40,32,26,20,18,16,16,14,14,12,10,10] },
-  { topic: 'Customer notes',  weeks: [18,14,12,10, 8, 6, 6, 5, 5, 4, 4, 3] },
-  { topic: 'Vault hygiene',   weeks: [22,18,14,10, 8, 6, 5, 5, 4, 4, 3, 3] },
-];
-const WEEK_LABELS = ['W12','W11','W10','W9','W8','W7','W6','W5','W4','W3','W2','W1'];
 
 const MEMORY_RESULTS = [
   { id: 'm-1041', title: 'Pricing v3 — net-15 trial for Northwind', source: 'Decision · May 4',   backlinks: 6,  score: 0.94 },
@@ -47,30 +41,8 @@ const MEMORY_RESULTS = [
   { id: 'm-0901', title: 'Metacron agent fleet — load shape',       source: 'Architect · Apr 14', backlinks: 9,  score: 0.78 },
 ];
 
-const SCHEDULED_JOBS_DATA = [
-  { id: 'job-01', name: 'Daily digest',              cron: '0 6 * * *',    owner: 'Curator',          lastRun: '06:00',     nextRun: 'Tomorrow 06:00', status: 'ok',   on: true  },
-  { id: 'job-02', name: 'Vault decay sweep',         cron: '0 7 * * MON',  owner: 'Janitor',          lastRun: 'Mon 07:00', nextRun: 'Mon 07:00',     status: 'ok',   on: true  },
-  { id: 'job-03', name: 'Renewal nudge',             cron: '0 9 * * *',    owner: 'Maya · CSM',       lastRun: '09:00',     nextRun: 'Tomorrow 09:00', status: 'ok',   on: true  },
-  { id: 'job-04', name: 'Trend scan',                cron: '0 6 * * *',    owner: 'Trend Scout',      lastRun: '06:00',     nextRun: 'Tomorrow 06:00', status: 'ok',   on: true  },
-  { id: 'job-05', name: 'Backup snapshot',           cron: '0 2 * * *',    owner: 'Telemetry',        lastRun: '02:00',     nextRun: 'Tomorrow 02:00', status: 'ok',   on: true  },
-  { id: 'job-06', name: 'Stripe re-auth ping',       cron: '0 8 * * MON',  owner: 'Boundary',         lastRun: 'Mon 08:00', nextRun: 'Mon 08:00',     status: 'warn', on: true  },
-  { id: 'job-07', name: 'Embedding refresh',         cron: '0 3 * * SUN',  owner: 'Curator',          lastRun: 'Sun 03:00', nextRun: 'Sun 03:00',     status: 'ok',   on: false },
-  { id: 'job-08', name: 'Procurement pull (hourly)', cron: '0 * * * *',    owner: 'Procurement Pull', lastRun: '14:00',     nextRun: '15:00',         status: 'ok',   on: true  },
-];
+// ScheduledJobs, AuditLog, and DecayHeatmap are now live-DB components imported above.
 
-const AUDIT_ENTRIES = [
-  { ts: 'May 7 · 10:14', actor: 'Keenan G',        action: 'decision.approve',       subject: 'Northwind net-15 billing',   meta: 'audit_id=a-9821' },
-  { ts: 'May 7 · 09:30', actor: 'Curator',          action: 'vault.archive',          subject: '12 stale notes',             meta: 'batch=cln-0507'  },
-  { ts: 'May 7 · 09:12', actor: 'Curator',          action: 'skill.run',              subject: 'Morning Brief',              meta: 'cost=$0.07'      },
-  { ts: 'May 6 · 16:41', actor: 'Taboo Keeper',     action: 'policy.refuse',          subject: 'impersonation',              meta: 'agent=Maya'      },
-  { ts: 'May 6 · 11:01', actor: 'Kyle B',           action: 'taboo.override.add',     subject: 'wire-without-co-sign · AWS', meta: 'expires=Jun 5'   },
-  { ts: 'May 5 · 14:22', actor: 'Kyle B',           action: 'service.reauth',         subject: 'Slack',                      meta: '—'               },
-  { ts: 'May 5 · 09:18', actor: 'System',           action: 'job.toggle',             subject: 'Embedding refresh OFF',      meta: 'by=Kyle'         },
-  { ts: 'May 7 · 14:30', actor: 'Procurement Pull', action: 'voice_dispatch',         subject: 'Harris County FCD',          meta: 'cost=$1.84'      },
-  { ts: 'May 7 · 13:42', actor: 'Kyle B',           action: 'voice_config_update',    subject: 'Phoenix Procurement cron',   meta: 'cfg-2 updated'   },
-  { ts: 'May 7 · 10:58', actor: 'Taboo Keeper',     action: 'voice_taboo_bounce',     subject: 'Reno Capital Projects',      meta: 'no_consent'      },
-  { ts: 'May 6 · 18:04', actor: 'Kyle B',           action: 'voice_assistant_update', subject: 'Marie · Zedcor SDR',         meta: 'asst_01HG7QXB'  },
-];
 
 const CONTINUITY_EVENTS = [
   { ts: 'May 7 · 10:14', kind: 'decision', who: 'Keenan G',     title: 'Approved net-15 billing for Northwind',   detail: '1-year auto-renew with 30-day pilot extension.' },
@@ -153,72 +125,8 @@ function VoiceTab() {
   );
 }
 
-// ─── Decay heatmap ────────────────────────────────────────────────────────────
-
-function decayCellColor(v: number): string {
-  if (v < 25) return 'rgba(46,142,102,0.85)';
-  if (v < 50) return 'rgba(46,142,102,0.45)';
-  if (v < 70) return 'rgba(194,138,31,0.55)';
-  if (v < 85) return 'rgba(225,75,75,0.45)';
-  return 'rgba(225,75,75,0.85)';
-}
-
-function DecayHeatmap() {
-  return (
-    <div className="bg-bg-card border border-border-default rounded-xl p-6">
-      <div className="mb-5">
-        <div className="mono text-[15px] font-semibold text-text-primary">Signal decay heatmap</div>
-        <div className="mono text-[11.5px] text-text-secondary mt-0.5">Topic freshness over the last 12 weeks · darker = staler</div>
-      </div>
-
-      <div className="overflow-x-auto">
-        <div style={{ minWidth: 600 }}>
-          {/* Week labels row */}
-          <div className="flex gap-2 mb-2" style={{ paddingLeft: 192 }}>
-            {WEEK_LABELS.map(w => (
-              <div key={w} className="mono text-center flex-1" style={{ fontSize: 10.5, color: 'rgba(229,229,231,0.4)' }}>{w}</div>
-            ))}
-          </div>
-
-          {/* Topic rows */}
-          {DECAY_TOPICS.map(t => (
-            <div key={t.topic} className="flex items-center gap-2 mb-1.5">
-              <div className="mono text-[13px] text-text-primary font-medium truncate" style={{ width: 180, flexShrink: 0 }}>
-                {t.topic}
-              </div>
-              <div className="flex gap-1 flex-1">
-                {t.weeks.map((v, i) => (
-                  <div
-                    key={i}
-                    title={`${t.topic} · ${WEEK_LABELS[i]} · staleness ${v}`}
-                    style={{
-                      flex: 1, height: 28, borderRadius: 4, background: decayCellColor(v),
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      fontSize: 10, color: v > 60 ? '#FFF' : 'rgba(229,229,231,0.85)',
-                      fontWeight: 600, fontVariantNumeric: 'tabular-nums',
-                    }}
-                  >
-                    {v}
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div className="flex items-center gap-4 mt-4 justify-end flex-wrap">
-        <span className="mono text-[11px] text-text-secondary">Scale:</span>
-        {[10, 30, 60, 80, 95].map(v => (
-          <span key={v} className="flex items-center gap-1.5 mono text-[11px] text-text-secondary">
-            <span style={{ width: 12, height: 12, borderRadius: 3, background: decayCellColor(v), display: 'inline-block' }} />
-            {v < 25 ? 'Fresh' : v < 50 ? 'Warm' : v < 70 ? 'Aging' : v < 85 ? 'Stale' : 'Critical'}
-          </span>
-        ))}
-      </div>
-    </div>
-  );
-}
+// ─── Decay heatmap — live component imported from system/DecayHeatmap.tsx ─────
+// (Sprint 7 Stream C — replaced static stub with DB-backed component)
 
 // ─── Memory search ────────────────────────────────────────────────────────────
 
@@ -287,162 +195,8 @@ function MemorySearch() {
   );
 }
 
-// ─── Scheduled jobs ───────────────────────────────────────────────────────────
-
-type GateState = 'idle' | 'validating' | 'ok' | 'blocked';
-
-function GatedButton() {
-  const [state, setState] = useState<GateState>('idle');
-  const trigger = () => {
-    setState('validating');
-    setTimeout(() => {
-      const pass = Math.random() > 0.15;
-      setState(pass ? 'ok' : 'blocked');
-      setTimeout(() => setState('idle'), 1400);
-    }, 900);
-  };
-  return (
-    <button
-      onClick={trigger}
-      disabled={state !== 'idle'}
-      className="mono text-[11.5px] font-semibold px-2.5 py-1 rounded-md flex items-center gap-1.5 transition-all"
-      style={{
-        background: state === 'ok' ? 'rgba(34,197,94,0.12)' : state === 'blocked' ? 'rgba(225,75,75,0.12)' : 'transparent',
-        border: `1px solid ${state === 'ok' ? '#22c55e' : state === 'blocked' ? '#E14B4B' : 'rgba(229,229,231,0.15)'}`,
-        color: state === 'ok' ? '#22c55e' : state === 'blocked' ? '#E14B4B' : 'rgba(229,229,231,0.5)',
-      }}
-    >
-      {state === 'validating' && (
-        <span className="w-2 h-2 rounded-full border border-current border-t-transparent animate-spin" />
-      )}
-      {state === 'idle'       && 'Trigger now'}
-      {state === 'validating' && 'Validating…'}
-      {state === 'ok'         && '✓ Triggered'}
-      {state === 'blocked'    && '✗ Blocked'}
-    </button>
-  );
-}
-
-function ScheduledJobs() {
-  const [jobs, setJobs] = useState(SCHEDULED_JOBS_DATA);
-  const toggle = (id: string) => setJobs(jobs.map(j => j.id === id ? { ...j, on: !j.on } : j));
-  const activeCount = jobs.filter(j => j.on).length;
-
-  return (
-    <div className="bg-bg-card border border-border-default rounded-xl overflow-hidden">
-      <div className="px-5 py-3.5 border-b border-border-subtle">
-        <div className="mono text-[14px] font-semibold text-text-primary">Scheduled jobs</div>
-        <div className="mono text-[11.5px] text-text-secondary mt-0.5">{activeCount} of {jobs.length} active · cron-driven</div>
-      </div>
-      <div className="overflow-x-auto">
-        <table className="w-full border-collapse" style={{ minWidth: 720 }}>
-          <thead>
-            <tr>
-              {['', 'Name', 'Cron', 'Owner', 'Last run', 'Next run', 'Status', ''].map((h, i) => (
-                <th
-                  key={i}
-                  className={`px-4 py-2.5 mono text-[11.5px] text-text-secondary font-medium border-b border-border-default ${i === 7 ? 'text-right' : 'text-left'}`}
-                >
-                  {h}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {jobs.map((j, idx) => (
-              <tr key={j.id} className={idx > 0 ? 'border-t border-border-subtle' : ''} style={{ opacity: j.on ? 1 : 0.5 }}>
-                <td className="px-4 py-3">
-                  <button
-                    onClick={() => toggle(j.id)}
-                    className="relative inline-block rounded-full transition-colors flex-shrink-0"
-                    style={{ width: 30, height: 17, background: j.on ? '#22c55e' : 'rgba(229,229,231,0.15)' }}
-                  >
-                    <span
-                      className="absolute top-0.5 rounded-full bg-white transition-all"
-                      style={{ width: 13, height: 13, left: j.on ? 15 : 2 }}
-                    />
-                  </button>
-                </td>
-                <td className="px-4 py-3 mono text-[13px] font-medium text-text-primary">{j.name}</td>
-                <td className="px-4 py-3 mono text-[11.5px] text-text-secondary">{j.cron}</td>
-                <td className="px-4 py-3 mono text-[12px] text-text-secondary">{j.owner}</td>
-                <td className="px-4 py-3 mono text-[11.5px] text-text-secondary">{j.lastRun}</td>
-                <td className="px-4 py-3 mono text-[11.5px] text-text-secondary">{j.nextRun}</td>
-                <td className="px-4 py-3">
-                  <span className="flex items-center gap-1.5 mono text-[12px]" style={{ color: j.status === 'ok' ? '#22c55e' : '#f59e0b' }}>
-                    <span className="w-1.5 h-1.5 rounded-full" style={{ background: j.status === 'ok' ? '#22c55e' : '#f59e0b' }} />
-                    {j.status === 'ok' ? 'Healthy' : 'Warning'}
-                  </span>
-                </td>
-                <td className="px-4 py-3 text-right">
-                  <GatedButton />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
-
-// ─── Audit log ────────────────────────────────────────────────────────────────
-
-function AuditLog() {
-  const [q, setQ] = useState('');
-  const filtered = AUDIT_ENTRIES.filter(a =>
-    q === '' || (a.actor + a.action + a.subject).toLowerCase().includes(q.toLowerCase())
-  );
-
-  return (
-    <div className="bg-bg-card border border-border-default rounded-xl overflow-hidden">
-      <div className="px-5 py-3.5 border-b border-border-subtle flex items-center justify-between gap-4 flex-wrap">
-        <div>
-          <div className="mono text-[14px] font-semibold text-text-primary">Audit log</div>
-          <div className="mono text-[11.5px] text-text-secondary mt-0.5">Every system change · immutable · {AUDIT_ENTRIES.length} entries</div>
-        </div>
-        <div className="flex items-center gap-2 px-3 py-1.5 bg-bg-raised border border-border-subtle rounded-lg">
-          <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-            <circle cx="5" cy="5" r="3.5" stroke="rgba(229,229,231,0.4)" strokeWidth="1.2"/>
-            <path d="M8 8l2.5 2.5" stroke="rgba(229,229,231,0.4)" strokeWidth="1.2" strokeLinecap="round"/>
-          </svg>
-          <input
-            value={q}
-            onChange={e => setQ(e.target.value)}
-            placeholder="Search actor, action, subject…"
-            className="bg-transparent outline-none mono text-[12px] text-text-primary placeholder:text-text-secondary w-44"
-          />
-        </div>
-      </div>
-      <div className="overflow-x-auto">
-        <table className="w-full border-collapse" style={{ minWidth: 680 }}>
-          <thead>
-            <tr>
-              {['Timestamp', 'Actor', 'Action', 'Subject', 'Meta'].map((h, i) => (
-                <th key={i} className="text-left px-5 py-2.5 mono text-[11.5px] text-text-secondary font-medium border-b border-border-default">
-                  {h}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map((a, i) => (
-              <tr key={i} className={i > 0 ? 'border-t border-border-subtle' : ''}>
-                <td className="px-5 py-3 mono text-[12px] text-text-secondary">{a.ts}</td>
-                <td className="px-5 py-3 mono text-[13px] text-text-primary">{a.actor}</td>
-                <td className="px-5 py-3">
-                  <span className="mono text-[11px] px-1.5 py-0.5 rounded bg-bg-raised text-text-secondary">{a.action}</span>
-                </td>
-                <td className="px-5 py-3 mono text-[12.5px] text-text-secondary">{a.subject}</td>
-                <td className="px-5 py-3 mono text-[11.5px] text-text-secondary">{a.meta}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
+// ─── Scheduled jobs + Audit log — live components imported above ──────────────
+// (Sprint 7 Stream C — replaced static stubs with DB-backed components)
 
 // ─── Continuity timeline ──────────────────────────────────────────────────────
 
@@ -568,10 +322,10 @@ export function System() {
         {active === 'Refusal Log'    && <RefusalLog />}
         {active === 'Services'       && <ServicesHealth />}
         {active === 'Voice'          && <VoiceTab />}
-        {active === 'Decay'          && <DecayHeatmap />}
+        {active === 'Decay'          && <DecayHeatmapComponent />}
         {active === 'Memory'         && <MemorySearch />}
-        {active === 'Scheduled Jobs' && <ScheduledJobs />}
-        {active === 'Audit Log'      && <AuditLog />}
+        {active === 'Scheduled Jobs' && <ScheduledJobsComponent />}
+        {active === 'Audit Log'      && <AuditLogComponent />}
         {active === 'Continuity'     && <ContinuityTimeline />}
       </div>
     </div>
