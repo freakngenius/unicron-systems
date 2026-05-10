@@ -61,7 +61,7 @@ export function Money() {
               onClick={() => setActive(tab)}
               className="mono text-[11px] uppercase tracking-[0.12em] px-4 py-2.5 rounded-t-lg transition-colors relative shrink-0 whitespace-nowrap focus:outline-none focus:ring-2 focus:ring-zinc-500"
               style={{
-                color: isActive ? 'var(--text-hi)' : 'var(--text-lo)',
+                color: isActive ? '#1F8A5B' : 'var(--text-lo)',
                 background: isActive ? 'var(--bg-elevated)' : 'transparent',
               }}
             >
@@ -69,7 +69,7 @@ export function Money() {
               {isActive && (
                 <span
                   className="absolute bottom-0 left-0 right-0 h-0.5 rounded-t-full"
-                  style={{ backgroundColor: 'var(--accent)' }}
+                  style={{ backgroundColor: '#1F8A5B' }}
                 />
               )}
             </button>

@@ -62,7 +62,7 @@ export function Library() {
               onClick={() => setActive(tab)}
               className="mono text-[11px] uppercase tracking-[0.12em] px-4 py-2.5 rounded-t-lg transition-colors relative shrink-0 whitespace-nowrap focus:outline-none focus:ring-2 focus:ring-zinc-500"
               style={{
-                color: isActive ? 'var(--text-hi)' : 'var(--text-lo)',
+                color: isActive ? '#7355E5' : 'var(--text-lo)',
                 background: isActive ? 'var(--bg-elevated)' : 'transparent',
               }}
             >
@@ -70,7 +70,7 @@ export function Library() {
               {isActive && (
                 <span
                   className="absolute bottom-0 left-0 right-0 h-0.5 rounded-t-full"
-                  style={{ backgroundColor: 'var(--accent)' }}
+                  style={{ backgroundColor: '#7355E5' }}
                 />
               )}
             </button>
