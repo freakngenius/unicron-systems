@@ -1,60 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   createCoverageGoal,
-  getCoverageGoal,
   listCoverageGoals,
   runCoverageGoal,
 } from './coverageClient';
 
-describe('coverageClient (mock-mode)', () => {
+describe('coverageClient', () => {
   beforeEach(() => {
-    vi.stubEnv('VITE_COVERAGE_API_ENABLED', 'false');
-  });
-  afterEach(() => {
-    vi.unstubAllEnvs();
-  });
-
-  it('createCoverageGoal returns an estimating goal with a generated id', async () => {
-    const result = await createCoverageGoal({
-      goal_text: 'Test goal',
-      scope_constraints: { geography: ['Pittsburgh, PA'] },
-    });
-    expect(result.status).toBe('estimating');
-    expect(result.goal_id).toMatch(/^mock-goal-/);
-  });
-
-  it('listCoverageGoals returns the in-memory fixture set', async () => {
-    const rows = await listCoverageGoals();
-    expect(rows.length).toBeGreaterThan(0);
-    expect(rows[0].vertical_id).toBe('pathfinder-default');
-  });
-
-  it('listCoverageGoals applies status + limit filters', async () => {
-    const completed = await listCoverageGoals({ status: 'completed', limit: 1 });
-    expect(completed).toHaveLength(1);
-    expect(completed[0].status).toBe('completed');
-  });
-
-  it('getCoverageGoal returns goal + candidates for the Pittsburgh fixture', async () => {
-    const all = await listCoverageGoals();
-    const pittsburgh = all.find((g) => g.goal_text.includes('Pittsburgh'));
-    expect(pittsburgh).toBeDefined();
-    const detail = await getCoverageGoal(pittsburgh!.id);
-    expect(detail.goal.id).toBe(pittsburgh!.id);
-    expect(detail.candidates.length).toBeGreaterThan(0);
-    expect(detail.candidates[0].goal_id).toBe(pittsburgh!.id);
-  });
-
-  it('runCoverageGoal returns ok + run_event_id', async () => {
-    const result = await runCoverageGoal('any-id');
-    expect(result.ok).toBe(true);
-    expect(result.run_event_id).toMatch(/^mock-run-/);
-  });
-});
-
-describe('coverageClient (real-mode)', () => {
-  beforeEach(() => {
-    vi.stubEnv('VITE_COVERAGE_API_ENABLED', 'true');
     vi.stubEnv('VITE_COVERAGE_API_URL', 'https://example.test');
     vi.stubGlobal('fetch', vi.fn());
   });

@@ -11,10 +11,6 @@
 // adds a dedicated eval table, swap the source query in `fetchEvalRuns()`
 // — the data-shaping helpers below are agnostic to where the rows come from
 // as long as they conform to `EvalRun`.
-//
-// Mock mode: when `VITE_PATHFINDER_DB_ENABLED !== 'true'` we synthesize a
-// deterministic two-week sample so the dashboard renders identically without
-// Supabase access. The same toggle is used by `customersClient.ts`.
 
 import { getSupabase } from './supabase';
 import type { AgentName } from './activity';
@@ -61,18 +57,11 @@ export type FailureSample = {
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-function realEnabled(): boolean {
-  return import.meta.env.VITE_PATHFINDER_DB_ENABLED === 'true';
-}
-
 /**
  * Fetch eval-relevant agent runs from the Supabase pathfinder schema.
- * In mock mode, returns a synthesized fixture covering the last 14 days.
+ * Returns an empty array when Supabase has no rows for the window.
  */
 export async function fetchEvalRuns(window: TimeWindow): Promise<EvalRun[]> {
-  if (!realEnabled()) {
-    return synthesizeMockRuns();
-  }
   const supabase = getSupabase();
   let query = supabase
     .schema('pathfinder')
@@ -222,65 +211,3 @@ export function listAgentNames(runs: EvalRun[]): AgentName[] {
   return Array.from(set).sort();
 }
 
-// ---- Mock fixture --------------------------------------------------------
-
-function synthesizeMockRuns(): EvalRun[] {
-  // Deterministic-ish: seed by hour-of-day to keep snapshots stable across
-  // re-renders within the same hour but still produce varied data day to day.
-  const now = Date.now();
-  const agents: AgentName[] = ['ranker', 'verifier', 'outreach', 'eval', 'briefing'];
-  const out: EvalRun[] = [];
-  let idCounter = 1;
-  // 14 days back, ~3-6 runs/day per agent.
-  for (let dayOffset = 13; dayOffset >= 0; dayOffset -= 1) {
-    for (const agent of agents) {
-      const runsToday = 3 + ((dayOffset + agent.length) % 4);
-      for (let i = 0; i < runsToday; i += 1) {
-        const ts = new Date(now - dayOffset * DAY_MS - i * 3 * 60 * 60 * 1000);
-        // Pass rate drifts by agent: ranker high, eval lower, outreach mid.
-        const baseRate = agentBasePass(agent);
-        const seed = (dayOffset * 31 + i * 7 + agent.length) % 100;
-        const passed = seed < baseRate;
-        out.push({
-          id: idCounter++,
-          agent_name: agent,
-          started_at: ts.toISOString(),
-          completed_at: new Date(ts.getTime() + 30_000).toISOString(),
-          status: passed ? 'success' : 'failed',
-          error_message: passed
-            ? null
-            : sampleErrorFor(agent, idCounter),
-        });
-      }
-    }
-  }
-  return out;
-}
-
-function agentBasePass(agent: AgentName): number {
-  switch (agent) {
-    case 'ranker':
-      return 92;
-    case 'verifier':
-      return 88;
-    case 'outreach':
-      return 80;
-    case 'eval':
-      return 72;
-    case 'briefing':
-      return 85;
-    default:
-      return 80;
-  }
-}
-
-function sampleErrorFor(agent: AgentName, n: number): string {
-  const samples = [
-    'rate_limited: openai 429 — backoff exceeded',
-    'schema_mismatch: expected lead.score number, got null',
-    'tool_call_failed: clay enrichment returned 502',
-    'eval_failed: outreach draft missed must-include token "permit"',
-    'timeout: agent exceeded 60s wall budget',
-  ];
-  return `[${agent}] ${samples[n % samples.length]}`;
-}

@@ -1,44 +1,9 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-  fetchConnectorsHealth,
-  __computeRollup,
-} from './connectorsHealthClient';
+import { describe, expect, it } from 'vitest';
+import { __computeRollup } from './connectorsHealthClient';
 import type {
   ConnectorRowRaw,
   ConnectorAuditEventRaw,
 } from './connectorsHealthClient';
-
-describe('connectorsHealthClient (mock-mode)', () => {
-  beforeEach(() => {
-    vi.stubEnv('VITE_PATHFINDER_DB_ENABLED', 'false');
-  });
-  afterEach(() => {
-    vi.unstubAllEnvs();
-  });
-
-  it('fetchConnectorsHealth returns the mock rollup with full status + type maps', async () => {
-    const r = await fetchConnectorsHealth();
-    expect(r.totals.connectors).toBeGreaterThan(0);
-    // every status bucket exists even when zero — UI iterates the keys
-    expect(Object.keys(r.byStatus).sort()).toEqual(
-      [
-        'active',
-        'disconnected',
-        'error',
-        'expired',
-        'pending',
-        'revoked',
-        'unknown',
-      ].sort(),
-    );
-    expect(Object.keys(r.byType).sort()).toEqual(
-      ['hubspot', 'other', 'slack', 'teams'].sort(),
-    );
-    expect(r.mostRecentSuccessByConnector.length).toBe(r.totals.connectors);
-    expect(r.errorRate24h.rate).toBeGreaterThanOrEqual(0);
-    expect(r.errorRate24h.rate).toBeLessThanOrEqual(1);
-  });
-});
 
 describe('__computeRollup (pure aggregate)', () => {
   const now = new Date('2026-05-03T12:00:00.000Z');
