@@ -72,7 +72,7 @@ function VoiceTab() {
         </div>
         {VOICE_AGENTS.map((a, i) => (
           <div key={a.name} className={`flex items-center gap-4 px-5 py-3.5 ${i > 0 ? 'border-t border-border-subtle' : ''}`}>
-            <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: '#4FB286' }} />
+            <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: '#E8763A' }} />
             <div className="flex-1 min-w-0">
               <div className="mono text-[13px] font-medium text-text-primary">{a.name}</div>
               <div className="mono text-[11.5px] text-text-secondary mt-0.5">{a.role}</div>
@@ -201,10 +201,10 @@ function MemorySearch() {
 // ─── Continuity timeline ──────────────────────────────────────────────────────
 
 const FILTER_DEFS = [
-  { id: 'decision', label: 'Decisions' },
-  { id: 'signal',   label: 'Signals'   },
-  { id: 'override', label: 'Overrides' },
-  { id: 'refusal',  label: 'Refusals'  },
+  { id: 'decision', label: 'Decisions', color: '#2E6CD4' },
+  { id: 'signal',   label: 'Signals',   color: '#1F8A5B' },
+  { id: 'override', label: 'Overrides', color: '#E8763A' },
+  { id: 'refusal',  label: 'Refusals',  color: '#E14B4B' },
 ];
 
 function ContinuityTimeline() {
@@ -222,18 +222,19 @@ function ContinuityTimeline() {
         <div className="flex gap-2 flex-wrap">
           {FILTER_DEFS.map(f => {
             const on = filters[f.id as keyof typeof filters];
+            const c = f.color;
             return (
               <button
                 key={f.id}
                 onClick={() => toggle(f.id)}
                 className="flex items-center gap-1.5 px-2.5 py-1 rounded-full mono text-[11.5px] font-medium transition-all"
                 style={{
-                  background: on ? 'rgba(255,255,255,0.04)' : 'transparent',
-                  border: `1px solid ${on ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.04)'}`,
-                  color: on ? 'var(--text-hi)' : 'var(--text-lo)',
+                  background: on ? `${c}12` : 'transparent',
+                  border: `1px solid ${on ? `${c}55` : 'var(--border-default)'}`,
+                  color: on ? c : 'var(--text-lo)',
                 }}
               >
-                <span className="w-1.5 h-1.5 rounded-full" style={{ background: KIND_COLOR[f.id], opacity: on ? 1 : 0.3 }} />
+                <span className="w-1.5 h-1.5 rounded-full" style={{ background: c, opacity: on ? 1 : 0.3 }} />
                 {f.label}
               </button>
             );
@@ -306,7 +307,7 @@ export function System() {
               onClick={() => setActive(tab)}
               className="mono text-[11px] uppercase tracking-[0.12em] px-4 py-2.5 rounded-t-lg transition-colors relative whitespace-nowrap flex-shrink-0 focus:outline-none focus:ring-2 focus:ring-zinc-500"
               style={{
-                color: isActive ? 'var(--text-hi)' : 'var(--text-lo)',
+                color: isActive ? '#2E6CD4' : 'var(--text-lo)',
                 background: isActive ? 'var(--bg-elevated)' : 'transparent',
               }}
             >
@@ -314,7 +315,7 @@ export function System() {
               {isActive && (
                 <span
                   className="absolute bottom-0 left-0 right-0 h-0.5 rounded-t-full"
-                  style={{ backgroundColor: 'var(--accent)' }}
+                  style={{ backgroundColor: '#2E6CD4' }}
                 />
               )}
             </button>
