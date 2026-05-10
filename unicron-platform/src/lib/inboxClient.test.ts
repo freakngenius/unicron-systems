@@ -1,51 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { listInboxTickets, resolveInboxTicket } from './inboxClient';
 
-describe('inboxClient (mock-mode)', () => {
+// inboxClient is real-only; mock fallback was stripped. All paths exercise
+// the same-origin Vercel proxy via fetch.
+describe('inboxClient', () => {
   beforeEach(() => {
-    vi.stubEnv('VITE_ARCHITECT_API_ENABLED', 'false');
-  });
-  afterEach(() => {
-    vi.unstubAllEnvs();
-  });
-
-  it('listInboxTickets returns the source-discovery fixture set', async () => {
-    const res = await listInboxTickets({ category: 'source-discovery' });
-    expect(res.category).toBe('source-discovery');
-    expect(res.status).toBe('open');
-    expect(res.tickets.length).toBeGreaterThan(0);
-    res.tickets.forEach((t) => expect(t.category).toBe('source-discovery'));
-  });
-
-  it('resolveInboxTicket returns dismissed for dismiss mode', async () => {
-    const res = await resolveInboxTicket('ticket-pgh-rss-1', { resolution: 'dismiss' });
-    expect(res.status).toBe('dismissed');
-  });
-
-  it('resolveInboxTicket returns resolved for manual mode', async () => {
-    const res = await resolveInboxTicket('ticket-pgh-rss-1', { resolution: 'manual' });
-    expect(res.status).toBe('resolved');
-  });
-
-  it('resolveInboxTicket returns queued + request_id for resume mode', async () => {
-    const res = await resolveInboxTicket('ticket-austin-auth', {
-      resolution: 'resume',
-      resume_url: 'https://services.austintexas.gov/permits.json',
-      resume_api_key_env: 'AUSTIN_OPEN_DATA_TOKEN',
-    });
-    expect(res.status).toBe('queued');
-    expect(res.request_id).toMatch(/^mock-resume-/);
-  });
-});
-
-describe('inboxClient (real-mode)', () => {
-  beforeEach(() => {
-    vi.stubEnv('VITE_ARCHITECT_API_ENABLED', 'true');
-    vi.stubEnv('VITE_ARCHITECT_API_URL', 'https://example.test');
     vi.stubGlobal('fetch', vi.fn());
   });
   afterEach(() => {
-    vi.unstubAllEnvs();
     vi.unstubAllGlobals();
   });
 
@@ -64,6 +26,20 @@ describe('inboxClient (real-mode)', () => {
     expect(url).toContain('category=source-discovery');
     expect(url).toContain('status=open');
     expect(url).toContain('limit=5');
+  });
+
+  it('listInboxTickets returns the response payload verbatim (including empty arrays)', async () => {
+    const fetchMock = globalThis.fetch as unknown as ReturnType<typeof vi.fn>;
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({ tickets: [], category: 'source-discovery', status: 'open' }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      ),
+    );
+    const res = await listInboxTickets({ category: 'source-discovery' });
+    expect(res.tickets).toEqual([]);
+    expect(res.category).toBe('source-discovery');
+    expect(res.status).toBe('open');
   });
 
   it('resolveInboxTicket POSTs JSON body to the resolve endpoint', async () => {
