@@ -1,12 +1,22 @@
 // MetacronProduct.tsx — Sprint 6 Stream B
 // Metacron sub-view inside the Atrium Products tab.
 //
-// Sections:
+// Pass 1 rebrand: now renders the full embedded Metacron app below a
+// summary header. The preview content (Agent Fleet + Architect Proposals
+// + KPI panel) stays as a top-level summary for Pass 1; Pass 3 will fold
+// it into Metacron's Agents tab + Architect Inbox tab.
+//
+// Summary sections:
 //  1. Agent fleet overview (nervous_system.agents — reuses AgentsGalaxy primitives)
 //  2. Architect proposals approved this week (pathfinder.architect_proposals)
 //  3. KPI panel (reads /api/atrium/vault/products/metacron/kpis via markdown)
+//
+// Below the summary: <MetacronEmbedded /> — the full Metacron app
+// (Onboarding, Live System, Architect Inbox, Agents, Customers, Audit Log,
+// Connectors, Evals, Inngest, Cost) with its outer Topbar shell stripped.
 
 import { useState, useEffect, useCallback } from 'react';
+import { MetacronEmbedded } from '../../App';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -374,6 +384,27 @@ export function MetacronProduct() {
             </div>
           </div>
         )}
+      </section>
+
+      {/* ── Embedded Metacron app ────────────────────────────────────────────
+          Pass 1 rebrand: full Metacron operator UI rendered here with its
+          outer Topbar shell stripped. Atrium provides rail + header; this
+          embed provides sub-nav + content. Pass 3 will fold the preview
+          above into Metacron's Agents tab + Architect Inbox tab. */}
+      <section
+        className="pt-6 mt-2"
+        style={{ borderTop: '1px solid var(--border-subtle)' }}
+        aria-label="Metacron app"
+      >
+        <div className="mb-4">
+          <div
+            className="mono text-[10px] uppercase tracking-[0.18em]"
+            style={{ color: 'var(--text-lo)' }}
+          >
+            Metacron — Operator Console
+          </div>
+        </div>
+        <MetacronEmbedded />
       </section>
     </div>
   );
