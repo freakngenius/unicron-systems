@@ -136,6 +136,9 @@ export const config = {
   // Basic Auth. The route enforces its own key-based auth: UNICRON_INGEST_API_KEY
   // for cross-app server-to-server calls, or per-team-member config.ingest_api_key
   // for human mobile captures (iOS Shortcuts). Sprint 4 hotfix — fix/sprint4-cross-app-ingest-hardening.
+  // `/api/organizations` is excluded because Metacron calls this route
+  // server-side (no browser session) to manage multi-tenant org records.
+  // Auth is via x-unicron-api-key header vs UNICRON_INGEST_API_KEY env var.
   // `/api/email/oauth/callback` is excluded because Google / Microsoft hit
   // the redirect URL without basic-auth; auth is via the signed `state`
   // token + provider code exchange (see lib/email/oauth.ts). Same pattern
@@ -154,6 +157,6 @@ export const config = {
   // rest of the Settings UI.
   matcher: [
     '/',
-    '/((?!_next/|favicon\\.ico|api/cron/|api/notifications/|api/slack/install/callback|api/slack/events|api/slack/actions|api/inngest|api/architect/|api/ingest|api/email/oauth/callback|api/email/webhooks/|api/connectors/slack/callback|api/connectors/slack/commands|api/connectors/slack/events).*)',
+    '/((?!_next/|favicon\\.ico|api/cron/|api/notifications/|api/slack/install/callback|api/slack/events|api/slack/actions|api/inngest|api/architect/|api/ingest|api/organizations|api/email/oauth/callback|api/email/webhooks/|api/connectors/slack/callback|api/connectors/slack/commands|api/connectors/slack/events).*)',
   ],
 };
