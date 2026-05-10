@@ -2,8 +2,9 @@
 // Prompt card (gradient bolt + textarea + gate-state pill) + 8-category grid + right rail.
 // Design ref: Atrium/Web UI/v3-skills.jsx
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useSkills, type SkillRow } from './Now';
+import { getSupabase } from '../lib/supabase';
 
 // ─── Category metadata ─────────────────────────────────────────────────────────
 
@@ -119,27 +120,76 @@ function RecentRuns() {
   );
 }
 
-// ─── Budget forecast (static demo) ────────────────────────────────────────────
+// ─── Budget forecast (live agent budget data) ──────────────────────────────────
+
+interface AgentBudgetRow {
+  budget: { limit_usd_per_period: number; current_spent_usd: number } | null;
+}
+
+function useBudgetData() {
+  const [state, setState] = useState<{ spent: number; limit: number; loading: boolean }>({
+    spent: 0, limit: 0, loading: true,
+  });
+
+  useEffect(() => {
+    let cancelled = false;
+    getSupabase()
+      .schema('nervous_system')
+      .from('agents')
+      .select('budget')
+      .eq('active', true)
+      .returns<AgentBudgetRow[]>()
+      .then(({ data }) => {
+        if (cancelled) return;
+        let spent = 0;
+        let limit = 0;
+        (data ?? []).forEach((a) => {
+          if (a.budget) {
+            spent += a.budget.current_spent_usd ?? 0;
+            limit += a.budget.limit_usd_per_period ?? 0;
+          }
+        });
+        setState({ spent, limit, loading: false });
+      })
+      .catch(() => { if (!cancelled) setState((s) => ({ ...s, loading: false })); });
+    return () => { cancelled = true; };
+  }, []);
+
+  return state;
+}
 
 function BudgetForecast() {
-  const used = 0.34;
-  const forecast = 0.41;
+  const { spent, limit, loading } = useBudgetData();
+
+  const used = limit > 0 ? spent / limit : 0;
+  const forecast = Math.min(used * 1.2, 1);
   const danger = 0.80;
+
+  const spentLabel = loading ? '…' : `$${spent.toFixed(2)}`;
+  const limitLabel = loading ? '…' : limit > 0 ? `$${limit.toFixed(0)}` : '—';
+  const usedPct = loading ? '—' : `${Math.round(used * 100)}%`;
+  const forecastPct = loading ? '—' : `${Math.round(forecast * 100)}%`;
+
   return (
     <div className="bg-bg-card border border-border-default rounded-xl p-4">
       <div className="flex items-baseline justify-between mb-1">
-        <span className="mono text-[13px] font-semibold text-text-primary">Forecast · 5h burn</span>
-        <span className="mono text-[11.5px] text-text-secondary">$214 / $640</span>
+        <span className="mono text-[13px] font-semibold text-text-primary">Budget burn</span>
+        <span className="mono text-[11.5px] text-text-secondary">{spentLabel} / {limitLabel}</span>
       </div>
-      <div className="mono text-[11px] text-text-secondary mb-3">Weekly budget · resets Sunday</div>
+      <div className="mono text-[11px] text-text-secondary mb-3">Active agents · weekly period</div>
       <div className="relative h-2 rounded-full bg-bg-raised overflow-hidden mb-2">
-        <div className="absolute inset-y-0 left-0 rounded-full" style={{ width: `${forecast * 100}%`, background: 'rgba(232,118,58,0.25)' }} />
-        <div className="absolute inset-y-0 left-0 rounded-full bg-accent-gold" style={{ width: `${used * 100}%` }} />
-        <div className="absolute inset-y-0 opacity-50" style={{ left: `${danger * 100}%`, width: 1.5, background: '#ef4444' }} />
+        {!loading && (
+          <>
+            <div className="absolute inset-y-0 left-0 rounded-full" style={{ width: `${forecast * 100}%`, background: 'rgba(232,118,58,0.25)' }} />
+            <div className="absolute inset-y-0 left-0 rounded-full bg-accent-gold" style={{ width: `${used * 100}%` }} />
+            <div className="absolute inset-y-0 opacity-50" style={{ left: `${danger * 100}%`, width: 1.5, background: '#ef4444' }} />
+          </>
+        )}
+        {loading && <div className="absolute inset-0 bg-bg-raised animate-pulse rounded-full" />}
       </div>
       <div className="flex justify-between mono text-[10.5px] text-text-secondary">
-        <span><span className="inline-block w-1.5 h-1.5 rounded-sm bg-accent-gold mr-1 align-middle" />Used 34%</span>
-        <span><span className="inline-block w-1.5 h-1.5 rounded-sm mr-1 align-middle" style={{ background: 'rgba(232,118,58,0.35)' }} />+5h forecast 41%</span>
+        <span><span className="inline-block w-1.5 h-1.5 rounded-sm bg-accent-gold mr-1 align-middle" />Used {usedPct}</span>
+        <span><span className="inline-block w-1.5 h-1.5 rounded-sm mr-1 align-middle" style={{ background: 'rgba(232,118,58,0.35)' }} />+20% forecast {forecastPct}</span>
       </div>
     </div>
   );
