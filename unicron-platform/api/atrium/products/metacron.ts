@@ -59,12 +59,8 @@ export default async function handler(
   const sinceWeek = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
   const [agentsResult, proposalsWeekResult, proposalsPendingResult] = await Promise.allSettled([
-    // nervous_system.agents fleet
-    sb
-      .schema('nervous_system')
-      .from('agents')
-      .select('id, name, archetype, specialty, active')
-      .order('name'),
+    // nervous_system.agents fleet (via RPC — schema not in PostgREST whitelist)
+    sb.rpc('ns_list_agents'),
 
     // Architect proposals this week
     sb

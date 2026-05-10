@@ -2,45 +2,39 @@
 // GET  /api/atrium/customers — list nervous_system.customers (optional ?status= filter)
 // POST /api/atrium/customers — create a new customer (taboo-checked, audit-logged)
 //
-// Uses service role key — nervous_system schema not exposed via PostgREST anon.
-// Follows the same createClient pattern as api/atrium/skills/run.ts.
+// Uses public-schema RPCs (ns_list_customers, ns_create_customer) with SECURITY DEFINER
+// to access nervous_system without exposing the schema through PostgREST.
 
-import type { IncomingMessage, ServerResponse } from 'http';
+import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
 
 interface CustomerRow {
   id: string;
   name: string;
   status: string;
-  primary_contact: string | null;
-  notes: unknown | null;
+  primary_contact_team_member_id: string | null;
+  notes: string | null;
+  metadata: unknown | null;
   created_at: string;
-  updated_at: string | null;
+  last_touched: string | null;
+  ttl_days: number | null;
 }
 
 type PostBody = {
   name?: string;
   status?: string;
-  primary_contact?: string;
-  notes?: unknown;
+  primary_contact?: string; // uuid of team member, or null
+  notes?: string;
+  metadata?: unknown;
+  ttl_days?: number;
 };
 
-function readBody(req: IncomingMessage): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const chunks: Buffer[] = [];
-    req.on('data', (c: Buffer) => chunks.push(c));
-    req.on('end', () => resolve(Buffer.concat(chunks).toString()));
-    req.on('error', reject);
-  });
-}
-
-function jsonResponse(res: ServerResponse, status: number, body: unknown): void {
-  const payload = JSON.stringify(body);
-  res.writeHead(status, {
-    'Content-Type': 'application/json',
-    'Content-Length': Buffer.byteLength(payload),
-  });
-  res.end(payload);
+function getServiceClient() {
+  const url = process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url) throw new Error('SUPABASE_URL not configured');
+  if (!key) throw new Error('SUPABASE_SERVICE_ROLE_KEY not configured');
+  return createClient(url, key);
 }
 
 async function tabooCheck(text: string): Promise<{ blocked: boolean; reason?: string }> {
@@ -76,122 +70,101 @@ async function tabooCheck(text: string): Promise<{ blocked: boolean; reason?: st
 async function writeAuditLog(
   action: string,
   entityId: string,
-  beforeState: unknown,
   afterState: unknown,
 ): Promise<void> {
   try {
-    const supabase = createClient(
-      process.env.VITE_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    );
-    await supabase.schema('nervous_system').from('audit_log').insert({
-      action,
-      entity_type: 'customer',
-      entity_id: entityId,
-      before_state: beforeState,
-      after_state: afterState,
-      performed_by: 'atrium_ui',
+    const sb = getServiceClient();
+    await sb.rpc('ns_append_ledger_signal', {
+      p_source_type: 'atrium_ui',
+      p_source_id: entityId,
+      p_summary: action,
+      p_insights: { after_state: afterState },
     });
   } catch {
     // Non-fatal
   }
 }
 
-export default async function handler(req: IncomingMessage, res: ServerResponse): Promise<void> {
-  const supabaseUrl = process.env.VITE_SUPABASE_URL;
-  const serviceKey  = process.env.SUPABASE_SERVICE_ROLE_KEY;
+export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');
 
-  if (!supabaseUrl || !serviceKey) {
-    jsonResponse(res, 500, { error: 'Supabase env vars not configured' });
+  if (req.method === 'OPTIONS') {
+    res.status(204).end();
     return;
   }
 
   // ─── GET ──────────────────────────────────────────────────────────────────
   if (req.method === 'GET') {
-    const supabase = createClient(supabaseUrl, serviceKey);
-    const url = new URL(req.url ?? '/', `http://localhost`);
-    const statusFilter = url.searchParams.get('status');
+    const statusFilter =
+      typeof req.query?.status === 'string' ? req.query.status : null;
 
-    let query = supabase
-      .schema('nervous_system')
-      .from('customers')
-      .select('id, name, status, primary_contact, notes, created_at, updated_at')
-      .order('created_at', { ascending: false });
-
-    if (statusFilter) {
-      query = query.eq('status', statusFilter);
-    }
-
-    const { data, error } = await query;
-
-    if (error) {
+    try {
+      const sb = getServiceClient();
+      const { data, error } = await sb.rpc('ns_list_customers', {
+        p_status: statusFilter,
+        p_limit: 100,
+      });
+      if (error) throw error;
+      res.status(200).json(data ?? []);
+    } catch (err) {
+      const msg =
+        err instanceof Error
+          ? err.message
+          : typeof err === 'object'
+            ? JSON.stringify(err)
+            : String(err);
       // Table may not exist yet — return empty array so UI shows placeholder
-      if (error.code === '42P01' || error.message.includes('does not exist')) {
-        jsonResponse(res, 200, []);
+      if (msg.includes('does not exist') || msg.includes('42P01')) {
+        res.status(200).json([]);
         return;
       }
-      jsonResponse(res, 500, { error: error.message });
-      return;
+      res.status(500).json({ error: msg });
     }
-
-    jsonResponse(res, 200, (data as CustomerRow[]) ?? []);
     return;
   }
 
   // ─── POST ─────────────────────────────────────────────────────────────────
   if (req.method === 'POST') {
-    let rawBody: string;
-    try {
-      rawBody = await readBody(req);
-    } catch {
-      jsonResponse(res, 400, { error: 'Failed to read body' });
-      return;
-    }
-
-    let body: PostBody;
-    try {
-      body = JSON.parse(rawBody) as PostBody;
-    } catch {
-      jsonResponse(res, 400, { error: 'Invalid JSON body' });
-      return;
-    }
+    const body = req.body as PostBody | undefined;
 
     if (!body?.name) {
-      jsonResponse(res, 400, { error: 'name is required' });
+      res.status(400).json({ error: 'name is required' });
       return;
     }
 
     const taboo = await tabooCheck(body.name);
     if (taboo.blocked) {
-      jsonResponse(res, 403, { error: 'Taboo check blocked this action', reason: taboo.reason });
+      res.status(403).json({ error: 'Taboo check blocked this action', reason: taboo.reason });
       return;
     }
 
-    const supabase = createClient(supabaseUrl, serviceKey);
-    const insertPayload = {
-      name: body.name,
-      status: body.status ?? 'Cold',
-      primary_contact: body.primary_contact ?? null,
-      notes: body.notes ?? null,
-    };
-
-    const { data, error } = await supabase
-      .schema('nervous_system')
-      .from('customers')
-      .insert(insertPayload)
-      .select()
-      .single();
-
-    if (error || !data) {
-      jsonResponse(res, 500, { error: error?.message ?? 'Insert failed' });
-      return;
+    try {
+      const sb = getServiceClient();
+      const { data, error } = await sb.rpc('ns_create_customer', {
+        p_name: body.name,
+        p_status: body.status ?? 'Cold',
+        p_primary_contact: body.primary_contact ?? null,
+        p_notes: body.notes ?? null,
+        p_metadata: body.metadata ?? null,
+        p_ttl_days: body.ttl_days ?? 90,
+      });
+      if (error) throw error;
+      const created = (Array.isArray(data) ? data[0] : data) as CustomerRow;
+      await writeAuditLog('create_customer', created.id, created);
+      res.status(201).json(created);
+    } catch (err) {
+      const msg =
+        err instanceof Error
+          ? err.message
+          : typeof err === 'object'
+            ? JSON.stringify(err)
+            : String(err);
+      res.status(500).json({ error: msg });
     }
-
-    const created = data as CustomerRow;
-    await writeAuditLog('create_customer', created.id, null, created);
-    jsonResponse(res, 201, created);
     return;
   }
 
-  jsonResponse(res, 405, { error: 'method not allowed' });
+  res.status(405).json({ error: 'method not allowed' });
 }
