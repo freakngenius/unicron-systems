@@ -157,7 +157,7 @@ interface AgentIdentity {
 }
 
 /**
- * Run an agent function with memory load/write, budget check, and audit log.
+ * Run an agent function with memory load/write, budget check, audit log, and ledger writes.
  *
  * @param agentName  - Name matching the `agents.name` column in Supabase
  * @param inputs     - Serialisable input payload (summary written to audit_log)
@@ -178,19 +178,52 @@ export async function runAgent<TInput, TOutput>(
   if (agent) await checkBudget(agent.id);
 
   const memory = await loadAgentMemory(agentName);
-  const output = await agentFn(inputs, memory);
 
-  // Write audit log entry
+  // Ledger: run_started
   if (agent) {
-    await supabase.from('audit_log').insert({
-      table_name: 'agents',
-      action: 'agent_run',
-      actor_id: agent.id,
-      payload: {
-        agent_name: agentName,
-        inputs_summary: JSON.stringify(inputs).slice(0, 200),
-      },
+    await supabase.schema('nervous_system').from('ledger').insert({
+      source_type: 'agent_run',
+      created_by_agent: agent.id,
+      content_summary: `run_started: ${agentName}`,
+      status: 'active',
     });
+  }
+
+  let output: TOutput;
+  try {
+    output = await agentFn(inputs, memory);
+  } catch (err) {
+    // Ledger: run_errored
+    if (agent) {
+      await supabase.schema('nervous_system').from('ledger').insert({
+        source_type: 'agent_run',
+        created_by_agent: agent.id,
+        content_summary: `run_errored: ${agentName} — ${err instanceof Error ? err.message : String(err)}`,
+        status: 'archived',
+      });
+    }
+    throw err;
+  }
+
+  // Write audit log entry + ledger: run_completed
+  if (agent) {
+    await Promise.all([
+      supabase.from('audit_log').insert({
+        table_name: 'agents',
+        action: 'agent_run',
+        actor_id: agent.id,
+        payload: {
+          agent_name: agentName,
+          inputs_summary: JSON.stringify(inputs).slice(0, 200),
+        },
+      }),
+      supabase.schema('nervous_system').from('ledger').insert({
+        source_type: 'agent_run',
+        created_by_agent: agent.id,
+        content_summary: `run_completed: ${agentName}`,
+        status: 'active',
+      }),
+    ]);
   }
 
   return output;
