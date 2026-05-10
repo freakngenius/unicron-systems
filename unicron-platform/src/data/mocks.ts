@@ -1298,3 +1298,66 @@ export function connectorsHealthMock(): ConnectorsHealthRollup {
   };
 }
 
+import type { InngestHealthPayload } from '../lib/contracts/inngestHealth';
+
+/**
+ * Static fixture used by InngestHealthView in mock-mode (the default,
+ * when `/api/inngest/health` returns `configured: false` or fails).
+ *
+ * Built as a function so timestamps are fresh on every call.
+ */
+export function inngestHealthMock(): InngestHealthPayload {
+  const now = new Date();
+  const ago = (ms: number) => new Date(now.getTime() - ms).toISOString();
+  const ahead = (ms: number) => new Date(now.getTime() + ms).toISOString();
+  return {
+    generated_at: now.toISOString(),
+    functions: [
+      {
+        id: 'metacron/sync-hubspot-hourly',
+        name: 'Sync HubSpot (hourly)',
+        cron: '0 * * * *',
+        cron_cadence: 'hourly',
+      },
+      {
+        id: 'metacron/daily-digest',
+        name: 'Daily digest',
+        cron: '0 13 * * *',
+        cron_cadence: 'daily',
+      },
+      {
+        id: 'metacron/architect-proposal-evaluator',
+        name: 'Architect proposal evaluator',
+        cron: null,
+        cron_cadence: null,
+      },
+      {
+        id: 'metacron/connector-audit-rollup',
+        name: 'Connector audit rollup',
+        cron: '*/15 * * * *',
+        cron_cadence: 'custom',
+      },
+    ],
+    recent_runs: [
+      // hubspot — healthy, last success 12 min ago
+      { run_id: 'r1', function_id: 'metacron/sync-hubspot-hourly', status: 'completed', started_at: ago(12 * 60 * 1000), ended_at: ago(11 * 60 * 1000) },
+      { run_id: 'r2', function_id: 'metacron/sync-hubspot-hourly', status: 'completed', started_at: ago(72 * 60 * 1000), ended_at: ago(71 * 60 * 1000) },
+      { run_id: 'r3', function_id: 'metacron/sync-hubspot-hourly', status: 'completed', started_at: ago(132 * 60 * 1000), ended_at: ago(131 * 60 * 1000) },
+      // daily digest — healthy
+      { run_id: 'r4', function_id: 'metacron/daily-digest', status: 'completed', started_at: ago(20 * 60 * 60 * 1000), ended_at: ago(20 * 60 * 60 * 1000 - 60_000) },
+      // architect evaluator — failing 3/4 in last 24h (red)
+      { run_id: 'r5', function_id: 'metacron/architect-proposal-evaluator', status: 'failed', started_at: ago(2 * 60 * 60 * 1000), ended_at: ago(2 * 60 * 60 * 1000) },
+      { run_id: 'r6', function_id: 'metacron/architect-proposal-evaluator', status: 'failed', started_at: ago(5 * 60 * 60 * 1000), ended_at: ago(5 * 60 * 60 * 1000) },
+      { run_id: 'r7', function_id: 'metacron/architect-proposal-evaluator', status: 'failed', started_at: ago(9 * 60 * 60 * 1000), ended_at: ago(9 * 60 * 60 * 1000) },
+      { run_id: 'r8', function_id: 'metacron/architect-proposal-evaluator', status: 'completed', started_at: ago(13 * 60 * 60 * 1000), ended_at: ago(13 * 60 * 60 * 1000) },
+      // connector-audit-rollup — healthy
+      { run_id: 'r9', function_id: 'metacron/connector-audit-rollup', status: 'completed', started_at: ago(8 * 60 * 1000), ended_at: ago(7 * 60 * 1000) },
+      { run_id: 'r10', function_id: 'metacron/connector-audit-rollup', status: 'completed', started_at: ago(23 * 60 * 1000), ended_at: ago(22 * 60 * 1000) },
+    ],
+    schedules: [
+      { function_id: 'metacron/sync-hubspot-hourly', next_run_at: ahead(48 * 60 * 1000) },
+      { function_id: 'metacron/daily-digest', next_run_at: ahead(4 * 60 * 60 * 1000) },
+      { function_id: 'metacron/connector-audit-rollup', next_run_at: ahead(7 * 60 * 1000) },
+    ],
+  };
+}
