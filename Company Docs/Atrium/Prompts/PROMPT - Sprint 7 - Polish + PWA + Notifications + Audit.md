@@ -224,6 +224,22 @@ The Conductor's final report posts to `#orchestrator-feed` and DMs Kyle:
 
 ---
 
+## Migration safety rule — schema-grounded SQL only
+
+Before writing any SQL migration that references an existing `nervous_system` table, run a schema query first:
+
+```sql
+SELECT column_name, data_type, is_nullable
+FROM information_schema.columns
+WHERE table_schema = 'nervous_system'
+  AND table_name = '<target_table>'
+ORDER BY ordinal_position;
+```
+
+Write migration SQL using verified column names from that query. Never use SPEC field names directly. Three prior sprints (3, 4, 5) each drifted on column names; this rule breaks the recurrence.
+
+---
+
 ## Hard halt conditions
 
 - PWA service worker introduces stale-cache bugs blocking critical updates

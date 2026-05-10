@@ -141,6 +141,30 @@ These are expected during a long autonomous run. Handle in-line and proceed.
 
 ---
 
+## Migration safety rule — schema-grounded SQL only
+
+Sprints 3, 4, and 5 each shipped migration files that used field names from the SPEC (`inputs`/`outputs`/`skill_path`/`skill_id`/`updated_at`) that diverged from the live `nervous_system` schema (`inputs_schema`/`outputs_schema`/`skill_md_path`). Three consecutive sprints hit this class of failure.
+
+**This rule is mandatory for every migration in every sprint:**
+
+Before writing any SQL migration that references an existing table in `nervous_system`, run a schema query first:
+
+```sql
+SELECT column_name, data_type, is_nullable
+FROM information_schema.columns
+WHERE table_schema = 'nervous_system'
+  AND table_name = '<target_table>'
+ORDER BY ordinal_position;
+```
+
+Write the migration SQL using the verified column names from that query output. Do not use SPEC field names directly. Do not assume a column exists because it is in the SPEC — verify it exists in the live schema.
+
+If the query returns an empty result (table not yet created), the migration must create the table in full. If it returns unexpected columns, halt and report before proceeding.
+
+This rule applies to: INSERT, UPDATE, ALTER TABLE, CREATE INDEX, and any RPC that references table columns. Read-only queries (SELECT) are exempt.
+
+---
+
 ## Resume capability
 
 If the conductor is interrupted (network failure, human cancellation, machine restart), it must be resumable. Maintain a state file at `Company Docs/Reports/conductor-state.json` updated after each sprint:
