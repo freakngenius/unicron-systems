@@ -1,6 +1,7 @@
-// AgentsGalaxy.tsx — Sprint 3 Stream D
+// AgentsGalaxy.tsx — Sprint 3 Stream D + SY-2
 // Displays all agents from nervous_system.agents via ns_list_agents() RPC.
-// Click a card to open the detail panel on the right.
+// Galaxy: SVG concentric rings visualization. Roster: card grid below.
+// Click a node or card to open the detail panel.
 
 import { useEffect, useState } from 'react';
 import { getSupabase } from '../../lib/supabase';
@@ -70,6 +71,151 @@ function archetypeColor(arch: string) {
   return ARCHETYPE_COLORS[arch] ?? DEFAULT_COLOR;
 }
 
+// Archetype → ring index mapping for galaxy layout
+const RING_ARCHETYPES = [
+  ['taboo_keeper', 'orchestrator'],   // inner ring — core/guardian
+  ['analyst', 'elder'],              // mid ring — insight/memory
+  ['specialist'],                     // outer ring — everything else
+];
+
+const RING_RADII = [72, 130, 182];
+
+// ─── Galaxy SVG ───────────────────────────────────────────────────────────────
+
+function AgentGalaxySVG({
+  agents,
+  selectedId,
+  onSelect,
+}: {
+  agents: Agent[];
+  selectedId: string | null;
+  onSelect: (a: Agent | null) => void;
+}) {
+  const cx = 300;
+  const cy = 155;
+
+  // Distribute agents into rings
+  const byRing: Agent[][] = [[], [], []];
+  agents.forEach((a) => {
+    const ri = RING_ARCHETYPES.findIndex((archs) => archs.includes(a.archetype));
+    (ri >= 0 ? byRing[ri] : byRing[2]).push(a);
+  });
+
+  // Compute node positions
+  const nodes = byRing.flatMap((ring, ri) =>
+    ring.map((agent, i) => {
+      const theta =
+        ring.length === 1
+          ? -Math.PI / 2
+          : (i / ring.length) * Math.PI * 2 - Math.PI / 2;
+      const loadFrac =
+        agent.budget && agent.budget.limit_usd_per_period > 0
+          ? Math.min(agent.budget.current_spent_usd / agent.budget.limit_usd_per_period, 1)
+          : 0.25;
+      return {
+        agent,
+        x: cx + Math.cos(theta) * RING_RADII[ri],
+        y: cy + Math.sin(theta) * RING_RADII[ri],
+        r: 8 + loadFrac * 6,
+      };
+    })
+  );
+
+  const archetypes = [...new Set(agents.map((a) => a.archetype))];
+
+  return (
+    <div className="bg-[#141416] border border-[#1F1F23] rounded-xl p-4 mb-5">
+      <div className="mono text-[12px] font-semibold text-[#E5E5E7] mb-1">Agent fleet</div>
+      <div className="mono text-[10px] text-[rgba(229,229,231,0.4)] mb-3">
+        {agents.length} agents · click a node to inspect
+      </div>
+      <svg viewBox="0 0 600 310" style={{ width: '100%', height: 280 }}>
+        <defs>
+          <radialGradient id="galaxyGlow" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor="rgba(255,107,43,0.12)" />
+            <stop offset="100%" stopColor="rgba(20,20,22,0)" />
+          </radialGradient>
+        </defs>
+        <rect width="600" height="310" fill="url(#galaxyGlow)" />
+
+        {/* Concentric dashed rings */}
+        {RING_RADII.map((r) => (
+          <circle
+            key={r}
+            cx={cx}
+            cy={cy}
+            r={r}
+            fill="none"
+            stroke="rgba(229,229,231,0.07)"
+            strokeWidth="1"
+            strokeDasharray="3 5"
+          />
+        ))}
+
+        {/* Center core */}
+        <circle cx={cx} cy={cy} r={22} fill="#FF6B2B" />
+        <circle cx={cx} cy={cy} r={22} fill="none" stroke="rgba(255,107,43,0.22)" strokeWidth={9} />
+        <text x={cx} y={cy + 4} textAnchor="middle" fontSize="10" fontWeight="700" fill="#FFF" fontFamily="monospace">
+          CORE
+        </text>
+
+        {/* Agent nodes */}
+        {nodes.map(({ agent, x, y, r }) => {
+          const color = archetypeColor(agent.archetype).dot;
+          const isSelected = selectedId === agent.id;
+          const label = agent.name.length > 13 ? agent.name.slice(0, 12) + '…' : agent.name;
+          return (
+            <g
+              key={agent.id}
+              onClick={() => onSelect(isSelected ? null : agent)}
+              style={{ cursor: 'pointer' }}
+            >
+              <line x1={cx} y1={cy} x2={x} y2={y} stroke={color} strokeWidth="1" opacity="0.14" />
+              <circle
+                cx={x}
+                cy={y}
+                r={r}
+                fill={color}
+                opacity={agent.active ? 0.88 : 0.35}
+              />
+              {isSelected && (
+                <circle cx={x} cy={y} r={r + 4} fill="none" stroke={color} strokeWidth="1.5" opacity="0.65" />
+              )}
+              {!agent.active && (
+                <circle cx={x} cy={y} r={r + 3} fill="none" stroke="rgba(229,229,231,0.18)" strokeWidth="1" strokeDasharray="2 3" />
+              )}
+              <text
+                x={x}
+                y={y + r + 13}
+                textAnchor="middle"
+                fontSize="10"
+                fill="rgba(229,229,231,0.6)"
+                fontFamily="monospace"
+              >
+                {label}
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+
+      {/* Archetype legend */}
+      {archetypes.length > 0 && (
+        <div className="flex flex-wrap gap-4 mt-2 justify-center">
+          {archetypes.map((arch) => (
+            <div key={arch} className="flex items-center gap-1.5 mono text-[10px] text-[rgba(229,229,231,0.5)]">
+              <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: archetypeColor(arch).dot }} />
+              <span style={{ textTransform: 'capitalize' }}>{arch.replace(/_/g, ' ')}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Data fetching ────────────────────────────────────────────────────────────
+
 async function fetchAgents(): Promise<Agent[]> {
   const { data, error } = await getSupabase().rpc('ns_list_agents');
   if (error) {
@@ -117,7 +263,12 @@ export default function AgentsGalaxy() {
   }
 
   return (
-    <div className="flex gap-4">
+    <div>
+      {/* SVG galaxy visualization */}
+      <AgentGalaxySVG agents={agents} selectedId={selected?.id ?? null} onSelect={setSelected} />
+
+      {/* Roster + detail panel */}
+      <div className="flex gap-4">
       {/* Agent grid */}
       <div className={`flex-1 grid grid-cols-2 sm:grid-cols-3 gap-3 ${selected ? 'min-w-0' : ''}`}>
         {agents.map((agent) => {
@@ -182,7 +333,7 @@ export default function AgentsGalaxy() {
 
       {/* Detail panel */}
       {selected && (
-        <div className="w-72 shrink-0 bg-[#141416] rounded-xl p-5 border border-[#1F1F23] self-start">
+        <div className="w-72 shrink-0 bg-[#141416] rounded-xl p-5 border border-[#1F1F23] self-start" style={{ minWidth: '18rem' }}>
           <div className="flex items-center gap-2 mb-1">
             <span
               className="w-2 h-2 rounded-full shrink-0"
@@ -249,6 +400,7 @@ export default function AgentsGalaxy() {
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }
