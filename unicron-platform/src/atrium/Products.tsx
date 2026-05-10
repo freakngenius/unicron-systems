@@ -54,7 +54,7 @@ export function Products() {
               onClick={() => setActive(tab)}
               className="mono text-[11px] uppercase tracking-[0.12em] px-4 py-2.5 rounded-t-lg transition-colors relative shrink-0 whitespace-nowrap focus:outline-none focus:ring-2 focus:ring-zinc-500"
               style={{
-                color: isActive ? 'var(--text-hi)' : 'var(--text-lo)',
+                color: isActive ? 'var(--accent)' : 'var(--text-lo)',
                 background: isActive ? 'var(--bg-elevated)' : 'transparent',
               }}
             >
