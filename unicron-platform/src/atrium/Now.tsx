@@ -37,7 +37,7 @@ interface AgentRow {
   budget: { limit_usd_per_period: number; current_spent_usd: number } | null;
 }
 
-interface SkillRow {
+export interface SkillRow {
   id: string;
   name: string;
   description: string;
@@ -811,7 +811,7 @@ function formatSkillName(name: string): string {
   return name.split('-').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
 }
 
-function useSkills() {
+export function useSkills() {
   const [skills, setSkills] = useState<SkillRow[]>([]);
   useEffect(() => {
     fetch('/api/atrium/skills')

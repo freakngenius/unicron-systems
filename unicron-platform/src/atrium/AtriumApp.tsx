@@ -17,6 +17,7 @@ import { Marketing } from './Marketing';
 import { Money } from './Money';
 import { People } from './People';
 import { Products } from './Products';
+import { Skills } from './Skills';
 import { System } from './System';
 import { Work } from './Work';
 
@@ -31,6 +32,7 @@ const TAB_SPRINT: Record<AtriumTab, number> = {
   products:  6,
   system:    2,
   library:   6,
+  skills:    4,
 };
 
 export function AtriumApp() {
@@ -86,6 +88,8 @@ export function AtriumApp() {
         <Products />
       ) : activeTab === 'library' ? (
         <Library />
+      ) : activeTab === 'skills' ? (
+        <Skills />
       ) : (
         <AtriumPlaceholder
           tab={(activeTab as string).charAt(0).toUpperCase() + (activeTab as string).slice(1)}

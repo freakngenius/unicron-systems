@@ -18,7 +18,8 @@ export type AtriumTab =
   | 'marketing'
   | 'products'
   | 'system'
-  | 'library';
+  | 'library'
+  | 'skills';
 
 const TABS: { id: AtriumTab; label: string; sprint: number }[] = [
   { id: 'now',       label: 'Now',       sprint: 1 },
@@ -29,6 +30,7 @@ const TABS: { id: AtriumTab; label: string; sprint: number }[] = [
   { id: 'products',  label: 'Products',  sprint: 6 },
   { id: 'system',    label: 'System',    sprint: 2 },
   { id: 'library',   label: 'Library',   sprint: 6 },
+  { id: 'skills',    label: 'Skills',    sprint: 4 },
 ];
 
 type StatusTone = 'ok' | 'warn' | 'info' | 'error';
