@@ -50,7 +50,7 @@ When a team member DMs you or @-mentions you, you:
 1. Read their message in context. Look at recent ledger entries, recent action items they own, recent calls they were in, their open kanban cards.
 2. Determine intent: directive (do something), inquiry (tell me), reflection (think with me), conversational (acknowledge / respond warmly).
 3. Use tools to fetch real state before answering. Do not answer from imagination when you can query.
-4. If a directive requires system action (creating an action item, dispatching code, reassigning DRI, scheduling, sending a message), run the proposed action through the Taboo Keeper validator BEFORE executing. If bounced, explain the reason and propose alternatives.
+4. If a directive requires system action (creating an action item, dispatching code, reassigning DRI, scheduling, sending a message), run the proposed action through the Taboo Keeper validator BEFORE executing. If bounced, explain the reason and propose alternatives. Read-only tools (get_continuity_log, query_ledger, get_team_member, get_recent_calls, list_action_items, semantic_search) are pure data reads — call them freely without pre-validation; the Taboo Keeper gate applies to state-mutating operations only.
 5. Be specific and grounded. Reference real ledger ids, action item titles, customer names, dates, costs.
 6. Push back when warranted. Do not capitulate to vague directives.
 7. Match the user's energy. Kyle prefers tight, no fluff, actionable. Keenan focuses on discovery and 0->1 execution. Curtis is at peer tier with full visibility.
@@ -472,11 +472,83 @@ Work from the existing codebase. Follow all conventions in CLAUDE.md. Create a P
       }
 
       case 'get_kanban_cards': {
-        return JSON.stringify({
-          stub: true,
-          message: `Notion kanban not yet wired (NOTION_TOKEN not configured). ${input.workspace as string} workspace unavailable via API.`,
-          workspace: input.workspace,
+        const workspace = input.workspace as string;
+        const notionToken = process.env.NOTION_TOKEN;
+
+        const DB_ENV_MAP: Record<string, string> = {
+          metacron:   'NOTION_DB_METACRON_KANBAN',
+          internal:   'NOTION_DB_INTERNAL_KANBAN',
+          pathfinder: 'NOTION_DB_PATHFINDER_KANBAN',
+          sales:      'NOTION_DB_SALES_KANBAN',
+          discovery:  'NOTION_DB_DISCOVERY_KANBAN',
+        };
+        const dbEnvKey = DB_ENV_MAP[workspace] ?? `NOTION_DB_${workspace.toUpperCase()}_KANBAN`;
+        const databaseId = process.env[dbEnvKey];
+
+        const notionDegrade = async (reason: string): Promise<string> => {
+          try {
+            await supabase.from('audit_log').insert({
+              table_name: 'orchestrator',
+              action: 'notion_kanban_degrade',
+              actor_id: null,
+              payload: { workspace, reason, timestamp: new Date().toISOString() },
+            });
+          } catch (logErr) {
+            console.error('[orchestrator] notion_kanban_degrade audit write failed:', logErr instanceof Error ? logErr.message : String(logErr));
+          }
+          return JSON.stringify({
+            degrade: true,
+            message: `I can't see ${workspace} kanban state right now (${reason})`,
+            workspace,
+          });
+        };
+
+        if (!notionToken) return notionDegrade('NOTION_TOKEN not configured');
+        if (!databaseId) return notionDegrade(`${dbEnvKey} not configured`);
+
+        const queryBody: Record<string, unknown> = { page_size: 50 };
+        if (input.status) {
+          queryBody.filter = { property: 'Status', select: { equals: input.status as string } };
+        }
+
+        const notionRes = await fetch(
+          `https://api.notion.com/v1/databases/${databaseId}/query`,
+          {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${notionToken}`,
+              'Content-Type': 'application/json',
+              'Notion-Version': '2022-06-28',
+            },
+            body: JSON.stringify(queryBody),
+          }
+        );
+
+        if (notionRes.status === 401 || notionRes.status === 403) {
+          return notionDegrade('NOTION_TOKEN not configured or auth failed');
+        }
+        if (!notionRes.ok) {
+          return notionDegrade(`Notion API error: ${notionRes.status}`);
+        }
+
+        const notionData = await notionRes.json() as { results: Array<Record<string, unknown>> };
+        const cards = notionData.results.map((page: Record<string, unknown>) => {
+          const props = page.properties as Record<string, {
+            select?: { name?: string };
+            title?: Array<{ plain_text: string }>;
+          }>;
+          const titleEntry = Object.values(props).find((p) => Array.isArray(p.title));
+          return {
+            id: page.id as string,
+            title: titleEntry?.title?.[0]?.plain_text ?? 'Untitled',
+            status: props.Status?.select?.name ?? null,
+            priority: props.Priority?.select?.name ?? null,
+            url: page.url as string,
+            last_edited_time: page.last_edited_time as string,
+          };
         });
+
+        return JSON.stringify({ workspace, count: cards.length, cards });
       }
 
       case 'get_recent_calls': {

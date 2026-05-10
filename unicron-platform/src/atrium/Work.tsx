@@ -1,6 +1,8 @@
 // Work.tsx — Sprint 4 Stream D
 // Atrium Work tab root. 5 sub-views: Action Items, Calls Log, Decisions
 // Timeline, Kanban Embeds, Sprints.
+// GAP W-1 (2026-05-10): Refusal Log is intentionally omitted here.
+// System > Refusal Log is the canonical location per routing decision W-1.
 
 import { useState } from 'react';
 import { ActionItems } from './work/ActionItems';
@@ -39,20 +41,27 @@ export function Work() {
       <div className="mb-5">
         <h1 className="mono text-[18px] text-[#E5E5E7] font-semibold">Work</h1>
         <p className="mono text-[11px] text-[rgba(229,229,231,0.5)] mt-1">
-          Action items, call logs, decisions, kanban, and sprint tracking — all
-          in one surface.
+          Action items, call logs, decisions, kanban, and sprint tracking. Refusal
+          history is in System &rsaquo; Refusal Log.
         </p>
       </div>
 
       {/* Sub-tab nav — scrollable on mobile */}
-      <nav className="flex gap-0.5 border-b border-[#1F1F23] mb-6 overflow-x-auto">
+      <nav
+        className="flex gap-0.5 border-b border-[#1F1F23] mb-6 overflow-x-auto"
+        aria-label="Work sub-tabs"
+        role="tablist"
+      >
         {WORK_TABS.map((tab) => {
           const isActive = active === tab;
           return (
             <button
               key={tab}
+              role="tab"
+              aria-selected={isActive}
+              aria-controls={`work-panel-${tab}`}
               onClick={() => setActive(tab)}
-              className="mono text-[11px] uppercase tracking-[0.12em] px-4 py-2.5 rounded-t-lg transition-colors relative shrink-0 whitespace-nowrap"
+              className="mono text-[11px] uppercase tracking-[0.12em] px-4 py-2.5 rounded-t-lg transition-colors relative shrink-0 whitespace-nowrap focus:outline-none focus:ring-2 focus:ring-zinc-500"
               style={{
                 color: isActive ? '#E5E5E7' : 'rgba(229,229,231,0.45)',
                 background: isActive ? '#141416' : 'transparent',
@@ -71,13 +80,13 @@ export function Work() {
       </nav>
 
       {/* Sub-tab content */}
-      <div>
+      <section id={`work-panel-${active}`} role="tabpanel" aria-label={WORK_TAB_LABELS[active]}>
         {active === 'action-items' && <ActionItems />}
         {active === 'calls' && <CallsLog />}
         {active === 'decisions' && <DecisionsTimeline />}
         {active === 'kanban' && <KanbanEmbeds />}
         {active === 'sprints' && <SprintsView />}
-      </div>
+      </section>
     </div>
   );
 }

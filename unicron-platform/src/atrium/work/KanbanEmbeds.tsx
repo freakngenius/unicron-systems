@@ -60,13 +60,13 @@ function useCurrentMember() {
     if (auth.status !== 'signed-in') return;
     const email = auth.user.email;
     if (!email) return;
+    // PGRST106 fix: use ns_get_team_member_by_email RPC
     getSupabase()
-      .schema('nervous_system')
-      .from('team_members')
-      .select('id')
-      .eq('email', email)
-      .maybeSingle()
-      .then(({ data }) => setMemberId(data?.id ?? null));
+      .rpc('ns_get_team_member_by_email', { p_email: email })
+      .then(({ data }) => {
+        const rows = data as Array<{ id: string }> | null;
+        setMemberId(rows?.[0]?.id ?? null);
+      });
   }, [auth.status]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return memberId;
@@ -87,26 +87,32 @@ function useKanbanItems(driFilter: string) {
 
     async function load() {
       try {
-        let query = sb
-          .schema('nervous_system')
-          .from('action_items')
-          .select('id, title, priority, status, dri, kanban_workspace, kanban_card_id, team_members(id, name)')
-          .not('kanban_workspace', 'is', null)
-          .order('created_at', { ascending: false })
-          .limit(500);
-
-        if (driFilter) query = query.eq('dri', driFilter);
-
-        const { data, error: err } = await query.returns<ActionItemRow[]>();
+        // PGRST106 fix: use ns_list_action_items_kanban RPC
+        const { data, error: err } = await sb.rpc('ns_list_action_items_kanban', {
+          p_dri_filter: driFilter || null,
+          p_limit: 500,
+        });
         if (err) throw err;
-        if (!cancelled) setItems(data ?? []);
 
-        const { data: memberData } = await sb
-          .schema('nervous_system')
-          .from('team_members')
-          .select('id, name, email')
-          .returns<TeamMember[]>();
-        if (!cancelled) setMembers(memberData ?? []);
+        // Map flat dri_id/dri_name back to the nested team_members shape the component expects
+        const mapped: ActionItemRow[] = ((data as Array<{
+          id: string; title: string; priority: string; status: string;
+          dri: string | null; kanban_workspace: string | null; kanban_card_id: string | null;
+          dri_id: string | null; dri_name: string | null;
+        }>) ?? []).map((row) => ({
+          id: row.id,
+          title: row.title,
+          priority: row.priority as ActionItemRow['priority'],
+          status: row.status as ActionItemRow['status'],
+          dri: row.dri,
+          kanban_workspace: row.kanban_workspace,
+          kanban_card_id: row.kanban_card_id,
+          team_members: row.dri_id ? { id: row.dri_id, name: row.dri_name ?? '' } : null,
+        }));
+        if (!cancelled) setItems(mapped);
+
+        const { data: memberData } = await sb.rpc('ns_list_team_members');
+        if (!cancelled) setMembers((memberData as TeamMember[] | null) ?? []);
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : 'Failed to load kanban');
       } finally {
