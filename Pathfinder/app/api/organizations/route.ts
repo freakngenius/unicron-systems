@@ -94,7 +94,6 @@ export async function POST(req: NextRequest) {
 
   const { name, slug, customer_org_id, architecture } = parsed.data;
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const adminWrite = supabaseAdmin() as unknown as { from: (t: string) => any };
   const { data, error } = (await adminWrite
     .from('organizations')

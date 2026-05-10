@@ -103,7 +103,6 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     return NextResponse.json({ error: 'No updatable fields provided' }, { status: 400, headers: corsHeaders(origin) });
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const adminWrite = supabaseAdmin() as unknown as { from: (t: string) => any };
   const { data, error } = (await adminWrite
     .from('organizations')
