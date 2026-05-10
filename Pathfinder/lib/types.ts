@@ -816,6 +816,19 @@ export interface DailyBrief {
   sections_rendered: Array<keyof BriefingSections>;
 }
 
+// Multi-tenant org store (migration 20260509_organizations).
+// Spec: MEMORY/operator-todos/2026-05-04-pathfinder-needs-organizations-schema.md
+export interface Organization {
+  id: string;
+  name: string;
+  slug: string;
+  architecture: Record<string, unknown>;
+  customer_org_id: string;
+  created_by_user_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 // Database type bag for the typed Supabase client.
 export interface PathfinderDatabase {
   pathfinder: {
@@ -979,6 +992,17 @@ export interface PathfinderDatabase {
           updated_at?: string;
         };
         Update: Partial<BriefingPrefs>;
+        Relationships: [];
+      };
+      // Multi-tenant org store (migration 20260509_organizations).
+      organizations: {
+        Row: Organization;
+        Insert: Omit<Organization, 'id' | 'created_at' | 'updated_at'> & {
+          id?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Organization>;
         Relationships: [];
       };
     };
