@@ -133,17 +133,15 @@ function useBudgetData() {
 
   useEffect(() => {
     let cancelled = false;
+    // PGRST106 fix: nervous_system is not in PostgREST db-schemas.
+    // Use public.ns_list_agents_active() SECURITY DEFINER RPC instead.
     getSupabase()
-      .schema('nervous_system')
-      .from('agents')
-      .select('budget')
-      .eq('active', true)
-      .returns<AgentBudgetRow[]>()
+      .rpc('ns_list_agents_active')
       .then(({ data }) => {
         if (cancelled) return;
         let spent = 0;
         let limit = 0;
-        (data ?? []).forEach((a) => {
+        ((data as AgentBudgetRow[] | null) ?? []).forEach((a) => {
           if (a.budget) {
             spent += a.budget.current_spent_usd ?? 0;
             limit += a.budget.limit_usd_per_period ?? 0;

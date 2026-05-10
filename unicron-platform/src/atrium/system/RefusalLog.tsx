@@ -29,13 +29,10 @@ export default function RefusalLog() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // PGRST106 fix: nervous_system is not in PostgREST db-schemas.
+    // Use public.ns_list_audit_log_taboo() SECURITY DEFINER RPC instead.
     getSupabase()
-      .schema('nervous_system')
-      .from('audit_log')
-      .select('id, created_at, action, payload')
-      .eq('action', 'taboo_bounce')
-      .order('created_at', { ascending: false })
-      .limit(50)
+      .rpc('ns_list_audit_log_taboo', { p_limit: 50 })
       .then(({ data, error }) => {
         if (error) {
           console.error('[RefusalLog] fetch error:', error.message);

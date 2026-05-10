@@ -115,26 +115,22 @@ export function Hiring({ forceShow = false }: HiringProps) {
 
     async function load() {
       try {
-        const { data, error } = await sb
-          .schema('nervous_system')
-          .from('hiring_candidates')
-          .select('id, name, stage, role, source, notes, created_at')
-          .order('created_at', { ascending: false });
+        // PGRST106 fix: use ns_list_hiring_candidates RPC (gracefully handles absent table)
+        const { data, error } = await sb.rpc('ns_list_hiring_candidates');
 
         if (cancelled) return;
 
         if (error) {
-          if (
-            error.code === '42P01' ||
-            error.message.includes('does not exist')
-          ) {
-            setTableExists(false);
-          }
+          // RPC itself failed — treat as table-absent
+          setTableExists(false);
           setLoading(false);
           return;
         }
 
-        setCandidates((data as Candidate[] | null) ?? []);
+        const rows = (data as Candidate[] | null) ?? [];
+        // If RPC returns empty array it means table exists but no rows (or table missing)
+        // The RPC handles absent table gracefully by returning empty result set
+        setCandidates(rows);
       } catch {
         if (!cancelled) setTableExists(false);
       } finally {
