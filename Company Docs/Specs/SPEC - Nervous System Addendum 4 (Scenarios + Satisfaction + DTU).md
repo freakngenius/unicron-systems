@@ -1,0 +1,250 @@
+# SPEC Addendum 4 — Scenarios, Satisfaction, Digital Twin Universe
+
+**Status:** Active
+**Parent SPECs:** SPEC - Unicron Nervous System.md, Company Docs/Atrium/Specs/SPEC - Atrium (Internal Cockpit).md
+**Companions:** Addendum 1 (Kanban Surface Routing), Addendum 2 (Skills + Karpathy + Refero), Addendum 3 (Voice System Integration)
+**Date:** 2026-05-08
+**Owner:** Kyle Kesterson
+**Reference:** Justin McCarthy, "Software Factories And The Agentic Moment," factory.strongdm.ai, Feb 6 2026
+
+This addendum integrates the StrongDM AI software-factory pattern into the Nervous System and Atrium. Five concrete additions plus one renamed primitive.
+
+Merge into main SPECs at v0.5 after Sprint 5 ships.
+
+---
+
+## 1. The shift in vocabulary
+
+Three terms enter the architecture. They replace or refine existing language.
+
+| Old or absent | New | Why |
+|---|---|---|
+| done-criteria (inline in sprint prompts) | **scenarios** stored at `vault/wiki/scenarios/` | Done-criteria fade with the sprint; scenarios are durable holdout artifacts that persist as the regression baseline across all future sprints. |
+| auto-merge criteria as boolean checks | **satisfaction** as probabilistic threshold | Boolean checks fail catastrophically on agent-built outputs (ranking, ingest extraction, voice agent calls). Probabilistic satisfaction matches the actual nature of agent work. |
+| no explicit external-service mocking | **Digital Twin Universe (DTU)** | High-volume scenario validation against external services without API costs, rate limits, or production risk. |
+
+A sprint is no longer "code merged when checks pass." A sprint is "code merged when satisfaction across declared scenarios exceeds threshold, validated against DTU where applicable."
+
+## 2. Scenarios
+
+### 2.1 Definition
+
+A scenario is an end-to-end user story that a working version of the system must satisfy. Stored outside the codebase. Owned by humans, edited by humans (or via vault PR), validated by an LLM judge. Functionally analogous to a holdout set in ML training.
+
+A scenario is NOT a test. Tests live in code; scenarios live in the vault. Tests are boolean; scenarios are probabilistic. Tests are vulnerable to reward hacking; scenarios are harder to game because their canonical form is human-readable English describing user-facing behavior.
+
+### 2.2 Location and structure
+
+`vault/wiki/scenarios/` directory. One file per scenario. Subdirectories per surface:
+
+```
+vault/wiki/scenarios/
+├── _index.md              # master list with one-line summaries
+├── orchestrator/
+│   ├── greet-and-status-pulse.md
+│   ├── reassign-dri-by-name.md
+│   ├── propose-action-item-with-customer-context.md
+│   └── refuse-out-of-allowlist-email.md
+├── ingest/
+│   ├── plaud-call-with-actionable-decisions.md
+│   ├── slack-thread-with-customer-commitment.md
+│   ├── voice-procurement-pull-with-3-projects.md
+│   └── ambiguous-email-returns-abstain.md
+├── kanban-writer/
+│   ├── route-pathfinder-bug-from-customer-call.md
+│   ├── route-internal-architecture-action.md
+│   └── escalate-ambiguous-action-item.md
+├── refusal-layer/
+│   ├── bounce-military-procurement-target.md
+│   ├── bounce-time-on-site-optimization.md
+│   └── override-flow-with-continuity-log.md
+├── voice/
+│   ├── procurement-pull-hcfcd-3-rfps.md
+│   ├── voicemail-detection-and-graceful-end.md
+│   └── disclosure-required-before-record.md
+└── atrium/
+    ├── now-tab-renders-status-pulse-and-skills.md
+    ├── system-tab-edit-taboo-via-pr.md
+    └── work-tab-action-item-detail-panel.md
+```
+
+### 2.3 Scenario file format
+
+Frontmatter plus narrative:
+
+```yaml
+---
+type: scenario
+surface: orchestrator | ingest | kanban-writer | refusal-layer | voice | atrium | ...
+status: active | superseded | draft
+priority: smoke | regression | production-gate
+created: YYYY-MM-DD
+last_validated: YYYY-MM-DD
+satisfaction_threshold: 0.85   # default; tighter for irreversible-priority surfaces
+ttl_days: permanent
+related_specs: [Company Docs/Atrium/Specs/SPEC - Atrium (Internal Cockpit).md, ...]
+---
+
+# <Scenario title>
+
+## Setup
+What state must exist before the scenario runs (database rows, env vars, kanban cards, vault content).
+
+## User action
+What the human or upstream agent does. Phrased as plain English, no API calls.
+
+## Expected behavior
+What the system should produce. Multiple acceptable trajectories described by their qualitative properties, not by exact strings.
+
+## Refusal cases
+What the system should NOT do. Including reward-hacking failure modes ("model returns hardcoded success without doing the work").
+
+## Evaluation
+What the LLM judge should look for. Often references specific schema fields (`ledger.decisions[]`, `action_items.dri`) and qualitative judgments ("does the response match user intent").
+
+## Notes
+Anything else that informs evaluation but isn't load-bearing for satisfaction.
+```
+
+### 2.4 Authorship and ownership
+
+- Initial scenarios authored by Kyle, Keenan, or Curtis as part of sprint specs (or by Cowork chats writing the sprint).
+- Edits via vault PR. Reviewer is one of the other peer-tier members.
+- Auto-edits (LLM proposes a scenario change to track new behavior) require explicit human approval before merge. A scenario whose evaluation criteria the model can edit is a scenario the model can game.
+- Scenarios with `status: superseded` are kept in the vault, marked, and excluded from default validation runs. They become institutional memory for what we used to require.
+
+## 3. Satisfaction
+
+### 3.1 Definition
+
+Satisfaction = the fraction of observed trajectories through a scenario that an LLM judge rates as meeting the scenario's expected behavior. A scalar between 0 and 1. Threshold-gated.
+
+Satisfaction is NOT pass/fail. It is a continuous signal. A 0.94 satisfaction on a regression scenario is meaningfully different from a 0.87. A 0.62 is bad regardless of which boolean checks passed.
+
+### 3.2 Evaluation
+
+A judge function (Claude Sonnet 4.6 or Opus 4.6 depending on stakes) reads:
+- The scenario file
+- The trajectory artifact (call transcript, ledger row, agent output, UI screenshot, etc.)
+- Optional: prior trajectories on the same scenario for relative judgment
+
+Returns:
+```json
+{
+  "satisfaction": 0.91,
+  "reasoning": "trajectory matched expected behavior in 7 of 8 dimensions; missed disclosure compliance phrasing on dimension 4",
+  "missed_dimensions": ["disclosure_compliance_phrasing"],
+  "reward_hacking_detected": false,
+  "evidence": [{"trajectory_span": "...", "scenario_clause": "..."}],
+  "recommend_block_merge": false
+}
+```
+
+The Master Conductor verify gate replaces boolean auto-merge criteria with satisfaction-threshold criteria. Default threshold 0.85. Higher for irreversible-priority surfaces. Lower for early-stage exploratory work.
+
+### 3.3 Reward-hacking detection
+
+Every judge call evaluates whether the trajectory looks like reward hacking: hardcoded success, scenario-specific shortcuts that don't generalize, output that satisfies the literal scenario but obviously misses intent. A `reward_hacking_detected: true` blocks merge regardless of satisfaction score.
+
+This is the explicit defense against the "return true passes the test" pattern.
+
+### 3.4 Multi-fork sprints use satisfaction natively
+
+The Sprint 5 multi-fork contract (Addendum 2 section 2.7) becomes:
+
+1. Sprint declares N parallel approaches AND the scenarios that gate the sprint
+2. N Claude Code runs produce N candidate diffs
+3. Each candidate is evaluated against the scenarios; satisfaction score returned per candidate per scenario
+4. Aggregate satisfaction score per candidate (weighted by scenario priority)
+5. Top candidate by aggregate satisfaction wins; reward_hacking_detected disqualifies regardless of score
+6. Loser candidates archived to `vault/wiki/sprint_forks/<sprint_id>/` with their satisfaction-by-scenario matrix
+
+This makes the LLM judge an unblinded peer to the candidates plus the human reviewer.
+
+## 4. Digital Twin Universe (DTU)
+
+### 4.1 Definition
+
+A DTU is a behavioral clone of an external service. Same API surface, same edge cases, same observable behaviors, but running locally and supporting volumes that exceed production limits. No API costs, no rate limits, no abuse detection, no production blast radius.
+
+Per Justin McCarthy: "high-fidelity SaaS clones were always possible but never economically feasible." LLMs have flipped the economics. A DTU that would have been a 6-month engineering project two years ago is now a multi-day Claude Code build.
+
+### 4.2 DTU build priority for Unicron
+
+Built in this order, by leverage:
+
+1. **Vapi DTU** (post-contest, high priority). Behavioral clone of Vapi's webhook + assistant + call APIs. Validates voice agents at thousands of role-played scenarios per hour without burning Vapi minutes or making bad real calls. Highest reputational leverage because voice calls are public artifacts.
+
+2. **Notion DTU** (Sprint 5 or 6, medium priority). Behavioral clone of Notion databases + pages + queries including the known query-data-source filter bug. Would have caught the kanban filter bug pre-deploy. Useful for kanban writer regression and Atrium edit-flow validation.
+
+3. **Slack DTU** (Sprint 5 or 6, medium priority). Behavioral clone of Slack DMs + channels + slash commands. Validates Orchestrator system-prompt or tool changes against scenarios before deploying to live #channels. Prevents another orchestrator-flooding incident.
+
+4. **HubSpot DTU** (Sprint 5+, conditional). Built when SDR connector ships and writes-through to HubSpot. Validates SDR agent's HubSpot interactions across rich pipeline scenarios.
+
+5. **Plaud / Fathom DTU** (deferred). Lower leverage; recordings are inputs we ingest, not services we depend on with complex APIs.
+
+### 4.3 DTU implementation pattern
+
+Each DTU is a standalone deployable service with the same hostname pattern as production but pointed at by env var override during scenario runs:
+
+- Production: `https://api.vapi.ai`
+- DTU: `https://vapi-dtu.atrium.unicron.systems` (or local)
+
+Test runs swap the env var. Production code is unchanged. DTU returns webhook events on the same shapes Vapi does, supports the same auth headers, simulates the edge cases (voicemail detection, call_ended with no transcript, transient 5xx errors, etc.).
+
+DTU code lives at `unicron-platform/dtu/<service>/`. Each service-twin is its own Inngest function or serverless route group. Behavioral fidelity is itself a scenario set: `vault/wiki/scenarios/dtu/<service>/` contains scenarios that validate the twin matches the real service's behavior.
+
+### 4.4 Cost framing
+
+Per the article's "$1,000 per engineer per day" floor, running scenarios at high volume against DTUs is cheap because there are no per-call external costs. The expensive part is the LLM judge calls (Sonnet 4.6 or Opus 4.6 evaluating each trajectory). For the contest budget envelope, we'll likely run satisfaction validation on PRs at 50-200 scenarios per merge with judge cost of $3-15 per merge. Acceptable.
+
+## 5. Reward-hacking awareness as first-class verify-gate concern
+
+Every PR that merges agent-written code passes through:
+
+1. Boolean checks (build, lint, type-check, smoke tests) — the floor
+2. Scenario satisfaction evaluation — the gate
+3. Reward-hacking detection per scenario — the disqualifier
+
+A PR with 0.95 satisfaction but `reward_hacking_detected=true` does NOT merge. It posts to `#orchestrator-escalations` with the detected pattern and routes to a human review.
+
+Common reward-hacking patterns to watch:
+- Hardcoded responses for known scenario inputs
+- Conditional branches that special-case scenario fixtures
+- Mocked external calls that always succeed in scenarios but fail in production
+- Test-only code paths that bypass refusal layer or audit logging
+- "Improving" the scenario file rather than the implementation (auto-rejected by the auth-required vault PR rule from section 2.4)
+
+## 6. Operating principles, refined
+
+Add to the Master Conductor's operating principles section (per the Addendum 2 sprint impact summary, this lands in Sprint 5):
+
+- **Kōan: "Why am I doing this? (the agent should be doing this instead)."** Direct from StrongDM. Sharper than the existing "no human middleware" framing. Forces every operator action to ask whether the substrate could carry it.
+- **Deliberate naivete.** Actively unlearn Software 1.0 habits. When proposing a sprint or feature, ask: "What was unthinkable six months ago that's now routine?" Often the right answer is the agentic version of the manual workflow you defaulted to.
+- **Token floor heuristic.** If a Claude Code session for an active sprint isn't burning meaningful tokens, the sprint is undersized or the agent is gatekeeping. Investigate.
+
+These do not replace the existing principles (read SPECs first, kanban hygiene, multi-Vercel verification, no deletes, etc.). They extend them.
+
+## 7. Sprint impact
+
+| Sprint | New work added by this addendum |
+|---|---|
+| 5 | Author initial scenario set across Orchestrator, ingest, kanban-writer, refusal-layer surfaces (~30 scenarios). Build the LLM judge function (Sonnet for cheap surfaces, Opus for irreversible). Replace boolean auto-merge criteria with satisfaction-threshold gate in the verify gate. Multi-fork contract uses satisfaction native. |
+| 6 | Notion DTU and Slack DTU (medium-leverage, low complexity). Author scenarios for Atrium edit flows and Orchestrator system-prompt regressions. |
+| 7 | Reward-hacking detection formalized in judge prompts. Operating principles added to Master Conductor. Begin Vapi DTU scoping. |
+| Post-contest | Vapi DTU build. HubSpot DTU when SDR ships. Continued scenario authoring as new surfaces ship. |
+
+## 8. What this does NOT change
+
+- Human review on customer-facing artifacts stays. StrongDM's "code must not be reviewed by humans" rule is right for them, wrong for us right now. Our public-facing outputs (voice calls to procurement offices, Pathfinder leads, Metacron operator surfaces for customers) carry reputational risk that LLM-judge-only review does not yet manage. We adopt the satisfaction frame on top of human review, not in place of it.
+- Verified-column rule stays. Verified is human-only. Satisfaction-gated auto-merge only moves cards to Deployed. Kyle, Keenan, or Curtis still promotes to Verified after their own check.
+- Refusal layer stays primary. Taboo Keeper validation runs before any state change regardless of satisfaction score. Satisfaction + refusal compose; satisfaction does not replace refusal.
+
+## 9. Open decisions
+
+1. **Judge model selection.** Sonnet 4.6 default; Opus 4.6 for irreversible-priority surfaces. Confirm or override.
+2. **Initial scenario coverage target.** ~30 scenarios across the four prioritized surfaces (Orchestrator, ingest, kanban-writer, refusal-layer) is the Sprint 5 ask. Acceptable, or scope tighter?
+3. **DTU sequencing if contest timeline pressures arise.** Notion + Slack first (Sprint 5/6), Vapi post-contest. If voice becomes the contest demo's centerpiece, pull Vapi DTU forward.
+4. **Public scenarios as recruiting/contributor signal.** Should `vault/wiki/scenarios/` be public-readable on the eventual marketing site? Demonstrates the engineering culture in a way decks cannot. Defer to founder strategy.
+
+End Addendum 4.

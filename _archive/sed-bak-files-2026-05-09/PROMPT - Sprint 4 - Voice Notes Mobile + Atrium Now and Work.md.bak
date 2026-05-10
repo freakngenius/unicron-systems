@@ -1,0 +1,224 @@
+# PROMPT — Sprint 4: Voice Notes, Mobile Capture, Atrium Now + Work Tabs
+
+Dispatched by the Master Conductor. Self-contained.
+
+**Project root:** `/Users/keka/Dropbox/Projects/Unicron Systems/`
+
+**Reference SPECs:** `Company Docs/Specs/SPEC - Unicron Nervous System.md`, `Company Docs/Specs/SPEC - Nervous System Addendum 2 (Skills + Karpathy + Refero).md`, `Company Docs/Specs/SPEC - Atrium (Internal Cockpit).md`
+
+This sprint accomplishes:
+1. Voice memo ingest (Whisper transcription server-side)
+2. Apple Notes ingest (iOS Shortcut configuration delivered to team members)
+3. Per-team-member API keys for mobile capture authentication
+4. Atrium **Now tab** finalization with full mobile layout and updated attention scoring (Refero refs continued)
+5. Atrium **Work tab**: action items cross-kanban, calls log, decisions timeline, kanban embeds, sprints
+6. Activate skills surface buttons for Productivity skills: `morning-brief`, `inbox-triage`, `quick-capture`
+
+## Parallel streams
+
+- **Stream A** (worktree `Pathfinder-worktrees/sprint4-voice-ingest`): voice memo skill + Whisper integration (Task 1)
+- **Stream B** (worktree `Pathfinder-worktrees/sprint4-notes-keys`): Apple Notes skill + per-team-member API keys + iOS Shortcut definitions (Tasks 2, 3, 4)
+- **Stream C** (worktree `unicron-platform-worktrees/sprint4-now-mobile`): Atrium Now tab finalization + mobile responsiveness (Tasks 5, 9)
+- **Stream D** (worktree `unicron-platform-worktrees/sprint4-work-tab`): Atrium Work tab with all 5 sub-views (Task 6) + action item edit endpoints (Task 8)
+- **Stream E** (worktree `unicron-platform-worktrees/sprint4-skills-productivity`): register Productivity skills + activate buttons
+
+---
+
+## Pre-conditions
+
+- Sprint 3 verified
+- Analyst, Elder, Taboo Keeper operational
+- Atrium System tab live
+- Slack Orchestrator can dispatch autonomously for safe patterns
+
+---
+
+## Kanban hygiene — start
+
+Card "Sprint 4 — Voice Notes Mobile + Atrium Now and Work" → In Process. DRI: Kyle. Surface: Architecture. Verify Criteria: "Voice memo and Apple Notes ingest produce ledger rows. Atrium Now tab fully mobile-rendered. Atrium Work tab functional with all five sub-views."
+
+---
+
+## Tasks
+
+### Task 1 — Voice memo ingest skill
+
+Path: `Pathfinder/lib/ingest/skills/ingest-voice-memo.ts`
+
+Logic:
+1. Receive audio file (uploaded via `/api/ingest` with `source_type=voice_memo`)
+2. Server-side Whisper API call (Anthropic doesn't have one; use OpenAI Whisper or self-hosted)
+3. Pass transcript to call ingest skill (Sprint 1) for the same extraction logic, but with `source_type=voice_memo` and lower confidence floor (voice memos are often raw thoughts, not decisions)
+4. Return one of `records | NO_SIGNAL | ABSTAIN`
+
+### Task 2 — Apple Notes ingest skill
+
+Path: `Pathfinder/lib/ingest/skills/ingest-apple-note.ts`
+
+Logic:
+1. Receive note content (plain text from iOS Shortcut)
+2. Treat similar to manual capture: extract decisions/action items/insights with structured-output prompt
+3. Lower confidence floor; route to Inbox if uncertain
+
+### Task 3 — Per-team-member API keys
+
+- Generate three (or four with team@) ingest API keys; store in `nervous_system.team_members.config.ingest_api_key`
+- Each key authenticates that team_member's mobile capture
+- API key validation in `/api/ingest`: header `x-unicron-api-key` → look up team_member by key → set `captured_by`
+
+### Task 4 — iOS Shortcut definitions
+
+Deliverables (saved as documentation Kyle distributes to Keenan and Curtis):
+
+**Voice Memo to Atrium**:
+1. iOS Shortcut: "Tap to capture for Atrium"
+2. Action: Record audio
+3. Action: POST audio file to `https://atrium.unicron.systems/api/ingest`
+4. Headers: `x-unicron-api-key: <user's key>`, `x-source-type: voice_memo`
+5. Body: multipart with audio
+6. On success: notification "Captured. Routed to Inbox."
+
+**Apple Note to Atrium**:
+1. iOS Shortcut: "Send to Atrium"
+2. Action: Get text from selected note
+3. Action: POST text to `https://atrium.unicron.systems/api/ingest`
+4. Headers: `x-unicron-api-key: <user's key>`, `x-source-type: apple_note`
+
+Save shortcut definitions as `.shortcut` files in `Pathfinder/scripts/ios-shortcuts/` (or wherever) for Kyle to airdrop to Keenan and Curtis.
+
+Document setup steps in `vault/Memory/wiki/quick-start.md` (stub for Sprint 6 to expand).
+
+### Task 5 — Atrium Now tab finalization
+
+Path: `unicron-platform/src/atrium/Now.tsx`
+
+Updates from Sprint 2:
+- Status pulse fully wired (all 4 indicators with real data)
+- Top of mind attention-scoring heuristic implemented:
+  - Score open escalations highest
+  - Score calls flagged by ingest with high confidence
+  - Score sprints in flight if state changed since user's last visit
+  - Score customer health alerts
+  - Score calendar items in next 4 hours
+  - Show top 3-5 by score
+- Calendar integration via Google Calendar MCP (read user's primary calendar)
+- Yesterday's digest pulls from `vault/Memory/analyst/YYYY-MM-DD.md` (Analyst writes it Sprint 3 onward)
+- Live activity feed throttle/dedupe per SPEC section 20
+- Quick capture full mode (voice now functional via Sprint 4 skill)
+
+Mobile responsive at 320px to 768px:
+- Status pulse stacks vertically
+- Top of mind cards full width
+- Calendar collapses to next-event with "more" link
+- Activity feed full width with reduced metadata on mobile
+
+### Task 6 — Atrium Work tab
+
+Path: `unicron-platform/src/atrium/Work.tsx` and sub-components
+
+**6.1 Action items cross-kanban view** (`ActionItems.tsx`)
+- Single table view of all `nervous_system.action_items` rows
+- Filters: DRI, surface, due, priority, status, source
+- Sort: priority (default), due, last_touched, created
+- Bulk actions: reassign DRI, defer, close (each through `/api/atrium/action-items/:id` with Taboo Keeper)
+- Click for detail panel: linked ledger row, evidence, Notion card
+
+**6.2 Calls log** (`CallsLog.tsx`)
+- Chronological list of `nervous_system.ledger` rows where `source_type='call'`
+- Per-call card: participants, summary, date, customer
+- Click for detail: full transcript (lazy-loaded), decisions extracted, action items created, evidence quotes
+- Search: by participant, date range, semantic content via pgvector RPC
+- Replaces the current Notion call logs page (link to migrate manually if needed)
+
+**6.3 Decisions timeline** (`DecisionsTimeline.tsx`)
+- Render `vault/Memory/elder/continuity.md` as a visual timeline
+- Filter by type
+- Click for detail and evidence
+- Visual show supersedes relationships (arrows or color-coded chains)
+
+**6.4 Kanban embeds** (`KanbanEmbeds.tsx`)
+- Read-only side-by-side embed of Pathfinder, Metacron, Internal Org Notion kanbans
+- Each kanban shows columns and cards via Notion MCP
+- Click card → opens Notion in new tab
+- Filter by DRI to show "my cards across all kanbans"
+
+**6.5 Sprints view** (`SprintsView.tsx`)
+- List of active and recent Claude Code sprints
+- Per sprint: name, surface, status, DRI, evidence link, kanban card link
+- For multi-fork sprints (slime mold, Sprint 5 onward): show all N candidates with scores
+- Active sprint detail: live log of Claude Code session output (tail of agent run; pulled from audit log or a sprint_runs table to be added in Sprint 5)
+
+### Task 7 — Mobile responsiveness for Work tab
+
+Test at 320px to 768px. Tables scroll horizontally on phone with sticky first column. Filter bar collapses to a "Filters" button. Detail panels open as full-screen modals on phone.
+
+### Task 8 — Server endpoints for Work tab edits
+
+- `PATCH /api/atrium/action-items/:id` — reassign DRI, change status, defer, close
+- All routes through Taboo Keeper, audit log
+
+### Task 9 — Multi-Vercel verification
+
+- Voice memo smoke test: POST audio to `/api/ingest`; verify transcript + ingest skill output
+- Apple Notes smoke test: POST text; verify ingest output
+- Atrium Now tab fully renders on desktop and 375px viewport
+- Atrium Work tab all 5 sub-views render
+- Action item edit smoke test: reassign DRI from Atrium; verify Taboo Keeper, audit log, Notion card update
+- Both Vercel projects healthy
+
+### Task 10 — Continuity log entry
+
+---
+
+## Hard halt conditions
+
+- Whisper API integration cost exceeds 10x baseline (suggests bug or runaway use)
+- iOS Shortcut format invalid (Apple format spec issue)
+- Atrium tabs cause client lag (>500ms render time on action items table with 100+ rows)
+- Either Vercel project fails to build
+- Voice memo skill cannot transcribe (third-party API failure)
+
+---
+
+## Auto-merge criteria
+
+- Voice memo and Apple Notes skills both produce valid ingest output
+- iOS Shortcut files exist and are valid
+- Per-team-member API keys generated and stored
+- Now tab fully functional with live data on desktop and mobile
+- Work tab all 5 sub-views functional
+- Both Vercel projects healthy
+- PR description has verbatim evidence
+
+---
+
+## Auto-revert triggers
+
+- Voice memo ingest causes Whisper API spend spike
+- Activity feed lag introduced by Now tab updates
+- Action item edit endpoints break existing Notion kanban hygiene
+
+---
+
+## Done criteria
+
+1. Voice memo and Apple Notes skills callable from `/api/ingest`
+2. Per-user API keys functional
+3. iOS Shortcut definitions delivered as importable files
+4. Atrium Now tab fully mobile and live
+5. Atrium Work tab fully functional with all 5 sub-views
+6. Action item editing routes through Taboo Keeper
+7. Both Vercel projects healthy
+8. Continuity log appended
+
+---
+
+## Out of scope
+
+- Email ingest (Sprint 5)
+- Atrium People, Money tabs (Sprint 5)
+- Multi-fork sprint contract (Sprint 5)
+- Atrium Marketing, Products, Library (Sprint 6)
+- PWA (Sprint 7)
+
+Begin.
