@@ -43,7 +43,7 @@ export default async function handler(
       if (error) throw error;
       res.status(200).json({ campaigns: data ?? [] });
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
+      const msg = err instanceof Error ? err.message : typeof err === 'object' ? JSON.stringify(err) : String(err);
       res.status(500).json({ error: msg });
     }
     return;
@@ -79,7 +79,7 @@ export default async function handler(
       if (error) throw error;
       res.status(201).json({ campaign: data });
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
+      const msg = err instanceof Error ? err.message : typeof err === 'object' ? JSON.stringify(err) : String(err);
       res.status(500).json({ error: msg });
     }
     return;
