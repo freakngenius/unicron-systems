@@ -399,18 +399,17 @@
   },
   "sprint_6_closeout": {
     "status": "Deployed",
-    "note": "All 5 stream PRs merged + build fix (package.json: tsc-b decoupled from vite build) + .vercelignore anchor fix (root Atrium/ pattern was excluding src/atrium/ on macOS). Deployed dpl_HjThijYa8u91ZrCjiWmF274Qm68k — 761 modules, aliased atrium.unicron.systems. 2 Supabase migrations applied (campaigns table, marketing skills seed). Known API bugs filed below. Awaiting Kyle human Verified promotion.",
-    "vercel_deployment_id": "dpl_HjThijYa8u91ZrCjiWmF274Qm68k",
-    "vercel_deployment_url": "https://unicron-platform-6y6jhovrl-kekas-projects-89ac4317.vercel.app",
+    "note": "All 5 stream PRs merged + build fix (package.json: tsc-b decoupled from vite build) + .vercelignore anchor fix (root Atrium/ pattern was excluding src/atrium/ on macOS) + wiki/vault GitHub API fallback (SHAs 6e6479d + 7d5839f). Deployed dpl_7CgZovVBZkCfZXaDDvRk4QFUjUfQ — wiki index + vault search smoke tested green via GitHub API fallback. Awaiting Kyle human Verified promotion.",
+    "vercel_deployment_id": "dpl_7CgZovVBZkCfZXaDDvRk4QFUjUfQ",
+    "vercel_deployment_url": "https://unicron-platform-qeodrzdbj-kekas-projects-89ac4317.vercel.app",
     "vercel_alias": "https://atrium.unicron.systems",
-    "production_sha": "b6e02d2",
-    "closed_at": "2026-05-10T08:15:00Z"
+    "production_sha": "7d5839f",
+    "closed_at": "2026-05-10T08:35:00Z"
   },
   "sprint_6_pending_manual": [
-    "HUMAN: Kyle smoke-test the 5 new Atrium surfaces — Marketing, Products, Library tabs visible + navigable; campaigns API; marketing skills run buttons",
-    "HUMAN: Promote Sprint 6 card to Verified on Internal Org Kanban (human-only — never auto-promote)",
-    "BUG: /api/atrium/wiki returns 404 — vault path reads from local Dropbox path, inaccessible from Vercel cloud; needs cloud-accessible vault (GitHub API read or Supabase storage)",
-    "BUG: /api/atrium/campaigns returns 500 — Supabase query error on ns_list_campaigns() RPC or direct table access; investigate"
+    "HUMAN: Add GITHUB_VAULT_TOKEN env var to unicron-platform Vercel project (enables authenticated GitHub API reads for wiki/vault; works unauthenticated but rate-limited at 60 req/hr)",
+    "HUMAN: Kyle smoke-test the 5 new Atrium surfaces — Marketing, Products, Library tabs visible + navigable; wiki Library tab loads pages from GitHub; marketing skills run buttons",
+    "HUMAN: Promote Sprint 6 card to Verified on Internal Org Kanban (human-only — never auto-promote)"
   ],
   "halts_observed": [
     {
