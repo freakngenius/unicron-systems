@@ -3,9 +3,11 @@
 // Tab list: Now, People, Work, Money, Marketing, Products, System, Library
 // All tabs except "Now" render a "Coming soon" placeholder.
 
+import { useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import { getSupabase } from '../lib/supabase';
 import { useAuth } from '../lib/auth';
+import { QuickCapture } from './QuickCapture';
 
 export type AtriumTab =
   | 'now'
@@ -34,8 +36,18 @@ type Props = {
   children: ReactNode;
 };
 
+const MOBILE_TABS: AtriumTab[] = ['now', 'people', 'work', 'money'];
+
 export function AtriumLayout({ activeTab, onTabChange, children }: Props) {
   const auth = useAuth();
+  const [captureOpen, setCaptureOpen] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 3000);
+    return () => clearTimeout(t);
+  }, [toast]);
 
   async function handleSignOut() {
     await getSupabase().auth.signOut();
@@ -55,6 +67,9 @@ export function AtriumLayout({ activeTab, onTabChange, children }: Props) {
     .join('')
     .toUpperCase()
     .slice(0, 2);
+
+  const tabLabel = (id: AtriumTab) =>
+    TABS.find((t) => t.id === id)?.label ?? id;
 
   return (
     <div className="atrium-shell min-h-screen bg-bg-base text-text-primary flex flex-col">
@@ -89,27 +104,6 @@ export function AtriumLayout({ activeTab, onTabChange, children }: Props) {
         </div>
       </header>
 
-      {/* Mobile tab strip (visible < md) */}
-      <nav className="md:hidden flex overflow-x-auto border-b border-border-default bg-bg-panel px-2 py-1 gap-1 shrink-0">
-        {TABS.map((tab) => {
-          const active = tab.id === activeTab;
-          return (
-            <button
-              key={tab.id}
-              onClick={() => onTabChange(tab.id)}
-              className={[
-                'shrink-0 px-3 py-1.5 rounded-md mono text-[10px] uppercase tracking-[0.14em] transition-colors whitespace-nowrap',
-                active
-                  ? 'bg-bg-card text-text-primary'
-                  : 'text-text-secondary hover:text-text-primary hover:bg-bg-card/50',
-              ].join(' ')}
-            >
-              {tab.label}
-            </button>
-          );
-        })}
-      </nav>
-
       {/* Body */}
       <div className="atrium-body flex flex-1 min-h-0">
         {/* Sidebar nav (hidden on mobile) */}
@@ -133,11 +127,79 @@ export function AtriumLayout({ activeTab, onTabChange, children }: Props) {
           })}
         </nav>
 
-        {/* Main content */}
-        <main className="atrium-content flex-1 overflow-auto p-4 md:p-6">
+        {/* Main content — pb-20 on mobile clears the 60px bottom nav */}
+        <main className="atrium-content flex-1 overflow-auto p-4 md:p-6 pb-20 md:pb-6">
           {children}
         </main>
       </div>
+
+      {/* Mobile bottom tab bar (visible < md) */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 h-[60px] bg-bg-panel border-t border-border-default flex items-stretch z-50">
+        {MOBILE_TABS.slice(0, 2).map((id) => {
+          const active = id === activeTab;
+          return (
+            <button
+              key={id}
+              onClick={() => onTabChange(id)}
+              className={[
+                'relative flex-1 flex flex-col items-center justify-center gap-0.5 mono text-[9px] uppercase tracking-[0.14em] transition-colors',
+                active ? 'text-accent-gold' : 'text-text-secondary',
+              ].join(' ')}
+            >
+              {active && (
+                <span className="absolute top-0 h-[2px] w-8 bg-accent-gold rounded-b" />
+              )}
+              {tabLabel(id)}
+            </button>
+          );
+        })}
+
+        {/* Center Capture FAB */}
+        <div className="flex items-center justify-center px-2">
+          <button
+            onClick={() => setCaptureOpen(true)}
+            className="w-11 h-11 rounded-full bg-accent-gold flex items-center justify-center text-white shadow-lg hover:opacity-90 transition-opacity"
+            aria-label="Quick capture"
+          >
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+              <path d="M9 3.5v11M3.5 9h11" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+            </svg>
+          </button>
+        </div>
+
+        {MOBILE_TABS.slice(2).map((id) => {
+          const active = id === activeTab;
+          return (
+            <button
+              key={id}
+              onClick={() => onTabChange(id)}
+              className={[
+                'relative flex-1 flex flex-col items-center justify-center gap-0.5 mono text-[9px] uppercase tracking-[0.14em] transition-colors',
+                active ? 'text-accent-gold' : 'text-text-secondary',
+              ].join(' ')}
+            >
+              {active && (
+                <span className="absolute top-0 h-[2px] w-8 bg-accent-gold rounded-b" />
+              )}
+              {tabLabel(id)}
+            </button>
+          );
+        })}
+      </nav>
+
+      {/* Quick Capture modal */}
+      <QuickCapture
+        open={captureOpen}
+        onClose={() => setCaptureOpen(false)}
+        onToast={setToast}
+      />
+
+      {/* Toast */}
+      {toast && (
+        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 md:bottom-6 z-[200] bg-bg-card border border-border-default rounded-lg px-4 py-2 mono text-[11px] text-text-primary shadow-lg">
+          {toast}
+        </div>
+      )}
     </div>
   );
 }
