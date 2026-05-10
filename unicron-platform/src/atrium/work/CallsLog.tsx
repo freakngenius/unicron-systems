@@ -165,14 +165,14 @@ function CallDetailPanel({ call, onClose }: { call: LedgerRow; onClose: () => vo
   const voice = isVoiceCall(call);
 
   return (
-    <div className="flex flex-col h-full bg-[#141416] border border-[#1F1F23] rounded-xl overflow-hidden">
+    <div className="flex flex-col h-full bg-bg-card border border-border-default rounded-xl overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-[#1F1F23] shrink-0">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-border-default shrink-0">
         <div className="flex items-center gap-2 min-w-0">
           {voice && <VoiceBadge />}
           <div>
-            <div className="mono text-[11px] font-medium text-[#E5E5E7]">Call Detail</div>
-            <div className="mono text-[9px] text-[rgba(229,229,231,0.35)]">
+            <div className="mono text-[11px] font-medium text-text-primary">Call Detail</div>
+            <div className="mono text-[9px] text-text-muted">
               {new Date(call.created_at).toLocaleDateString('en-US', {
                 weekday: 'short', month: 'short', day: 'numeric', year: 'numeric',
               })}
@@ -181,7 +181,7 @@ function CallDetailPanel({ call, onClose }: { call: LedgerRow; onClose: () => vo
         </div>
         <button
           onClick={onClose}
-          className="mono text-[10px] uppercase tracking-[0.14em] text-[rgba(229,229,231,0.4)] hover:text-[#E5E5E7] transition-colors shrink-0"
+          className="mono text-[10px] uppercase tracking-[0.14em] text-text-muted hover:text-text-primary transition-colors shrink-0"
         >
           ✕
         </button>
@@ -194,8 +194,8 @@ function CallDetailPanel({ call, onClose }: { call: LedgerRow; onClose: () => vo
             { label: 'Participants', value: participants },
           ].map(({ label, value }) => (
             <div key={label} className="flex items-baseline gap-3">
-              <div className="mono text-[9px] uppercase tracking-[0.16em] text-[rgba(229,229,231,0.4)] w-24 shrink-0">{label}</div>
-              <div className="mono text-[11px] text-[rgba(229,229,231,0.8)] min-w-0 truncate">{value}</div>
+              <div className="mono text-[9px] uppercase tracking-[0.16em] text-text-muted w-24 shrink-0">{label}</div>
+              <div className="mono text-[11px] text-text-primary min-w-0 truncate">{value}</div>
             </div>
           ))}
         </div>
@@ -203,20 +203,20 @@ function CallDetailPanel({ call, onClose }: { call: LedgerRow; onClose: () => vo
         {/* Summary */}
         {call.content_summary && (
           <div>
-            <div className="mono text-[9px] uppercase tracking-[0.16em] text-[rgba(229,229,231,0.4)] mb-1.5">Summary</div>
-            <div className="mono text-[11px] text-[rgba(229,229,231,0.8)] leading-relaxed">{call.content_summary}</div>
+            <div className="mono text-[9px] uppercase tracking-[0.16em] text-text-muted mb-1.5">Summary</div>
+            <div className="mono text-[11px] text-text-primary leading-relaxed">{call.content_summary}</div>
           </div>
         )}
 
         {/* Decisions */}
         {decisions.length > 0 && (
           <div>
-            <div className="mono text-[9px] uppercase tracking-[0.16em] text-[rgba(229,229,231,0.4)] mb-1.5">Decisions</div>
+            <div className="mono text-[9px] uppercase tracking-[0.16em] text-text-muted mb-1.5">Decisions</div>
             <div className="space-y-1">
               {decisions.map((d, i) => (
                 <div key={i} className="flex gap-2">
-                  <span className="mono text-[9px] text-[rgba(229,229,231,0.3)] mt-1">·</span>
-                  <span className="mono text-[11px] text-[rgba(229,229,231,0.8)] leading-relaxed">{d}</span>
+                  <span className="mono text-[9px] text-text-muted mt-1">·</span>
+                  <span className="mono text-[11px] text-text-primary leading-relaxed">{d}</span>
                 </div>
               ))}
             </div>
@@ -225,17 +225,17 @@ function CallDetailPanel({ call, onClose }: { call: LedgerRow; onClose: () => vo
 
         {/* Action items */}
         <div>
-          <div className="mono text-[9px] uppercase tracking-[0.16em] text-[rgba(229,229,231,0.4)] mb-1.5">Action Items</div>
+          <div className="mono text-[9px] uppercase tracking-[0.16em] text-text-muted mb-1.5">Action Items</div>
           {aiLoading ? (
-            <div className="h-8 bg-[#1A1A1D] rounded-lg animate-pulse" />
+            <div className="h-8 bg-bg-raised rounded-lg animate-pulse" />
           ) : actionItems.length === 0 ? (
-            <div className="mono text-[11px] text-[rgba(229,229,231,0.35)]">None linked.</div>
+            <div className="mono text-[11px] text-text-muted">None linked.</div>
           ) : (
             <div className="space-y-1.5">
               {actionItems.map((ai) => (
-                <div key={ai.id} className="flex items-center justify-between gap-2 bg-[#1A1A1D] border border-[#1F1F23] rounded-lg px-3 py-2">
-                  <div className="mono text-[11px] text-[#E5E5E7] truncate">{ai.title}</div>
-                  <span className="mono text-[9px] uppercase tracking-[0.12em] text-[rgba(229,229,231,0.4)] shrink-0">{ai.status}</span>
+                <div key={ai.id} className="flex items-center justify-between gap-2 bg-bg-raised border border-border-default rounded-lg px-3 py-2">
+                  <div className="mono text-[11px] text-text-primary truncate">{ai.title}</div>
+                  <span className="mono text-[9px] uppercase tracking-[0.12em] text-text-muted shrink-0">{ai.status}</span>
                 </div>
               ))}
             </div>
@@ -245,10 +245,10 @@ function CallDetailPanel({ call, onClose }: { call: LedgerRow; onClose: () => vo
         {/* Quotes */}
         {quotes.length > 0 && (
           <div>
-            <div className="mono text-[9px] uppercase tracking-[0.16em] text-[rgba(229,229,231,0.4)] mb-1.5">Quotes</div>
+            <div className="mono text-[9px] uppercase tracking-[0.16em] text-text-muted mb-1.5">Quotes</div>
             <div className="space-y-2">
               {quotes.map((q, i) => (
-                <blockquote key={i} className="border-l-2 border-[#FF6B2B] pl-3 mono text-[11px] text-[rgba(229,229,231,0.7)] italic leading-relaxed">
+                <blockquote key={i} className="border-l-2 border-accent pl-3 mono text-[11px] text-text-secondary italic leading-relaxed">
                   {q}
                 </blockquote>
               ))}
@@ -259,9 +259,9 @@ function CallDetailPanel({ call, onClose }: { call: LedgerRow; onClose: () => vo
         {/* Transcript */}
         {call.content_full && (
           <div>
-            <div className="mono text-[9px] uppercase tracking-[0.16em] text-[rgba(229,229,231,0.4)] mb-1.5">Transcript</div>
-            <div className="bg-[#1A1A1D] border border-[#1F1F23] rounded-lg p-3 max-h-64 overflow-y-auto">
-              <pre className="mono text-[10px] text-[rgba(229,229,231,0.7)] whitespace-pre-wrap leading-relaxed">{call.content_full}</pre>
+            <div className="mono text-[9px] uppercase tracking-[0.16em] text-text-muted mb-1.5">Transcript</div>
+            <div className="bg-bg-raised border border-border-default rounded-lg p-3 max-h-64 overflow-y-auto">
+              <pre className="mono text-[10px] text-text-secondary whitespace-pre-wrap leading-relaxed">{call.content_full}</pre>
             </div>
           </div>
         )}
@@ -282,7 +282,7 @@ export function CallsLog() {
     return (
       <div className="space-y-3">
         {[0, 1, 2].map((i) => (
-          <div key={i} className="h-20 bg-[#141416] rounded-xl animate-pulse" />
+          <div key={i} className="h-20 bg-bg-card rounded-xl animate-pulse" />
         ))}
       </div>
     );
@@ -301,7 +301,7 @@ export function CallsLog() {
       {/* Semantic search bar */}
       <div className="flex items-center gap-2">
         <div className="relative flex-1 sm:flex-none sm:w-80">
-          <svg className="absolute left-3 top-1/2 -translate-y-1/2 text-[rgba(229,229,231,0.3)]" width="12" height="12" viewBox="0 0 12 12" fill="none">
+          <svg className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" width="12" height="12" viewBox="0 0 12 12" fill="none">
             <circle cx="5" cy="5" r="4" stroke="currentColor" strokeWidth="1.2" />
             <line x1="8.5" y1="8.5" x2="11" y2="11" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
           </svg>
@@ -309,21 +309,21 @@ export function CallsLog() {
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
             placeholder="Semantic search calls…"
-            className="w-full bg-[#141416] border border-[#1F1F23] rounded-lg pl-8 pr-3 py-2 mono text-[12px] text-[#E5E5E7] placeholder:text-[rgba(229,229,231,0.3)] focus:outline-none focus:border-[#2A2A2E]"
+            className="w-full bg-bg-card border border-border-default rounded-lg pl-8 pr-3 py-2 mono text-[12px] text-text-primary placeholder:text-text-muted focus:outline-none focus:border-border-hover"
           />
         </div>
         {calls.length > 0 && (
-          <span className="mono text-[10px] text-[rgba(229,229,231,0.35)]">{calls.length} call{calls.length !== 1 ? 's' : ''}</span>
+          <span className="mono text-[10px] text-text-muted">{calls.length} call{calls.length !== 1 ? 's' : ''}</span>
         )}
       </div>
 
       {calls.length === 0 ? (
-        <div className="bg-[#141416] border border-[#1F1F23] rounded-xl px-5 py-8 text-center">
-          <div className="mono text-[11px] uppercase tracking-[0.18em] text-[rgba(229,229,231,0.4)] mb-1">
+        <div className="bg-bg-card border border-border-default rounded-xl px-5 py-8 text-center">
+          <div className="mono text-[11px] uppercase tracking-[0.18em] text-text-muted mb-1">
             {search ? 'No calls match this search.' : 'No calls logged yet'}
           </div>
           {!search && (
-            <div className="mono text-[11px] text-[rgba(229,229,231,0.3)]">
+            <div className="mono text-[11px] text-text-muted">
               Call transcripts are ingested via the Quick Capture or voice pipeline.
             </div>
           )}
@@ -340,18 +340,18 @@ export function CallsLog() {
                 <div
                   key={call.id}
                   onClick={() => setDetail(isSelected ? null : call)}
-                  className="bg-[#141416] border rounded-xl px-4 py-3 hover:border-[#2A2A2E] transition-colors cursor-pointer"
-                  style={{ borderColor: isSelected ? '#FF6B2B40' : '#1F1F23' }}
+                  className="bg-bg-card border rounded-xl px-4 py-3 hover:border-border-hover transition-colors cursor-pointer"
+                  style={{ borderColor: isSelected ? 'rgba(232,118,58,0.25)' : 'var(--border-default)' }}
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 mb-1 flex-wrap">
                         {voice && <VoiceBadge />}
-                        <span className="mono text-[9px] uppercase tracking-[0.14em] text-[rgba(229,229,231,0.4)]">
+                        <span className="mono text-[9px] uppercase tracking-[0.14em] text-text-muted">
                           {formatRelativeTime(call.created_at)}
                         </span>
                       </div>
-                      <div className={`mono text-[11px] text-[rgba(229,229,231,0.8)] leading-relaxed ${detail ? 'line-clamp-2' : 'line-clamp-2'}`}>
+                      <div className={`mono text-[11px] text-text-primary leading-relaxed ${detail ? 'line-clamp-2' : 'line-clamp-2'}`}>
                         {call.content_summary
                           ? call.content_summary.slice(0, 160)
                           : call.content_full
@@ -359,7 +359,7 @@ export function CallsLog() {
                           : 'No summary available.'}
                       </div>
                     </div>
-                    <div className="mono text-[10px] text-[rgba(229,229,231,0.3)] shrink-0 mt-0.5">
+                    <div className="mono text-[10px] text-text-muted shrink-0 mt-0.5">
                       {isSelected ? '▸' : '›'}
                     </div>
                   </div>

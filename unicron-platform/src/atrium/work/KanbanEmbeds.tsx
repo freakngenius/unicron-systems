@@ -40,7 +40,7 @@ const PRIORITY_COLORS: Record<string, string> = {
   irreversible: '#EF4444',
   high: '#F59E0B',
   medium: '#3B82F6',
-  low: 'rgba(229,229,231,0.35)',
+  low: 'var(--text-lo)',
 };
 
 // Distinct color per workspace (cycles if more than 5)
@@ -130,14 +130,14 @@ function useKanbanItems(driFilter: string) {
 // ─── Slide-out detail panel ───────────────────────────────────────────────────
 
 function CardSlideOut({ item, onClose }: { item: ActionItemRow; onClose: () => void }) {
-  const priorityColor = PRIORITY_COLORS[item.priority] ?? 'rgba(229,229,231,0.35)';
+  const priorityColor = PRIORITY_COLORS[item.priority] ?? 'var(--text-lo)';
 
   return (
     <div className="fixed inset-0 z-[80] flex justify-end">
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative w-full sm:max-w-md h-full bg-[#141416] sm:border-l border-[#1F1F23] overflow-y-auto flex flex-col">
+      <div className="relative w-full sm:max-w-md h-full bg-bg-card sm:border-l border-border-default overflow-y-auto flex flex-col">
         {/* Header */}
-        <div className="flex items-start justify-between px-5 py-4 border-b border-[#1F1F23] sticky top-0 bg-[#141416] z-10">
+        <div className="flex items-start justify-between px-5 py-4 border-b border-border-default sticky top-0 bg-bg-card z-10">
           <div className="min-w-0 flex-1 pr-3">
             <div className="flex items-center gap-2 mb-1">
               <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: priorityColor }} />
@@ -145,11 +145,11 @@ function CardSlideOut({ item, onClose }: { item: ActionItemRow; onClose: () => v
                 {item.priority}
               </div>
             </div>
-            <div className="mono text-[13px] font-medium text-[#E5E5E7] leading-snug">{item.title}</div>
+            <div className="mono text-[13px] font-medium text-text-primary leading-snug">{item.title}</div>
           </div>
           <button
             onClick={onClose}
-            className="mono text-[11px] uppercase tracking-[0.14em] text-[rgba(229,229,231,0.4)] hover:text-[#E5E5E7] transition-colors shrink-0 mt-0.5"
+            className="mono text-[11px] uppercase tracking-[0.14em] text-text-muted hover:text-text-primary transition-colors shrink-0 mt-0.5"
           >
             ✕
           </button>
@@ -164,9 +164,9 @@ function CardSlideOut({ item, onClose }: { item: ActionItemRow; onClose: () => v
               { label: 'DRI', value: item.team_members?.name ?? '—' },
               { label: 'Priority', value: item.priority },
             ].map(({ label, value }) => (
-              <div key={label} className="bg-[#1A1A1D] border border-[#1F1F23] rounded-lg px-3 py-2">
-                <div className="mono text-[9px] uppercase tracking-[0.16em] text-[rgba(229,229,231,0.4)] mb-0.5">{label}</div>
-                <div className="mono text-[11px] text-[rgba(229,229,231,0.85)] capitalize">{value}</div>
+              <div key={label} className="bg-bg-raised border border-border-default rounded-lg px-3 py-2">
+                <div className="mono text-[9px] uppercase tracking-[0.16em] text-text-muted mb-0.5">{label}</div>
+                <div className="mono text-[11px] text-text-primary capitalize">{value}</div>
               </div>
             ))}
           </div>
@@ -174,12 +174,12 @@ function CardSlideOut({ item, onClose }: { item: ActionItemRow; onClose: () => v
           {/* Notion link */}
           {item.kanban_card_id && (
             <div>
-              <div className="mono text-[9px] uppercase tracking-[0.16em] text-[rgba(229,229,231,0.4)] mb-1.5">Notion Card</div>
+              <div className="mono text-[9px] uppercase tracking-[0.16em] text-text-muted mb-1.5">Notion Card</div>
               <a
                 href={`https://notion.so/${item.kanban_card_id.replace(/-/g, '')}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 mono text-[11px] text-[#FF6B2B] hover:underline"
+                className="inline-flex items-center gap-1.5 mono text-[11px] text-accent-orange hover:underline"
               >
                 Open in Notion →
               </a>
@@ -187,8 +187,8 @@ function CardSlideOut({ item, onClose }: { item: ActionItemRow; onClose: () => v
           )}
 
           {/* Card ID */}
-          <div className="pt-3 border-t border-[#1F1F23]">
-            <div className="mono text-[9px] text-[rgba(229,229,231,0.25)] break-all">ID: {item.id}</div>
+          <div className="pt-3 border-t border-border-default">
+            <div className="mono text-[9px] text-text-faint break-all">ID: {item.id}</div>
           </div>
         </div>
       </div>
@@ -202,19 +202,19 @@ function KanbanCard({ item, onSelect, selected }: { item: ActionItemRow; onSelec
   return (
     <div
       onClick={onSelect}
-      className="bg-[#1A1A1D] border rounded-lg px-3 py-2.5 hover:border-[#2A2A2E] transition-colors cursor-pointer"
-      style={{ borderColor: selected ? '#FF6B2B60' : '#1F1F23' }}
+      className="bg-bg-raised border rounded-lg px-3 py-2.5 hover:border-border-hover transition-colors cursor-pointer"
+      style={{ borderColor: selected ? 'rgba(232,118,58,0.38)' : 'var(--border-default)' }}
     >
       <div className="flex items-start gap-2 mb-1.5">
         <div
           className="w-1.5 h-1.5 rounded-full mt-1.5 shrink-0"
           style={{ backgroundColor: PRIORITY_COLORS[item.priority] }}
         />
-        <div className="mono text-[11px] text-[#E5E5E7] leading-snug">{item.title}</div>
+        <div className="mono text-[11px] text-text-primary leading-snug">{item.title}</div>
       </div>
       <div className="flex items-center gap-2">
         {item.team_members && (
-          <span className="mono text-[9px] text-[rgba(229,229,231,0.45)]">{item.team_members.name}</span>
+          <span className="mono text-[9px] text-text-muted">{item.team_members.name}</span>
         )}
         {item.kanban_card_id && (
           <a
@@ -222,7 +222,7 @@ function KanbanCard({ item, onSelect, selected }: { item: ActionItemRow; onSelec
             target="_blank"
             rel="noopener noreferrer"
             onClick={(e) => e.stopPropagation()}
-            className="mono text-[9px] text-[#FF6B2B] hover:underline ml-auto"
+            className="mono text-[9px] text-accent-orange hover:underline ml-auto"
           >
             Notion →
           </a>
@@ -262,7 +262,7 @@ function WorkspaceBoard({
         <div className="mono text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color }}>
           {workspace}
         </div>
-        <span className="mono text-[9px] text-[rgba(229,229,231,0.4)]">{items.length} items</span>
+        <span className="mono text-[9px] text-text-muted">{items.length} items</span>
       </div>
 
       {/* Status columns */}
@@ -272,9 +272,9 @@ function WorkspaceBoard({
             const colItems = byStatus[col.key];
             return (
               <div key={col.key} className="flex-1 min-w-[120px]">
-                <div className="mono text-[9px] uppercase tracking-[0.16em] text-[rgba(229,229,231,0.4)] mb-2 flex items-center justify-between">
+                <div className="mono text-[9px] uppercase tracking-[0.16em] text-text-muted mb-2 flex items-center justify-between">
                   <span>{col.label}</span>
-                  <span className="text-[rgba(229,229,231,0.3)]">{colItems.length}</span>
+                  <span className="text-text-muted">{colItems.length}</span>
                 </div>
                 <div className="space-y-1.5 min-h-[40px]">
                   {colItems.map((item) => (
@@ -286,8 +286,8 @@ function WorkspaceBoard({
                     />
                   ))}
                   {colItems.length === 0 && (
-                    <div className="h-8 border border-dashed border-[#1F1F23] rounded-lg flex items-center justify-center">
-                      <div className="mono text-[9px] text-[rgba(229,229,231,0.2)]">Empty</div>
+                    <div className="h-8 border border-dashed border-border-default rounded-lg flex items-center justify-center">
+                      <div className="mono text-[9px] text-text-faint">Empty</div>
                     </div>
                   )}
                 </div>
@@ -321,7 +321,7 @@ export function KanbanEmbeds() {
     return (
       <div className="space-y-3">
         {[0, 1].map((i) => (
-          <div key={i} className="h-32 bg-[#141416] rounded-xl animate-pulse" />
+          <div key={i} className="h-32 bg-bg-card rounded-xl animate-pulse" />
         ))}
       </div>
     );
@@ -345,8 +345,8 @@ export function KanbanEmbeds() {
           disabled={!currentMemberId}
           className={`mono text-[10px] uppercase tracking-[0.14em] px-3 py-1.5 rounded-lg border transition-colors ${
             myCardsOnly
-              ? 'bg-[#FF6B2B] border-[#FF6B2B] text-white'
-              : 'border-[#1F1F23] text-[rgba(229,229,231,0.5)] hover:text-[rgba(229,229,231,0.8)] disabled:opacity-30 disabled:cursor-not-allowed'
+              ? 'bg-accent-orange border-accent text-white'
+              : 'border-border-default text-text-secondary hover:text-text-primary disabled:opacity-30 disabled:cursor-not-allowed'
           }`}
         >
           My Cards
@@ -360,7 +360,7 @@ export function KanbanEmbeds() {
                 setMyCardsOnly(false);
               }
             }}
-            className="bg-[#141416] border border-[#1F1F23] rounded-lg px-2 py-1 mono text-[11px] text-[#E5E5E7] focus:outline-none"
+            className="bg-bg-card border border-border-default rounded-lg px-2 py-1 mono text-[11px] text-text-primary focus:outline-none"
           >
             <option value="">All team members</option>
             {members.map((m) => (
@@ -370,19 +370,19 @@ export function KanbanEmbeds() {
         )}
 
         {myCardsOnly && (
-          <span className="mono text-[10px] text-[rgba(229,229,231,0.35)]">
+          <span className="mono text-[10px] text-text-muted">
             Showing your cards only
           </span>
         )}
       </div>
 
       {workspaces.length === 0 ? (
-        <div className="bg-[#141416] border border-[#1F1F23] rounded-xl px-5 py-8 text-center">
-          <div className="mono text-[11px] uppercase tracking-[0.18em] text-[rgba(229,229,231,0.4)] mb-1">
+        <div className="bg-bg-card border border-border-default rounded-xl px-5 py-8 text-center">
+          <div className="mono text-[11px] uppercase tracking-[0.18em] text-text-muted mb-1">
             {myCardsOnly ? 'No cards assigned to you.' : 'No kanban items yet'}
           </div>
           {!myCardsOnly && (
-            <div className="mono text-[11px] text-[rgba(229,229,231,0.3)] max-w-xs mx-auto">
+            <div className="mono text-[11px] text-text-muted max-w-xs mx-auto">
               Action items with a kanban_workspace set will appear here.
             </div>
           )}
