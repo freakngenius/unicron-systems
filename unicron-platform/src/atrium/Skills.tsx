@@ -41,10 +41,9 @@ function SkillTile({ skill, color, picked, onPick }: {
       aria-label={`${skill.name}${skill.refusal_gate ? ' (gated)' : ''}${skill.status === 'scaffolded' ? ' (coming soon)' : ''}`}
       className={[
         'text-left p-3 rounded-xl flex flex-col gap-1 min-h-[64px] transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-zinc-500',
-        picked
-          ? 'bg-bg-card ring-[1.5px] ring-accent-gold shadow-sm'
-          : 'bg-bg-card hover:shadow-md shadow-sm',
+        picked ? 'ring-[1.5px] ring-accent-gold shadow-sm' : 'bg-bg-card hover:shadow-md shadow-sm',
       ].join(' ')}
+      style={picked ? { background: 'rgba(232,118,58,0.06)' } : undefined}
     >
       <div className="flex items-center gap-2">
         <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: color }} />
@@ -184,7 +183,7 @@ function RecentRuns() {
         runs.map((r, i) => (
           <div key={i} className={`flex items-center gap-2.5 px-4 py-2.5 ${i > 0 ? 'border-t border-border-subtle' : ''}`}>
             <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{
-              background: r.status === 'ok' ? '#22c55e' : r.status === 'blocked' ? '#ef4444' : '#f59e0b',
+              background: r.status === 'ok' ? '#1F8A5B' : r.status === 'blocked' ? '#E14B4B' : '#C9A227',
             }} />
             <div className="flex-1 min-w-0">
               <div className="mono text-[12.5px] text-text-primary truncate">{r.skill}</div>
