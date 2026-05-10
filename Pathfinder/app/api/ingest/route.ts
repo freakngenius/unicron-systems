@@ -193,7 +193,9 @@ interface TeamMemberKeyMatch {
 
 /**
  * Look up a team member by their ingest_api_key stored in config jsonb.
- * Uses the Supabase REST API with Accept-Profile: nervous_system.
+ * Uses the public.lookup_team_member_by_ingest_key RPC (security-definer,
+ * queries nervous_system.team_members) so no Accept-Profile schema exposure
+ * is required in PostgREST config.
  * Returns null if not found or if Supabase env vars are missing.
  */
 async function lookupTeamMemberByKey(apiKey: string): Promise<TeamMemberKeyMatch | null> {
@@ -202,15 +204,16 @@ async function lookupTeamMemberByKey(apiKey: string): Promise<TeamMemberKeyMatch
   if (!url || !serviceKey) return null;
 
   try {
-    const encoded = encodeURIComponent(apiKey);
     const res = await fetch(
-      `${url}/rest/v1/team_members?select=id,name&config->>ingest_api_key=eq.${encoded}&limit=1`,
+      `${url}/rest/v1/rpc/lookup_team_member_by_ingest_key`,
       {
+        method: 'POST',
         headers: {
           apikey: serviceKey,
           Authorization: `Bearer ${serviceKey}`,
-          'Accept-Profile': 'nervous_system',
+          'Content-Type': 'application/json',
         },
+        body: JSON.stringify({ p_api_key: apiKey }),
       }
     );
     if (!res.ok) return null;
