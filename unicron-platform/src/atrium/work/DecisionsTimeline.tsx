@@ -12,7 +12,7 @@ interface DecisionRow {
   id: string;
   source_type: string;
   content_summary: string | null;
-  metadata: {
+  insights: {
     decision_type?: string;
     supersedes_id?: string;
     evidence_url?: string;
@@ -58,7 +58,7 @@ function useDecisions(typeFilter: string) {
             typeFilter && typeFilter !== 'all'
               ? rows.filter(
                   (r) =>
-                    (r.metadata?.decision_type ?? 'unknown') === typeFilter,
+                    (r.insights?.decision_type ?? 'unknown') === typeFilter,
                 )
               : rows;
           setDecisions(filtered);
@@ -85,7 +85,7 @@ function useDecisions(typeFilter: string) {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function getDecisionType(row: DecisionRow): DecisionType {
-  const t = row.metadata?.decision_type;
+  const t = row.insights?.decision_type;
   if (t === 'tactical' || t === 'strategic' || t === 'irreversible') return t;
   return 'unknown';
 }
@@ -239,20 +239,20 @@ export function DecisionsTimeline() {
                     </div>
 
                     {/* Supersedes link */}
-                    {row.metadata?.supersedes_id && (
+                    {row.insights?.supersedes_id && (
                       <div className="mt-2 mono text-[10px] text-[rgba(229,229,231,0.4)]">
                         supersedes:{' '}
                         <span className="font-mono text-[rgba(229,229,231,0.5)]">
-                          {row.metadata.supersedes_id}
+                          {row.insights.supersedes_id}
                         </span>
                       </div>
                     )}
 
                     {/* Evidence link */}
-                    {row.metadata?.evidence_url && (
+                    {row.insights?.evidence_url && (
                       <div className="mt-2">
                         <a
-                          href={row.metadata.evidence_url}
+                          href={row.insights.evidence_url}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="mono text-[10px] text-[#FF6B2B] hover:underline"
