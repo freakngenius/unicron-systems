@@ -6,20 +6,25 @@
 // Auth flow:
 //  - If not signed in → <AtriumLogin />
 //  - If signed in → <AtriumLayout> with tab routing
+//
+// Sprint 7 Stream D: lazy-load all non-Now tabs to reduce initial bundle size.
 
-import { useState } from 'react';
+import { useState, lazy, Suspense } from 'react';
 import { useAuth } from '../lib/auth';
 import { AtriumLogin } from './AtriumLogin';
 import { AtriumLayout, AtriumPlaceholder, type AtriumTab } from './AtriumLayout';
 import { AtriumNow } from './AtriumNow';
-import { Library } from './Library';
-import { Marketing } from './Marketing';
-import { Money } from './Money';
-import { People } from './People';
-import { Products } from './Products';
-import { Skills } from './Skills';
-import { System } from './System';
-import { Work } from './Work';
+import { Skeleton } from './ui-primitives';
+
+// Heavy tabs — lazy-loaded so they're split into separate chunks
+const Library   = lazy(() => import('./Library').then(m => ({ default: m.Library })));
+const Marketing = lazy(() => import('./Marketing').then(m => ({ default: m.Marketing })));
+const Money     = lazy(() => import('./Money').then(m => ({ default: m.Money })));
+const People    = lazy(() => import('./People').then(m => ({ default: m.People })));
+const Products  = lazy(() => import('./Products').then(m => ({ default: m.Products })));
+const Skills    = lazy(() => import('./Skills').then(m => ({ default: m.Skills })));
+const System    = lazy(() => import('./System').then(m => ({ default: m.System })));
+const Work      = lazy(() => import('./Work').then(m => ({ default: m.Work })));
 
 const ATRIUM_ENABLED = import.meta.env.VITE_ATRIUM_ENABLED === 'true';
 
@@ -34,6 +39,21 @@ const TAB_SPRINT: Record<AtriumTab, number> = {
   library:   6,
   skills:    4,
 };
+
+// Fallback shown while a lazy tab chunk loads
+function TabSkeleton() {
+  return (
+    <div className="max-w-5xl w-full space-y-3 pt-2" aria-live="polite">
+      <Skeleton className="h-6 w-32" />
+      <Skeleton className="h-3 w-64" />
+      <div className="mt-6 space-y-2">
+        <Skeleton className="h-10 w-full" />
+        <Skeleton className="h-10 w-full" />
+        <Skeleton className="h-10 w-full" />
+      </div>
+    </div>
+  );
+}
 
 export function AtriumApp() {
   const auth = useAuth();
@@ -72,30 +92,32 @@ export function AtriumApp() {
 
   return (
     <AtriumLayout activeTab={activeTab} onTabChange={setActiveTab}>
-      {activeTab === 'now' ? (
-        <AtriumNow name={displayName} />
-      ) : activeTab === 'people' ? (
-        <People />
-      ) : activeTab === 'system' ? (
-        <System />
-      ) : activeTab === 'work' ? (
-        <Work />
-      ) : activeTab === 'money' ? (
-        <Money />
-      ) : activeTab === 'marketing' ? (
-        <Marketing />
-      ) : activeTab === 'products' ? (
-        <Products />
-      ) : activeTab === 'library' ? (
-        <Library />
-      ) : activeTab === 'skills' ? (
-        <Skills />
-      ) : (
-        <AtriumPlaceholder
-          tab={(activeTab as string).charAt(0).toUpperCase() + (activeTab as string).slice(1)}
-          sprint={TAB_SPRINT[activeTab as AtriumTab]}
-        />
-      )}
+      <Suspense fallback={<TabSkeleton />}>
+        {activeTab === 'now' ? (
+          <AtriumNow name={displayName} />
+        ) : activeTab === 'people' ? (
+          <People />
+        ) : activeTab === 'system' ? (
+          <System />
+        ) : activeTab === 'work' ? (
+          <Work />
+        ) : activeTab === 'money' ? (
+          <Money />
+        ) : activeTab === 'marketing' ? (
+          <Marketing />
+        ) : activeTab === 'products' ? (
+          <Products />
+        ) : activeTab === 'library' ? (
+          <Library />
+        ) : activeTab === 'skills' ? (
+          <Skills />
+        ) : (
+          <AtriumPlaceholder
+            tab={(activeTab as string).charAt(0).toUpperCase() + (activeTab as string).slice(1)}
+            sprint={TAB_SPRINT[activeTab as AtriumTab]}
+          />
+        )}
+      </Suspense>
     </AtriumLayout>
   );
 }

@@ -1,7 +1,7 @@
 // System.tsx — Sprint 3 Stream D + SY-1
 // Atrium System tab root. 10 sub-sections per v3-system.jsx spec.
 
-import React, { useState } from 'react';
+import { useState } from 'react';
 import AgentsGalaxy from './system/AgentsGalaxy';
 import TaboosViewer from './system/TaboosViewer';
 import RefusalLog from './system/RefusalLog';
@@ -536,14 +536,21 @@ export function System() {
       </div>
 
       {/* Sub-tab nav */}
-      <nav className="flex gap-0.5 border-b border-[#1F1F23] mb-6 overflow-x-auto">
+      <nav
+        className="flex gap-0.5 border-b border-[#1F1F23] mb-6 overflow-x-auto"
+        aria-label="System sub-tabs"
+        role="tablist"
+      >
         {SYSTEM_TABS.map((tab) => {
           const isActive = active === tab;
           return (
             <button
               key={tab}
+              role="tab"
+              aria-selected={isActive}
+              aria-controls={`system-panel-${tab.replace(/\s+/g, '-').toLowerCase()}`}
               onClick={() => setActive(tab)}
-              className="mono text-[11px] uppercase tracking-[0.12em] px-4 py-2.5 rounded-t-lg transition-colors relative whitespace-nowrap flex-shrink-0"
+              className="mono text-[11px] uppercase tracking-[0.12em] px-4 py-2.5 rounded-t-lg transition-colors relative whitespace-nowrap flex-shrink-0 focus:outline-none focus:ring-2 focus:ring-zinc-500"
               style={{
                 color: isActive ? '#E5E5E7' : 'rgba(229,229,231,0.45)',
                 background: isActive ? '#141416' : 'transparent',
@@ -562,7 +569,11 @@ export function System() {
       </nav>
 
       {/* Sub-tab content */}
-      <div>
+      <section
+        id={`system-panel-${active.replace(/\s+/g, '-').toLowerCase()}`}
+        role="tabpanel"
+        aria-label={active}
+      >
         {active === 'Agents'         && <AgentsGalaxy />}
         {active === 'Taboos'         && <TaboosViewer />}
         {active === 'Refusal Log'    && <RefusalLog />}
@@ -573,7 +584,7 @@ export function System() {
         {active === 'Scheduled Jobs' && <ScheduledJobs />}
         {active === 'Audit Log'      && <AuditLog />}
         {active === 'Continuity'     && <ContinuityTimeline />}
-      </div>
+      </section>
     </div>
   );
 }

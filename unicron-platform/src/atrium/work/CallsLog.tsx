@@ -1,7 +1,7 @@
 // CallsLog.tsx — Sprint 4 Stream D / W-5 upgrade
 // W-5: inline split-panel detail, voice badge on voice-agent calls, semantic search bar.
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { getSupabase } from '../../lib/supabase';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
