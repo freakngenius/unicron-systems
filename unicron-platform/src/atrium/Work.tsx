@@ -1,6 +1,8 @@
 // Work.tsx — Sprint 4 Stream D
 // Atrium Work tab root. 5 sub-views: Action Items, Calls Log, Decisions
 // Timeline, Kanban Embeds, Sprints.
+// GAP W-1 (2026-05-10): Refusal Log is intentionally omitted here.
+// System > Refusal Log is the canonical location per routing decision W-1.
 
 import { useState } from 'react';
 import { ActionItems } from './work/ActionItems';
@@ -39,8 +41,8 @@ export function Work() {
       <div className="mb-5">
         <h1 className="mono text-[18px] text-[#E5E5E7] font-semibold">Work</h1>
         <p className="mono text-[11px] text-[rgba(229,229,231,0.5)] mt-1">
-          Action items, call logs, decisions, kanban, and sprint tracking — all
-          in one surface.
+          Action items, call logs, decisions, kanban, and sprint tracking. Refusal
+          history is in System &rsaquo; Refusal Log.
         </p>
       </div>
 
