@@ -12,6 +12,7 @@ import { useAuth } from '../lib/auth';
 import { AtriumLogin } from './AtriumLogin';
 import { AtriumLayout, AtriumPlaceholder, type AtriumTab } from './AtriumLayout';
 import { AtriumNow } from './AtriumNow';
+import { Library } from './Library';
 import { Marketing } from './Marketing';
 import { Money } from './Money';
 import { People } from './People';
@@ -83,6 +84,8 @@ export function AtriumApp() {
         <Marketing />
       ) : activeTab === 'products' ? (
         <Products />
+      ) : activeTab === 'library' ? (
+        <Library />
       ) : (
         <AtriumPlaceholder
           tab={activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}

@@ -86,11 +86,13 @@ export const analystRun = inngest.createFunction(
 export const analystNightlyCron = inngest.createFunction(
   { id: 'analyst-nightly', name: 'Analyst Nightly Cron', retries: 1 },
   { cron: 'TZ=America/Los_Angeles 0 2 * * *' },
-  async () => {
-    const { decayTick, dailyDigest, driftFlagScan } = await import('./analyst.js');
-    const decayResult = await decayTick();
-    await dailyDigest();
-    await driftFlagScan();
+  async ({ step }) => {
+    const { decayTick, dailyDigest, driftFlagScan, analystWikiSync } = await import('./analyst.js');
+    const decayResult = await step.run('decay-tick', () => decayTick());
+    await step.run('daily-digest', () => dailyDigest());
+    await step.run('drift-flag-scan', () => driftFlagScan());
+    // Sprint 6 Stream C: regenerate whats-connected.md from live Supabase data
+    await step.run('wiki-sync', () => analystWikiSync());
     return { status: 'ok', ...decayResult };
   }
 );
