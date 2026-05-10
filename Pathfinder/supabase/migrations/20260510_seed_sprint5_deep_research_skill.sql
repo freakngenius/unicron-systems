@@ -6,6 +6,10 @@
 -- this migration is a no-op thanks to the DO $$ block guard below.
 -- Stream G (unicron-platform) owns the canonical skills table schema;
 -- this migration seeds the deep-research row once the table exists.
+--
+-- Column alignment patch (2026-05-09): removed non-existent skill_id column
+-- (live PK is id uuid); changed ON CONFLICT target to (name); aligned name
+-- value to slug 'deep-research' (consistent with Stream G migration).
 
 DO $$
 BEGIN
@@ -17,7 +21,6 @@ BEGIN
       AND table_name = 'skills'
   ) THEN
     INSERT INTO nervous_system.skills (
-      skill_id,
       name,
       description,
       domain,
@@ -25,12 +28,11 @@ BEGIN
       run_endpoint
     ) VALUES (
       'deep-research',
-      'Deep Research',
       'Autoresearch a topic to an 8-15 page synthesized brief with citations in wiki/research/',
       'research',
       'active',
       '/api/skills/deep-research'
-    ) ON CONFLICT (skill_id) DO NOTHING;
+    ) ON CONFLICT (name) DO NOTHING;
 
     RAISE NOTICE 'deep-research skill seeded into nervous_system.skills';
   ELSE
