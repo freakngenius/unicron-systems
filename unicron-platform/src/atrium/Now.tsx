@@ -62,7 +62,7 @@ interface FeedEvent {
   table: 'ledger' | 'audit_log';
 }
 
-type NowTab = 'overview' | 'activity';
+type NowTab = 'overview' | 'activity' | 'digest';
 type Timeframe = '1h' | '24h' | '7d' | 'custom';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -947,6 +947,166 @@ function ActivityTab() {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+// ─── DigestTab — N-5: date picker + vault fetch + 2-col sections ─────────────
+
+function DigestTab() {
+  const today = new Date().toISOString().split('T')[0];
+  const [date, setDate] = useState(today);
+  const [content, setContent] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setContent(null);
+
+    const url = `https://raw.githubusercontent.com/freakngenius/unicron-knowledge/main/wiki/memory/analyst/${date}.md`;
+    fetch(url)
+      .then((res) => {
+        if (!res.ok) throw new Error(`${res.status}`);
+        return res.text();
+      })
+      .then((text) => { if (!cancelled) { setContent(text); setLoading(false); } })
+      .catch(() => { if (!cancelled) { setContent(null); setLoading(false); } });
+
+    return () => { cancelled = true; };
+  }, [date]);
+
+  const { narrative, sections } = useMemo(() => {
+    if (!content) return { narrative: null, sections: [] as { title: string; body: string }[] };
+    const lines = content.split('\n');
+    const intro: string[] = [];
+    const sects: { title: string; body: string }[] = [];
+    let current: { title: string; body: string[] } | null = null;
+
+    for (const line of lines) {
+      if (line.startsWith('## ')) {
+        if (current) sects.push({ title: current.title, body: current.body.join('\n').trim() });
+        current = { title: line.slice(3).trim(), body: [] };
+      } else if (line.startsWith('# ')) {
+        // skip top-level header
+      } else if (current) {
+        current.body.push(line);
+      } else {
+        intro.push(line);
+      }
+    }
+    if (current) sects.push({ title: current.title, body: current.body.join('\n').trim() });
+
+    return {
+      narrative: intro.filter(Boolean).join('\n').trim() || null,
+      sections: sects,
+    };
+  }, [content]);
+
+  function shiftDate(delta: number) {
+    const d = new Date(date + 'T12:00:00');
+    d.setDate(d.getDate() + delta);
+    setDate(d.toISOString().split('T')[0]);
+  }
+
+  const displayDate = new Date(date + 'T12:00:00').toLocaleDateString('en-US', {
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+  });
+
+  const SECTION_LABELS = ['Calls', 'Actions', 'PRs', 'Taboos', 'Decay', 'Sprints'];
+
+  return (
+    <div className="flex flex-col gap-4">
+      {/* Header card */}
+      <div className="bg-[#141416] border border-[#1F1F23] rounded-xl px-5 py-5">
+        <div className="flex items-start justify-between flex-wrap gap-4 mb-4">
+          <div>
+            <div className="mono text-[10px] uppercase tracking-[0.18em] text-[#FF6B2B] font-semibold mb-1">
+              Analyst · Daily digest
+            </div>
+            <div className="mono text-[22px] font-medium text-[#E5E5E7] leading-tight">{displayDate}</div>
+            <div className="mono text-[10px] text-[rgba(229,229,231,0.35)] mt-1.5">
+              vault/Memory/analyst/{date}.md
+            </div>
+          </div>
+
+          {/* Date nav */}
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button
+              onClick={() => shiftDate(-1)}
+              className="w-8 h-8 flex items-center justify-center bg-[#1A1A1D] border border-[#1F1F23] rounded-lg mono text-[rgba(229,229,231,0.6)] hover:text-[#E5E5E7] hover:border-[#2A2A2E] transition-colors"
+              aria-label="Previous day"
+            >
+              ←
+            </button>
+            <input
+              type="date"
+              value={date}
+              max={today}
+              onChange={(e) => setDate(e.target.value)}
+              className="bg-[#1A1A1D] border border-[#1F1F23] rounded-lg px-2.5 py-1.5 mono text-[12px] text-[#E5E5E7] focus:outline-none focus:border-[#2A2A2E]"
+            />
+            <button
+              onClick={() => shiftDate(1)}
+              disabled={date >= today}
+              className="w-8 h-8 flex items-center justify-center bg-[#1A1A1D] border border-[#1F1F23] rounded-lg mono text-[rgba(229,229,231,0.6)] hover:text-[#E5E5E7] hover:border-[#2A2A2E] transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+              aria-label="Next day"
+            >
+              →
+            </button>
+          </div>
+        </div>
+
+        {loading ? (
+          <div className="space-y-2">
+            <div className="h-3 w-full bg-[#1F1F23] rounded animate-pulse" />
+            <div className="h-3 w-4/5 bg-[#1A1A1D] rounded animate-pulse" />
+          </div>
+        ) : content ? (
+          narrative && (
+            <p className="mono text-[13px] text-[rgba(229,229,231,0.8)] leading-relaxed">{narrative}</p>
+          )
+        ) : (
+          <p className="mono text-[12px] text-[rgba(229,229,231,0.45)]">
+            No digest for this date. Digests are generated nightly at 06:00 PT.
+          </p>
+        )}
+      </div>
+
+      {/* 2-col sections grid — real sections from markdown or placeholder skeleton */}
+      {loading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {SECTION_LABELS.map((s) => (
+            <div key={s} className="h-32 bg-[#141416] rounded-xl animate-pulse" />
+          ))}
+        </div>
+      ) : sections.length > 0 ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {sections.map((s) => (
+            <div key={s.title} className="bg-[#141416] border border-[#1F1F23] rounded-xl px-5 py-4">
+              <div className="mono text-[12px] font-semibold text-[#E5E5E7] mb-3">{s.title}</div>
+              {s.body ? (
+                <div className="mono text-[12px] text-[rgba(229,229,231,0.7)] leading-relaxed whitespace-pre-line">
+                  {s.body}
+                </div>
+              ) : (
+                <div className="mono text-[11px] text-[rgba(229,229,231,0.3)]">—</div>
+              )}
+            </div>
+          ))}
+        </div>
+      ) : content ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {SECTION_LABELS.map((s) => (
+            <div
+              key={s}
+              className="h-20 border border-dashed border-[#1F1F23] rounded-xl flex items-center justify-center"
+            >
+              <div className="mono text-[9px] uppercase tracking-[0.18em] text-[rgba(229,229,231,0.2)]">{s}</div>
+            </div>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -2073,7 +2233,7 @@ export function Now({ name }: Props) {
     <div className="relative w-full">
       {/* N-4: sub-tab nav */}
       <div className="flex gap-0.5 mb-5 border-b border-[#1F1F23] -mt-1">
-        {(['overview', 'activity'] as const).map((tab) => (
+        {(['overview', 'activity', 'digest'] as const).map((tab) => (
           <button
             key={tab}
             onClick={() => setNowTab(tab)}
@@ -2092,6 +2252,13 @@ export function Now({ name }: Props) {
       {nowTab === 'activity' && (
         <div className="px-2 sm:px-0">
           <ActivityTab />
+        </div>
+      )}
+
+      {/* N-5: Digest sub-tab — full width, date picker + 2-col sections */}
+      {nowTab === 'digest' && (
+        <div className="px-2 sm:px-0">
+          <DigestTab />
         </div>
       )}
 
