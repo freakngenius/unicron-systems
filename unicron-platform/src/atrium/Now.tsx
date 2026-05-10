@@ -51,6 +51,9 @@ export interface SkillRow {
   run_endpoint?: string | null;
   // config is an opaque JSON column — we only read ui_trigger here
   config?: { ui_trigger?: boolean } | null;
+  // N-6: last run timestamp and cumulative run count
+  last_run_at?: string | null;
+  total_runs?: number | null;
 }
 
 interface FeedEvent {
@@ -1253,10 +1256,18 @@ function SkillsSurface({ onOpenQuickCapture }: { onOpenQuickCapture?: () => void
   // Sprint 5: modal state for active skills that need user input before running
   const [modal, setModal] = useState<SkillModalState>({ open: false });
 
+  // N-6: category filter state
+  const [domainFilter, setDomainFilter] = useState<string | null>(null);
+
   const byDomain = skills.reduce<Record<string, SkillRow[]>>((acc, s) => {
     (acc[s.domain] ??= []).push(s);
     return acc;
   }, {});
+
+  const allDomains = [...new Set(skills.map((s) => s.domain))].sort();
+  const filteredDomains = domainFilter
+    ? { [domainFilter]: byDomain[domainFilter] ?? [] }
+    : byDomain;
 
   const registeredNames = new Set(skills.map((s) => s.name));
 
@@ -1645,13 +1656,44 @@ function SkillsSurface({ onOpenQuickCapture }: { onOpenQuickCapture?: () => void
 
       {/* Domain grid — DB-registered skills */}
       <div className="px-4 sm:px-5 py-4 space-y-4">
-        {Object.entries(byDomain).map(([domain, domainSkills]) => (
+        {/* N-6: category filter chips */}
+        {allDomains.length > 1 && (
+          <div className="flex flex-wrap gap-1.5">
+            <button
+              onClick={() => setDomainFilter(null)}
+              className={[
+                'mono text-[9px] uppercase tracking-[0.16em] px-2.5 py-1 rounded-full border transition-colors',
+                domainFilter === null
+                  ? 'border-[#FF6B2B] text-[#FF6B2B] bg-[#FF6B2B]/10'
+                  : 'border-[#2A2A2E] text-[rgba(229,229,231,0.45)] hover:border-[#3A3A3E] hover:text-[rgba(229,229,231,0.7)]',
+              ].join(' ')}
+            >
+              All
+            </button>
+            {allDomains.map((d) => (
+              <button
+                key={d}
+                onClick={() => setDomainFilter(d === domainFilter ? null : d)}
+                className={[
+                  'mono text-[9px] uppercase tracking-[0.16em] px-2.5 py-1 rounded-full border transition-colors',
+                  domainFilter === d
+                    ? 'border-[#FF6B2B] text-[#FF6B2B] bg-[#FF6B2B]/10'
+                    : 'border-[#2A2A2E] text-[rgba(229,229,231,0.45)] hover:border-[#3A3A3E] hover:text-[rgba(229,229,231,0.7)]',
+                ].join(' ')}
+              >
+                {d}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {Object.entries(filteredDomains).map(([domain, domainSkills]) => (
           <div key={domain}>
             <div className="mono text-[9px] uppercase tracking-[0.22em] text-[rgba(229,229,231,0.35)] mb-2">
               {domain}:
             </div>
-            {/* 2-col mobile, 3-col sm, 4-col lg */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-1.5">
+            {/* N-6: auto-fill with 180px min tile width */}
+            <div className="grid gap-1.5" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))' }}>
               {domainSkills.map((skill) => {
                 const isThisRunning = state.running && state.runningSlug === skill.name;
                 const isUiTrigger =
@@ -1672,7 +1714,7 @@ function SkillsSurface({ onOpenQuickCapture }: { onOpenQuickCapture?: () => void
                     onClick={() => void handleSkillClick(skill)}
                     disabled={isDisabled}
                     className={[
-                      'text-left px-3 py-2 rounded-lg border mono text-[11px] tracking-[0.08em] transition-colors',
+                      'text-left px-3 py-2 rounded-lg border transition-colors',
                       isThisRunning
                         ? 'border-[#FF6B2B] text-[#FF6B2B] opacity-70 cursor-wait'
                         : isScaffolded
@@ -1683,19 +1725,33 @@ function SkillsSurface({ onOpenQuickCapture }: { onOpenQuickCapture?: () => void
                         : '',
                     ].join(' ')}
                   >
-                    {isThisRunning ? '…' : formatSkillName(skill.name)}
-                    {isScaffolded && (
-                      <span className="ml-1 mono text-[8px] text-[rgba(229,229,231,0.2)]">
-                        S6
-                      </span>
-                    )}
-                    {skill.refusal_gate && !isThisRunning && !isScaffolded && (
-                      <span
-                        className="ml-1 mono text-[8px] text-orange-400"
-                        title="Requires human approval before running"
-                      >
-                        &#x1F6E1;
-                      </span>
+                    <div className="mono text-[11px] tracking-[0.08em] truncate">
+                      {isThisRunning ? '…' : formatSkillName(skill.name)}
+                      {isScaffolded && (
+                        <span className="ml-1 mono text-[8px] text-[rgba(229,229,231,0.2)]">
+                          S6
+                        </span>
+                      )}
+                      {skill.refusal_gate && !isThisRunning && !isScaffolded && (
+                        <span
+                          className="ml-1 mono text-[8px] text-orange-400"
+                          title="Requires human approval before running"
+                        >
+                          &#x1F6E1;
+                        </span>
+                      )}
+                    </div>
+                    {!isThisRunning && (
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <span className="mono text-[8px] text-[rgba(229,229,231,0.25)]">
+                          {skill.last_run_at ? formatRelativeTime(skill.last_run_at) : 'never'}
+                        </span>
+                        {(skill.total_runs ?? 0) > 0 && (
+                          <span className="mono text-[8px] text-[rgba(229,229,231,0.4)] bg-[rgba(255,255,255,0.06)] rounded px-1">
+                            {skill.total_runs}×
+                          </span>
+                        )}
+                      </div>
                     )}
                   </button>
                 );
