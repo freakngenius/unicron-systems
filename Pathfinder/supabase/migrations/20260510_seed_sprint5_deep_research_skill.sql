@@ -24,12 +24,14 @@ BEGIN
       name,
       description,
       domain,
+      type,
       status,
       run_endpoint
     ) VALUES (
       'deep-research',
       'Autoresearch a topic to an 8-15 page synthesized brief with citations in wiki/research/',
       'research',
+      'manual',
       'active',
       '/api/skills/deep-research'
     ) ON CONFLICT (name) DO NOTHING;
