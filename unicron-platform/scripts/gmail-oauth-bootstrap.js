@@ -11,10 +11,9 @@
 //
 // Prerequisites: npm install googleapis
 
-'use strict';
-
-const http = require('http');
-const { google } = require('googleapis');
+import http from 'http';
+import { execSync } from 'child_process';
+import { google } from 'googleapis';
 
 // ── Parse CLI args ────────────────────────────────────────────────────────────
 
@@ -58,7 +57,6 @@ console.log(authUrl + '\n');
 
 // Attempt to open browser (non-fatal if it fails)
 try {
-  const { execSync } = require('child_process');
   const platform = process.platform;
   if (platform === 'darwin') execSync(`open "${authUrl}"`, { stdio: 'ignore' });
   else if (platform === 'win32') execSync(`start "" "${authUrl}"`, { stdio: 'ignore', shell: true });
