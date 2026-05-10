@@ -202,10 +202,10 @@ function usePulseData(): PulseData {
 }
 
 const STATUS_COLORS = {
-  green: '#22C55E',
-  yellow: '#F59E0B',
-  red: '#EF4444',
-  loading: '#2A2A2E',
+  green: '#4FB286',
+  yellow: '#D9A23A',
+  red: '#DD6262',
+  loading: 'var(--border-strong)',
 };
 
 function StatusPulse() {
@@ -253,17 +253,17 @@ function StatusPulse() {
       {indicators.map((ind) => (
         <div
           key={ind.label}
-          className="bg-[#141416] border border-[#1F1F23] rounded-xl px-3 sm:px-4 py-3 flex items-center gap-2 sm:gap-3"
+          className="bg-bg-card border border-border-default rounded-xl px-3 sm:px-4 py-3 flex items-center gap-2 sm:gap-3"
         >
           <div
             className="w-2.5 h-2.5 rounded-full shrink-0"
             style={{ backgroundColor: ind.color, boxShadow: `0 0 6px ${ind.color}60` }}
           />
           <div className="min-w-0">
-            <div className="mono text-[9px] uppercase tracking-[0.16em] text-[rgba(229,229,231,0.5)] truncate">
+            <div className="mono text-[9px] uppercase tracking-[0.16em] text-text-secondary truncate">
               {ind.label}
             </div>
-            <div className="mono text-[12px] sm:text-[13px] text-[#E5E5E7] font-medium truncate">
+            <div className="mono text-[12px] sm:text-[13px] text-text-primary font-medium truncate">
               {ind.value}
             </div>
           </div>
@@ -306,11 +306,11 @@ function useAttentionItems() {
 }
 
 const CATEGORY_COLORS: Record<ScoredItem['category'], string> = {
-  escalation: '#EF4444',
-  ingest: '#F59E0B',
-  sprint: '#3B82F6',
-  health: '#A78BFA',
-  calendar: '#22C55E',
+  escalation: '#DD6262',
+  ingest: '#D9A23A',
+  sprint: '#6F95D6',
+  health: '#8B7CD8',
+  calendar: '#4FB286',
 };
 
 const CATEGORY_LABELS: Record<ScoredItem['category'], string> = {
@@ -328,7 +328,7 @@ function TopOfMind() {
     return (
       <div className="space-y-2">
         {[0, 1, 2].map((i) => (
-          <div key={i} className="h-16 bg-[#141416] rounded-xl animate-pulse" />
+          <div key={i} className="h-16 bg-bg-card rounded-xl animate-pulse" />
         ))}
       </div>
     );
@@ -336,12 +336,12 @@ function TopOfMind() {
 
   if (items.length === 0) {
     return (
-      <div className="bg-[#141416] border border-[#1F1F23] rounded-xl px-5 py-4">
-        <div className="mono text-[11px] text-[rgba(229,229,231,0.5)]">
+      <div className="bg-bg-card border border-border-default rounded-xl px-5 py-4">
+        <div className="mono text-[11px] text-text-secondary">
           Nothing demanding attention right now.
         </div>
         {calendarConnected === false && (
-          <div className="mono text-[10px] text-[rgba(229,229,231,0.35)] mt-1.5">
+          <div className="mono text-[10px] text-text-muted mt-1.5">
             Calendar not connected — Sprint 5
           </div>
         )}
@@ -355,7 +355,7 @@ function TopOfMind() {
         <div
           key={item.id}
           // Sprint 4 mobile: full width, comfortable padding
-          className="w-full bg-[#141416] border border-[#1F1F23] rounded-xl px-4 sm:px-5 py-3 sm:py-4 hover:border-[#2A2A2E] transition-colors"
+          className="w-full bg-bg-card border border-border-default rounded-xl px-4 sm:px-5 py-3 sm:py-4 hover:border-border-hover transition-colors"
         >
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-start gap-3 min-w-0">
@@ -364,9 +364,9 @@ function TopOfMind() {
                 style={{ backgroundColor: CATEGORY_COLORS[item.category] }}
               />
               <div className="min-w-0">
-                <div className="mono text-[13px] text-[#E5E5E7] truncate">{item.label}</div>
+                <div className="mono text-[13px] text-text-primary truncate">{item.label}</div>
                 {item.detail && (
-                  <div className="mono text-[11px] text-[rgba(229,229,231,0.5)] mt-0.5 line-clamp-1">
+                  <div className="mono text-[11px] text-text-secondary mt-0.5 line-clamp-1">
                     {item.detail}
                   </div>
                 )}
@@ -378,16 +378,16 @@ function TopOfMind() {
                     {CATEGORY_LABELS[item.category]}
                   </span>
                   {item.priority && (
-                    <span className="mono text-[9px] uppercase tracking-[0.12em] text-[rgba(229,229,231,0.4)]">
+                    <span className="mono text-[9px] uppercase tracking-[0.12em] text-text-muted">
                       {item.priority}
                     </span>
                   )}
                   {item.due_at && (
-                    <span className="mono text-[9px] text-[rgba(229,229,231,0.4)]">
+                    <span className="mono text-[9px] text-text-muted">
                       due {new Date(item.due_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                     </span>
                   )}
-                  <span className="mono text-[9px] text-[rgba(229,229,231,0.3)]">
+                  <span className="mono text-[9px] text-text-muted">
                     score {item.score}
                   </span>
                 </div>
@@ -408,7 +408,7 @@ function TopOfMind() {
         </div>
       ))}
       {calendarConnected === false && (
-        <div className="mono text-[9px] uppercase tracking-[0.14em] text-[rgba(229,229,231,0.25)] pt-1 pl-1">
+        <div className="mono text-[9px] uppercase tracking-[0.14em] text-text-muted pt-1 pl-1">
           Calendar not connected — Sprint 5
         </div>
       )}
@@ -420,13 +420,13 @@ function TopOfMind() {
 
 function CalendarStub() {
   return (
-    <div className="bg-[#141416] border border-[#1F1F23] rounded-xl px-4 sm:px-5 py-4 sm:py-5">
+    <div className="bg-bg-card border border-border-default rounded-xl px-4 sm:px-5 py-4 sm:py-5">
       {/* Full calendar on sm+; just next event hint on xs */}
       <div className="flex items-center gap-2 mb-3">
-        <div className="w-4 h-4 rounded border border-[#2A2A2E] flex items-center justify-center shrink-0">
-          <div className="w-2 h-2 bg-[rgba(229,229,231,0.3)] rounded-sm" />
+        <div className="w-4 h-4 rounded border border-border-hover flex items-center justify-center shrink-0">
+          <div className="w-2 h-2 bg-border-subtle rounded-sm" />
         </div>
-        <div className="mono text-[11px] uppercase tracking-[0.16em] text-[rgba(229,229,231,0.5)]">
+        <div className="mono text-[11px] uppercase tracking-[0.16em] text-text-secondary">
           {/* Mobile: abbreviated; sm+: full */}
           <span className="sm:hidden">Today</span>
           <span className="hidden sm:inline">Today's Calendar</span>
@@ -434,16 +434,16 @@ function CalendarStub() {
       </div>
 
       {/* On xs: compact next-event stub */}
-      <div className="sm:hidden mono text-[12px] text-[rgba(229,229,231,0.5)]">
+      <div className="sm:hidden mono text-[12px] text-text-secondary">
         No upcoming events.
       </div>
 
       {/* On sm+: full placeholder */}
       <div className="hidden sm:block">
-        <div className="mono text-[12px] text-[rgba(229,229,231,0.5)]">
+        <div className="mono text-[12px] text-text-secondary">
           Connect Google Calendar to see today's events.
         </div>
-        <div className="mono text-[9px] uppercase tracking-[0.14em] text-[rgba(229,229,231,0.3)] mt-2">
+        <div className="mono text-[9px] uppercase tracking-[0.14em] text-text-muted mt-2">
           Calendar integration — Sprint 5
         </div>
       </div>
@@ -488,24 +488,24 @@ function YesterdayDigest() {
 
   if (loading) {
     return (
-      <div className="bg-[#141416] border border-[#1F1F23] rounded-xl px-4 sm:px-5 py-4 sm:py-5">
-        <div className="h-4 w-32 bg-[#1F1F23] rounded animate-pulse mb-2" />
-        <div className="h-3 w-full bg-[#1A1A1D] rounded animate-pulse" />
+      <div className="bg-bg-card border border-border-default rounded-xl px-4 sm:px-5 py-4 sm:py-5">
+        <div className="h-4 w-32 bg-bg-raised rounded animate-pulse mb-2" />
+        <div className="h-3 w-full bg-bg-raised rounded animate-pulse" />
       </div>
     );
   }
 
   return (
-    <div className="bg-[#141416] border border-[#1F1F23] rounded-xl px-4 sm:px-5 py-4 sm:py-5">
-      <div className="mono text-[11px] uppercase tracking-[0.16em] text-[rgba(229,229,231,0.5)] mb-3">
+    <div className="bg-bg-card border border-border-default rounded-xl px-4 sm:px-5 py-4 sm:py-5">
+      <div className="mono text-[11px] uppercase tracking-[0.16em] text-text-secondary mb-3">
         Yesterday's Digest
       </div>
       {content ? (
-        <div className="mono text-[12px] text-[rgba(229,229,231,0.8)] leading-relaxed whitespace-pre-line line-clamp-6">
+        <div className="mono text-[12px] text-text-primary leading-relaxed whitespace-pre-line line-clamp-6">
           {content}
         </div>
       ) : (
-        <div className="mono text-[12px] text-[rgba(229,229,231,0.5)]">
+        <div className="mono text-[12px] text-text-secondary">
           No digest yet.
         </div>
       )}
@@ -648,25 +648,25 @@ function ActivityFeed() {
 
   return (
     // Sprint 4 mobile: full width
-    <div className="w-full bg-[#141416] border border-[#1F1F23] rounded-xl overflow-hidden">
-      <div className="px-4 sm:px-5 py-3 border-b border-[#1F1F23] flex items-center justify-between">
-        <div className="mono text-[11px] uppercase tracking-[0.16em] text-[rgba(229,229,231,0.5)]">
+    <div className="w-full bg-bg-card border border-border-default rounded-xl overflow-hidden">
+      <div className="px-4 sm:px-5 py-3 border-b border-border-default flex items-center justify-between">
+        <div className="mono text-[11px] uppercase tracking-[0.16em] text-text-secondary">
           Live Activity
         </div>
         <div className="flex items-center gap-1.5">
           <div className="w-1.5 h-1.5 rounded-full bg-[#22C55E] animate-pulse" />
-          <div className="mono text-[9px] uppercase tracking-[0.14em] text-[rgba(229,229,231,0.4)]">
+          <div className="mono text-[9px] uppercase tracking-[0.14em] text-text-muted">
             Live
           </div>
         </div>
       </div>
 
       {events.length === 0 ? (
-        <div className="px-4 sm:px-5 py-6 mono text-[11px] text-[rgba(229,229,231,0.4)]">
+        <div className="px-4 sm:px-5 py-6 mono text-[11px] text-text-muted">
           Listening for activity… events will appear here in real time.
         </div>
       ) : (
-        <div className="divide-y divide-[#1F1F23]">
+        <div className="divide-y divide-border-default">
           {events.map((evt) => (
             <div key={evt.id} className="px-4 sm:px-5 py-3 flex items-start gap-3">
               <div className="text-[14px] pt-0.5 shrink-0">
@@ -674,20 +674,20 @@ function ActivityFeed() {
               </div>
               <div className="min-w-0 flex-1">
                 <div className="flex items-baseline justify-between gap-2">
-                  <div className="mono text-[12px] text-[#E5E5E7] truncate">
+                  <div className="mono text-[12px] text-text-primary truncate">
                     {evt.content_summary ?? evt.source_type}
                     {(evt.count ?? 1) > 1 && (
-                      <span className="ml-1.5 mono text-[10px] bg-[#1F1F23] text-[rgba(229,229,231,0.6)] px-1.5 py-0.5 rounded">
+                      <span className="ml-1.5 mono text-[10px] bg-bg-raised text-text-secondary px-1.5 py-0.5 rounded">
                         ×{evt.count}
                       </span>
                     )}
                   </div>
                   {/* Sprint 4 mobile: hide timestamps on xs */}
-                  <div className="hidden sm:block mono text-[10px] text-[rgba(229,229,231,0.4)] shrink-0">
+                  <div className="hidden sm:block mono text-[10px] text-text-muted shrink-0">
                     {formatRelativeTime(evt.created_at)}
                   </div>
                 </div>
-                <div className="mono text-[9px] uppercase tracking-[0.12em] text-[rgba(229,229,231,0.35)] mt-0.5">
+                <div className="mono text-[9px] uppercase tracking-[0.12em] text-text-muted mt-0.5">
                   {evt.source_type} · {evt.table}
                 </div>
               </div>
@@ -728,15 +728,15 @@ function HeroStrip() {
         .join(' · ');
 
   return (
-    <div className="w-full bg-[#141416] border border-[#1F1F23] rounded-xl px-5 py-4">
+    <div className="w-full bg-bg-card border border-border-default rounded-xl px-5 py-4">
       <div
-        className="mono font-medium text-[#E5E5E7] leading-tight mb-1"
+        className="mono font-medium text-text-primary leading-tight mb-1"
         style={{ fontSize: 'clamp(16px, 3vw, 22px)' }}
       >
         {loading ? <span className="opacity-0">placeholder</span> : headline}
       </div>
       {context && (
-        <div className="mono text-[12px] text-[rgba(229,229,231,0.5)]">{context}</div>
+        <div className="mono text-[12px] text-text-secondary">{context}</div>
       )}
     </div>
   );
@@ -791,7 +791,7 @@ function ActivityTab() {
       {/* Filter bar */}
       <div className="flex flex-wrap gap-2 items-center">
         {/* Timeframe selector */}
-        <div className="flex gap-0.5 bg-[#141416] border border-[#1F1F23] rounded-lg p-0.5 mr-1">
+        <div className="flex gap-0.5 bg-bg-card border border-border-default rounded-lg p-0.5 mr-1">
           {(['1h', '24h', '7d', 'custom'] as const).map((t) => (
             <button
               key={t}
@@ -799,7 +799,7 @@ function ActivityTab() {
               className={`mono text-[10px] uppercase tracking-[0.12em] px-2.5 py-1 rounded transition-colors ${
                 timeframe === t
                   ? 'bg-[#FF6B2B] text-white'
-                  : 'text-[rgba(229,229,231,0.5)] hover:text-[rgba(229,229,231,0.8)]'
+                  : 'text-text-secondary hover:text-text-primary'
               }`}
             >
               {t}
@@ -814,8 +814,8 @@ function ActivityTab() {
             onClick={() => setSurface(s)}
             className={`mono text-[10px] uppercase tracking-[0.12em] px-2.5 py-1 rounded-full border transition-colors ${
               surface === s
-                ? 'border-[#FF6B2B] text-[#E5E5E7] bg-[#FF6B2B18]'
-                : 'border-[#1F1F23] text-[rgba(229,229,231,0.4)] hover:text-[rgba(229,229,231,0.7)]'
+                ? 'border-[#FF6B2B] text-text-primary bg-[#FF6B2B18]'
+                : 'border-border-default text-text-muted hover:text-text-secondary'
             }`}
           >
             {s === 'all' ? 'All' : s === 'audit_log' ? 'Audit' : 'Ledger'}
@@ -829,8 +829,8 @@ function ActivityTab() {
             onClick={() => toggleSource(src)}
             className={`mono text-[10px] px-2.5 py-1 rounded-full border transition-colors ${
               activeSources.has(src)
-                ? 'border-[#FF6B2B] text-[#E5E5E7] bg-[#FF6B2B18]'
-                : 'border-[#1F1F23] text-[rgba(229,229,231,0.4)] hover:text-[rgba(229,229,231,0.7)]'
+                ? 'border-[#FF6B2B] text-text-primary bg-[#FF6B2B18]'
+                : 'border-border-default text-text-muted hover:text-text-secondary'
             }`}
           >
             {SOURCE_TYPE_ICONS[src] ?? '⚡'} {src}
@@ -841,41 +841,41 @@ function ActivityTab() {
         <button
           disabled
           title="DRI filtering — Sprint 5"
-          className="mono text-[10px] px-2.5 py-1 rounded-full border border-[#1F1F23] text-[rgba(229,229,231,0.2)] cursor-not-allowed"
+          className="mono text-[10px] px-2.5 py-1 rounded-full border border-border-default text-text-faint cursor-not-allowed"
         >
           DRI · Sprint 5
         </button>
       </div>
 
       {/* Feed */}
-      <div className="bg-[#141416] border border-[#1F1F23] rounded-xl overflow-hidden">
-        <div className="px-4 sm:px-5 py-3 border-b border-[#1F1F23] flex items-center justify-between">
-          <div className="mono text-[11px] uppercase tracking-[0.16em] text-[rgba(229,229,231,0.5)]">
+      <div className="bg-bg-card border border-border-default rounded-xl overflow-hidden">
+        <div className="px-4 sm:px-5 py-3 border-b border-border-default flex items-center justify-between">
+          <div className="mono text-[11px] uppercase tracking-[0.16em] text-text-secondary">
             Activity Feed
           </div>
           <div className="flex items-center gap-3">
-            <span className="mono text-[10px] text-[rgba(229,229,231,0.35)]">
+            <span className="mono text-[10px] text-text-muted">
               {filtered.length} event{filtered.length !== 1 ? 's' : ''}
             </span>
             <div className="flex items-center gap-1.5">
               <div className="w-1.5 h-1.5 rounded-full bg-[#22C55E] animate-pulse" />
-              <span className="mono text-[9px] uppercase tracking-[0.14em] text-[rgba(229,229,231,0.4)]">Live</span>
+              <span className="mono text-[9px] uppercase tracking-[0.14em] text-text-muted">Live</span>
             </div>
           </div>
         </div>
 
         {filtered.length === 0 ? (
-          <div className="px-4 sm:px-5 py-6 mono text-[11px] text-[rgba(229,229,231,0.4)]">
+          <div className="px-4 sm:px-5 py-6 mono text-[11px] text-text-muted">
             No events matching the current filters.
           </div>
         ) : (
-          <div className="divide-y divide-[#1F1F23]">
+          <div className="divide-y divide-border-default">
             {filtered.map((evt) => {
               const expanded = expandedId === evt.id;
               return (
                 <div
                   key={evt.id}
-                  className="cursor-pointer hover:bg-[#1A1A1D] transition-colors"
+                  className="cursor-pointer hover:bg-bg-raised transition-colors"
                   onClick={() => setExpandedId(expanded ? null : evt.id)}
                 >
                   <div className="px-4 sm:px-5 py-3 flex items-start gap-3">
@@ -884,52 +884,52 @@ function ActivityTab() {
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-baseline justify-between gap-2">
-                        <div className="mono text-[12px] text-[#E5E5E7] truncate">
+                        <div className="mono text-[12px] text-text-primary truncate">
                           {evt.content_summary ?? evt.source_type}
                           {(evt.count ?? 1) > 1 && (
-                            <span className="ml-1.5 mono text-[10px] bg-[#1F1F23] text-[rgba(229,229,231,0.6)] px-1.5 py-0.5 rounded">
+                            <span className="ml-1.5 mono text-[10px] bg-bg-raised text-text-secondary px-1.5 py-0.5 rounded">
                               ×{evt.count}
                             </span>
                           )}
                         </div>
-                        <div className="mono text-[10px] text-[rgba(229,229,231,0.4)] shrink-0">
+                        <div className="mono text-[10px] text-text-muted shrink-0">
                           {formatRelativeTime(evt.created_at)}
                         </div>
                       </div>
-                      <div className="mono text-[9px] uppercase tracking-[0.12em] text-[rgba(229,229,231,0.35)] mt-0.5">
+                      <div className="mono text-[9px] uppercase tracking-[0.12em] text-text-muted mt-0.5">
                         {evt.source_type} · {evt.table}
                       </div>
                     </div>
-                    <div className="mono text-[10px] text-[rgba(229,229,231,0.3)] shrink-0 pt-0.5">
+                    <div className="mono text-[10px] text-text-muted shrink-0 pt-0.5">
                       {expanded ? '▾' : '▸'}
                     </div>
                   </div>
 
                   {expanded && (
-                    <div className="px-4 sm:px-5 pb-3 bg-[#141416]">
+                    <div className="px-4 sm:px-5 pb-3 bg-bg-card">
                       <div className="grid grid-cols-2 gap-x-4 gap-y-2 pl-7 pt-1">
                         <div>
-                          <div className="mono text-[9px] uppercase tracking-[0.16em] text-[rgba(229,229,231,0.35)]">source</div>
-                          <div className="mono text-[11px] text-[rgba(229,229,231,0.8)]">{evt.source_type}</div>
+                          <div className="mono text-[9px] uppercase tracking-[0.16em] text-text-muted">source</div>
+                          <div className="mono text-[11px] text-text-primary">{evt.source_type}</div>
                         </div>
                         <div>
-                          <div className="mono text-[9px] uppercase tracking-[0.16em] text-[rgba(229,229,231,0.35)]">surface</div>
-                          <div className="mono text-[11px] text-[rgba(229,229,231,0.8)]">{evt.table}</div>
+                          <div className="mono text-[9px] uppercase tracking-[0.16em] text-text-muted">surface</div>
+                          <div className="mono text-[11px] text-text-primary">{evt.table}</div>
                         </div>
                         <div>
-                          <div className="mono text-[9px] uppercase tracking-[0.16em] text-[rgba(229,229,231,0.35)]">count</div>
-                          <div className="mono text-[11px] text-[rgba(229,229,231,0.8)]">{evt.count ?? 1}</div>
+                          <div className="mono text-[9px] uppercase tracking-[0.16em] text-text-muted">count</div>
+                          <div className="mono text-[11px] text-text-primary">{evt.count ?? 1}</div>
                         </div>
                         <div>
-                          <div className="mono text-[9px] uppercase tracking-[0.16em] text-[rgba(229,229,231,0.35)]">timestamp</div>
-                          <div className="mono text-[11px] text-[rgba(229,229,231,0.8)]">
+                          <div className="mono text-[9px] uppercase tracking-[0.16em] text-text-muted">timestamp</div>
+                          <div className="mono text-[11px] text-text-primary">
                             {new Date(evt.created_at).toLocaleString()}
                           </div>
                         </div>
                         {evt.content_summary && (
                           <div className="col-span-2">
-                            <div className="mono text-[9px] uppercase tracking-[0.16em] text-[rgba(229,229,231,0.35)]">payload</div>
-                            <div className="mono text-[11px] text-[rgba(229,229,231,0.8)] mt-0.5 break-all leading-relaxed">
+                            <div className="mono text-[9px] uppercase tracking-[0.16em] text-text-muted">payload</div>
+                            <div className="mono text-[11px] text-text-primary mt-0.5 break-all leading-relaxed">
                               {evt.content_summary}
                             </div>
                           </div>
@@ -1014,14 +1014,14 @@ function DigestTab() {
   return (
     <div className="flex flex-col gap-4">
       {/* Header card */}
-      <div className="bg-[#141416] border border-[#1F1F23] rounded-xl px-5 py-5">
+      <div className="bg-bg-card border border-border-default rounded-xl px-5 py-5">
         <div className="flex items-start justify-between flex-wrap gap-4 mb-4">
           <div>
             <div className="mono text-[10px] uppercase tracking-[0.18em] text-[#FF6B2B] font-semibold mb-1">
               Analyst · Daily digest
             </div>
-            <div className="mono text-[22px] font-medium text-[#E5E5E7] leading-tight">{displayDate}</div>
-            <div className="mono text-[10px] text-[rgba(229,229,231,0.35)] mt-1.5">
+            <div className="mono text-[22px] font-medium text-text-primary leading-tight">{displayDate}</div>
+            <div className="mono text-[10px] text-text-muted mt-1.5">
               vault/Memory/analyst/{date}.md
             </div>
           </div>
@@ -1030,7 +1030,7 @@ function DigestTab() {
           <div className="flex items-center gap-1.5 shrink-0">
             <button
               onClick={() => shiftDate(-1)}
-              className="w-8 h-8 flex items-center justify-center bg-[#1A1A1D] border border-[#1F1F23] rounded-lg mono text-[rgba(229,229,231,0.6)] hover:text-[#E5E5E7] hover:border-[#2A2A2E] transition-colors"
+              className="w-8 h-8 flex items-center justify-center bg-bg-raised border border-border-default rounded-lg mono text-text-secondary hover:text-text-primary hover:border-border-hover transition-colors"
               aria-label="Previous day"
             >
               ←
@@ -1040,12 +1040,12 @@ function DigestTab() {
               value={date}
               max={today}
               onChange={(e) => setDate(e.target.value)}
-              className="bg-[#1A1A1D] border border-[#1F1F23] rounded-lg px-2.5 py-1.5 mono text-[12px] text-[#E5E5E7] focus:outline-none focus:border-[#2A2A2E]"
+              className="bg-bg-raised border border-border-default rounded-lg px-2.5 py-1.5 mono text-[12px] text-text-primary focus:outline-none focus:border-border-hover"
             />
             <button
               onClick={() => shiftDate(1)}
               disabled={date >= today}
-              className="w-8 h-8 flex items-center justify-center bg-[#1A1A1D] border border-[#1F1F23] rounded-lg mono text-[rgba(229,229,231,0.6)] hover:text-[#E5E5E7] hover:border-[#2A2A2E] transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+              className="w-8 h-8 flex items-center justify-center bg-bg-raised border border-border-default rounded-lg mono text-text-secondary hover:text-text-primary hover:border-border-hover transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
               aria-label="Next day"
             >
               →
@@ -1055,15 +1055,15 @@ function DigestTab() {
 
         {loading ? (
           <div className="space-y-2">
-            <div className="h-3 w-full bg-[#1F1F23] rounded animate-pulse" />
-            <div className="h-3 w-4/5 bg-[#1A1A1D] rounded animate-pulse" />
+            <div className="h-3 w-full bg-bg-raised rounded animate-pulse" />
+            <div className="h-3 w-4/5 bg-bg-raised rounded animate-pulse" />
           </div>
         ) : content ? (
           narrative && (
-            <p className="mono text-[13px] text-[rgba(229,229,231,0.8)] leading-relaxed">{narrative}</p>
+            <p className="mono text-[13px] text-text-primary leading-relaxed">{narrative}</p>
           )
         ) : (
-          <p className="mono text-[12px] text-[rgba(229,229,231,0.45)]">
+          <p className="mono text-[12px] text-text-muted">
             No digest for this date. Digests are generated nightly at 06:00 PT.
           </p>
         )}
@@ -1073,20 +1073,20 @@ function DigestTab() {
       {loading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {SECTION_LABELS.map((s) => (
-            <div key={s} className="h-32 bg-[#141416] rounded-xl animate-pulse" />
+            <div key={s} className="h-32 bg-bg-card rounded-xl animate-pulse" />
           ))}
         </div>
       ) : sections.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {sections.map((s) => (
-            <div key={s.title} className="bg-[#141416] border border-[#1F1F23] rounded-xl px-5 py-4">
-              <div className="mono text-[12px] font-semibold text-[#E5E5E7] mb-3">{s.title}</div>
+            <div key={s.title} className="bg-bg-card border border-border-default rounded-xl px-5 py-4">
+              <div className="mono text-[12px] font-semibold text-text-primary mb-3">{s.title}</div>
               {s.body ? (
-                <div className="mono text-[12px] text-[rgba(229,229,231,0.7)] leading-relaxed whitespace-pre-line">
+                <div className="mono text-[12px] text-text-secondary leading-relaxed whitespace-pre-line">
                   {s.body}
                 </div>
               ) : (
-                <div className="mono text-[11px] text-[rgba(229,229,231,0.3)]">—</div>
+                <div className="mono text-[11px] text-text-muted">—</div>
               )}
             </div>
           ))}
@@ -1096,9 +1096,9 @@ function DigestTab() {
           {SECTION_LABELS.map((s) => (
             <div
               key={s}
-              className="h-20 border border-dashed border-[#1F1F23] rounded-xl flex items-center justify-center"
+              className="h-20 border border-dashed border-border-default rounded-xl flex items-center justify-center"
             >
-              <div className="mono text-[9px] uppercase tracking-[0.18em] text-[rgba(229,229,231,0.2)]">{s}</div>
+              <div className="mono text-[9px] uppercase tracking-[0.18em] text-text-faint">{s}</div>
             </div>
           ))}
         </div>
@@ -1117,27 +1117,27 @@ function GlobalSearch({ open, onClose }: { open: boolean; onClose: () => void })
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-[#141416] border border-[#2A2A2E] rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
-        <div className="flex items-center gap-3 px-5 py-4 border-b border-[#1F1F23]">
-          <div className="mono text-[rgba(229,229,231,0.4)]">⌘</div>
+      <div className="relative bg-bg-card border border-border-hover rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
+        <div className="flex items-center gap-3 px-5 py-4 border-b border-border-default">
+          <div className="mono text-text-muted">⌘</div>
           <input
             autoFocus
             placeholder="Search coming in Sprint 3…"
-            className="flex-1 bg-transparent mono text-[14px] text-[#E5E5E7] placeholder:text-[rgba(229,229,231,0.3)] outline-none"
+            className="flex-1 bg-transparent mono text-[14px] text-text-primary placeholder:text-text-muted outline-none"
             readOnly
           />
           <button
             onClick={onClose}
-            className="mono text-[10px] uppercase tracking-[0.16em] text-[rgba(229,229,231,0.5)] hover:text-[#E5E5E7] transition-colors"
+            className="mono text-[10px] uppercase tracking-[0.16em] text-text-secondary hover:text-text-primary transition-colors"
           >
             esc
           </button>
         </div>
         <div className="px-5 py-6 text-center">
-          <div className="mono text-[11px] uppercase tracking-[0.18em] text-[rgba(229,229,231,0.4)] mb-2">
+          <div className="mono text-[11px] uppercase tracking-[0.18em] text-text-muted mb-2">
             Search not yet implemented
           </div>
-          <div className="mono text-[10px] text-[rgba(229,229,231,0.3)]">
+          <div className="mono text-[10px] text-text-muted">
             Full search across vault, action items, and ledger arrives in Sprint 3.
           </div>
         </div>
@@ -1555,19 +1555,19 @@ function SkillsSurface({ onOpenQuickCapture }: { onOpenQuickCapture?: () => void
   }
 
   return (
-    <div className="bg-[#141416] border border-[#1F1F23] rounded-xl overflow-hidden">
+    <div className="bg-bg-card border border-border-default rounded-xl overflow-hidden">
       {/* Header */}
-      <div className="px-4 sm:px-5 py-4 border-b border-[#1F1F23]">
-        <div className="mono text-[10px] uppercase tracking-[0.22em] text-[rgba(229,229,231,0.4)]">
+      <div className="px-4 sm:px-5 py-4 border-b border-border-default">
+        <div className="mono text-[10px] uppercase tracking-[0.22em] text-text-muted">
           Run a Skill to Begin
         </div>
-        <div className="mono text-[9px] text-[rgba(229,229,231,0.3)] mt-0.5">
+        <div className="mono text-[9px] text-text-muted mt-0.5">
           Click a skill · press run · or type any prompt
         </div>
       </div>
 
       {/* Prompt area */}
-      <div className="px-4 sm:px-5 py-4 border-b border-[#1F1F23]">
+      <div className="px-4 sm:px-5 py-4 border-b border-border-default">
         <div className="flex gap-2">
           <textarea
             value={state.prompt}
@@ -1575,7 +1575,7 @@ function SkillsSurface({ onOpenQuickCapture }: { onOpenQuickCapture?: () => void
             onKeyDown={handleKeyDown}
             placeholder="Describe what you want the system to do…"
             rows={3}
-            className="flex-1 bg-[#1A1A1D] border border-[#1F1F23] rounded-lg px-3 py-2 mono text-[13px] text-[#E5E5E7] placeholder:text-[rgba(229,229,231,0.3)] focus:outline-none focus:border-[#2A2A2E] resize-none"
+            className="flex-1 bg-bg-raised border border-border-default rounded-lg px-3 py-2 mono text-[13px] text-text-primary placeholder:text-text-muted focus:outline-none focus:border-border-hover resize-none"
           />
           <div className="flex flex-col gap-2">
             <button
@@ -1587,7 +1587,7 @@ function SkillsSurface({ onOpenQuickCapture }: { onOpenQuickCapture?: () => void
             </button>
             <button
               onClick={clearState}
-              className="mono text-[11px] uppercase tracking-[0.14em] px-3 sm:px-4 py-2 rounded-lg border border-[#1F1F23] text-[rgba(229,229,231,0.5)] hover:text-[#E5E5E7] hover:border-[#2A2A2E] transition-colors"
+              className="mono text-[11px] uppercase tracking-[0.14em] px-3 sm:px-4 py-2 rounded-lg border border-border-default text-text-secondary hover:text-text-primary hover:border-border-hover transition-colors"
             >
               Clear
             </button>
@@ -1596,39 +1596,39 @@ function SkillsSurface({ onOpenQuickCapture }: { onOpenQuickCapture?: () => void
 
         {/* Morning Brief result — preformatted message */}
         {state.result && (
-          <div className="mt-3 bg-[#1A1A1D] border border-[#1F1F23] rounded-lg px-3 py-2">
-            <div className="mono text-[10px] uppercase tracking-[0.14em] text-[rgba(229,229,231,0.5)] mb-1">Result</div>
-            <div className="mono text-[12px] text-[#E5E5E7] whitespace-pre-wrap">{state.result}</div>
+          <div className="mt-3 bg-bg-raised border border-border-default rounded-lg px-3 py-2">
+            <div className="mono text-[10px] uppercase tracking-[0.14em] text-text-secondary mb-1">Result</div>
+            <div className="mono text-[12px] text-text-primary whitespace-pre-wrap">{state.result}</div>
           </div>
         )}
 
         {/* Inbox Triage result — ordered list */}
         {state.triageItems !== null && (
-          <div className="mt-3 bg-[#1A1A1D] border border-[#1F1F23] rounded-lg px-3 py-2">
-            <div className="mono text-[10px] uppercase tracking-[0.14em] text-[rgba(229,229,231,0.5)] mb-2">
+          <div className="mt-3 bg-bg-raised border border-border-default rounded-lg px-3 py-2">
+            <div className="mono text-[10px] uppercase tracking-[0.14em] text-text-secondary mb-2">
               Inbox Triage — Top {state.triageItems.length} Items
             </div>
             {state.triageMessage && state.triageItems.length === 0 ? (
-              <div className="mono text-[12px] text-[rgba(229,229,231,0.5)]">{state.triageMessage}</div>
+              <div className="mono text-[12px] text-text-secondary">{state.triageMessage}</div>
             ) : (
               <div className="space-y-2">
                 {state.triageItems.map((item, idx) => (
                   <div key={item.id} className="flex items-start gap-2">
-                    <div className="mono text-[9px] text-[rgba(229,229,231,0.35)] w-4 shrink-0 pt-0.5">
+                    <div className="mono text-[9px] text-text-muted w-4 shrink-0 pt-0.5">
                       {idx + 1}.
                     </div>
                     <div className="min-w-0 flex-1">
-                      <div className="mono text-[12px] text-[#E5E5E7] truncate">
+                      <div className="mono text-[12px] text-text-primary truncate">
                         {item.content_summary ?? `(${item.source_type} · no summary)`}
                       </div>
                       <div className="flex items-center gap-2 mt-0.5">
-                        <span className="mono text-[9px] uppercase tracking-[0.1em] text-[rgba(229,229,231,0.4)]">
+                        <span className="mono text-[9px] uppercase tracking-[0.1em] text-text-muted">
                           {item.source_type}
                         </span>
-                        <span className="mono text-[9px] text-[rgba(229,229,231,0.3)]">
+                        <span className="mono text-[9px] text-text-muted">
                           score {item.score.toFixed(2)}
                         </span>
-                        <span className="mono text-[9px] text-[rgba(229,229,231,0.3)]">
+                        <span className="mono text-[9px] text-text-muted">
                           {formatRelativeTime(item.created_at)}
                         </span>
                       </div>
@@ -1658,7 +1658,7 @@ function SkillsSurface({ onOpenQuickCapture }: { onOpenQuickCapture?: () => void
                 'mono text-[9px] uppercase tracking-[0.16em] px-2.5 py-1 rounded-full border transition-colors',
                 domainFilter === null
                   ? 'border-[#FF6B2B] text-[#FF6B2B] bg-[#FF6B2B]/10'
-                  : 'border-[#2A2A2E] text-[rgba(229,229,231,0.45)] hover:border-[#3A3A3E] hover:text-[rgba(229,229,231,0.7)]',
+                  : 'border-border-hover text-text-muted hover:border-border-strong hover:text-text-secondary',
               ].join(' ')}
             >
               All
@@ -1671,7 +1671,7 @@ function SkillsSurface({ onOpenQuickCapture }: { onOpenQuickCapture?: () => void
                   'mono text-[9px] uppercase tracking-[0.16em] px-2.5 py-1 rounded-full border transition-colors',
                   domainFilter === d
                     ? 'border-[#FF6B2B] text-[#FF6B2B] bg-[#FF6B2B]/10'
-                    : 'border-[#2A2A2E] text-[rgba(229,229,231,0.45)] hover:border-[#3A3A3E] hover:text-[rgba(229,229,231,0.7)]',
+                    : 'border-border-hover text-text-muted hover:border-border-strong hover:text-text-secondary',
                 ].join(' ')}
               >
                 {d}
@@ -1682,7 +1682,7 @@ function SkillsSurface({ onOpenQuickCapture }: { onOpenQuickCapture?: () => void
 
         {Object.entries(filteredDomains).map(([domain, domainSkills]) => (
           <div key={domain}>
-            <div className="mono text-[9px] uppercase tracking-[0.22em] text-[rgba(229,229,231,0.35)] mb-2">
+            <div className="mono text-[9px] uppercase tracking-[0.22em] text-text-muted mb-2">
               {domain}:
             </div>
             {/* N-6: auto-fill with 180px min tile width */}
@@ -1711,8 +1711,8 @@ function SkillsSurface({ onOpenQuickCapture }: { onOpenQuickCapture?: () => void
                       isThisRunning
                         ? 'border-[#FF6B2B] text-[#FF6B2B] opacity-70 cursor-wait'
                         : isScaffolded
-                        ? 'border-[#1F1F23] text-[rgba(229,229,231,0.25)] cursor-not-allowed opacity-60'
-                        : 'border-[#2A2A2E] text-[#E5E5E7] hover:border-[#FF6B2B] hover:text-[#FF6B2B] cursor-pointer',
+                        ? 'border-border-default text-text-muted cursor-not-allowed opacity-60'
+                        : 'border-border-hover text-text-primary hover:border-[#FF6B2B] hover:text-[#FF6B2B] cursor-pointer',
                       isDisabled && !isThisRunning && !isScaffolded
                         ? 'disabled:opacity-50 disabled:cursor-not-allowed'
                         : '',
@@ -1721,7 +1721,7 @@ function SkillsSurface({ onOpenQuickCapture }: { onOpenQuickCapture?: () => void
                     <div className="mono text-[11px] tracking-[0.08em] truncate">
                       {isThisRunning ? '…' : formatSkillName(skill.name)}
                       {isScaffolded && (
-                        <span className="ml-1 mono text-[8px] text-[rgba(229,229,231,0.2)]">
+                        <span className="ml-1 mono text-[8px] text-text-faint">
                           S6
                         </span>
                       )}
@@ -1736,11 +1736,11 @@ function SkillsSurface({ onOpenQuickCapture }: { onOpenQuickCapture?: () => void
                     </div>
                     {!isThisRunning && (
                       <div className="flex items-center gap-1.5 mt-0.5">
-                        <span className="mono text-[8px] text-[rgba(229,229,231,0.25)]">
+                        <span className="mono text-[8px] text-text-muted">
                           {skill.last_run_at ? formatRelativeTime(skill.last_run_at) : 'never'}
                         </span>
                         {(skill.total_runs ?? 0) > 0 && (
-                          <span className="mono text-[8px] text-[rgba(229,229,231,0.4)] bg-[rgba(255,255,255,0.06)] rounded px-1">
+                          <span className="mono text-[8px] text-text-muted bg-[rgba(255,255,255,0.06)] rounded px-1">
                             {skill.total_runs}×
                           </span>
                         )}
@@ -1761,7 +1761,7 @@ function SkillsSurface({ onOpenQuickCapture }: { onOpenQuickCapture?: () => void
           if (unstubbed.length === 0) return null;
           return (
             <div key={domain.key}>
-              <div className="mono text-[9px] uppercase tracking-[0.22em] text-[rgba(229,229,231,0.25)] mb-2">
+              <div className="mono text-[9px] uppercase tracking-[0.22em] text-text-muted mb-2">
                 {domain.label}:
               </div>
               {/* 2-col mobile, 3-col sm, 4-col lg */}
@@ -1771,10 +1771,10 @@ function SkillsSurface({ onOpenQuickCapture }: { onOpenQuickCapture?: () => void
                     key={skillName}
                     disabled
                     title={`Coming in Sprint ${domain.sprint}`}
-                    className="text-left px-3 py-2 rounded-lg border mono text-[11px] tracking-[0.08em] transition-colors border-[#1F1F23] text-[rgba(229,229,231,0.25)] cursor-not-allowed"
+                    className="text-left px-3 py-2 rounded-lg border mono text-[11px] tracking-[0.08em] transition-colors border-border-default text-text-muted cursor-not-allowed"
                   >
                     {skillName}
-                    <span className="ml-1 mono text-[8px] text-[rgba(229,229,231,0.2)]">
+                    <span className="ml-1 mono text-[8px] text-text-faint">
                       S{domain.sprint}
                     </span>
                   </button>
@@ -1786,17 +1786,17 @@ function SkillsSurface({ onOpenQuickCapture }: { onOpenQuickCapture?: () => void
       </div>
 
       {/* Footer stats */}
-      <div className="px-4 sm:px-5 py-3 border-t border-[#1F1F23] flex items-center gap-4 sm:gap-6">
+      <div className="px-4 sm:px-5 py-3 border-t border-border-default flex items-center gap-4 sm:gap-6">
         {[
           { label: 'Registered', value: skills.length > 0 ? String(skills.length) : '—' },
           { label: 'Recent Runs', value: '—' },
           { label: 'Vault Pulse', value: '—' },
         ].map((stat) => (
           <div key={stat.label} className="text-center">
-            <div className="mono text-[9px] uppercase tracking-[0.18em] text-[rgba(229,229,231,0.3)]">
+            <div className="mono text-[9px] uppercase tracking-[0.18em] text-text-muted">
               {stat.label}
             </div>
-            <div className="mono text-[11px] text-[rgba(229,229,231,0.4)]">{stat.value}</div>
+            <div className="mono text-[11px] text-text-muted">{stat.value}</div>
           </div>
         ))}
       </div>
@@ -1808,20 +1808,20 @@ function SkillsSurface({ onOpenQuickCapture }: { onOpenQuickCapture?: () => void
           onClick={(e) => e.target === e.currentTarget && setModal({ open: false })}
         >
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setModal({ open: false })} />
-          <div className="relative bg-[#141416] border border-[#2A2A2E] rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+          <div className="relative bg-bg-card border border-border-hover rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
             {/* Modal header */}
-            <div className="flex items-center justify-between px-5 py-4 border-b border-[#1F1F23]">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-border-default">
               <div>
-                <div className="mono text-[12px] text-[#E5E5E7] font-medium">
+                <div className="mono text-[12px] text-text-primary font-medium">
                   {formatSkillName(modal.skill.name)}
                 </div>
-                <div className="mono text-[10px] text-[rgba(229,229,231,0.4)] mt-0.5 line-clamp-1">
+                <div className="mono text-[10px] text-text-muted mt-0.5 line-clamp-1">
                   {modal.skill.description}
                 </div>
               </div>
               <button
                 onClick={() => setModal({ open: false })}
-                className="mono text-[10px] uppercase tracking-[0.16em] text-[rgba(229,229,231,0.5)] hover:text-[#E5E5E7] transition-colors ml-4"
+                className="mono text-[10px] uppercase tracking-[0.16em] text-text-secondary hover:text-text-primary transition-colors ml-4"
               >
                 esc
               </button>
@@ -1833,7 +1833,7 @@ function SkillsSurface({ onOpenQuickCapture }: { onOpenQuickCapture?: () => void
               {modal.skill.name === 'deep-research' && (
                 <>
                   <div>
-                    <label className="mono text-[9px] uppercase tracking-[0.18em] text-[rgba(229,229,231,0.5)] block mb-1.5">
+                    <label className="mono text-[9px] uppercase tracking-[0.18em] text-text-secondary block mb-1.5">
                       Topic *
                     </label>
                     <textarea
@@ -1843,17 +1843,17 @@ function SkillsSurface({ onOpenQuickCapture }: { onOpenQuickCapture?: () => void
                       placeholder="What should the system research? Be specific."
                       value={modal.topic ?? ''}
                       onChange={(e) => setModal((m) => m.open ? { ...m, topic: e.target.value } : m)}
-                      className="w-full bg-[#1A1A1D] border border-[#1F1F23] rounded-lg px-3 py-2 mono text-[13px] text-[#E5E5E7] placeholder:text-[rgba(229,229,231,0.3)] focus:outline-none focus:border-[#2A2A2E] resize-none"
+                      className="w-full bg-bg-raised border border-border-default rounded-lg px-3 py-2 mono text-[13px] text-text-primary placeholder:text-text-muted focus:outline-none focus:border-border-hover resize-none"
                     />
                   </div>
                   <div>
-                    <label className="mono text-[9px] uppercase tracking-[0.18em] text-[rgba(229,229,231,0.5)] block mb-1.5">
+                    <label className="mono text-[9px] uppercase tracking-[0.18em] text-text-secondary block mb-1.5">
                       Depth
                     </label>
                     <select
                       value={modal.depth ?? 'standard'}
                       onChange={(e) => setModal((m) => m.open ? { ...m, depth: e.target.value } : m)}
-                      className="w-full bg-[#1A1A1D] border border-[#1F1F23] rounded-lg px-3 py-2 mono text-[13px] text-[#E5E5E7] focus:outline-none focus:border-[#2A2A2E]"
+                      className="w-full bg-bg-raised border border-border-default rounded-lg px-3 py-2 mono text-[13px] text-text-primary focus:outline-none focus:border-border-hover"
                     >
                       <option value="quick">Quick (2-4 pages)</option>
                       <option value="standard">Standard (6-10 pages)</option>
@@ -1867,7 +1867,7 @@ function SkillsSurface({ onOpenQuickCapture }: { onOpenQuickCapture?: () => void
               {modal.skill.name === 'llm-council-deliberate' && (
                 <>
                   <div>
-                    <label className="mono text-[9px] uppercase tracking-[0.18em] text-[rgba(229,229,231,0.5)] block mb-1.5">
+                    <label className="mono text-[9px] uppercase tracking-[0.18em] text-text-secondary block mb-1.5">
                       Question *
                     </label>
                     <textarea
@@ -1877,11 +1877,11 @@ function SkillsSurface({ onOpenQuickCapture }: { onOpenQuickCapture?: () => void
                       placeholder="What question or decision should the council deliberate on?"
                       value={modal.question ?? ''}
                       onChange={(e) => setModal((m) => m.open ? { ...m, question: e.target.value } : m)}
-                      className="w-full bg-[#1A1A1D] border border-[#1F1F23] rounded-lg px-3 py-2 mono text-[13px] text-[#E5E5E7] placeholder:text-[rgba(229,229,231,0.3)] focus:outline-none focus:border-[#2A2A2E] resize-none"
+                      className="w-full bg-bg-raised border border-border-default rounded-lg px-3 py-2 mono text-[13px] text-text-primary placeholder:text-text-muted focus:outline-none focus:border-border-hover resize-none"
                     />
                   </div>
                   <div>
-                    <label className="mono text-[9px] uppercase tracking-[0.18em] text-[rgba(229,229,231,0.5)] block mb-1.5">
+                    <label className="mono text-[9px] uppercase tracking-[0.18em] text-text-secondary block mb-1.5">
                       Evaluation Criteria (optional)
                     </label>
                     <input
@@ -1889,7 +1889,7 @@ function SkillsSurface({ onOpenQuickCapture }: { onOpenQuickCapture?: () => void
                       placeholder="e.g. speed, cost, risk, market fit"
                       value={modal.criteria ?? ''}
                       onChange={(e) => setModal((m) => m.open ? { ...m, criteria: e.target.value } : m)}
-                      className="w-full bg-[#1A1A1D] border border-[#1F1F23] rounded-lg px-3 py-2 mono text-[13px] text-[#E5E5E7] placeholder:text-[rgba(229,229,231,0.3)] focus:outline-none focus:border-[#2A2A2E]"
+                      className="w-full bg-bg-raised border border-border-default rounded-lg px-3 py-2 mono text-[13px] text-text-primary placeholder:text-text-muted focus:outline-none focus:border-border-hover"
                     />
                   </div>
                 </>
@@ -1899,7 +1899,7 @@ function SkillsSurface({ onOpenQuickCapture }: { onOpenQuickCapture?: () => void
               {modal.skill.name === 'track-pipeline-stage' && (
                 <>
                   <div>
-                    <label className="mono text-[9px] uppercase tracking-[0.18em] text-[rgba(229,229,231,0.5)] block mb-1.5">
+                    <label className="mono text-[9px] uppercase tracking-[0.18em] text-text-secondary block mb-1.5">
                       Customer ID *
                     </label>
                     <input
@@ -1909,18 +1909,18 @@ function SkillsSurface({ onOpenQuickCapture }: { onOpenQuickCapture?: () => void
                       placeholder="UUID of the customer record"
                       value={modal.customerId ?? ''}
                       onChange={(e) => setModal((m) => m.open ? { ...m, customerId: e.target.value } : m)}
-                      className="w-full bg-[#1A1A1D] border border-[#1F1F23] rounded-lg px-3 py-2 mono text-[13px] text-[#E5E5E7] placeholder:text-[rgba(229,229,231,0.3)] focus:outline-none focus:border-[#2A2A2E] font-mono"
+                      className="w-full bg-bg-raised border border-border-default rounded-lg px-3 py-2 mono text-[13px] text-text-primary placeholder:text-text-muted focus:outline-none focus:border-border-hover font-mono"
                     />
                   </div>
                   <div>
-                    <label className="mono text-[9px] uppercase tracking-[0.18em] text-[rgba(229,229,231,0.5)] block mb-1.5">
+                    <label className="mono text-[9px] uppercase tracking-[0.18em] text-text-secondary block mb-1.5">
                       New Stage *
                     </label>
                     <select
                       required
                       value={modal.newStage ?? 'qualified'}
                       onChange={(e) => setModal((m) => m.open ? { ...m, newStage: e.target.value } : m)}
-                      className="w-full bg-[#1A1A1D] border border-[#1F1F23] rounded-lg px-3 py-2 mono text-[13px] text-[#E5E5E7] focus:outline-none focus:border-[#2A2A2E]"
+                      className="w-full bg-bg-raised border border-border-default rounded-lg px-3 py-2 mono text-[13px] text-text-primary focus:outline-none focus:border-border-hover"
                     >
                       <option value="lead">Lead</option>
                       <option value="qualified">Qualified</option>
@@ -1931,7 +1931,7 @@ function SkillsSurface({ onOpenQuickCapture }: { onOpenQuickCapture?: () => void
                     </select>
                   </div>
                   <div>
-                    <label className="mono text-[9px] uppercase tracking-[0.18em] text-[rgba(229,229,231,0.5)] block mb-1.5">
+                    <label className="mono text-[9px] uppercase tracking-[0.18em] text-text-secondary block mb-1.5">
                       Note (optional)
                     </label>
                     <textarea
@@ -1939,7 +1939,7 @@ function SkillsSurface({ onOpenQuickCapture }: { onOpenQuickCapture?: () => void
                       placeholder="What happened? Any context for this stage change."
                       value={modal.note ?? ''}
                       onChange={(e) => setModal((m) => m.open ? { ...m, note: e.target.value } : m)}
-                      className="w-full bg-[#1A1A1D] border border-[#1F1F23] rounded-lg px-3 py-2 mono text-[13px] text-[#E5E5E7] placeholder:text-[rgba(229,229,231,0.3)] focus:outline-none focus:border-[#2A2A2E] resize-none"
+                      className="w-full bg-bg-raised border border-border-default rounded-lg px-3 py-2 mono text-[13px] text-text-primary placeholder:text-text-muted focus:outline-none focus:border-border-hover resize-none"
                     />
                   </div>
                 </>
@@ -1949,7 +1949,7 @@ function SkillsSurface({ onOpenQuickCapture }: { onOpenQuickCapture?: () => void
               {modal.skill.name === 'draft-blog-post' && (
                 <>
                   <div>
-                    <label className="mono text-[9px] uppercase tracking-[0.18em] text-[rgba(229,229,231,0.5)] block mb-1.5">
+                    <label className="mono text-[9px] uppercase tracking-[0.18em] text-text-secondary block mb-1.5">
                       Topic *
                     </label>
                     <textarea
@@ -1959,11 +1959,11 @@ function SkillsSurface({ onOpenQuickCapture }: { onOpenQuickCapture?: () => void
                       placeholder="e.g. How surveillance operators can win more bids with procurement intelligence"
                       value={modal.topic ?? ''}
                       onChange={(e) => setModal((m) => m.open ? { ...m, topic: e.target.value } : m)}
-                      className="w-full bg-[#1A1A1D] border border-[#1F1F23] rounded-lg px-3 py-2 mono text-[13px] text-[#E5E5E7] placeholder:text-[rgba(229,229,231,0.3)] focus:outline-none focus:border-[#2A2A2E] resize-none"
+                      className="w-full bg-bg-raised border border-border-default rounded-lg px-3 py-2 mono text-[13px] text-text-primary placeholder:text-text-muted focus:outline-none focus:border-border-hover resize-none"
                     />
                   </div>
                   <div>
-                    <label className="mono text-[9px] uppercase tracking-[0.18em] text-[rgba(229,229,231,0.5)] block mb-1.5">
+                    <label className="mono text-[9px] uppercase tracking-[0.18em] text-text-secondary block mb-1.5">
                       Target Audience (optional)
                     </label>
                     <input
@@ -1971,7 +1971,7 @@ function SkillsSurface({ onOpenQuickCapture }: { onOpenQuickCapture?: () => void
                       placeholder="e.g. construction security buyers, investors"
                       value={modal.targetAudience ?? ''}
                       onChange={(e) => setModal((m) => m.open ? { ...m, targetAudience: e.target.value } : m)}
-                      className="w-full bg-[#1A1A1D] border border-[#1F1F23] rounded-lg px-3 py-2 mono text-[13px] text-[#E5E5E7] placeholder:text-[rgba(229,229,231,0.3)] focus:outline-none focus:border-[#2A2A2E]"
+                      className="w-full bg-bg-raised border border-border-default rounded-lg px-3 py-2 mono text-[13px] text-text-primary placeholder:text-text-muted focus:outline-none focus:border-border-hover"
                     />
                   </div>
                 </>
@@ -1981,7 +1981,7 @@ function SkillsSurface({ onOpenQuickCapture }: { onOpenQuickCapture?: () => void
               {modal.skill.name === 'draft-social-post' && (
                 <>
                   <div>
-                    <label className="mono text-[9px] uppercase tracking-[0.18em] text-[rgba(229,229,231,0.5)] block mb-1.5">
+                    <label className="mono text-[9px] uppercase tracking-[0.18em] text-text-secondary block mb-1.5">
                       Topic / Milestone *
                     </label>
                     <textarea
@@ -1991,17 +1991,17 @@ function SkillsSurface({ onOpenQuickCapture }: { onOpenQuickCapture?: () => void
                       placeholder="e.g. We just shipped procurement signal scoring for Zedcor"
                       value={modal.topic ?? ''}
                       onChange={(e) => setModal((m) => m.open ? { ...m, topic: e.target.value } : m)}
-                      className="w-full bg-[#1A1A1D] border border-[#1F1F23] rounded-lg px-3 py-2 mono text-[13px] text-[#E5E5E7] placeholder:text-[rgba(229,229,231,0.3)] focus:outline-none focus:border-[#2A2A2E] resize-none"
+                      className="w-full bg-bg-raised border border-border-default rounded-lg px-3 py-2 mono text-[13px] text-text-primary placeholder:text-text-muted focus:outline-none focus:border-border-hover resize-none"
                     />
                   </div>
                   <div>
-                    <label className="mono text-[9px] uppercase tracking-[0.18em] text-[rgba(229,229,231,0.5)] block mb-1.5">
+                    <label className="mono text-[9px] uppercase tracking-[0.18em] text-text-secondary block mb-1.5">
                       Platform
                     </label>
                     <select
                       value={modal.platform ?? 'both'}
                       onChange={(e) => setModal((m) => m.open ? { ...m, platform: e.target.value } : m)}
-                      className="w-full bg-[#1A1A1D] border border-[#1F1F23] rounded-lg px-3 py-2 mono text-[13px] text-[#E5E5E7] focus:outline-none focus:border-[#2A2A2E]"
+                      className="w-full bg-bg-raised border border-border-default rounded-lg px-3 py-2 mono text-[13px] text-text-primary focus:outline-none focus:border-border-hover"
                     >
                       <option value="both">Both (LinkedIn + Twitter/X)</option>
                       <option value="linkedin">LinkedIn only</option>
@@ -2015,7 +2015,7 @@ function SkillsSurface({ onOpenQuickCapture }: { onOpenQuickCapture?: () => void
               {modal.skill.name === 'generate-positioning-deck' && (
                 <>
                   <div>
-                    <label className="mono text-[9px] uppercase tracking-[0.18em] text-[rgba(229,229,231,0.5)] block mb-1.5">
+                    <label className="mono text-[9px] uppercase tracking-[0.18em] text-text-secondary block mb-1.5">
                       Audience Segment *
                     </label>
                     <input
@@ -2025,17 +2025,17 @@ function SkillsSurface({ onOpenQuickCapture }: { onOpenQuickCapture?: () => void
                       placeholder="e.g. construction security buyers, municipal procurement officers"
                       value={modal.audience ?? ''}
                       onChange={(e) => setModal((m) => m.open ? { ...m, audience: e.target.value } : m)}
-                      className="w-full bg-[#1A1A1D] border border-[#1F1F23] rounded-lg px-3 py-2 mono text-[13px] text-[#E5E5E7] placeholder:text-[rgba(229,229,231,0.3)] focus:outline-none focus:border-[#2A2A2E]"
+                      className="w-full bg-bg-raised border border-border-default rounded-lg px-3 py-2 mono text-[13px] text-text-primary placeholder:text-text-muted focus:outline-none focus:border-border-hover"
                     />
                   </div>
                   <div>
-                    <label className="mono text-[9px] uppercase tracking-[0.18em] text-[rgba(229,229,231,0.5)] block mb-1.5">
+                    <label className="mono text-[9px] uppercase tracking-[0.18em] text-text-secondary block mb-1.5">
                       Product
                     </label>
                     <select
                       value={modal.product ?? 'pathfinder'}
                       onChange={(e) => setModal((m) => m.open ? { ...m, product: e.target.value } : m)}
-                      className="w-full bg-[#1A1A1D] border border-[#1F1F23] rounded-lg px-3 py-2 mono text-[13px] text-[#E5E5E7] focus:outline-none focus:border-[#2A2A2E]"
+                      className="w-full bg-bg-raised border border-border-default rounded-lg px-3 py-2 mono text-[13px] text-text-primary focus:outline-none focus:border-border-hover"
                     >
                       <option value="pathfinder">Pathfinder</option>
                       <option value="metacron">Metacron</option>
@@ -2048,7 +2048,7 @@ function SkillsSurface({ onOpenQuickCapture }: { onOpenQuickCapture?: () => void
               {modal.skill.name === 'update-manifesto-page' && (
                 <>
                   <div>
-                    <label className="mono text-[9px] uppercase tracking-[0.18em] text-[rgba(229,229,231,0.5)] block mb-1.5">
+                    <label className="mono text-[9px] uppercase tracking-[0.18em] text-text-secondary block mb-1.5">
                       Page Slug *
                     </label>
                     <input
@@ -2058,11 +2058,11 @@ function SkillsSurface({ onOpenQuickCapture }: { onOpenQuickCapture?: () => void
                       placeholder="e.g. why-we-build, seven-generations, operating-principles"
                       value={modal.pageSlug ?? ''}
                       onChange={(e) => setModal((m) => m.open ? { ...m, pageSlug: e.target.value } : m)}
-                      className="w-full bg-[#1A1A1D] border border-[#1F1F23] rounded-lg px-3 py-2 mono text-[13px] text-[#E5E5E7] placeholder:text-[rgba(229,229,231,0.3)] focus:outline-none focus:border-[#2A2A2E]"
+                      className="w-full bg-bg-raised border border-border-default rounded-lg px-3 py-2 mono text-[13px] text-text-primary placeholder:text-text-muted focus:outline-none focus:border-border-hover"
                     />
                   </div>
                   <div>
-                    <label className="mono text-[9px] uppercase tracking-[0.18em] text-[rgba(229,229,231,0.5)] block mb-1.5">
+                    <label className="mono text-[9px] uppercase tracking-[0.18em] text-text-secondary block mb-1.5">
                       Proposed Changes *
                     </label>
                     <textarea
@@ -2071,7 +2071,7 @@ function SkillsSurface({ onOpenQuickCapture }: { onOpenQuickCapture?: () => void
                       placeholder="Describe what to add, remove, or reframe — e.g. 'Add a paragraph about Zedcor pilot outcomes to the proof section'"
                       value={modal.proposedChanges ?? ''}
                       onChange={(e) => setModal((m) => m.open ? { ...m, proposedChanges: e.target.value } : m)}
-                      className="w-full bg-[#1A1A1D] border border-[#1F1F23] rounded-lg px-3 py-2 mono text-[13px] text-[#E5E5E7] placeholder:text-[rgba(229,229,231,0.3)] focus:outline-none focus:border-[#2A2A2E] resize-none"
+                      className="w-full bg-bg-raised border border-border-default rounded-lg px-3 py-2 mono text-[13px] text-text-primary placeholder:text-text-muted focus:outline-none focus:border-border-hover resize-none"
                     />
                   </div>
                 </>
@@ -2082,7 +2082,7 @@ function SkillsSurface({ onOpenQuickCapture }: { onOpenQuickCapture?: () => void
                 <button
                   type="button"
                   onClick={() => setModal({ open: false })}
-                  className="mono text-[11px] uppercase tracking-[0.14em] px-4 py-2 rounded-lg border border-[#1F1F23] text-[rgba(229,229,231,0.5)] hover:text-[#E5E5E7] hover:border-[#2A2A2E] transition-colors"
+                  className="mono text-[11px] uppercase tracking-[0.14em] px-4 py-2 rounded-lg border border-border-default text-text-secondary hover:text-text-primary hover:border-border-hover transition-colors"
                 >
                   Cancel
                 </button>
@@ -2190,7 +2190,7 @@ function RecentRunsPanel() {
       {RECENT_AGENT_RUNS.map((r, i) => (
         <div key={i} className={`flex items-center gap-2.5 px-4 py-2 ${i > 0 ? 'border-t border-border-subtle' : ''}`}>
           <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{
-            background: r.status === 'ok' ? '#22c55e' : '#f59e0b',
+            background: r.status === 'ok' ? '#4FB286' : '#D9A23A',
           }} />
           <span className="mono text-[11.5px] text-text-primary flex-1 truncate">{r.name}</span>
           <span className="mono text-[10.5px] text-text-secondary">{r.t}</span>
@@ -2280,15 +2280,15 @@ export function Now({ name }: Props) {
   return (
     <div className="relative w-full">
       {/* N-4: sub-tab nav */}
-      <div className="flex gap-0.5 mb-5 border-b border-[#1F1F23] -mt-1">
+      <div className="flex gap-0.5 mb-5 border-b border-border-default -mt-1">
         {(['overview', 'activity', 'digest'] as const).map((tab) => (
           <button
             key={tab}
             onClick={() => setNowTab(tab)}
             className={`mono text-[11px] uppercase tracking-[0.16em] px-4 py-2 border-b-2 transition-colors ${
               nowTab === tab
-                ? 'border-[#FF6B2B] text-[#E5E5E7]'
-                : 'border-transparent text-[rgba(229,229,231,0.4)] hover:text-[rgba(229,229,231,0.7)]'
+                ? 'border-[#FF6B2B] text-text-primary'
+                : 'border-transparent text-text-muted hover:text-text-secondary'
             }`}
           >
             {tab}
@@ -2322,10 +2322,10 @@ export function Now({ name }: Props) {
           {/* ─── Top bar row ─── */}
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
-              <div className="mono text-[10px] uppercase tracking-[0.18em] text-[rgba(229,229,231,0.5)] mb-1">
+              <div className="mono text-[10px] uppercase tracking-[0.18em] text-text-secondary mb-1">
                 {formatDate()} · {time}
               </div>
-              <h1 className="text-[20px] sm:text-[26px] font-semibold text-[#E5E5E7] tracking-tight leading-tight">
+              <h1 className="text-[20px] sm:text-[26px] font-semibold text-text-primary tracking-tight leading-tight">
                 {greeting(name)}
               </h1>
             </div>
@@ -2334,9 +2334,9 @@ export function Now({ name }: Props) {
               <button
                 onClick={() => setSearchOpen(true)}
                 title="Search (/ or ⌘K)"
-                className="hidden sm:flex items-center gap-1.5 px-3 py-2 bg-[#141416] border border-[#1F1F23] rounded-lg hover:border-[#2A2A2E] transition-colors group"
+                className="hidden sm:flex items-center gap-1.5 px-3 py-2 bg-bg-card border border-border-default rounded-lg hover:border-border-hover transition-colors group"
               >
-                <span className="mono text-[12px] text-[rgba(229,229,231,0.5)] group-hover:text-[#E5E5E7]">
+                <span className="mono text-[12px] text-text-secondary group-hover:text-text-primary">
                   ⌘K
                 </span>
               </button>
@@ -2420,7 +2420,7 @@ export function Now({ name }: Props) {
 
       {/* ─── Toast ─── */}
       {toast && (
-        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 mono text-[11px] uppercase tracking-[0.18em] text-white bg-[#141416] border border-[#2A2A2E] rounded-lg px-4 py-2 z-[200] pointer-events-none animate-toastUp">
+        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 mono text-[11px] uppercase tracking-[0.18em] text-white bg-bg-card border border-border-hover rounded-lg px-4 py-2 z-[200] pointer-events-none animate-toastUp">
           {toast}
         </div>
       )}
@@ -2430,7 +2430,7 @@ export function Now({ name }: Props) {
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <div className="mono text-[9px] uppercase tracking-[0.22em] text-[rgba(229,229,231,0.35)] mb-2">
+    <div className="mono text-[9px] uppercase tracking-[0.22em] text-text-muted mb-2">
       {children}
     </div>
   );
