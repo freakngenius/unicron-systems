@@ -38,10 +38,10 @@ type StatusTone = 'ok' | 'warn' | 'info' | 'error';
 type StatusItem = { label: string; tone: StatusTone; detail: string };
 
 function toneColor(tone: StatusTone) {
-  if (tone === 'ok')    return '#22c55e';
-  if (tone === 'warn')  return '#f59e0b';
-  if (tone === 'error') return '#ef4444';
-  return '#60a5fa';
+  if (tone === 'ok')    return '#4FB286';
+  if (tone === 'warn')  return '#D9A23A';
+  if (tone === 'error') return '#DD6262';
+  return '#6F95D6';
 }
 
 function StatusPulseHeader({ items }: { items: StatusItem[] }) {
@@ -265,7 +265,7 @@ export function AtriumLayout({ activeTab, onTabChange, children, onOpenSettings 
     TABS.find((t) => t.id === id)?.label ?? id;
 
   function TabIcon({ id, active }: { id: AtriumTab; active: boolean }) {
-    const c = active ? '#E8763A' : 'rgba(229,229,231,0.45)';
+    const c = active ? 'var(--accent)' : 'var(--text-lo)';
     const w = 16;
     switch (id) {
       case 'now':       return <svg width={w} height={w} viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="5.5" stroke={c} strokeWidth="1.4"/><path d="M8 5v3.2l2 1.5" stroke={c} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>;
@@ -403,9 +403,9 @@ export function AtriumLayout({ activeTab, onTabChange, children, onOpenSettings 
                   aria-label={tab.label}
                   aria-current={active ? 'page' : undefined}
                 >
-                  {/* 2px orange active bar */}
+                  {/* 2px accent active bar */}
                   {active && (
-                    <span className="absolute left-0 top-2 bottom-2 w-0.5 rounded-r" style={{ background: '#FF6B2B' }} />
+                    <span className="absolute left-0 top-2 bottom-2 w-0.5 rounded-r" style={{ background: 'var(--accent)' }} />
                   )}
                   <TabIcon id={tab.id} active={active} />
                   {/* Hover tooltip */}
