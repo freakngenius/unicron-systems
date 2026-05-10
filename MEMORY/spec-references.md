@@ -818,3 +818,14 @@ Operator setup: `MEMORY/operator-todos/2026-05-03-teams-user-setup.md` — Micro
 **Last verified against spec:** 2026-05-09.
 **Drift:** none — pure additive filter, no removal of existing session logic.
 
+
+---
+
+## Phase 2A — Multi-tenant slug routing & operator auth — PR #238
+
+**State:** PR #238 open. Adds slug routing (`/[slug]`), operator-only Supabase magic-link auth, Metacron deep-link, and Pathfinder client-side org context.
+
+#### Pathfinder/lib/org-context.tsx
+**Implements:** SPEC - Phase 2A Multi-tenant Routing & Auth.md §3 (per-org React context for slug-routed pages). Provides `<OrgProvider>` + `useOrg()` so any descendant component reads the current `Organization` row resolved from `[slug]/layout.tsx`. Magic-link callback writes a session cookie; layout reads `pathfinder.organizations` by slug; provider exposes `org` + `loading`.
+**Last verified against spec:** 2026-05-10.
+**Drift:** none. Provider mirrors the patterns already used in Atrium contexts on the unicron-platform side.
