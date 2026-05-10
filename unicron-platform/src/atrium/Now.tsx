@@ -1640,6 +1640,128 @@ function SkillsSurface({ onOpenQuickCapture }: { onOpenQuickCapture?: () => void
   );
 }
 
+// ─── N-1 Right rail panels ────────────────────────────────────────────────────
+
+function MiniBar({ value, max, color }: { value: number; max: number; color: string }) {
+  const pct = max > 0 ? (value / max) * 100 : 0;
+  return (
+    <div className="flex-1 flex items-end" style={{ height: 32 }}>
+      <div className="w-full rounded-sm" style={{ height: `${Math.max(4, pct)}%`, background: color }} />
+    </div>
+  );
+}
+
+function BarChart({ data, color, labels }: { data: number[]; color: string; labels?: string[] }) {
+  const max = Math.max(...data, 1);
+  return (
+    <div className="flex items-end gap-0.5" style={{ height: 32 }}>
+      {data.map((v, i) => (
+        <div key={i} className="flex-1 flex flex-col items-center gap-0.5">
+          <MiniBar value={v} max={max} color={color} />
+          {labels && <span className="mono text-[8px] text-text-secondary">{labels[i]}</span>}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function DistBar({ label, percent, color }: { label: string; percent: number; color: string }) {
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="flex items-baseline justify-between">
+        <span className="mono text-[11px] text-text-secondary">{label}</span>
+        <span className="mono text-[11px] text-text-primary">{percent}%</span>
+      </div>
+      <div className="h-1.5 rounded-full bg-bg-raised overflow-hidden">
+        <div className="h-full rounded-full" style={{ width: `${percent}%`, background: color }} />
+      </div>
+    </div>
+  );
+}
+
+function ForecastPanel() {
+  return (
+    <div className="bg-bg-card border border-border-default rounded-xl p-4">
+      <div className="mono text-[12px] font-semibold text-text-primary mb-0.5">Forecast</div>
+      <div className="mono text-[10px] text-text-secondary mb-3">Next 7 days</div>
+      <div className="flex flex-col gap-4">
+        <div>
+          <div className="flex items-baseline justify-between mb-1.5">
+            <span className="mono text-[11px] text-text-secondary">Calls scheduled</span>
+            <span className="mono text-[11px] text-text-primary">11</span>
+          </div>
+          <BarChart data={[2,1,3,2,1,1,1]} color="#60a5fa" labels={['W','T','F','S','S','M','T']} />
+        </div>
+        <div>
+          <div className="flex items-baseline justify-between mb-1.5">
+            <span className="mono text-[11px] text-text-secondary">Renewal exposure</span>
+            <span className="mono text-[11px] text-text-primary">$48k</span>
+          </div>
+          <BarChart data={[0,12,0,0,18,0,18]} color="#f59e0b" />
+        </div>
+        <div>
+          <div className="flex items-baseline justify-between mb-1.5">
+            <span className="mono text-[11px] text-text-secondary">Action items due</span>
+            <span className="mono text-[11px] text-text-primary">9</span>
+          </div>
+          <BarChart data={[1,3,2,0,0,2,1]} color="#e8763a" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const RECENT_AGENT_RUNS = [
+  { name: 'Customer health sweep', status: 'ok',   t: '03:00', dur: '1m 12s' },
+  { name: 'Daily digest',          status: 'ok',   t: '07:00', dur: '8s'     },
+  { name: 'Inbox triage',          status: 'ok',   t: '07:14', dur: '22s'    },
+  { name: 'Lead surface',          status: 'warn', t: '08:30', dur: '2m 04s' },
+  { name: 'Calendar sweep',        status: 'ok',   t: '09:00', dur: '4s'     },
+];
+
+function RecentRunsPanel() {
+  return (
+    <div className="bg-bg-card border border-border-default rounded-xl overflow-hidden">
+      <div className="px-4 py-3 border-b border-border-subtle">
+        <div className="mono text-[12px] font-semibold text-text-primary">Recent runs</div>
+        <div className="mono text-[10px] text-text-secondary">Last 5 skill executions</div>
+      </div>
+      {RECENT_AGENT_RUNS.map((r, i) => (
+        <div key={i} className={`flex items-center gap-2.5 px-4 py-2 ${i > 0 ? 'border-t border-border-subtle' : ''}`}>
+          <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{
+            background: r.status === 'ok' ? '#22c55e' : '#f59e0b',
+          }} />
+          <span className="mono text-[11.5px] text-text-primary flex-1 truncate">{r.name}</span>
+          <span className="mono text-[10.5px] text-text-secondary">{r.t}</span>
+          <span className="mono text-[10.5px] text-text-secondary min-w-[44px] text-right">{r.dur}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function VaultPulse() {
+  return (
+    <div className="bg-bg-card border border-border-default rounded-xl p-4">
+      <div className="mono text-[12px] font-semibold text-text-primary mb-0.5">Vault pulse</div>
+      <div className="mono text-[10px] text-text-secondary mb-3">Knowledge health</div>
+      <div className="flex items-baseline justify-between mb-3">
+        <span className="mono text-[11px] text-text-secondary">Total documents</span>
+        <span className="mono text-[11px] text-text-primary">1,247</span>
+      </div>
+      <div className="flex flex-col gap-2.5">
+        <DistBar label="Fresh (≤30d)"   percent={62} color="#22c55e" />
+        <DistBar label="Aging (30–90d)" percent={26} color="#f59e0b" />
+        <DistBar label="Decaying (90+)" percent={12} color="#ef4444" />
+      </div>
+      <div className="flex justify-between items-baseline mt-3 pt-2.5 border-t border-border-subtle">
+        <span className="mono text-[10.5px] text-text-secondary">Embed coverage</span>
+        <span className="mono text-[10.5px] text-[#22c55e]">98.3%</span>
+      </div>
+    </div>
+  );
+}
+
 // ─── Now (main export) ────────────────────────────────────────────────────────
 
 interface Props {
@@ -1695,77 +1817,90 @@ export function Now({ name }: Props) {
   }
 
   return (
-    <div className="relative max-w-3xl w-full mx-auto px-2 sm:px-0">
-      {/* ─── Top bar row ─── */}
-      <div className="flex items-start justify-between gap-4 mb-6">
-        <div className="min-w-0">
-          <div className="mono text-[10px] uppercase tracking-[0.18em] text-[rgba(229,229,231,0.5)] mb-1">
-            {formatDate()} · {time}
+    <div className="relative w-full">
+      {/* N-1: two-column grid at ≥1024px */}
+      <div className="now-layout grid gap-5" style={{ gridTemplateColumns: 'minmax(0, 1fr) 320px', alignItems: 'start' }}>
+        <style>{`
+          @media (max-width: 1023px) { .now-layout { grid-template-columns: 1fr !important; } .now-rail { display: none !important; } }
+        `}</style>
+
+        {/* LEFT column */}
+        <div className="flex flex-col gap-6 min-w-0 px-2 sm:px-0">
+          {/* ─── Top bar row ─── */}
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <div className="mono text-[10px] uppercase tracking-[0.18em] text-[rgba(229,229,231,0.5)] mb-1">
+                {formatDate()} · {time}
+              </div>
+              <h1 className="text-[20px] sm:text-[26px] font-semibold text-[#E5E5E7] tracking-tight leading-tight">
+                {greeting(name)}
+              </h1>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0 pt-1">
+              <button
+                onClick={() => setSearchOpen(true)}
+                title="Search (/ or ⌘K)"
+                className="hidden sm:flex items-center gap-1.5 px-3 py-2 bg-[#141416] border border-[#1F1F23] rounded-lg hover:border-[#2A2A2E] transition-colors group"
+              >
+                <span className="mono text-[12px] text-[rgba(229,229,231,0.5)] group-hover:text-[#E5E5E7]">
+                  ⌘K
+                </span>
+              </button>
+              <button
+                onClick={() => setCaptureOpen(true)}
+                title="Quick Capture"
+                className="hidden sm:flex items-center gap-1.5 px-3 py-2 bg-[#FF6B2B] rounded-lg hover:bg-[#e55a1a] transition-colors"
+              >
+                <span className="mono text-[11px] uppercase tracking-[0.12em] text-white">+ Capture</span>
+              </button>
+            </div>
           </div>
-          <h1 className="text-[20px] sm:text-[26px] font-semibold text-[#E5E5E7] tracking-tight leading-tight">
-            {greeting(name)}
-          </h1>
+
+          {/* ─── Status Pulse ─── */}
+          <section>
+            <SectionLabel>System Status</SectionLabel>
+            <StatusPulse />
+          </section>
+
+          {/* ─── Top of Mind ─── */}
+          <section>
+            <SectionLabel>Top of Mind</SectionLabel>
+            <TopOfMind />
+          </section>
+
+          {/* ─── Calendar + Digest ─── */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <section>
+              <SectionLabel>Today</SectionLabel>
+              <CalendarStub />
+            </section>
+            <section>
+              <SectionLabel>Yesterday</SectionLabel>
+              <YesterdayDigest />
+            </section>
+          </div>
+
+          {/* ─── Activity Feed ─── */}
+          <section>
+            <SectionLabel>Live Activity</SectionLabel>
+            <ActivityFeed />
+          </section>
+
+          {/* ─── Skills Surface ─── */}
+          <section className="mb-24 sm:mb-8">
+            <SectionLabel>Skills</SectionLabel>
+            <SkillsSurface onOpenQuickCapture={() => setCaptureOpen(true)} />
+          </section>
         </div>
 
-        {/* Search button (sm+); capture always visible */}
-        <div className="flex items-center gap-2 shrink-0 pt-1">
-          <button
-            onClick={() => setSearchOpen(true)}
-            title="Search (/ or ⌘K)"
-            className="hidden sm:flex items-center gap-1.5 px-3 py-2 bg-[#141416] border border-[#1F1F23] rounded-lg hover:border-[#2A2A2E] transition-colors group"
-          >
-            <span className="mono text-[12px] text-[rgba(229,229,231,0.5)] group-hover:text-[#E5E5E7]">
-              ⌘K
-            </span>
-          </button>
-          {/* Sprint 4 mobile: capture button is static in header (fixed FAB added below for mobile) */}
-          <button
-            onClick={() => setCaptureOpen(true)}
-            title="Quick Capture"
-            className="hidden sm:flex items-center gap-1.5 px-3 py-2 bg-[#FF6B2B] rounded-lg hover:bg-[#e55a1a] transition-colors"
-          >
-            <span className="mono text-[11px] uppercase tracking-[0.12em] text-white">+ Capture</span>
-          </button>
+        {/* RIGHT rail (320px, hidden < 1024px) */}
+        <div className="now-rail flex flex-col gap-4 sticky top-0 pt-2">
+          <ForecastPanel />
+          <RecentRunsPanel />
+          <VaultPulse />
         </div>
       </div>
-
-      {/* ─── Status Pulse ─── */}
-      <section className="mb-6">
-        <SectionLabel>System Status</SectionLabel>
-        <StatusPulse />
-      </section>
-
-      {/* ─── Top of Mind — attention scored ─── */}
-      <section className="mb-6">
-        <SectionLabel>Top of Mind</SectionLabel>
-        {/* Pass teamMemberId for future DRI-scoped filtering; scorer is user-agnostic for now */}
-        <TopOfMind />
-      </section>
-
-      {/* ─── Calendar + Digest side-by-side on md+; stacked on mobile ─── */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-        <section>
-          <SectionLabel>Today</SectionLabel>
-          <CalendarStub />
-        </section>
-        <section>
-          <SectionLabel>Yesterday</SectionLabel>
-          <YesterdayDigest />
-        </section>
-      </div>
-
-      {/* ─── Activity Feed ─── */}
-      <section className="mb-6">
-        <SectionLabel>Live Activity</SectionLabel>
-        <ActivityFeed />
-      </section>
-
-      {/* ─── Skills Surface ─── */}
-      {/* Sprint 4 mobile: extra bottom margin to clear the FAB */}
-      <section className="mb-24 sm:mb-8">
-        <SectionLabel>Skills</SectionLabel>
-        <SkillsSurface onOpenQuickCapture={() => setCaptureOpen(true)} />
-      </section>
 
       {/* ─── Modals ─── */}
       <GlobalSearch open={searchOpen} onClose={() => setSearchOpen(false)} />
@@ -1776,8 +1911,7 @@ export function Now({ name }: Props) {
         teamMemberId={teamMemberId}
       />
 
-      {/* ─── Mobile FAB: fixed bottom-right quick capture ─── */}
-      {/* Sprint 4: fixed on mobile (sm:hidden), static in header on desktop */}
+      {/* ─── Mobile FAB ─── */}
       <button
         onClick={() => setCaptureOpen(true)}
         title="Quick Capture"
