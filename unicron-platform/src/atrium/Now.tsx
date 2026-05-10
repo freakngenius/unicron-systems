@@ -19,6 +19,7 @@ import {
   useEffect,
   useRef,
   useCallback,
+  useMemo,
   type KeyboardEvent,
   type FormEvent,
 } from 'react';
@@ -60,6 +61,9 @@ interface FeedEvent {
   count: number;
   table: 'ledger' | 'audit_log';
 }
+
+type NowTab = 'overview' | 'activity';
+type Timeframe = '1h' | '24h' | '7d' | 'custom';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -695,6 +699,211 @@ function ActivityFeed() {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── ActivityTab — N-4: filter bar + timeframe + expandable rows ──────────────
+
+const KNOWN_SOURCES = Object.keys(SOURCE_TYPE_ICONS);
+
+function ActivityTab() {
+  const events = useActivityFeed();
+  const [activeSources, setActiveSources] = useState<Set<string>>(new Set());
+  const [surface, setSurface] = useState<'all' | 'ledger' | 'audit_log'>('all');
+  const [timeframe, setTimeframe] = useState<Timeframe>('24h');
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  const cutoffMs = useMemo(() => {
+    const now = Date.now();
+    if (timeframe === '1h') return now - 3_600_000;
+    if (timeframe === '24h') return now - 86_400_000;
+    if (timeframe === '7d') return now - 604_800_000;
+    return 0;
+  }, [timeframe]);
+
+  const allSourceTypes = useMemo(
+    () => [...new Set([...KNOWN_SOURCES, ...events.map((e) => e.source_type)])],
+    [events],
+  );
+
+  const filtered = useMemo(
+    () =>
+      events.filter((evt) => {
+        if (new Date(evt.created_at).getTime() < cutoffMs) return false;
+        if (surface !== 'all' && evt.table !== surface) return false;
+        if (activeSources.size > 0 && !activeSources.has(evt.source_type)) return false;
+        return true;
+      }),
+    [events, cutoffMs, surface, activeSources],
+  );
+
+  function toggleSource(src: string) {
+    setActiveSources((prev) => {
+      const next = new Set(prev);
+      if (next.has(src)) next.delete(src);
+      else next.add(src);
+      return next;
+    });
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      {/* Filter bar */}
+      <div className="flex flex-wrap gap-2 items-center">
+        {/* Timeframe selector */}
+        <div className="flex gap-0.5 bg-[#141416] border border-[#1F1F23] rounded-lg p-0.5 mr-1">
+          {(['1h', '24h', '7d', 'custom'] as const).map((t) => (
+            <button
+              key={t}
+              onClick={() => setTimeframe(t)}
+              className={`mono text-[10px] uppercase tracking-[0.12em] px-2.5 py-1 rounded transition-colors ${
+                timeframe === t
+                  ? 'bg-[#FF6B2B] text-white'
+                  : 'text-[rgba(229,229,231,0.5)] hover:text-[rgba(229,229,231,0.8)]'
+              }`}
+            >
+              {t}
+            </button>
+          ))}
+        </div>
+
+        {/* Surface chips */}
+        {(['all', 'ledger', 'audit_log'] as const).map((s) => (
+          <button
+            key={s}
+            onClick={() => setSurface(s)}
+            className={`mono text-[10px] uppercase tracking-[0.12em] px-2.5 py-1 rounded-full border transition-colors ${
+              surface === s
+                ? 'border-[#FF6B2B] text-[#E5E5E7] bg-[#FF6B2B18]'
+                : 'border-[#1F1F23] text-[rgba(229,229,231,0.4)] hover:text-[rgba(229,229,231,0.7)]'
+            }`}
+          >
+            {s === 'all' ? 'All' : s === 'audit_log' ? 'Audit' : 'Ledger'}
+          </button>
+        ))}
+
+        {/* Source chips */}
+        {allSourceTypes.map((src) => (
+          <button
+            key={src}
+            onClick={() => toggleSource(src)}
+            className={`mono text-[10px] px-2.5 py-1 rounded-full border transition-colors ${
+              activeSources.has(src)
+                ? 'border-[#FF6B2B] text-[#E5E5E7] bg-[#FF6B2B18]'
+                : 'border-[#1F1F23] text-[rgba(229,229,231,0.4)] hover:text-[rgba(229,229,231,0.7)]'
+            }`}
+          >
+            {SOURCE_TYPE_ICONS[src] ?? '⚡'} {src}
+          </button>
+        ))}
+
+        {/* DRI chip — Sprint 5+ */}
+        <button
+          disabled
+          title="DRI filtering — Sprint 5"
+          className="mono text-[10px] px-2.5 py-1 rounded-full border border-[#1F1F23] text-[rgba(229,229,231,0.2)] cursor-not-allowed"
+        >
+          DRI · Sprint 5
+        </button>
+      </div>
+
+      {/* Feed */}
+      <div className="bg-[#141416] border border-[#1F1F23] rounded-xl overflow-hidden">
+        <div className="px-4 sm:px-5 py-3 border-b border-[#1F1F23] flex items-center justify-between">
+          <div className="mono text-[11px] uppercase tracking-[0.16em] text-[rgba(229,229,231,0.5)]">
+            Activity Feed
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="mono text-[10px] text-[rgba(229,229,231,0.35)]">
+              {filtered.length} event{filtered.length !== 1 ? 's' : ''}
+            </span>
+            <div className="flex items-center gap-1.5">
+              <div className="w-1.5 h-1.5 rounded-full bg-[#22C55E] animate-pulse" />
+              <span className="mono text-[9px] uppercase tracking-[0.14em] text-[rgba(229,229,231,0.4)]">Live</span>
+            </div>
+          </div>
+        </div>
+
+        {filtered.length === 0 ? (
+          <div className="px-4 sm:px-5 py-6 mono text-[11px] text-[rgba(229,229,231,0.4)]">
+            No events matching the current filters.
+          </div>
+        ) : (
+          <div className="divide-y divide-[#1F1F23]">
+            {filtered.map((evt) => {
+              const expanded = expandedId === evt.id;
+              return (
+                <div
+                  key={evt.id}
+                  className="cursor-pointer hover:bg-[#1A1A1D] transition-colors"
+                  onClick={() => setExpandedId(expanded ? null : evt.id)}
+                >
+                  <div className="px-4 sm:px-5 py-3 flex items-start gap-3">
+                    <div className="text-[14px] pt-0.5 shrink-0">
+                      {SOURCE_TYPE_ICONS[evt.source_type] ?? '⚡'}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-baseline justify-between gap-2">
+                        <div className="mono text-[12px] text-[#E5E5E7] truncate">
+                          {evt.content_summary ?? evt.source_type}
+                          {(evt.count ?? 1) > 1 && (
+                            <span className="ml-1.5 mono text-[10px] bg-[#1F1F23] text-[rgba(229,229,231,0.6)] px-1.5 py-0.5 rounded">
+                              ×{evt.count}
+                            </span>
+                          )}
+                        </div>
+                        <div className="mono text-[10px] text-[rgba(229,229,231,0.4)] shrink-0">
+                          {formatRelativeTime(evt.created_at)}
+                        </div>
+                      </div>
+                      <div className="mono text-[9px] uppercase tracking-[0.12em] text-[rgba(229,229,231,0.35)] mt-0.5">
+                        {evt.source_type} · {evt.table}
+                      </div>
+                    </div>
+                    <div className="mono text-[10px] text-[rgba(229,229,231,0.3)] shrink-0 pt-0.5">
+                      {expanded ? '▾' : '▸'}
+                    </div>
+                  </div>
+
+                  {expanded && (
+                    <div className="px-4 sm:px-5 pb-3 bg-[#141416]">
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-2 pl-7 pt-1">
+                        <div>
+                          <div className="mono text-[9px] uppercase tracking-[0.16em] text-[rgba(229,229,231,0.35)]">source</div>
+                          <div className="mono text-[11px] text-[rgba(229,229,231,0.8)]">{evt.source_type}</div>
+                        </div>
+                        <div>
+                          <div className="mono text-[9px] uppercase tracking-[0.16em] text-[rgba(229,229,231,0.35)]">surface</div>
+                          <div className="mono text-[11px] text-[rgba(229,229,231,0.8)]">{evt.table}</div>
+                        </div>
+                        <div>
+                          <div className="mono text-[9px] uppercase tracking-[0.16em] text-[rgba(229,229,231,0.35)]">count</div>
+                          <div className="mono text-[11px] text-[rgba(229,229,231,0.8)]">{evt.count ?? 1}</div>
+                        </div>
+                        <div>
+                          <div className="mono text-[9px] uppercase tracking-[0.16em] text-[rgba(229,229,231,0.35)]">timestamp</div>
+                          <div className="mono text-[11px] text-[rgba(229,229,231,0.8)]">
+                            {new Date(evt.created_at).toLocaleString()}
+                          </div>
+                        </div>
+                        {evt.content_summary && (
+                          <div className="col-span-2">
+                            <div className="mono text-[9px] uppercase tracking-[0.16em] text-[rgba(229,229,231,0.35)]">payload</div>
+                            <div className="mono text-[11px] text-[rgba(229,229,231,0.8)] mt-0.5 break-all leading-relaxed">
+                              {evt.content_summary}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -1771,6 +1980,7 @@ interface Props {
 export function Now({ name }: Props) {
   const auth = useAuth();
   const time = useLocalTime();
+  const [nowTab, setNowTab] = useState<NowTab>('overview');
   const [searchOpen, setSearchOpen] = useState(false);
   const [captureOpen, setCaptureOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
@@ -1818,7 +2028,32 @@ export function Now({ name }: Props) {
 
   return (
     <div className="relative w-full">
-      {/* N-1: two-column grid at ≥1024px */}
+      {/* N-4: sub-tab nav */}
+      <div className="flex gap-0.5 mb-5 border-b border-[#1F1F23] -mt-1">
+        {(['overview', 'activity'] as const).map((tab) => (
+          <button
+            key={tab}
+            onClick={() => setNowTab(tab)}
+            className={`mono text-[11px] uppercase tracking-[0.16em] px-4 py-2 border-b-2 transition-colors ${
+              nowTab === tab
+                ? 'border-[#FF6B2B] text-[#E5E5E7]'
+                : 'border-transparent text-[rgba(229,229,231,0.4)] hover:text-[rgba(229,229,231,0.7)]'
+            }`}
+          >
+            {tab}
+          </button>
+        ))}
+      </div>
+
+      {/* N-4: Activity sub-tab — full width, no rail */}
+      {nowTab === 'activity' && (
+        <div className="px-2 sm:px-0">
+          <ActivityTab />
+        </div>
+      )}
+
+      {/* N-1: two-column grid at ≥1024px (Overview tab) */}
+      {nowTab === 'overview' && (
       <div className="now-layout grid gap-5" style={{ gridTemplateColumns: 'minmax(0, 1fr) 320px', alignItems: 'start' }}>
         <style>{`
           @media (max-width: 1023px) { .now-layout { grid-template-columns: 1fr !important; } .now-rail { display: none !important; } }
@@ -1901,6 +2136,7 @@ export function Now({ name }: Props) {
           <VaultPulse />
         </div>
       </div>
+      )}
 
       {/* ─── Modals ─── */}
       <GlobalSearch open={searchOpen} onClose={() => setSearchOpen(false)} />
