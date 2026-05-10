@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { Visualizer } from '../visualizer/Visualizer';
 import { useSettings } from '../SettingsContext';
 import { useSystem } from '../../context/SystemContext';
-import { ActivityFeed } from './ActivityFeed';
+import { ActivitySidebar } from './ActivitySidebar';
 import { ActionBar, type ActivePanel } from './ActionBar';
 import { AddAgentPanel } from './panels/AddAgentPanel';
 import { AddSourcePanel } from './panels/AddSourcePanel';
@@ -79,11 +79,23 @@ export function LiveSystem({ onArchitectClick, onGoToOnboarding }: Props) {
   }
 
   return (
-    <div className="relative min-h-[calc(100vh-56px)]">
+    <div className="relative h-[calc(100vh-56px)] overflow-hidden">
       <ActionBar active={activePanel} onToggle={togglePanel} />
 
-      <div className="grid grid-cols-1 lg:grid-cols-[7fr_3fr] min-h-[calc(100vh-56px)]">
-        <section className="relative border-r border-border-default min-h-[60vh]">
+      {/*
+        Visualizer fills the full viewport (minus the 56px top nav) and is
+        sized to a square equal to min(viewportW, viewportH - 56px) so the
+        orbit ring stays fully inside the visible area at any 16:9 resolution.
+        The activity sidebar overlays on top — it does NOT shrink this region.
+      */}
+      <div className="absolute inset-0 flex items-center justify-center">
+        <div
+          className="relative"
+          style={{
+            width: 'min(100%, calc(100vh - 56px))',
+            height: 'min(100%, calc(100vh - 56px))',
+          }}
+        >
           <Visualizer
             config={config}
             showInternalCostMetrics={settings.showInternalCostMetrics}
@@ -97,18 +109,12 @@ export function LiveSystem({ onArchitectClick, onGoToOnboarding }: Props) {
               setActivePanel('edit-node');
             }}
           />
-        </section>
-
-        <aside className="px-6 py-10 overflow-y-auto">
-          {settings.activityFeed ? (
-            <ActivityFeed onArchitectClick={onArchitectClick} />
-          ) : (
-            <div className="mono text-[11px] uppercase tracking-[0.22em] text-text-secondary">
-              activity feed disabled · enable in settings
-            </div>
-          )}
-        </aside>
+        </div>
       </div>
+
+      {settings.activityFeed ? (
+        <ActivitySidebar onArchitectClick={onArchitectClick} />
+      ) : null}
 
       <AddAgentPanel open={activePanel === 'add-agent'} onClose={close} />
       <AddSourcePanel open={activePanel === 'add-source'} onClose={close} />
