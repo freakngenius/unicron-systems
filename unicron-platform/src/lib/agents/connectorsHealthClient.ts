@@ -2,11 +2,10 @@
 // pathfinder.connector_audit_log. Computes the rollup the dashboard
 // renders (totals, byType, byStatus, mostRecentSuccess, 24h error rate).
 //
-// Mock mode is the default — flip VITE_PATHFINDER_DB_ENABLED=true to hit
-// Supabase. RLS allows anon SELECT on pathfinder.connectors +
-// connector_audit_log when the service role policy or cross-tenant policy
-// is in place; if anon access is refused, the live branch surfaces the
-// Supabase error to the caller (the view renders an inline error).
+// RLS allows anon SELECT on pathfinder.connectors + connector_audit_log
+// when the service role policy or cross-tenant policy is in place; if anon
+// access is refused, the call surfaces the Supabase error to the caller
+// (the view renders an inline error).
 
 import { getSupabase } from '../supabase';
 import {
@@ -19,7 +18,6 @@ import {
   type ConnectorType,
   type ConnectorsHealthRollup,
 } from '../contracts/connectorsHealth';
-import { connectorsHealthMock } from '../../data/mocks';
 
 // Raw shapes — mirror the columns we read off Supabase. The DB uses
 // `connector_type` + the `pathfinder.connectors.status` values, which we
@@ -40,10 +38,6 @@ export interface ConnectorAuditEventRaw {
 }
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
-
-function realEnabled(): boolean {
-  return import.meta.env.VITE_PATHFINDER_DB_ENABLED === 'true';
-}
 
 /** Successful audit-log statuses. `sent` + `succeeded` + `received` all
  *  count — the audit table records direction independently, and any of
@@ -148,15 +142,10 @@ export function __computeRollup(
 
 /**
  * Read pathfinder.connectors + last 24h of pathfinder.connector_audit_log
- * and return the dashboard rollup. Mock-mode returns the fixture so the
- * UI renders without Supabase.
+ * and return the dashboard rollup. Returns a zeroed rollup when no rows are
+ * present in Supabase.
  */
 export async function fetchConnectorsHealth(): Promise<ConnectorsHealthRollup> {
-  if (!realEnabled()) {
-    await new Promise((r) => setTimeout(r, 80));
-    return connectorsHealthMock();
-  }
-
   const supabase = getSupabase();
   // Pull a 7d window for last_success even though rate is 24h. Most ops will
   // see something within 7d; rows with no event in 7d render `—`.

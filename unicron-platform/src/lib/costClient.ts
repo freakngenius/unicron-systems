@@ -255,67 +255,6 @@ export function aggregate(
 }
 
 // ---------------------------------------------------------------------------
-// Mock fixture (used when VITE_PATHFINDER_DB_ENABLED !== 'true')
-// ---------------------------------------------------------------------------
-
-function realEnabled(): boolean {
-  return import.meta.env.VITE_PATHFINDER_DB_ENABLED === 'true';
-}
-
-function mockData(now = new Date()): { llm: LlmCallRow[]; dispatches: DispatchCostRow[] } {
-  // Spread synthetic rows across the trailing 7 days so the default window
-  // shows non-empty charts without a live DB.
-  const llm: LlmCallRow[] = [];
-  const dispatches: DispatchCostRow[] = [];
-  const baseAgents = ['ranker', 'qualifier', 'enricher', 'briefer', 'architect'];
-  const models: { model: string; provider: string | null; input: number; output: number; cost: number }[] = [
-    { model: 'claude-opus-4-5', provider: 'anthropic', input: 12000, output: 1800, cost: 0.36 },
-    { model: 'claude-sonnet-4-5', provider: 'anthropic', input: 8000, output: 1200, cost: 0.06 },
-    { model: 'gpt-4o', provider: 'openai', input: 6000, output: 900, cost: 0.04 },
-    { model: 'sonar-pro', provider: 'perplexity', input: 4000, output: 700, cost: 0.02 },
-    { model: 'claude-haiku-4-5', provider: 'anthropic', input: 3000, output: 500, cost: 0.005 },
-  ];
-
-  let id = 0;
-  for (let day = 6; day >= 0; day--) {
-    const ts = new Date(now.getTime() - day * 24 * 60 * 60 * 1000);
-    for (let i = 0; i < 6; i++) {
-      const m = models[(day + i) % models.length];
-      const a = baseAgents[(day * 2 + i) % baseAgents.length];
-      llm.push({
-        id: `mock-llm-${++id}`,
-        agent_name: a,
-        model: m.model,
-        provider: m.provider,
-        input_tokens: m.input,
-        output_tokens: m.output,
-        cached_input_tokens: 0,
-        cost_usd: m.cost * (1 + (i % 3) * 0.25),
-        created_at: ts.toISOString(),
-      });
-    }
-    dispatches.push({
-      id: `mock-disp-${day}-zedcor`,
-      agent_name: 'qualifier',
-      customer_org_id: 'zedcor',
-      cost_usd: 0.32 + day * 0.04,
-      created_at: ts.toISOString(),
-    });
-    if (day < 4) {
-      dispatches.push({
-        id: `mock-disp-${day}-acme`,
-        agent_name: 'briefer',
-        customer_org_id: 'acme-pilot',
-        cost_usd: 0.18 + day * 0.02,
-        created_at: ts.toISOString(),
-      });
-    }
-  }
-
-  return { llm, dispatches };
-}
-
-// ---------------------------------------------------------------------------
 // Network fetcher
 // ---------------------------------------------------------------------------
 
@@ -331,12 +270,6 @@ export async function loadCostSummary(
   win: CostWindow,
   now = new Date(),
 ): Promise<CostSummary> {
-  if (!realEnabled()) {
-    await new Promise((r) => setTimeout(r, 80));
-    const { llm, dispatches } = mockData(now);
-    return aggregate(win, llm, dispatches, now);
-  }
-
   const supabase = getSupabase();
   const start = windowStart(win, now);
 
