@@ -6,6 +6,28 @@ Dispatched by the Master Conductor. Self-contained.
 
 **Reference SPECs:** `Company Docs/Specs/SPEC - Unicron Nervous System.md`, `Company Docs/Specs/SPEC - Nervous System Addendum 2 (Skills + Karpathy + Refero).md`, `Company Docs/Atrium/Specs/SPEC - Atrium (Internal Cockpit).md`
 
+---
+
+## HARD CONSTRAINTS — read before any tool call
+
+These constraints apply to this session. Read this section completely before executing any tool call, creating any worktree, or touching any branch.
+
+**No destructive git operations.**
+Never run `git reset --hard`, `git clean`, `git checkout -- .`, `git restore .`, or any command that destroys uncommitted state in any worktree.
+
+**Worktree pre-flight — mandatory before any branch switch, reset, or checkout:**
+Before touching any worktree you did not create in this session, run `git status` first. If any modified or untracked files exist, stop and stash them (`git stash --include-untracked`) before proceeding. Never destroy uncommitted work. Safe alternatives to bring a branch current: `git stash --include-untracked` then proceed; or `git fetch origin && git merge --ff-only origin/<branch>` (refuses rather than destroys); or work in a different worktree entirely.
+
+**Refusal layer is primary.** Every system-modifying action passes through Taboo Keeper validation before execution.
+
+**Verified column is human-only.** Never auto-promote a kanban card to Verified.
+
+**Multi-Vercel verification.** Pathfinder and unicron-platform are separate Vercel projects. Verify each independently after every deployment.
+
+**No time estimates or numeric cost caps.** Never write "~3 hours" or "$40 cap" in prompts or PR descriptions.
+
+---
+
 This sprint is the polish pass. Atrium becomes installable, configurable, observable, and accessibility-correct.
 
 This sprint accomplishes:
