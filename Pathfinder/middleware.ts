@@ -155,8 +155,12 @@ export const config = {
   // Note that `/api/connectors/slack/auth` is NOT excluded — it's the
   // operator-side "Connect" click and goes through basic-auth like the
   // rest of the Settings UI.
+  // `/auth/callback` is excluded because Supabase Auth hits the magic-link
+  // redirect URL from the user's email client, which won't carry Basic Auth
+  // credentials. Auth is via Supabase OTP token_hash + operator_allowlist
+  // enforcement inside the route handler (see app/auth/callback/route.ts).
   matcher: [
     '/',
-    '/((?!_next/|favicon\\.ico|api/cron/|api/notifications/|api/slack/install/callback|api/slack/events|api/slack/actions|api/inngest|api/architect/|api/ingest|api/organizations|api/email/oauth/callback|api/email/webhooks/|api/connectors/slack/callback|api/connectors/slack/commands|api/connectors/slack/events).*)',
+    '/((?!_next/|favicon\\.ico|api/cron/|api/notifications/|api/slack/install/callback|api/slack/events|api/slack/actions|api/inngest|api/architect/|api/ingest|api/organizations|api/email/oauth/callback|api/email/webhooks/|api/connectors/slack/callback|api/connectors/slack/commands|api/connectors/slack/events|auth/callback).*)',
   ],
 };
