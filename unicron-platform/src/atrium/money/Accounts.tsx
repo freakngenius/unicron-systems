@@ -26,10 +26,10 @@ interface ConnectedService {
 // ── Design helpers ────────────────────────────────────────────────────────────
 
 const STATUS_DOT: Record<ConnectedService['status'], string> = {
-  healthy:  '#22C55E',
-  degraded: '#F59E0B',
-  broken:   '#EF4444',
-  unknown:  'rgba(229,229,231,0.3)',
+  healthy:  '#4FB286',
+  degraded: '#D9A23A',
+  broken:   '#DD6262',
+  unknown:  'var(--text-lo)',
 };
 
 const STATUS_LABEL: Record<ConnectedService['status'], string> = {
@@ -40,10 +40,10 @@ const STATUS_LABEL: Record<ConnectedService['status'], string> = {
 };
 
 const CAT_COLORS: Record<string, string> = {
-  infrastructure: '#3B82F6',
+  infrastructure: '#6F95D6',
   ai:             '#7C3AED',
-  communication:  '#FF6B2B',
-  payroll:        '#F59E0B',
+  communication:  'var(--accent)',
+  payroll:        '#D9A23A',
   contractors:    '#EC4899',
   marketing:      '#C026D3',
   other:          '#6B7280',
@@ -104,8 +104,8 @@ function RegisterForm({
   }
 
   const inputCls =
-    'w-full bg-[#141416] border border-[#1F1F23] rounded-lg px-3 py-2 mono text-[12px] text-[#E5E5E7] placeholder:text-[rgba(229,229,231,0.3)] focus:outline-none focus:border-[#FF6B2B] transition-colors';
-  const labelCls = 'mono text-[9px] uppercase tracking-[0.16em] text-[rgba(229,229,231,0.4)] block mb-1';
+    'w-full bg-bg-card border border-border-default rounded-lg px-3 py-2 mono text-[12px] text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent transition-colors';
+  const labelCls = 'mono text-[9px] uppercase tracking-[0.16em] text-text-muted block mb-1';
 
   return (
     <div className="fixed inset-0 z-[80] flex items-start justify-end">
@@ -115,16 +115,16 @@ function RegisterForm({
       {/* Panel */}
       <form
         onSubmit={(e) => void handleSubmit(e)}
-        className="relative w-full max-w-md h-full bg-[#141416] border-l border-[#1F1F23] overflow-y-auto flex flex-col"
+        className="relative w-full max-w-md h-full bg-bg-card border-l border-border-default overflow-y-auto flex flex-col"
       >
-        <div className="flex items-center justify-between px-5 py-4 border-b border-[#1F1F23] sticky top-0 bg-[#141416] z-10">
-          <div className="mono text-[11px] uppercase tracking-[0.18em] text-[rgba(229,229,231,0.5)]">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-border-default sticky top-0 bg-bg-card z-10">
+          <div className="mono text-[11px] uppercase tracking-[0.18em] text-text-secondary">
             Register Service
           </div>
           <button
             type="button"
             onClick={onCancel}
-            className="mono text-[11px] uppercase tracking-[0.14em] text-[rgba(229,229,231,0.5)] hover:text-[#E5E5E7] transition-colors"
+            className="mono text-[11px] uppercase tracking-[0.14em] text-text-secondary hover:text-text-primary transition-colors"
           >
             Cancel
           </button>
@@ -213,17 +213,17 @@ function RegisterForm({
           </div>
 
           {err && (
-            <div className="bg-[#EF4444]/10 border border-[#EF4444]/30 rounded-lg px-3 py-2">
-              <div className="mono text-[11px] text-[#EF4444]">{err}</div>
+            <div className="bg-[#DD6262]/10 border border-[#DD6262]/30 rounded-lg px-3 py-2">
+              <div className="mono text-[11px] text-[#DD6262]">{err}</div>
             </div>
           )}
         </div>
 
-        <div className="px-5 py-4 border-t border-[#1F1F23]">
+        <div className="px-5 py-4 border-t border-border-default">
           <button
             type="submit"
             disabled={saving || !form.name.trim()}
-            className="w-full mono text-[11px] uppercase tracking-[0.12em] py-2.5 bg-[#FF6B2B] text-white rounded-lg hover:bg-[#e55a1a] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            className="w-full mono text-[11px] uppercase tracking-[0.12em] py-2.5 bg-accent-orange text-white rounded-lg hover:bg-[#e55a1a] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {saving ? '…' : 'Register Service'}
           </button>
@@ -269,7 +269,7 @@ export function Accounts() {
     return (
       <div className="space-y-2">
         {[0, 1, 2, 3, 4].map((i) => (
-          <div key={i} className="h-10 bg-[#141416] rounded-xl animate-pulse" />
+          <div key={i} className="h-10 bg-bg-card rounded-xl animate-pulse" />
         ))}
       </div>
     );
@@ -277,11 +277,11 @@ export function Accounts() {
 
   if (error) {
     return (
-      <div className="bg-[#EF4444]/10 border border-[#EF4444]/30 rounded-xl px-5 py-4">
-        <div className="mono text-[12px] text-[#EF4444]">{error}</div>
+      <div className="bg-[#DD6262]/10 border border-[#DD6262]/30 rounded-xl px-5 py-4">
+        <div className="mono text-[12px] text-[#DD6262]">{error}</div>
         <button
           onClick={() => void load()}
-          className="mono text-[10px] uppercase tracking-[0.12em] mt-2 text-[rgba(229,229,231,0.5)] hover:text-[#E5E5E7] transition-colors"
+          className="mono text-[10px] uppercase tracking-[0.12em] mt-2 text-text-secondary hover:text-text-primary transition-colors"
         >
           Retry
         </button>
@@ -294,38 +294,38 @@ export function Accounts() {
       {/* Header row */}
       <div className="flex items-center justify-between mb-4">
         <div>
-          <span className="mono text-[12px] text-[rgba(229,229,231,0.5)]">
+          <span className="mono text-[12px] text-text-secondary">
             {services.length} services
           </span>
         </div>
         <button
           onClick={() => setShowForm(true)}
-          className="mono text-[10px] uppercase tracking-[0.12em] px-3 py-1.5 bg-[#FF6B2B] text-white rounded-lg hover:bg-[#e55a1a] transition-colors"
+          className="mono text-[10px] uppercase tracking-[0.12em] px-3 py-1.5 bg-accent-orange text-white rounded-lg hover:bg-[#e55a1a] transition-colors"
         >
           + Register Service
         </button>
       </div>
 
       {services.length === 0 ? (
-        <div className="bg-[#141416] border border-[#1F1F23] rounded-xl px-5 py-8 text-center">
-          <div className="mono text-[11px] uppercase tracking-[0.18em] text-[rgba(229,229,231,0.4)] mb-1">
+        <div className="bg-bg-card border border-border-default rounded-xl px-5 py-8 text-center">
+          <div className="mono text-[11px] uppercase tracking-[0.18em] text-text-muted mb-1">
             No services registered
           </div>
-          <div className="mono text-[11px] text-[rgba(229,229,231,0.3)]">
+          <div className="mono text-[11px] text-text-muted">
             Click "Register Service" to add the first service.
           </div>
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-[#1F1F23]">
+        <div className="overflow-x-auto rounded-xl border border-border-default">
           <table className="w-full min-w-[700px]">
             <thead>
-              <tr className="bg-[#141416] border-b border-[#1F1F23]">
+              <tr className="bg-bg-card border-b border-border-default">
                 {['Service', 'Status', 'Category', 'Monthly', 'Last Billed', 'Notes', ''].map(
                   (h, i) => (
                     <th
                       key={i}
                       className={[
-                        'px-4 py-2.5 mono text-[9px] uppercase tracking-[0.16em] text-[rgba(229,229,231,0.4)] whitespace-nowrap',
+                        'px-4 py-2.5 mono text-[9px] uppercase tracking-[0.16em] text-text-muted whitespace-nowrap',
                         i === 3 ? 'text-right' : 'text-left',
                       ].join(' ')}
                     >
@@ -339,9 +339,9 @@ export function Accounts() {
               {services.map((svc) => (
                 <tr
                   key={svc.id}
-                  className="border-b border-[#1F1F23] hover:bg-[#1A1A1D] transition-colors"
+                  className="border-b border-border-default hover:bg-bg-raised transition-colors"
                 >
-                  <td className="px-4 py-3 mono text-[12px] text-[#E5E5E7] font-medium">
+                  <td className="px-4 py-3 mono text-[12px] text-text-primary font-medium">
                     {svc.name}
                   </td>
 
@@ -374,7 +374,7 @@ export function Accounts() {
                     )}
                   </td>
 
-                  <td className="px-4 py-3 mono text-[12px] text-[#E5E5E7] text-right tabular-nums">
+                  <td className="px-4 py-3 mono text-[12px] text-text-primary text-right tabular-nums">
                     {svc.monthly_cost_usd != null
                       ? `$${svc.monthly_cost_usd.toLocaleString('en-US', {
                           minimumFractionDigits: 0,
@@ -383,7 +383,7 @@ export function Accounts() {
                       : '—'}
                   </td>
 
-                  <td className="px-4 py-3 mono text-[11px] text-[rgba(229,229,231,0.5)]">
+                  <td className="px-4 py-3 mono text-[11px] text-text-secondary">
                     {svc.last_billed_at
                       ? new Date(svc.last_billed_at).toLocaleDateString('en-US', {
                           month: 'short',
@@ -392,7 +392,7 @@ export function Accounts() {
                       : '—'}
                   </td>
 
-                  <td className="px-4 py-3 mono text-[11px] text-[rgba(229,229,231,0.4)] max-w-[200px] truncate">
+                  <td className="px-4 py-3 mono text-[11px] text-text-muted max-w-[200px] truncate">
                     {svc.notes ?? '—'}
                   </td>
 
@@ -402,7 +402,7 @@ export function Accounts() {
                         href={svc.config_url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="mono text-[10px] text-[#3B82F6] hover:underline"
+                        className="mono text-[10px] text-status-blue hover:underline"
                       >
                         Open ↗
                       </a>
@@ -417,11 +417,11 @@ export function Accounts() {
 
       {/* Total footer */}
       <div className="mt-4 flex justify-end">
-        <div className="bg-[#141416] border border-[#1F1F23] rounded-lg px-4 py-2.5 flex items-center gap-3">
-          <span className="mono text-[10px] uppercase tracking-[0.14em] text-[rgba(229,229,231,0.4)]">
+        <div className="bg-bg-card border border-border-default rounded-lg px-4 py-2.5 flex items-center gap-3">
+          <span className="mono text-[10px] uppercase tracking-[0.14em] text-text-muted">
             Total monthly
           </span>
-          <span className="mono text-[14px] text-[#E5E5E7] font-semibold tabular-nums">
+          <span className="mono text-[14px] text-text-primary font-semibold tabular-nums">
             ${totalMonthly.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
           </span>
         </div>

@@ -41,18 +41,18 @@ function SocialReach() {
   }
 
   const inputCls =
-    'w-full bg-[#141416] border border-[#1F1F23] rounded-lg px-3 py-2 mono text-[12px] text-[#E5E5E7] placeholder:text-[rgba(229,229,231,0.3)] focus:outline-none focus:border-[#FF6B2B] transition-colors';
-  const labelCls = 'mono text-[9px] uppercase tracking-[0.16em] text-[rgba(229,229,231,0.4)] block mb-1';
+    'w-full bg-bg-card border border-border-default rounded-lg px-3 py-2 mono text-[12px] text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent transition-colors';
+  const labelCls = 'mono text-[9px] uppercase tracking-[0.16em] text-text-muted block mb-1';
 
   return (
-    <div className="bg-[#141416] border border-[#1F1F23] rounded-xl p-5">
+    <div className="bg-bg-card border border-border-default rounded-xl p-5">
       <div className="flex items-center justify-between mb-4">
-        <div className="mono text-[11px] uppercase tracking-[0.16em] text-[rgba(229,229,231,0.5)]">
+        <div className="mono text-[11px] uppercase tracking-[0.16em] text-text-secondary">
           Social Reach
         </div>
         <button
           onClick={() => setShowForm(!showForm)}
-          className="mono text-[10px] uppercase tracking-[0.1em] px-3 py-1.5 bg-[#1F1F23] text-[rgba(229,229,231,0.5)] rounded-lg hover:text-[#E5E5E7] transition-colors"
+          className="mono text-[10px] uppercase tracking-[0.1em] px-3 py-1.5 bg-bg-raised text-text-secondary rounded-lg hover:text-text-primary transition-colors"
         >
           {showForm ? 'Cancel' : '+ Add Entry'}
         </button>
@@ -112,7 +112,7 @@ function SocialReach() {
           </div>
           <button
             type="submit"
-            className="mono text-[10px] uppercase tracking-[0.12em] px-4 py-2 bg-[#FF6B2B] text-white rounded-lg hover:bg-[#e55a1a] transition-colors"
+            className="mono text-[10px] uppercase tracking-[0.12em] px-4 py-2 bg-accent-orange text-white rounded-lg hover:bg-[#e55a1a] transition-colors"
           >
             Save Entry
           </button>
@@ -121,7 +121,7 @@ function SocialReach() {
 
       {entries.length === 0 ? (
         <div className="text-center py-5">
-          <div className="mono text-[11px] text-[rgba(229,229,231,0.3)]">
+          <div className="mono text-[11px] text-text-muted">
             No social reach data entered yet.
           </div>
         </div>
@@ -129,11 +129,11 @@ function SocialReach() {
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
-              <tr className="border-b border-[#1F1F23]">
+              <tr className="border-b border-border-default">
                 {['Platform', 'Followers', 'Reach 30d', 'Engagement', 'As of'].map((h) => (
                   <th
                     key={h}
-                    className="pb-2 mono text-[9px] uppercase tracking-[0.14em] text-[rgba(229,229,231,0.4)] text-left"
+                    className="pb-2 mono text-[9px] uppercase tracking-[0.14em] text-text-muted text-left"
                   >
                     {h}
                   </th>
@@ -142,18 +142,18 @@ function SocialReach() {
             </thead>
             <tbody>
               {entries.map((entry, i) => (
-                <tr key={i} className="border-b border-[#1F1F23]">
-                  <td className="py-2.5 mono text-[12px] text-[#E5E5E7]">{entry.platform}</td>
-                  <td className="py-2.5 mono text-[12px] text-[rgba(229,229,231,0.6)] tabular-nums">
+                <tr key={i} className="border-b border-border-default">
+                  <td className="py-2.5 mono text-[12px] text-text-primary">{entry.platform}</td>
+                  <td className="py-2.5 mono text-[12px] text-text-secondary tabular-nums">
                     {entry.followers || '—'}
                   </td>
-                  <td className="py-2.5 mono text-[12px] text-[rgba(229,229,231,0.6)] tabular-nums">
+                  <td className="py-2.5 mono text-[12px] text-text-secondary tabular-nums">
                     {entry.reach || '—'}
                   </td>
-                  <td className="py-2.5 mono text-[12px] text-[rgba(229,229,231,0.6)] tabular-nums">
+                  <td className="py-2.5 mono text-[12px] text-text-secondary tabular-nums">
                     {entry.engagement ? `${entry.engagement}%` : '—'}
                   </td>
-                  <td className="py-2.5 mono text-[11px] text-[rgba(229,229,231,0.4)]">
+                  <td className="py-2.5 mono text-[11px] text-text-muted">
                     {entry.asOf || '—'}
                   </td>
                 </tr>
@@ -173,11 +173,11 @@ const POSTHOG_KEY = import.meta.env.VITE_POSTHOG_KEY as string | undefined;
 function AnalyticsConnect() {
   if (POSTHOG_KEY) {
     return (
-      <div className="bg-[#141416] border border-[#1F1F23] rounded-xl p-5">
-        <div className="mono text-[11px] uppercase tracking-[0.16em] text-[rgba(229,229,231,0.5)] mb-2">
+      <div className="bg-bg-card border border-border-default rounded-xl p-5">
+        <div className="mono text-[11px] uppercase tracking-[0.16em] text-text-secondary mb-2">
           PostHog Connected
         </div>
-        <div className="mono text-[12px] text-[rgba(229,229,231,0.6)] mb-3">
+        <div className="mono text-[12px] text-text-secondary mb-3">
           PostHog key detected. Embed the PostHog dashboard or use the JS SDK to render
           funnel and retention charts directly in this panel.
         </div>
@@ -185,7 +185,7 @@ function AnalyticsConnect() {
           href="https://app.posthog.com"
           target="_blank"
           rel="noopener noreferrer"
-          className="mono text-[11px] text-[#3B82F6] hover:underline"
+          className="mono text-[11px] text-status-blue hover:underline"
         >
           Open PostHog dashboard ↗
         </a>
@@ -194,11 +194,11 @@ function AnalyticsConnect() {
   }
 
   return (
-    <div className="bg-[#141416] border border-[#1F1F23] rounded-xl p-5">
-      <div className="mono text-[11px] uppercase tracking-[0.16em] text-[rgba(229,229,231,0.4)] mb-3">
+    <div className="bg-bg-card border border-border-default rounded-xl p-5">
+      <div className="mono text-[11px] uppercase tracking-[0.16em] text-text-muted mb-3">
         Analytics not yet connected
       </div>
-      <p className="mono text-[12px] text-[rgba(229,229,231,0.5)] mb-4">
+      <p className="mono text-[12px] text-text-secondary mb-4">
         Connect PostHog or Plausible to surface pageviews, funnels, and retention.
       </p>
       <div className="space-y-2">
@@ -231,7 +231,7 @@ function AnalyticsConnect() {
           href="https://plausible.io"
           target="_blank"
           rel="noopener noreferrer"
-          className="mono text-[10px] uppercase tracking-[0.12em] px-3 py-1.5 bg-[#1F1F23] text-[rgba(229,229,231,0.6)] rounded-lg hover:text-[#E5E5E7] transition-colors"
+          className="mono text-[10px] uppercase tracking-[0.12em] px-3 py-1.5 bg-bg-raised text-text-secondary rounded-lg hover:text-text-primary transition-colors"
         >
           Plausible ↗
         </a>
@@ -243,14 +243,14 @@ function AnalyticsConnect() {
 function SetupStep({ step, label, code }: { step: number; label: string; code: string }) {
   return (
     <div className="flex items-start gap-3">
-      <span className="w-5 h-5 rounded-full bg-[#1F1F23] mono text-[10px] text-[rgba(229,229,231,0.4)] flex items-center justify-center shrink-0 mt-0.5">
+      <span className="w-5 h-5 rounded-full bg-bg-raised mono text-[10px] text-text-muted flex items-center justify-center shrink-0 mt-0.5">
         {step}
       </span>
       <div>
-        <div className="mono text-[10px] uppercase tracking-[0.1em] text-[rgba(229,229,231,0.5)] mb-0.5">
+        <div className="mono text-[10px] uppercase tracking-[0.1em] text-text-secondary mb-0.5">
           {label}
         </div>
-        <code className="mono text-[11px] text-[#FF6B2B] bg-[#1F1F23] px-2 py-0.5 rounded">
+        <code className="mono text-[11px] text-accent-orange bg-bg-raised px-2 py-0.5 rounded">
           {code}
         </code>
       </div>
@@ -262,8 +262,8 @@ function SetupStep({ step, label, code }: { step: number; label: string; code: s
 
 function Funnels() {
   return (
-    <div className="bg-[#141416] border border-[#1F1F23] rounded-xl p-5">
-      <div className="mono text-[11px] uppercase tracking-[0.16em] text-[rgba(229,229,231,0.4)] mb-3">
+    <div className="bg-bg-card border border-border-default rounded-xl p-5">
+      <div className="mono text-[11px] uppercase tracking-[0.16em] text-text-muted mb-3">
         Conversion Funnels
       </div>
       <div className="space-y-3">
@@ -276,26 +276,26 @@ function Funnels() {
           { label: 'Closed', pct: 1 },
         ].map(({ label, pct }) => (
           <div key={label} className="flex items-center gap-3">
-            <div className="w-28 mono text-[10px] text-[rgba(229,229,231,0.4)] text-right shrink-0">
+            <div className="w-28 mono text-[10px] text-text-muted text-right shrink-0">
               {label}
             </div>
-            <div className="flex-1 h-2 bg-[#1F1F23] rounded-full overflow-hidden">
+            <div className="flex-1 h-2 bg-bg-raised rounded-full overflow-hidden">
               <div
                 className="h-full rounded-full"
                 style={{
                   width: `${pct}%`,
-                  background: pct > 50 ? '#22C55E' : pct > 10 ? '#F59E0B' : '#FF6B2B',
+                  background: pct > 50 ? '#4FB286' : pct > 10 ? '#D9A23A' : 'var(--accent)',
                   opacity: 0.4,
                 }}
               />
             </div>
-            <div className="w-10 mono text-[10px] text-[rgba(229,229,231,0.3)] tabular-nums">
+            <div className="w-10 mono text-[10px] text-text-muted tabular-nums">
               {pct}%
             </div>
           </div>
         ))}
       </div>
-      <div className="mt-4 mono text-[10px] text-[rgba(229,229,231,0.25)]">
+      <div className="mt-4 mono text-[10px] text-text-faint">
         Placeholder data. Connect PostHog to replace with real funnel metrics.
       </div>
     </div>

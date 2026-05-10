@@ -72,7 +72,7 @@ function VoiceTab() {
         </div>
         {VOICE_AGENTS.map((a, i) => (
           <div key={a.name} className={`flex items-center gap-4 px-5 py-3.5 ${i > 0 ? 'border-t border-border-subtle' : ''}`}>
-            <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: '#22c55e' }} />
+            <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: '#4FB286' }} />
             <div className="flex-1 min-w-0">
               <div className="mono text-[13px] font-medium text-text-primary">{a.name}</div>
               <div className="mono text-[11.5px] text-text-secondary mt-0.5">{a.role}</div>
@@ -106,8 +106,8 @@ function VoiceTab() {
                 <tr key={s.name} className={i > 0 ? 'border-t border-border-subtle' : ''}>
                   <td className="px-5 py-3 mono text-[13px] font-medium text-text-primary">{s.name}</td>
                   <td className="px-5 py-3">
-                    <span className="flex items-center gap-1.5 mono text-[12.5px]" style={{ color: s.status === 'ok' ? '#22c55e' : '#f59e0b' }}>
-                      <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: s.status === 'ok' ? '#22c55e' : '#f59e0b' }} />
+                    <span className="flex items-center gap-1.5 mono text-[12.5px]" style={{ color: s.status === 'ok' ? '#4FB286' : '#D9A23A' }}>
+                      <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: s.status === 'ok' ? '#4FB286' : '#D9A23A' }} />
                       {s.status === 'ok' ? 'Healthy' : 'Degraded'}
                     </span>
                   </td>
@@ -142,8 +142,8 @@ function MemorySearch() {
       <div className="bg-bg-card border border-border-default rounded-xl p-5">
         <div className="flex items-center gap-2.5 px-3 py-2.5 bg-bg-raised border border-border-subtle rounded-lg mb-4">
           <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
-            <circle cx="5.5" cy="5.5" r="4" stroke="rgba(229,229,231,0.4)" strokeWidth="1.3"/>
-            <path d="M9 9l2.5 2.5" stroke="rgba(229,229,231,0.4)" strokeWidth="1.3" strokeLinecap="round"/>
+            <circle cx="5.5" cy="5.5" r="4" stroke="rgba(255,255,255,0.25)" strokeWidth="1.3"/>
+            <path d="M9 9l2.5 2.5" stroke="rgba(255,255,255,0.25)" strokeWidth="1.3" strokeLinecap="round"/>
           </svg>
           <input
             value={q}
@@ -184,9 +184,9 @@ function MemorySearch() {
             { label: 'Northwind notes', x: 160, y: 235 },
           ].map((n, i) => (
             <g key={i}>
-              <line x1="160" y1="130" x2={n.x} y2={n.y} stroke="rgba(229,229,231,0.12)" strokeWidth="1"/>
-              <circle cx={n.x} cy={n.y} r="12" fill="#1a1a1e" stroke="rgba(229,229,231,0.2)" strokeWidth="1"/>
-              <text x={n.x} y={n.y + (n.y < 130 ? -20 : 24)} textAnchor="middle" fontSize="9.5" fill="rgba(229,229,231,0.5)">{n.label}</text>
+              <line x1="160" y1="130" x2={n.x} y2={n.y} stroke="rgba(255,255,255,0.07)" strokeWidth="1"/>
+              <circle cx={n.x} cy={n.y} r="12" fill="#0A0C10" stroke="rgba(255,255,255,0.07)" strokeWidth="1"/>
+              <text x={n.x} y={n.y + (n.y < 130 ? -20 : 24)} textAnchor="middle" fontSize="9.5" fill="rgba(255,255,255,0.32)">{n.label}</text>
             </g>
           ))}
         </svg>
@@ -228,9 +228,9 @@ function ContinuityTimeline() {
                 onClick={() => toggle(f.id)}
                 className="flex items-center gap-1.5 px-2.5 py-1 rounded-full mono text-[11.5px] font-medium transition-all"
                 style={{
-                  background: on ? 'rgba(229,229,231,0.06)' : 'transparent',
-                  border: `1px solid ${on ? 'rgba(229,229,231,0.2)' : 'rgba(229,229,231,0.08)'}`,
-                  color: on ? 'rgba(229,229,231,0.9)' : 'rgba(229,229,231,0.35)',
+                  background: on ? 'rgba(255,255,255,0.04)' : 'transparent',
+                  border: `1px solid ${on ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.04)'}`,
+                  color: on ? 'var(--text-hi)' : 'var(--text-lo)',
                 }}
               >
                 <span className="w-1.5 h-1.5 rounded-full" style={{ background: KIND_COLOR[f.id], opacity: on ? 1 : 0.3 }} />
@@ -249,14 +249,14 @@ function ContinuityTimeline() {
             style={{
               gridTemplateColumns: '110px 20px 1fr',
               padding: '14px 0',
-              borderTop: i === 0 ? 'none' : '1px solid rgba(229,229,231,0.06)',
+              borderTop: i === 0 ? 'none' : '1px solid rgba(255,255,255,0.04)',
             }}
           >
             <div className="mono text-[11.5px] text-text-secondary pt-0.5">{e.ts}</div>
             <div className="flex flex-col items-center">
               <span className="w-2.5 h-2.5 rounded-full mt-1.5 flex-shrink-0" style={{ background: KIND_COLOR[e.kind] }} />
               {i < visible.length - 1 && (
-                <span className="flex-1 w-px mt-1.5" style={{ background: 'rgba(229,229,231,0.06)' }} />
+                <span className="flex-1 w-px mt-1.5" style={{ background: 'rgba(255,255,255,0.04)' }} />
               )}
             </div>
             <div>
@@ -283,15 +283,15 @@ export function System() {
     <div className="max-w-5xl w-full">
       {/* Page header */}
       <div className="mb-5">
-        <h1 className="mono text-[18px] text-[#E5E5E7] font-semibold">System</h1>
-        <p className="mono text-[11px] text-[rgba(229,229,231,0.5)] mt-1">
+        <h1 className="mono text-[18px] text-text-primary font-semibold">System</h1>
+        <p className="mono text-[11px] text-text-secondary mt-1">
           Configure agents, review taboos, audit refused actions, and monitor service health.
         </p>
       </div>
 
       {/* Sub-tab nav */}
       <nav
-        className="flex gap-0.5 border-b border-[#1F1F23] mb-6 overflow-x-auto"
+        className="flex gap-0.5 border-b border-border-default mb-6 overflow-x-auto"
         aria-label="System sub-tabs"
         role="tablist"
       >
@@ -306,15 +306,15 @@ export function System() {
               onClick={() => setActive(tab)}
               className="mono text-[11px] uppercase tracking-[0.12em] px-4 py-2.5 rounded-t-lg transition-colors relative whitespace-nowrap flex-shrink-0 focus:outline-none focus:ring-2 focus:ring-zinc-500"
               style={{
-                color: isActive ? '#E5E5E7' : 'rgba(229,229,231,0.45)',
-                background: isActive ? '#141416' : 'transparent',
+                color: isActive ? 'var(--text-hi)' : 'var(--text-lo)',
+                background: isActive ? 'var(--bg-elevated)' : 'transparent',
               }}
             >
               {tab}
               {isActive && (
                 <span
                   className="absolute bottom-0 left-0 right-0 h-0.5 rounded-t-full"
-                  style={{ backgroundColor: '#FF6B2B' }}
+                  style={{ backgroundColor: 'var(--accent)' }}
                 />
               )}
             </button>

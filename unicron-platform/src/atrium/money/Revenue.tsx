@@ -30,20 +30,20 @@ const STAGE_WEIGHT: Record<string, number> = {
 
 function StripeStub() {
   return (
-    <div className="bg-[#141416] border border-[#1F1F23] rounded-xl p-6 flex items-center justify-between gap-6 flex-wrap">
+    <div className="bg-bg-card border border-border-default rounded-xl p-6 flex items-center justify-between gap-6 flex-wrap">
       <div>
-        <div className="mono text-[14px] font-semibold text-[#E5E5E7] mb-1.5">
+        <div className="mono text-[14px] font-semibold text-text-primary mb-1.5">
           Revenue
         </div>
-        <div className="mono text-[12px] text-[rgba(229,229,231,0.5)]">
+        <div className="mono text-[12px] text-text-secondary">
           No revenue connector configured yet — pre-revenue, pilot in flight.
         </div>
-        <div className="mono text-[11px] text-[rgba(229,229,231,0.35)] mt-1">
+        <div className="mono text-[11px] text-text-muted mt-1">
           Connect Stripe to auto-pull MRR, ARR, and churn data.
         </div>
       </div>
       <button
-        className="mono text-[11px] uppercase tracking-[0.12em] px-4 py-2.5 bg-[#FF6B2B] text-white rounded-lg hover:bg-[#e55a1a] transition-colors shrink-0"
+        className="mono text-[11px] uppercase tracking-[0.12em] px-4 py-2.5 bg-accent-orange text-white rounded-lg hover:bg-[#e55a1a] transition-colors shrink-0"
         onClick={() => alert('Stripe connection — add STRIPE_SECRET_KEY to environment and deploy /api/atrium/stripe-mrr endpoint.')}
       >
         Connect Stripe
@@ -61,11 +61,11 @@ function PipelineTable({ customers }: { customers: Customer[] }) {
 
   if (pipeline.length === 0) {
     return (
-      <div className="bg-[#141416] border border-[#1F1F23] rounded-xl px-5 py-8 text-center">
-        <div className="mono text-[11px] uppercase tracking-[0.18em] text-[rgba(229,229,231,0.4)] mb-1">
+      <div className="bg-bg-card border border-border-default rounded-xl px-5 py-8 text-center">
+        <div className="mono text-[11px] uppercase tracking-[0.18em] text-text-muted mb-1">
           No pipeline customers
         </div>
-        <div className="mono text-[11px] text-[rgba(229,229,231,0.3)]">
+        <div className="mono text-[11px] text-text-muted">
           Customers in Proposal or Contract status will appear here.
         </div>
       </div>
@@ -81,26 +81,26 @@ function PipelineTable({ customers }: { customers: Customer[] }) {
   return (
     <div>
       <div className="flex items-baseline justify-between mb-3">
-        <span className="mono text-[11px] uppercase tracking-[0.14em] text-[rgba(229,229,231,0.4)]">
+        <span className="mono text-[11px] uppercase tracking-[0.14em] text-text-muted">
           Pipeline-weighted forecast
         </span>
         <div className="flex items-baseline gap-2">
-          <span className="mono text-[10px] text-[rgba(229,229,231,0.35)]">Weighted total</span>
-          <span className="mono text-[14px] font-semibold text-[#22C55E] tabular-nums">
+          <span className="mono text-[10px] text-text-muted">Weighted total</span>
+          <span className="mono text-[14px] font-semibold text-status-green tabular-nums">
             ${Math.round(totalWeighted).toLocaleString()}
           </span>
         </div>
       </div>
 
-      <div className="overflow-x-auto rounded-xl border border-[#1F1F23]">
+      <div className="overflow-x-auto rounded-xl border border-border-default">
         <table className="w-full min-w-[500px]">
           <thead>
-            <tr className="bg-[#141416] border-b border-[#1F1F23]">
+            <tr className="bg-bg-card border-b border-border-default">
               {['Customer', 'Stage', 'Deal Value', 'Weight', 'Weighted'].map((h, i) => (
                 <th
                   key={i}
                   className={[
-                    'px-4 py-2.5 mono text-[9px] uppercase tracking-[0.16em] text-[rgba(229,229,231,0.4)]',
+                    'px-4 py-2.5 mono text-[9px] uppercase tracking-[0.16em] text-text-muted',
                     i >= 2 ? 'text-right' : 'text-left',
                   ].join(' ')}
                 >
@@ -117,21 +117,21 @@ function PipelineTable({ customers }: { customers: Customer[] }) {
               return (
                 <tr
                   key={c.id}
-                  className="border-b border-[#1F1F23] hover:bg-[#1A1A1D] transition-colors"
+                  className="border-b border-border-default hover:bg-bg-raised transition-colors"
                 >
-                  <td className="px-4 py-3 mono text-[12px] text-[#E5E5E7]">{c.name}</td>
+                  <td className="px-4 py-3 mono text-[12px] text-text-primary">{c.name}</td>
                   <td className="px-4 py-3">
-                    <span className="mono text-[10px] px-2 py-0.5 rounded-full bg-[#FF6B2B]/15 text-[#FF6B2B] uppercase tracking-[0.08em]">
+                    <span className="mono text-[10px] px-2 py-0.5 rounded-full bg-accent-orange/15 text-accent-orange uppercase tracking-[0.08em]">
                       {c.status}
                     </span>
                   </td>
-                  <td className="px-4 py-3 mono text-[12px] text-[#E5E5E7] text-right tabular-nums">
+                  <td className="px-4 py-3 mono text-[12px] text-text-primary text-right tabular-nums">
                     {val ? `$${val.toLocaleString()}` : '—'}
                   </td>
-                  <td className="px-4 py-3 mono text-[11px] text-[rgba(229,229,231,0.5)] text-right">
+                  <td className="px-4 py-3 mono text-[11px] text-text-secondary text-right">
                     {Math.round(weight * 100)}%
                   </td>
-                  <td className="px-4 py-3 mono text-[12px] text-[#22C55E] text-right tabular-nums">
+                  <td className="px-4 py-3 mono text-[12px] text-status-green text-right tabular-nums">
                     ${Math.round(weighted).toLocaleString()}
                   </td>
                 </tr>
@@ -185,18 +185,18 @@ export function Revenue() {
 
       {/* Pipeline forecast */}
       <div>
-        <div className="mono text-[10px] uppercase tracking-[0.14em] text-[rgba(229,229,231,0.4)] mb-3">
+        <div className="mono text-[10px] uppercase tracking-[0.14em] text-text-muted mb-3">
           Pipeline
         </div>
         {loading ? (
           <div className="space-y-2">
             {[0, 1, 2].map((i) => (
-              <div key={i} className="h-10 bg-[#141416] rounded-xl animate-pulse" />
+              <div key={i} className="h-10 bg-bg-card rounded-xl animate-pulse" />
             ))}
           </div>
         ) : error ? (
-          <div className="bg-[#EF4444]/10 border border-[#EF4444]/30 rounded-xl px-4 py-3">
-            <div className="mono text-[11px] text-[#EF4444]">{error}</div>
+          <div className="bg-[#DD6262]/10 border border-[#DD6262]/30 rounded-xl px-4 py-3">
+            <div className="mono text-[11px] text-[#DD6262]">{error}</div>
           </div>
         ) : (
           <PipelineTable customers={customers} />
