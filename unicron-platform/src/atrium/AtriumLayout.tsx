@@ -3,6 +3,7 @@
 // Tab list: Now, People, Work, Money, Marketing, Products, System, Library
 // S-2: header now shows greeting + date/time, labeled StatusPulse pill (live),
 //      ⌘K search button, and Mic+Plus capture button.
+// S-7B: user avatar menu with Settings access added.
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { ReactNode } from 'react';
@@ -139,6 +140,7 @@ type Props = {
   activeTab: AtriumTab;
   onTabChange: (tab: AtriumTab) => void;
   children: ReactNode;
+  onOpenSettings?: () => void;
 };
 
 const MOBILE_TABS: AtriumTab[] = ['now', 'people', 'work', 'money'];
@@ -150,11 +152,13 @@ const DEFAULT_STATUS: StatusItem[] = [
   { label: 'Decay',     tone: 'info', detail: 'Loading…' },
 ];
 
-export function AtriumLayout({ activeTab, onTabChange, children }: Props) {
+export function AtriumLayout({ activeTab, onTabChange, children, onOpenSettings }: Props) {
   const auth = useAuth();
   const [captureOpen, setCaptureOpen] = useState(false);
   const [cmdkOpen, setCmdkOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement>(null);
   const [statusItems, setStatusItems] = useState<StatusItem[]>(DEFAULT_STATUS);
   const [now, setNow] = useState(new Date());
 
@@ -214,6 +218,18 @@ export function AtriumLayout({ activeTab, onTabChange, children }: Props) {
     const t = setInterval(fetchStatus, 30_000);
     return () => clearInterval(t);
   }, [fetchStatus]);
+
+  // Close user menu on outside click
+  useEffect(() => {
+    if (!userMenuOpen) return;
+    function handler(e: MouseEvent) {
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
+        setUserMenuOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [userMenuOpen]);
 
   async function handleSignOut() {
     await getSupabase().auth.signOut();
@@ -321,17 +337,44 @@ export function AtriumLayout({ activeTab, onTabChange, children }: Props) {
           </svg>
         </button>
 
-        {/* User avatar + sign out */}
-        <div className="flex items-center gap-2 flex-shrink-0">
-          <div className="w-7 h-7 rounded-full bg-bg-card border border-border-default flex items-center justify-center mono text-[10px] text-text-secondary">
+        {/* User avatar + dropdown menu */}
+        <div className="flex items-center gap-2 flex-shrink-0 relative" ref={userMenuRef}>
+          <button
+            onClick={() => setUserMenuOpen(o => !o)}
+            className="w-7 h-7 rounded-full bg-bg-card border border-border-default flex items-center justify-center mono text-[10px] text-text-secondary hover:border-border-hover transition-colors"
+            aria-label="User menu"
+            aria-expanded={userMenuOpen}
+          >
             {initials || '?'}
-          </div>
+          </button>
           <button
             onClick={handleSignOut}
             className="hidden md:block mono text-[10px] uppercase tracking-[0.16em] text-text-secondary hover:text-text-primary transition-colors"
           >
             Sign out
           </button>
+          {/* User dropdown */}
+          {userMenuOpen && (
+            <div className="absolute top-full right-0 mt-2 w-44 bg-bg-elevated border border-border-default rounded-lg shadow-xl z-[100] overflow-hidden">
+              <div className="px-3 py-2 border-b border-border-subtle">
+                <p className="mono text-[10px] text-text-primary truncate">{userEmail}</p>
+              </div>
+              {onOpenSettings && (
+                <button
+                  onClick={() => { setUserMenuOpen(false); onOpenSettings(); }}
+                  className="w-full text-left px-3 py-2 mono text-[11px] text-text-secondary hover:text-text-primary hover:bg-bg-raised transition-colors"
+                >
+                  Settings
+                </button>
+              )}
+              <button
+                onClick={() => { setUserMenuOpen(false); void handleSignOut(); }}
+                className="w-full text-left px-3 py-2 mono text-[11px] text-text-secondary hover:text-text-primary hover:bg-bg-raised transition-colors"
+              >
+                Sign out
+              </button>
+            </div>
+          )}
         </div>
       </header>
 
@@ -374,10 +417,17 @@ export function AtriumLayout({ activeTab, onTabChange, children }: Props) {
             })}
           </div>
 
-          {/* User avatar at bottom */}
-          <div className="mt-auto mb-2 w-7 h-7 rounded-full bg-bg-card border border-border-default flex items-center justify-center mono text-[10px] text-text-secondary flex-shrink-0">
+          {/* User avatar at bottom — click to open settings */}
+          <button
+            onClick={() => onOpenSettings?.()}
+            className="mt-auto mb-2 w-7 h-7 rounded-full bg-bg-card border border-border-default flex items-center justify-center mono text-[10px] text-text-secondary flex-shrink-0 hover:border-border-hover transition-colors group relative"
+            aria-label="Open settings"
+          >
             {initials || '?'}
-          </div>
+            <span className="absolute left-full ml-2.5 px-2 py-1 bg-bg-elevated border border-border-default rounded-md mono text-[10px] font-medium text-text-primary whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-[60]">
+              Settings
+            </span>
+          </button>
         </nav>
 
         {/* Main content — pb-20 on mobile clears the 60px bottom nav */}

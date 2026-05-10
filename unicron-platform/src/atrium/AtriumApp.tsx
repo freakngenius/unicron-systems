@@ -22,6 +22,7 @@ const Marketing = lazy(() => import('./Marketing').then(m => ({ default: m.Marke
 const Money     = lazy(() => import('./Money').then(m => ({ default: m.Money })));
 const People    = lazy(() => import('./People').then(m => ({ default: m.People })));
 const Products  = lazy(() => import('./Products').then(m => ({ default: m.Products })));
+const Settings  = lazy(() => import('./Settings').then(m => ({ default: m.Settings })));
 const Skills    = lazy(() => import('./Skills').then(m => ({ default: m.Skills })));
 const System    = lazy(() => import('./System').then(m => ({ default: m.System })));
 const Work      = lazy(() => import('./Work').then(m => ({ default: m.Work })));
@@ -58,6 +59,7 @@ function TabSkeleton() {
 export function AtriumApp() {
   const auth = useAuth();
   const [activeTab, setActiveTab] = useState<AtriumTab>('now');
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   if (!ATRIUM_ENABLED) {
     return (
@@ -90,10 +92,25 @@ export function AtriumApp() {
     (auth.user.user_metadata as Record<string, string> | undefined)?.name ??
     userEmail.split('@')[0];
 
+  // member_id is the Supabase auth user ID — used by the preferences API.
+  // The team_members table is keyed by uuid that matches auth.user.id when
+  // team members are seeded with the correct IDs. Falls back gracefully if
+  // no match (Settings still renders, save is disabled).
+  const memberId = auth.user.id;
+
   return (
-    <AtriumLayout activeTab={activeTab} onTabChange={setActiveTab}>
+    <AtriumLayout
+      activeTab={activeTab}
+      onTabChange={(tab) => { setSettingsOpen(false); setActiveTab(tab); }}
+      onOpenSettings={() => setSettingsOpen(true)}
+    >
       <Suspense fallback={<TabSkeleton />}>
-        {activeTab === 'now' ? (
+        {settingsOpen ? (
+          <Settings
+            memberId={memberId}
+            onClose={() => setSettingsOpen(false)}
+          />
+        ) : activeTab === 'now' ? (
           <AtriumNow name={displayName} />
         ) : activeTab === 'people' ? (
           <People />
