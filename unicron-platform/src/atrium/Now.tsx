@@ -643,6 +643,35 @@ const SOURCE_TYPE_ICONS: Record<string, string> = {
   manual: '⌨️',
 };
 
+const SOURCE_TYPE_COLORS: Record<string, string> = {
+  call:           '#2E6CD4',
+  slack:          '#7355E5',
+  email:          '#1F8A5B',
+  voice_memo:     '#E8763A',
+  agent_run:      '#0EA5E9',
+  kanban_move:    '#94A3B8',
+  taboo_bounce:   '#D14848',
+  audit_log:      '#5B6580',
+  ledger_write:   '#0B9488',
+  apple_note:     '#C9A227',
+  cowork_session: '#4FB286',
+  manual:         '#7E8AA3',
+};
+
+function SourceDot({ sourceType }: { sourceType: string }) {
+  const color = SOURCE_TYPE_COLORS[sourceType] ?? '#94A3B8';
+  return (
+    <span style={{
+      width: 22, height: 22, borderRadius: 6,
+      background: color + '1A', color,
+      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+      flexShrink: 0,
+    }}>
+      <span style={{ width: 6, height: 6, borderRadius: 999, background: color }} />
+    </span>
+  );
+}
+
 function ActivityFeed() {
   const events = useActivityFeed();
 
@@ -668,10 +697,8 @@ function ActivityFeed() {
       ) : (
         <div className="divide-y divide-border-default">
           {events.map((evt) => (
-            <div key={evt.id} className="px-4 sm:px-5 py-3 flex items-start gap-3">
-              <div className="text-[14px] pt-0.5 shrink-0">
-                {SOURCE_TYPE_ICONS[evt.source_type] ?? '⚡'}
-              </div>
+            <div key={evt.id} className="px-4 sm:px-5 py-3 flex items-center gap-3">
+              <SourceDot sourceType={evt.source_type} />
               <div className="min-w-0 flex-1">
                 <div className="flex items-baseline justify-between gap-2">
                   <div className="mono text-[12px] text-text-primary truncate">
@@ -682,7 +709,6 @@ function ActivityFeed() {
                       </span>
                     )}
                   </div>
-                  {/* Sprint 4 mobile: hide timestamps on xs */}
                   <div className="hidden sm:block mono text-[10px] text-text-muted shrink-0">
                     {formatRelativeTime(evt.created_at)}
                   </div>
@@ -798,7 +824,7 @@ function ActivityTab() {
               onClick={() => setTimeframe(t)}
               className={`mono text-[10px] uppercase tracking-[0.12em] px-2.5 py-1 rounded transition-colors ${
                 timeframe === t
-                  ? 'bg-[#FF6B2B] text-white'
+                  ? 'bg-[var(--accent)] text-white'
                   : 'text-text-secondary hover:text-text-primary'
               }`}
             >
@@ -814,7 +840,7 @@ function ActivityTab() {
             onClick={() => setSurface(s)}
             className={`mono text-[10px] uppercase tracking-[0.12em] px-2.5 py-1 rounded-full border transition-colors ${
               surface === s
-                ? 'border-[#FF6B2B] text-text-primary bg-[#FF6B2B18]'
+                ? 'border-[var(--accent)] text-text-primary bg-[rgba(232,118,58,0.09)]'
                 : 'border-border-default text-text-muted hover:text-text-secondary'
             }`}
           >
@@ -829,11 +855,11 @@ function ActivityTab() {
             onClick={() => toggleSource(src)}
             className={`mono text-[10px] px-2.5 py-1 rounded-full border transition-colors ${
               activeSources.has(src)
-                ? 'border-[#FF6B2B] text-text-primary bg-[#FF6B2B18]'
+                ? 'border-[var(--accent)] text-text-primary bg-[rgba(232,118,58,0.09)]'
                 : 'border-border-default text-text-muted hover:text-text-secondary'
             }`}
           >
-            {SOURCE_TYPE_ICONS[src] ?? '⚡'} {src}
+            {src}
           </button>
         ))}
 
@@ -878,10 +904,8 @@ function ActivityTab() {
                   className="cursor-pointer hover:bg-bg-raised transition-colors"
                   onClick={() => setExpandedId(expanded ? null : evt.id)}
                 >
-                  <div className="px-4 sm:px-5 py-3 flex items-start gap-3">
-                    <div className="text-[14px] pt-0.5 shrink-0">
-                      {SOURCE_TYPE_ICONS[evt.source_type] ?? '⚡'}
-                    </div>
+                  <div className="px-4 sm:px-5 py-3 flex items-center gap-3">
+                    <SourceDot sourceType={evt.source_type} />
                     <div className="min-w-0 flex-1">
                       <div className="flex items-baseline justify-between gap-2">
                         <div className="mono text-[12px] text-text-primary truncate">
@@ -900,7 +924,7 @@ function ActivityTab() {
                         {evt.source_type} · {evt.table}
                       </div>
                     </div>
-                    <div className="mono text-[10px] text-text-muted shrink-0 pt-0.5">
+                    <div className="mono text-[10px] text-text-muted shrink-0">
                       {expanded ? '▾' : '▸'}
                     </div>
                   </div>
@@ -1017,7 +1041,7 @@ function DigestTab() {
       <div className="bg-bg-card border border-border-default rounded-xl px-5 py-5">
         <div className="flex items-start justify-between flex-wrap gap-4 mb-4">
           <div>
-            <div className="mono text-[10px] uppercase tracking-[0.18em] text-[#FF6B2B] font-semibold mb-1">
+            <div className="mono text-[10px] uppercase tracking-[0.18em] text-[var(--accent)] font-semibold mb-1">
               Analyst · Daily digest
             </div>
             <div className="mono text-[22px] font-medium text-text-primary leading-tight">{displayDate}</div>
@@ -1581,7 +1605,7 @@ function SkillsSurface({ onOpenQuickCapture }: { onOpenQuickCapture?: () => void
             <button
               onClick={() => void handleRun()}
               disabled={!state.prompt.trim() || state.running}
-              className="mono text-[11px] uppercase tracking-[0.14em] bg-[#FF6B2B] text-white px-3 sm:px-4 py-2 rounded-lg hover:bg-[#e55a1a] transition-colors disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
+              className="mono text-[11px] uppercase tracking-[0.14em] bg-[var(--accent)] text-white px-3 sm:px-4 py-2 rounded-lg hover:opacity-90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
             >
               {state.running ? '…' : 'Run →'}
             </button>
@@ -1657,7 +1681,7 @@ function SkillsSurface({ onOpenQuickCapture }: { onOpenQuickCapture?: () => void
               className={[
                 'mono text-[9px] uppercase tracking-[0.16em] px-2.5 py-1 rounded-full border transition-colors',
                 domainFilter === null
-                  ? 'border-[#FF6B2B] text-[#FF6B2B] bg-[#FF6B2B]/10'
+                  ? 'border-[var(--accent)] text-[var(--accent)] bg-[var(--accent)]/10'
                   : 'border-border-hover text-text-muted hover:border-border-strong hover:text-text-secondary',
               ].join(' ')}
             >
@@ -1670,7 +1694,7 @@ function SkillsSurface({ onOpenQuickCapture }: { onOpenQuickCapture?: () => void
                 className={[
                   'mono text-[9px] uppercase tracking-[0.16em] px-2.5 py-1 rounded-full border transition-colors',
                   domainFilter === d
-                    ? 'border-[#FF6B2B] text-[#FF6B2B] bg-[#FF6B2B]/10'
+                    ? 'border-[var(--accent)] text-[var(--accent)] bg-[var(--accent)]/10'
                     : 'border-border-hover text-text-muted hover:border-border-strong hover:text-text-secondary',
                 ].join(' ')}
               >
@@ -1709,10 +1733,10 @@ function SkillsSurface({ onOpenQuickCapture }: { onOpenQuickCapture?: () => void
                     className={[
                       'text-left px-3 py-2 rounded-lg border transition-colors',
                       isThisRunning
-                        ? 'border-[#FF6B2B] text-[#FF6B2B] opacity-70 cursor-wait'
+                        ? 'border-[var(--accent)] text-[var(--accent)] opacity-70 cursor-wait'
                         : isScaffolded
                         ? 'border-border-default text-text-muted cursor-not-allowed opacity-60'
-                        : 'border-border-hover text-text-primary hover:border-[#FF6B2B] hover:text-[#FF6B2B] cursor-pointer',
+                        : 'border-border-hover text-text-primary hover:border-[var(--accent)] hover:text-[var(--accent)] cursor-pointer',
                       isDisabled && !isThisRunning && !isScaffolded
                         ? 'disabled:opacity-50 disabled:cursor-not-allowed'
                         : '',
@@ -2088,7 +2112,7 @@ function SkillsSurface({ onOpenQuickCapture }: { onOpenQuickCapture?: () => void
                 </button>
                 <button
                   type="submit"
-                  className="mono text-[11px] uppercase tracking-[0.14em] bg-[#FF6B2B] text-white px-4 py-2 rounded-lg hover:bg-[#e55a1a] transition-colors"
+                  className="mono text-[11px] uppercase tracking-[0.14em] bg-[var(--accent)] text-white px-4 py-2 rounded-lg hover:opacity-90 transition-colors"
                 >
                   Run →
                 </button>
@@ -2287,7 +2311,7 @@ export function Now({ name }: Props) {
             onClick={() => setNowTab(tab)}
             className={`mono text-[11px] uppercase tracking-[0.16em] px-4 py-2 border-b-2 transition-colors ${
               nowTab === tab
-                ? 'border-[#FF6B2B] text-text-primary'
+                ? 'border-[var(--accent)] text-text-primary'
                 : 'border-transparent text-text-muted hover:text-text-secondary'
             }`}
           >
@@ -2343,7 +2367,7 @@ export function Now({ name }: Props) {
               <button
                 onClick={() => setCaptureOpen(true)}
                 title="Quick Capture"
-                className="hidden sm:flex items-center gap-1.5 px-3 py-2 bg-[#FF6B2B] rounded-lg hover:bg-[#e55a1a] transition-colors"
+                className="hidden sm:flex items-center gap-1.5 px-3 py-2 bg-[var(--accent)] rounded-lg hover:opacity-90 transition-colors"
               >
                 <span className="mono text-[11px] uppercase tracking-[0.12em] text-white">+ Capture</span>
               </button>
@@ -2412,7 +2436,7 @@ export function Now({ name }: Props) {
       <button
         onClick={() => setCaptureOpen(true)}
         title="Quick Capture"
-        className="sm:hidden fixed bottom-4 right-4 z-50 flex items-center gap-1.5 px-4 py-3 bg-[#FF6B2B] rounded-2xl shadow-lg hover:bg-[#e55a1a] transition-colors"
+        className="sm:hidden fixed bottom-4 right-4 z-50 flex items-center gap-1.5 px-4 py-3 bg-[var(--accent)] rounded-2xl shadow-lg hover:opacity-90 transition-colors"
         aria-label="Quick Capture"
       >
         <span className="mono text-[11px] uppercase tracking-[0.12em] text-white">+ Capture</span>
