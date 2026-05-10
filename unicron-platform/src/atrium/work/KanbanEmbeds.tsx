@@ -1,10 +1,9 @@
-// KanbanEmbeds.tsx — Sprint 4 Stream D
-// Read-only view of action_items grouped by kanban_workspace, with status
-// columns mirroring the Notion kanban. Data comes from nervous_system tables —
-// NOT from the Notion API (no Notion MCP at runtime in this surface).
+// KanbanEmbeds.tsx — Sprint 4 Stream D / W-4 upgrade
+// W-4: colored workspace board headers, My Cards toggle, slide-out card detail.
 
 import { useState, useEffect } from 'react';
 import { getSupabase } from '../../lib/supabase';
+import { useAuth } from '../../lib/auth';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -22,11 +21,11 @@ interface ActionItemRow {
 interface TeamMember {
   id: string;
   name: string;
+  email: string;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-// Map action_items.status → Notion kanban column label
 const STATUS_COLUMNS = [
   { key: 'open', label: 'Backlog' },
   { key: 'in_progress', label: 'In Process' },
@@ -41,10 +40,37 @@ const PRIORITY_COLORS: Record<string, string> = {
   irreversible: '#EF4444',
   high: '#F59E0B',
   medium: '#3B82F6',
-  low: 'rgba(229,229,231,0.35)',
+  low: 'var(--text-lo)',
 };
 
-// ─── Hook ─────────────────────────────────────────────────────────────────────
+// Distinct color per workspace (cycles if more than 5)
+const WORKSPACE_COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#8B5CF6', '#EC4899'];
+
+function workspaceColor(index: number): string {
+  return WORKSPACE_COLORS[index % WORKSPACE_COLORS.length];
+}
+
+// ─── Hooks ────────────────────────────────────────────────────────────────────
+
+function useCurrentMember() {
+  const auth = useAuth();
+  const [memberId, setMemberId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (auth.status !== 'signed-in') return;
+    const email = auth.user.email;
+    if (!email) return;
+    // PGRST106 fix: use ns_get_team_member_by_email RPC
+    getSupabase()
+      .rpc('ns_get_team_member_by_email', { p_email: email })
+      .then(({ data }) => {
+        const rows = data as Array<{ id: string }> | null;
+        setMemberId(rows?.[0]?.id ?? null);
+      });
+  }, [auth.status]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  return memberId;
+}
 
 function useKanbanItems(driFilter: string) {
   const [items, setItems] = useState<ActionItemRow[]>([]);
@@ -61,64 +87,134 @@ function useKanbanItems(driFilter: string) {
 
     async function load() {
       try {
-        let query = sb
-          .schema('nervous_system')
-          .from('action_items')
-          .select('id, title, priority, status, dri, kanban_workspace, kanban_card_id, team_members(id, name)')
-          .not('kanban_workspace', 'is', null)
-          .order('created_at', { ascending: false })
-          .limit(500);
-
-        if (driFilter) {
-          query = query.eq('dri', driFilter);
-        }
-
-        const { data, error: err } = await query.returns<ActionItemRow[]>();
+        // PGRST106 fix: use ns_list_action_items_kanban RPC
+        const { data, error: err } = await sb.rpc('ns_list_action_items_kanban', {
+          p_dri_filter: driFilter || null,
+          p_limit: 500,
+        });
         if (err) throw err;
-        if (!cancelled) setItems(data ?? []);
 
-        const { data: memberData } = await sb
-          .schema('nervous_system')
-          .from('team_members')
-          .select('id, name')
-          .returns<TeamMember[]>();
-        if (!cancelled) setMembers(memberData ?? []);
+        // Map flat dri_id/dri_name back to the nested team_members shape the component expects
+        const mapped: ActionItemRow[] = ((data as Array<{
+          id: string; title: string; priority: string; status: string;
+          dri: string | null; kanban_workspace: string | null; kanban_card_id: string | null;
+          dri_id: string | null; dri_name: string | null;
+        }>) ?? []).map((row) => ({
+          id: row.id,
+          title: row.title,
+          priority: row.priority as ActionItemRow['priority'],
+          status: row.status as ActionItemRow['status'],
+          dri: row.dri,
+          kanban_workspace: row.kanban_workspace,
+          kanban_card_id: row.kanban_card_id,
+          team_members: row.dri_id ? { id: row.dri_id, name: row.dri_name ?? '' } : null,
+        }));
+        if (!cancelled) setItems(mapped);
+
+        const { data: memberData } = await sb.rpc('ns_list_team_members');
+        if (!cancelled) setMembers((memberData as TeamMember[] | null) ?? []);
       } catch (e) {
-        if (!cancelled)
-          setError(e instanceof Error ? e.message : 'Failed to load kanban');
+        if (!cancelled) setError(e instanceof Error ? e.message : 'Failed to load kanban');
       } finally {
         if (!cancelled) setLoading(false);
       }
     }
 
     void load();
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [driFilter]);
 
   return { items, members, loading, error };
 }
 
-// ─── Item Card ────────────────────────────────────────────────────────────────
+// ─── Slide-out detail panel ───────────────────────────────────────────────────
 
-function KanbanCard({ item }: { item: ActionItemRow }) {
+function CardSlideOut({ item, onClose }: { item: ActionItemRow; onClose: () => void }) {
+  const priorityColor = PRIORITY_COLORS[item.priority] ?? 'var(--text-lo)';
+
   return (
-    <div className="bg-[#1A1A1D] border border-[#1F1F23] rounded-lg px-3 py-2.5 hover:border-[#2A2A2E] transition-colors">
+    <div className="fixed inset-0 z-[80] flex justify-end">
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative w-full sm:max-w-md h-full bg-bg-card sm:border-l border-border-default overflow-y-auto flex flex-col">
+        {/* Header */}
+        <div className="flex items-start justify-between px-5 py-4 border-b border-border-default sticky top-0 bg-bg-card z-10">
+          <div className="min-w-0 flex-1 pr-3">
+            <div className="flex items-center gap-2 mb-1">
+              <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: priorityColor }} />
+              <div className="mono text-[9px] uppercase tracking-[0.14em]" style={{ color: priorityColor }}>
+                {item.priority}
+              </div>
+            </div>
+            <div className="mono text-[13px] font-medium text-text-primary leading-snug">{item.title}</div>
+          </div>
+          <button
+            onClick={onClose}
+            className="mono text-[11px] uppercase tracking-[0.14em] text-text-muted hover:text-text-primary transition-colors shrink-0 mt-0.5"
+          >
+            ✕
+          </button>
+        </div>
+
+        <div className="px-5 py-5 space-y-4 flex-1">
+          {/* Fields grid */}
+          <div className="grid grid-cols-2 gap-3">
+            {[
+              { label: 'Status', value: item.status.replace(/_/g, ' ') },
+              { label: 'Workspace', value: item.kanban_workspace ?? '—' },
+              { label: 'DRI', value: item.team_members?.name ?? '—' },
+              { label: 'Priority', value: item.priority },
+            ].map(({ label, value }) => (
+              <div key={label} className="bg-bg-raised border border-border-default rounded-lg px-3 py-2">
+                <div className="mono text-[9px] uppercase tracking-[0.16em] text-text-muted mb-0.5">{label}</div>
+                <div className="mono text-[11px] text-text-primary capitalize">{value}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Notion link */}
+          {item.kanban_card_id && (
+            <div>
+              <div className="mono text-[9px] uppercase tracking-[0.16em] text-text-muted mb-1.5">Notion Card</div>
+              <a
+                href={`https://notion.so/${item.kanban_card_id.replace(/-/g, '')}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 mono text-[11px] text-accent-orange hover:underline"
+              >
+                Open in Notion →
+              </a>
+            </div>
+          )}
+
+          {/* Card ID */}
+          <div className="pt-3 border-t border-border-default">
+            <div className="mono text-[9px] text-text-faint break-all">ID: {item.id}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Item card ────────────────────────────────────────────────────────────────
+
+function KanbanCard({ item, onSelect, selected }: { item: ActionItemRow; onSelect: () => void; selected: boolean }) {
+  return (
+    <div
+      onClick={onSelect}
+      className="bg-bg-raised border rounded-lg px-3 py-2.5 hover:border-border-hover transition-colors cursor-pointer"
+      style={{ borderColor: selected ? 'rgba(232,118,58,0.38)' : 'var(--border-default)' }}
+    >
       <div className="flex items-start gap-2 mb-1.5">
         <div
           className="w-1.5 h-1.5 rounded-full mt-1.5 shrink-0"
           style={{ backgroundColor: PRIORITY_COLORS[item.priority] }}
         />
-        <div className="mono text-[11px] text-[#E5E5E7] leading-snug">
-          {item.title}
-        </div>
+        <div className="mono text-[11px] text-text-primary leading-snug">{item.title}</div>
       </div>
       <div className="flex items-center gap-2">
         {item.team_members && (
-          <span className="mono text-[9px] text-[rgba(229,229,231,0.45)]">
-            {item.team_members.name}
-          </span>
+          <span className="mono text-[9px] text-text-muted">{item.team_members.name}</span>
         )}
         {item.kanban_card_id && (
           <a
@@ -126,7 +222,7 @@ function KanbanCard({ item }: { item: ActionItemRow }) {
             target="_blank"
             rel="noopener noreferrer"
             onClick={(e) => e.stopPropagation()}
-            className="mono text-[9px] text-[#FF6B2B] hover:underline ml-auto"
+            className="mono text-[9px] text-accent-orange hover:underline ml-auto"
           >
             Notion →
           </a>
@@ -136,56 +232,62 @@ function KanbanCard({ item }: { item: ActionItemRow }) {
   );
 }
 
-// ─── Workspace Column Group ────────────────────────────────────────────────────
+// ─── Workspace board ──────────────────────────────────────────────────────────
 
 function WorkspaceBoard({
   workspace,
   items,
+  color,
+  selectedId,
+  onSelectItem,
 }: {
   workspace: string;
   items: ActionItemRow[];
+  color: string;
+  selectedId: string | null;
+  onSelectItem: (item: ActionItemRow) => void;
 }) {
   const byStatus = STATUS_COLUMNS.reduce<Record<KanbanStatus, ActionItemRow[]>>(
-    (acc, col) => {
-      acc[col.key] = items.filter((i) => i.status === col.key);
-      return acc;
-    },
+    (acc, col) => { acc[col.key] = items.filter((i) => i.status === col.key); return acc; },
     { open: [], in_progress: [], blocked: [], done: [], broken_off: [] },
   );
 
   return (
     <div className="mb-8">
-      {/* Workspace header */}
-      <div className="mono text-[11px] uppercase tracking-[0.22em] text-[rgba(229,229,231,0.5)] mb-3 flex items-center gap-2">
-        <div className="w-1 h-3 rounded bg-[#FF6B2B]" />
-        {workspace}
-        <span className="mono text-[9px] text-[rgba(229,229,231,0.3)]">
-          {items.length} items
-        </span>
+      {/* Colored workspace header */}
+      <div
+        className="flex items-center gap-2 px-3 py-2 rounded-lg mb-3"
+        style={{ background: `${color}14`, borderLeft: `3px solid ${color}` }}
+      >
+        <div className="mono text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color }}>
+          {workspace}
+        </div>
+        <span className="mono text-[9px] text-text-muted">{items.length} items</span>
       </div>
 
-      {/* Columns — horizontal scroll on mobile */}
+      {/* Status columns */}
       <div className="overflow-x-auto">
         <div className="flex gap-3 min-w-[600px]">
           {STATUS_COLUMNS.map((col) => {
             const colItems = byStatus[col.key];
             return (
               <div key={col.key} className="flex-1 min-w-[120px]">
-                <div className="mono text-[9px] uppercase tracking-[0.16em] text-[rgba(229,229,231,0.4)] mb-2 flex items-center justify-between">
+                <div className="mono text-[9px] uppercase tracking-[0.16em] text-text-muted mb-2 flex items-center justify-between">
                   <span>{col.label}</span>
-                  <span className="text-[rgba(229,229,231,0.3)]">
-                    {colItems.length}
-                  </span>
+                  <span className="text-text-muted">{colItems.length}</span>
                 </div>
                 <div className="space-y-1.5 min-h-[40px]">
                   {colItems.map((item) => (
-                    <KanbanCard key={item.id} item={item} />
+                    <KanbanCard
+                      key={item.id}
+                      item={item}
+                      selected={selectedId === item.id}
+                      onSelect={() => onSelectItem(item)}
+                    />
                   ))}
                   {colItems.length === 0 && (
-                    <div className="h-8 border border-dashed border-[#1F1F23] rounded-lg flex items-center justify-center">
-                      <div className="mono text-[9px] text-[rgba(229,229,231,0.2)]">
-                        Empty
-                      </div>
+                    <div className="h-8 border border-dashed border-border-default rounded-lg flex items-center justify-center">
+                      <div className="mono text-[9px] text-text-faint">Empty</div>
                     </div>
                   )}
                 </div>
@@ -201,26 +303,25 @@ function WorkspaceBoard({
 // ─── Main export ──────────────────────────────────────────────────────────────
 
 export function KanbanEmbeds() {
-  const [driFilter, setDriFilter] = useState('');
+  const currentMemberId = useCurrentMember();
+  const [myCardsOnly, setMyCardsOnly] = useState(false);
+  const [selectedItem, setSelectedItem] = useState<ActionItemRow | null>(null);
+
+  const driFilter = myCardsOnly && currentMemberId ? currentMemberId : '';
   const { items, members, loading, error } = useKanbanItems(driFilter);
 
-  // Group by kanban_workspace
-  const byWorkspace = items.reduce<Record<string, ActionItemRow[]>>(
-    (acc, item) => {
-      const ws = item.kanban_workspace ?? 'Unknown';
-      (acc[ws] ??= []).push(item);
-      return acc;
-    },
-    {},
-  );
-
+  const byWorkspace = items.reduce<Record<string, ActionItemRow[]>>((acc, item) => {
+    const ws = item.kanban_workspace ?? 'Unknown';
+    (acc[ws] ??= []).push(item);
+    return acc;
+  }, {});
   const workspaces = Object.keys(byWorkspace).sort();
 
   if (loading) {
     return (
       <div className="space-y-3">
         {[0, 1].map((i) => (
-          <div key={i} className="h-32 bg-[#141416] rounded-xl animate-pulse" />
+          <div key={i} className="h-32 bg-bg-card rounded-xl animate-pulse" />
         ))}
       </div>
     );
@@ -236,40 +337,71 @@ export function KanbanEmbeds() {
 
   return (
     <div>
-      {/* DRI filter */}
+      {/* Controls row */}
       <div className="flex items-center gap-3 mb-5">
-        <label className="mono text-[9px] uppercase tracking-[0.16em] text-[rgba(229,229,231,0.4)]">
-          Filter by DRI
-        </label>
-        <select
-          value={driFilter}
-          onChange={(e) => setDriFilter(e.target.value)}
-          className="bg-[#141416] border border-[#1F1F23] rounded-lg px-2 py-1 mono text-[11px] text-[#E5E5E7] focus:outline-none"
+        {/* My Cards toggle */}
+        <button
+          onClick={() => setMyCardsOnly((v) => !v)}
+          disabled={!currentMemberId}
+          className={`mono text-[10px] uppercase tracking-[0.14em] px-3 py-1.5 rounded-lg border transition-colors ${
+            myCardsOnly
+              ? 'bg-accent-orange border-accent text-white'
+              : 'border-border-default text-text-secondary hover:text-text-primary disabled:opacity-30 disabled:cursor-not-allowed'
+          }`}
         >
-          <option value="">All team members</option>
-          {members.map((m) => (
-            <option key={m.id} value={m.id}>
-              {m.name}
-            </option>
-          ))}
-        </select>
+          My Cards
+        </button>
+
+        {/* DRI dropdown for non-self filtering */}
+        {!myCardsOnly && (
+          <select
+            onChange={(e) => {
+              if (e.target.value && e.target.value !== currentMemberId) {
+                setMyCardsOnly(false);
+              }
+            }}
+            className="bg-bg-card border border-border-default rounded-lg px-2 py-1 mono text-[11px] text-text-primary focus:outline-none"
+          >
+            <option value="">All team members</option>
+            {members.map((m) => (
+              <option key={m.id} value={m.id}>{m.name}</option>
+            ))}
+          </select>
+        )}
+
+        {myCardsOnly && (
+          <span className="mono text-[10px] text-text-muted">
+            Showing your cards only
+          </span>
+        )}
       </div>
 
       {workspaces.length === 0 ? (
-        <div className="bg-[#141416] border border-[#1F1F23] rounded-xl px-5 py-8 text-center">
-          <div className="mono text-[11px] uppercase tracking-[0.18em] text-[rgba(229,229,231,0.4)] mb-1">
-            No kanban items yet
+        <div className="bg-bg-card border border-border-default rounded-xl px-5 py-8 text-center">
+          <div className="mono text-[11px] uppercase tracking-[0.18em] text-text-muted mb-1">
+            {myCardsOnly ? 'No cards assigned to you.' : 'No kanban items yet'}
           </div>
-          <div className="mono text-[11px] text-[rgba(229,229,231,0.3)] max-w-xs mx-auto">
-            Action items with a kanban_workspace set will appear here. Agents
-            populate this as they create action items linked to Notion kanban
-            cards.
-          </div>
+          {!myCardsOnly && (
+            <div className="mono text-[11px] text-text-muted max-w-xs mx-auto">
+              Action items with a kanban_workspace set will appear here.
+            </div>
+          )}
         </div>
       ) : (
-        workspaces.map((ws) => (
-          <WorkspaceBoard key={ws} workspace={ws} items={byWorkspace[ws]} />
+        workspaces.map((ws, idx) => (
+          <WorkspaceBoard
+            key={ws}
+            workspace={ws}
+            items={byWorkspace[ws]}
+            color={workspaceColor(idx)}
+            selectedId={selectedItem?.id ?? null}
+            onSelectItem={(item) => setSelectedItem(selectedItem?.id === item.id ? null : item)}
+          />
         ))
+      )}
+
+      {selectedItem && (
+        <CardSlideOut item={selectedItem} onClose={() => setSelectedItem(null)} />
       )}
     </div>
   );

@@ -1,14 +1,18 @@
 {
-  "current_sprint": 5,
-  "last_completed_sprint": 4,
-  "last_completed_at": "2026-05-08T06:45:00Z",
-  "active_sprint_status": "in_process",
+  "current_sprint": 6,
+  "last_completed_sprint": 5,
+  "last_completed_at": "2026-05-10T06:31:09Z",
+  "active_sprint_status": "deployed",
+  "sprint_5_status": "verified",
+  "sprint_5_verified_at": "2026-05-10T06:31:09Z",
+  "sprint_5_audit_log_id": "97252273-17bb-4020-a67a-bb5fe0554a61",
+  "sprint_6_prompt_path": "Company Docs/Atrium/Prompts/PROMPT - Sprint 6 - Marketing + Products + Library + Wiki.md",
   "sprint_5_started_at": "2026-05-09T01:51:00Z",
   "sprint_5_streams_dispatched_at": "2026-05-09T01:52:00Z",
   "sprint_5_streams_complete_at": "2026-05-09T02:10:00Z",
   "sprint_5_closeout": {
-    "status": "Review",
-    "note": "All 7 stream PRs open and pending Kyle squash-merge. 0 new TS errors across all streams. unicron-platform build clean at 177 modules. Vercel deploy is manual (not GitHub-connected). Supabase migrations require manual apply. Continuity log appended.",
+    "status": "Verified",
+    "note": "All 7 stream PRs merged (#220–#226). All 7 Supabase migrations applied (with column alignment patch PRs #233 + #234 for schema divergences). 8 kanban cards verified. audit_log close-out entry 97252273-17bb-4020-a67a-bb5fe0554a61. Production SHA 31fafe4. Smoke tests: DB-level pass, API/UI blocked by auth gate (same pattern as Sprint 4).",
     "prs": [
       "https://github.com/freakngenius/unicron-systems/pull/220",
       "https://github.com/freakngenius/unicron-systems/pull/221",
@@ -42,7 +46,7 @@
   "sprint_5_kanban": {
     "sprint_card_id": "35c785c6-7e72-8141-ba1c-cb3bbdce7f2c",
     "sprint_card_url": "https://www.notion.so/Sprint-5-Email-Multi-Fork-Atrium-People-and-Money-35c785c67e728141ba1ccb3bbdce7f2c",
-    "sprint_card_status": "In Process",
+    "sprint_card_status": "Verified",
     "stream_cards": {
       "A": { "id": "35c785c6-7e72-81a2-a872-e95ec13ae744", "title": "Sprint 5 — Stream A: Email Ingest Skill + Daily Cron", "status": "Review", "pr": "https://github.com/freakngenius/unicron-systems/pull/221", "sha": "2cbfb68", "note": "Gmail OAuth2 cron at 16:00 UTC. Spam filter + customer attribution + dedup + auto-revert gate. ingest_processed migration. Zero new TS errors." },
       "B": { "id": "35c785c6-7e72-8167-9b1d-ffdd1729f591", "title": "Sprint 5 — Stream B: LLM Council Specialist Agent + Multi-Fork Integration", "status": "Review", "pr": "https://github.com/freakngenius/unicron-systems/pull/220", "sha": "0b6856d", "note": "3-stage deliberation shipped. ScoringAgent interface exported for Stream D. Migration uses confirmed skill column schema. Zero new TS errors." },
@@ -345,6 +349,67 @@
     "Smoke test: Work tab Action Items → reassign DRI → Taboo Keeper passes → audit_log entry",
     "Smoke test: Productivity skill Run buttons → morning-brief + inbox-triage return results",
     "Browser test recommended for Now tab FAB z-index at 320px (noted by Stream C agent)"
+  ],
+  "sprint_6_started_at": "2026-05-10T06:35:00Z",
+  "sprint_6_streams_dispatched_at": "2026-05-10T06:36:00Z",
+  "sprint_6_streams_complete_at": "2026-05-10T07:20:00Z",
+  "sprint_6_kanban": {
+    "sprint_card_id": "35c785c6-7e72-81c9-96bf-fcf008e52eb6",
+    "sprint_card_url": "https://www.notion.so/35c785c67e7281c996bffcf008e52eb6",
+    "sprint_card_status": "Deployed",
+    "stream_cards": {
+      "A": {
+        "id": "35c785c6-7e72-8194-b3a6-c47032f26c55",
+        "title": "Sprint 6 — Stream A: Marketing Tab + Campaigns API",
+        "status": "Deployed",
+        "pr": "https://github.com/freakngenius/unicron-systems/pull/240",
+        "sha": "0aca71e",
+        "migration_applied": "20260510_campaigns.sql (nervous_system.campaigns table + RLS + ns_list_campaigns RPC)"
+      },
+      "B": {
+        "id": "35c785c6-7e72-8174-9dbb-c1cb84b8ccfe",
+        "title": "Sprint 6 — Stream B: Products Tab (Pathfinder + Metacron)",
+        "status": "Deployed",
+        "pr": "https://github.com/freakngenius/unicron-systems/pull/241",
+        "sha": "9db4db4"
+      },
+      "C": {
+        "id": "35c785c6-7e72-8153-a5b2-f2d0415bf422",
+        "title": "Sprint 6 — Stream C: Library Tab (Wiki/Repo/Templates)",
+        "status": "Deployed",
+        "pr": "https://github.com/freakngenius/unicron-systems/pull/242",
+        "sha": "6515e0a"
+      },
+      "D": {
+        "id": "35c785c6-7e72-8121-9cd6-d775f7ad1df8",
+        "title": "Sprint 6 — Stream D: Wiki Content — 11 Pages",
+        "status": "Deployed",
+        "pr": "https://github.com/freakngenius/unicron-knowledge/pull/2",
+        "note": "11 wiki pages + Elder continuity.md Sprint 6 closeout entry"
+      },
+      "E": {
+        "id": "35c785c6-7e72-81c9-9df2-cab7b18086c9",
+        "title": "Sprint 6 — Stream E: Marketing Skills + Activate Buttons",
+        "status": "Deployed",
+        "pr": "https://github.com/freakngenius/unicron-systems/pull/239",
+        "sha": "0fbaac8",
+        "migration_applied": "20260510_seed_sprint6_marketing_skills.sql (draft-blog-post, draft-social-post, generate-positioning-deck, update-manifesto-page)"
+      }
+    }
+  },
+  "sprint_6_closeout": {
+    "status": "Deployed",
+    "note": "All 5 stream PRs merged + build fix (package.json: tsc-b decoupled from vite build) + .vercelignore anchor fix (root Atrium/ pattern was excluding src/atrium/ on macOS) + wiki/vault GitHub API fallback (SHAs 6e6479d + 7d5839f). Deployed dpl_7CgZovVBZkCfZXaDDvRk4QFUjUfQ — wiki index + vault search smoke tested green via GitHub API fallback. Awaiting Kyle human Verified promotion.",
+    "vercel_deployment_id": "dpl_7CgZovVBZkCfZXaDDvRk4QFUjUfQ",
+    "vercel_deployment_url": "https://unicron-platform-qeodrzdbj-kekas-projects-89ac4317.vercel.app",
+    "vercel_alias": "https://atrium.unicron.systems",
+    "production_sha": "7d5839f",
+    "closed_at": "2026-05-10T08:35:00Z"
+  },
+  "sprint_6_pending_manual": [
+    "HUMAN: Add GITHUB_VAULT_TOKEN env var to unicron-platform Vercel project (enables authenticated GitHub API reads for wiki/vault; works unauthenticated but rate-limited at 60 req/hr)",
+    "HUMAN: Kyle smoke-test the 5 new Atrium surfaces — Marketing, Products, Library tabs visible + navigable; wiki Library tab loads pages from GitHub; marketing skills run buttons",
+    "HUMAN: Promote Sprint 6 card to Verified on Internal Org Kanban (human-only — never auto-promote)"
   ],
   "halts_observed": [
     {

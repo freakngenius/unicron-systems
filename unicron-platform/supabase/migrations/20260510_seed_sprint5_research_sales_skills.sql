@@ -11,6 +11,11 @@
 -- Also adds `run_endpoint` text column for explicit routing metadata used by the
 -- skills/run endpoint and agent dispatchers.
 --
+-- Column alignment patch (2026-05-09): corrected inputs→inputs_schema, outputs→outputs_schema,
+-- skill_path→skill_md_path to match live nervous_system.skills schema. Added schedule_cron
+-- to INSERT column list (was missing; caused value-count mismatch for scheduled skills).
+-- Dropped updated_at from ON CONFLICT DO UPDATE (column does not exist in live schema).
+--
 -- This migration is additive only — no DROP, no destructive ALTER.
 
 -- ---------------------------------------------------------------------------
@@ -57,15 +62,15 @@ RETURNS TABLE (
   description        text,
   domain             text,
   type               text,
-  inputs             jsonb,
-  outputs            jsonb,
+  inputs_schema      jsonb,
+  outputs_schema     jsonb,
   schedule_cron      text,
   refusal_gate       boolean,
   budget_usd_per_run numeric,
   active             boolean,
   status             text,
   run_endpoint       text,
-  skill_path         text
+  skill_md_path      text
 )
 LANGUAGE sql
 SECURITY DEFINER
@@ -73,8 +78,8 @@ SET search_path = nervous_system, public
 AS $$
   SELECT
     id, name, description, domain, type,
-    inputs, outputs, schedule_cron, refusal_gate,
-    budget_usd_per_run, active, status, run_endpoint, skill_path
+    inputs_schema, outputs_schema, schedule_cron, refusal_gate,
+    budget_usd_per_run, active, status, run_endpoint, skill_md_path
   FROM nervous_system.skills
   WHERE active = true
   ORDER BY domain, name;
@@ -88,7 +93,7 @@ GRANT EXECUTE ON FUNCTION public.ns_list_skills()
 -- ---------------------------------------------------------------------------
 
 INSERT INTO nervous_system.skills
-  (name, description, domain, type, inputs, outputs, refusal_gate, budget_usd_per_run, active, status, run_endpoint, skill_path)
+  (name, description, domain, type, inputs_schema, outputs_schema, schedule_cron, refusal_gate, budget_usd_per_run, active, status, run_endpoint, skill_md_path)
 VALUES
   (
     'deep-research',
@@ -96,6 +101,7 @@ VALUES
     'research', 'manual',
     '[{"name":"topic","type":"string","required":true,"description":"The research topic or question to investigate"},{"name":"depth","type":"string","required":false,"description":"Depth level: quick | standard | deep (default: standard)"}]',
     '[{"type":"vault_doc","location":"wiki/research/YYYY-MM-DD-<slug>.md"},{"type":"ledger_row","location":"nervous_system.ledger"}]',
+    NULL,
     false, 0.40,
     true, 'active',
     '/api/skills/deep-research',
@@ -107,6 +113,7 @@ VALUES
     'research', 'manual',
     '[{"name":"question","type":"string","required":true,"description":"The question or decision to deliberate on"},{"name":"criteria","type":"string","required":false,"description":"Evaluation criteria for the Chairman synthesis (optional)"}]',
     '[{"type":"council_result","location":"in-memory + ledger_row"},{"type":"ledger_row","location":"nervous_system.ledger"}]',
+    NULL,
     false, 0.25,
     true, 'active',
     '/api/atrium/council-deliberate',
@@ -118,6 +125,7 @@ VALUES
     'research', 'manual',
     '[{"name":"question","type":"string","required":true,"description":"Natural language question to query the vault knowledge graph"}]',
     '[{"type":"rag_results","location":"ranked vault documents with relevance scores"}]',
+    NULL,
     false, 0.05,
     true, 'scaffolded',
     '/api/atrium/skills/run',
@@ -151,23 +159,22 @@ ON CONFLICT (name) DO UPDATE SET
   description        = EXCLUDED.description,
   domain             = EXCLUDED.domain,
   type               = EXCLUDED.type,
-  inputs             = EXCLUDED.inputs,
-  outputs            = EXCLUDED.outputs,
+  inputs_schema      = EXCLUDED.inputs_schema,
+  outputs_schema     = EXCLUDED.outputs_schema,
   schedule_cron      = EXCLUDED.schedule_cron,
   refusal_gate       = EXCLUDED.refusal_gate,
   budget_usd_per_run = EXCLUDED.budget_usd_per_run,
   active             = EXCLUDED.active,
   status             = EXCLUDED.status,
   run_endpoint       = EXCLUDED.run_endpoint,
-  skill_path         = EXCLUDED.skill_path,
-  updated_at         = now();
+  skill_md_path      = EXCLUDED.skill_md_path;
 
 -- ---------------------------------------------------------------------------
 -- Seed Sprint 5 Sales/Discovery domain skills
 -- ---------------------------------------------------------------------------
 
 INSERT INTO nervous_system.skills
-  (name, description, domain, type, inputs, outputs, refusal_gate, budget_usd_per_run, active, status, run_endpoint, skill_path)
+  (name, description, domain, type, inputs_schema, outputs_schema, refusal_gate, budget_usd_per_run, active, status, run_endpoint, skill_md_path)
 VALUES
   (
     'schedule-discovery-call',
@@ -228,13 +235,11 @@ ON CONFLICT (name) DO UPDATE SET
   description        = EXCLUDED.description,
   domain             = EXCLUDED.domain,
   type               = EXCLUDED.type,
-  inputs             = EXCLUDED.inputs,
-  outputs            = EXCLUDED.outputs,
-  schedule_cron      = EXCLUDED.schedule_cron,
+  inputs_schema      = EXCLUDED.inputs_schema,
+  outputs_schema     = EXCLUDED.outputs_schema,
   refusal_gate       = EXCLUDED.refusal_gate,
   budget_usd_per_run = EXCLUDED.budget_usd_per_run,
   active             = EXCLUDED.active,
   status             = EXCLUDED.status,
   run_endpoint       = EXCLUDED.run_endpoint,
-  skill_path         = EXCLUDED.skill_path,
-  updated_at         = now();
+  skill_md_path      = EXCLUDED.skill_md_path;

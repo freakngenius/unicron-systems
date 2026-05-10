@@ -59,25 +59,17 @@ function useHealthData(customerId: string): HealthData {
 
     async function load() {
       try {
+        // PGRST106 fix: use ns_list_ledger_by_customer and ns_list_action_items_by_customer RPCs
         const [ledgerRes, actionsRes] = await Promise.all([
-          // Ledger entries for this customer in last 30d
-          sb
-            .schema('nervous_system')
-            .from('ledger')
-            .select('id, source_type, content_summary, created_at, sentiment_score, customer_id, participants')
-            .eq('customer_id', customerId)
-            .gte('created_at', since30d)
-            .order('created_at', { ascending: false })
-            .limit(50),
-          // Open action items for this customer
-          sb
-            .schema('nervous_system')
-            .from('action_items')
-            .select('id, title, status, priority, due_at, assigned_to')
-            .eq('customer_id', customerId)
-            .eq('status', 'open')
-            .order('due_at', { ascending: true })
-            .limit(10),
+          sb.rpc('ns_list_ledger_by_customer', {
+            p_customer_id: customerId,
+            p_since: since30d,
+            p_limit: 50,
+          }),
+          sb.rpc('ns_list_action_items_by_customer', {
+            p_customer_id: customerId,
+            p_limit: 10,
+          }),
         ]);
 
         if (cancelled) return;

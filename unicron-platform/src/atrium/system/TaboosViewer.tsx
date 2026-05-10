@@ -27,7 +27,7 @@ export default function TaboosViewer() {
     return (
       <div className="space-y-2">
         {[0, 1, 2, 3].map((i) => (
-          <div key={i} className="h-5 bg-[#141416] rounded-lg animate-pulse" style={{ width: `${70 + (i % 3) * 10}%` }} />
+          <div key={i} className="h-5 bg-bg-card rounded-lg animate-pulse" style={{ width: `${70 + (i % 3) * 10}%` }} />
         ))}
       </div>
     );
@@ -35,9 +35,9 @@ export default function TaboosViewer() {
 
   if (error) {
     return (
-      <div className="bg-[#EF4444]/10 border border-[#EF4444]/30 rounded-xl px-5 py-4">
-        <div className="mono text-[12px] text-[#EF4444]">{error}</div>
-        <div className="mono text-[10px] text-[rgba(229,229,231,0.4)] mt-1">
+      <div className="bg-[#DD6262]/10 border border-[#DD6262]/30 rounded-xl px-5 py-4">
+        <div className="mono text-[12px] text-[#DD6262]">{error}</div>
+        <div className="mono text-[10px] text-text-muted mt-1">
           Ensure GITHUB_VAULT_TOKEN is set in Vercel environment variables.
         </div>
       </div>
@@ -46,15 +46,15 @@ export default function TaboosViewer() {
 
   return (
     <div className="max-w-2xl">
-      <div className="bg-[#141416] rounded-xl p-6 border border-[#1F1F23]">
-        <pre className="mono text-[12px] text-[rgba(229,229,231,0.85)] whitespace-pre-wrap leading-relaxed">
+      <div className="bg-bg-card rounded-xl p-6 border border-border-default">
+        <pre className="mono text-[12px] text-[var(--text-hi)] whitespace-pre-wrap leading-relaxed">
           {content}
         </pre>
       </div>
-      <div className="mt-4 px-4 py-3 bg-[#F59E0B]/10 border border-[#F59E0B]/20 rounded-xl">
-        <p className="mono text-[11px] text-[#F59E0B]">
+      <div className="mt-4 px-4 py-3 bg-[#D9A23A]/10 border border-[#D9A23A]/20 rounded-xl">
+        <p className="mono text-[11px] text-[#D9A23A]">
           Taboos are human-edited only. To propose an edit, open a PR against{' '}
-          <span className="text-[rgba(229,229,231,0.7)]">
+          <span className="text-text-secondary">
             unicron-knowledge/wiki/memory/taboos.md
           </span>{' '}
           with peer review. No agent may modify this file directly.

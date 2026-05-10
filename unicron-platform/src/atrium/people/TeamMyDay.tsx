@@ -81,15 +81,9 @@ function MemberDetail({
 
     async function load() {
       try {
+        // PGRST106 fix: use ns_list_action_items_by_assignee RPC
         const { data, error: err } = await sb
-          .schema('nervous_system')
-          .from('action_items')
-          .select('id, title, status, priority, due_at, customer_id, notion_url')
-          .eq('assigned_to', member.id)
-          .eq('status', 'open')
-          .order('priority', { ascending: false })
-          .order('due_at', { ascending: true })
-          .limit(20);
+          .rpc('ns_list_action_items_by_assignee', { p_member_id: member.id, p_limit: 20 });
 
         if (cancelled) return;
         if (err) throw err;
@@ -301,12 +295,8 @@ export function TeamMyDay() {
 
     async function load() {
       try {
-        const { data, error: err } = await sb
-          .schema('nervous_system')
-          .from('team_members')
-          .select('id, name, role, email, avatar_url, active')
-          .eq('active', true)
-          .order('name');
+        // PGRST106 fix: use ns_list_team_members_active RPC
+        const { data, error: err } = await sb.rpc('ns_list_team_members_active');
 
         if (cancelled) return;
         if (err) throw err;
@@ -388,13 +378,10 @@ function MemberCard({ member, onClick }: { member: TeamMember; onClick: () => vo
   useEffect(() => {
     let cancelled = false;
     const sb = getSupabase();
-    sb.schema('nervous_system')
-      .from('action_items')
-      .select('id', { count: 'exact', head: true })
-      .eq('assigned_to', member.id)
-      .eq('status', 'open')
-      .then(({ count }) => {
-        if (!cancelled) setActionCount(count ?? 0);
+    // PGRST106 fix: use ns_count_action_items_by_assignee RPC
+    sb.rpc('ns_count_action_items_by_assignee', { p_member_id: member.id })
+      .then(({ data }) => {
+        if (!cancelled) setActionCount(Number(data ?? 0));
       });
     return () => { cancelled = true; };
   }, [member.id]);

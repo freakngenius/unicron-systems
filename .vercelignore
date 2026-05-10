@@ -1,18 +1,18 @@
-Pathfinder/
-Product/
-Company Docs/
-Customers/
-Brand/
-Atrium/
-MEMORY/
-_archive/
-_demo-snapshot-2026-04-30/
-supabase/
-unicron-knowledge/
-unicron-knowledge-worktrees/
-unicron-platform-worktrees/
-Pathfinder-worktrees/
-Phase2-worktrees/
+/Pathfinder/
+/Product/
+/Company Docs/
+/Customers/
+/Brand/
+/Atrium/
+/MEMORY/
+/_archive/
+/_demo-snapshot-2026-04-30/
+/supabase/
+/unicron-knowledge/
+/unicron-knowledge-worktrees/
+/unicron-platform-worktrees/
+/Pathfinder-worktrees/
+/Phase2-worktrees/
 node_modules
 dist
 *.log

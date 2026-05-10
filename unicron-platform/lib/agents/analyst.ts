@@ -939,3 +939,150 @@ _Generated at ${now.toISOString()}_`;
 
   console.log(`[analyst] wikiLint done: ${brokenLinks.length}/${links.length} broken`);
 }
+
+// ---------------------------------------------------------------------------
+// 10. analystWikiSync — nightly regeneration of whats-connected.md
+// ---------------------------------------------------------------------------
+//
+// Queries nervous_system.connected_services and nervous_system.agents,
+// renders markdown tables, and pushes to vault.
+// CRITICAL: preserves <!-- protected -->...<!-- /protected --> blocks verbatim.
+
+interface ConnectedServiceRow {
+  name: string;
+  category: string | null;
+  status: string | null;
+  owner_team_member_id: string | null;
+  monthly_cost_usd: number | null;
+}
+
+interface AgentRow {
+  name: string;
+  status: string | null;
+  last_run: string | null;
+}
+
+function extractProtectedBlocks(content: string): Map<string, string> {
+  const blocks = new Map<string, string>();
+  const re = /<!-- protected -->([\s\S]*?)<!-- \/protected -->/g;
+  let match: RegExpExecArray | null;
+  let idx = 0;
+  while ((match = re.exec(content)) !== null) {
+    blocks.set(`__PROTECTED_${idx}__`, match[0]);
+    idx++;
+  }
+  return blocks;
+}
+
+export async function analystWikiSync(): Promise<void> {
+  console.log('[analyst] analystWikiSync: starting');
+
+  // ── Fetch connected_services ──────────────────────────────────────────────
+  const { data: services, error: servicesErr } = await supabase
+    .schema('nervous_system')
+    .from('connected_services')
+    .select('name, category, status, owner_team_member_id, monthly_cost_usd')
+    .order('name', { ascending: true });
+
+  if (servicesErr) {
+    console.error('[analyst] analystWikiSync connected_services error:', servicesErr.message);
+  }
+
+  // ── Fetch agents ──────────────────────────────────────────────────────────
+  const { data: agents, error: agentsErr } = await supabase
+    .schema('nervous_system')
+    .from('agents')
+    .select('name, status, last_run')
+    .order('name', { ascending: true });
+
+  if (agentsErr) {
+    console.error('[analyst] analystWikiSync agents error:', agentsErr.message);
+  }
+
+  const serviceRows = (services ?? []) as ConnectedServiceRow[];
+  const agentRows = (agents ?? []) as AgentRow[];
+
+  const now = new Date();
+  const dateStr = now.toISOString().split('T')[0];
+
+  // ── Build services table ──────────────────────────────────────────────────
+  const servicesTable =
+    serviceRows.length > 0
+      ? [
+          '| Name | Category | Status | Owner | Cost/mo |',
+          '|---|---|---|---|---|',
+          ...serviceRows.map(
+            (s) =>
+              `| ${s.name} | ${s.category ?? ''} | ${s.status ?? ''} | ${s.owner_team_member_id ?? ''} | ${s.monthly_cost_usd != null ? `$${s.monthly_cost_usd.toFixed(2)}` : ''} |`
+          ),
+        ].join('\n')
+      : '_No connected services recorded._';
+
+  // ── Build agents table ────────────────────────────────────────────────────
+  const agentsTable =
+    agentRows.length > 0
+      ? [
+          '| Name | Status | Last Run |',
+          '|---|---|---|',
+          ...agentRows.map(
+            (a) =>
+              `| ${a.name} | ${a.status ?? ''} | ${a.last_run ? a.last_run.slice(0, 19).replace('T', ' ') : ''} |`
+          ),
+        ].join('\n')
+      : '_No agents recorded._';
+
+  // ── Load existing file to preserve protected blocks ───────────────────────
+  const existingFile = await vaultRead('wiki/whats-connected.md');
+  const protectedBlocks = existingFile
+    ? extractProtectedBlocks(existingFile.content)
+    : new Map<string, string>();
+
+  // Build a placeholder-mapped version of the content
+  // (we embed placeholders in our new content where protected blocks should go)
+  const newContent = `---
+type: integration_map
+status: active
+ttl_days: 90
+last_touched: ${dateStr}
+generated_by: analyst (analystWikiSync)
+---
+
+# What's Connected
+
+Live integration map for the Unicron Nervous System. Auto-regenerated nightly by the Analyst agent.
+
+---
+
+## As of ${dateStr}
+
+### Connected Services
+
+${servicesTable}
+
+### Agents
+
+${agentsTable}
+
+---
+
+_Last regenerated: ${now.toISOString()}_
+`;
+
+  // Re-embed any protected blocks from the old file
+  let finalContent = newContent;
+  if (protectedBlocks.size > 0 && existingFile) {
+    // Append protected blocks at the end (preserving them verbatim)
+    const blocksSection = Array.from(protectedBlocks.values()).join('\n\n');
+    finalContent = newContent.trimEnd() + '\n\n' + blocksSection + '\n';
+  }
+
+  await vaultWrite(
+    'wiki/whats-connected.md',
+    finalContent,
+    `wiki(analyst): nightly whats-connected regeneration ${dateStr}`
+  );
+
+  console.log(
+    `[analyst] analystWikiSync done: ${serviceRows.length} services, ${agentRows.length} agents`
+  );
+}

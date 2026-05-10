@@ -47,7 +47,7 @@ const PRIORITY_COLORS: Record<string, string> = {
   irreversible: '#EF4444',
   high: '#F59E0B',
   medium: '#3B82F6',
-  low: 'rgba(229,229,231,0.4)',
+  low: 'var(--text-lo)',
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -71,23 +71,23 @@ function useActionItems() {
     setError(null);
     const sb = getSupabase();
     try {
+      // PGRST106 fix: nervous_system not in PostgREST db-schemas.
+      // ns_list_action_items() returns dri_name in place of the team_members(name) join.
       const { data, error: err } = await sb
-        .schema('nervous_system')
-        .from('action_items')
-        .select('*, team_members(name)')
-        .order('created_at', { ascending: false })
-        .limit(200)
-        .returns<ActionItemRow[]>();
+        .rpc('ns_list_action_items', { p_limit: 200 });
 
       if (err) throw err;
-      setItems(data ?? []);
 
-      const { data: memberData } = await sb
-        .schema('nervous_system')
-        .from('team_members')
-        .select('id, name, email')
-        .returns<TeamMember[]>();
-      setMembers(memberData ?? []);
+      // Map flat dri_name back to the nested team_members shape the component expects
+      const mapped: ActionItemRow[] = ((data as Array<ActionItemRow & { dri_name: string | null }>) ?? [])
+        .map((row) => ({
+          ...row,
+          team_members: row.dri_name ? { name: row.dri_name } : null,
+        }));
+      setItems(mapped);
+
+      const { data: memberData } = await sb.rpc('ns_list_team_members');
+      setMembers((memberData as TeamMember[] | null) ?? []);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load action items');
     } finally {
@@ -139,15 +139,15 @@ function DetailPanel({
       />
 
       {/* Panel */}
-      <div className="relative w-full max-w-md h-full bg-[#141416] border-l border-[#1F1F23] overflow-y-auto flex flex-col">
+      <div className="relative w-full max-w-md h-full bg-bg-card border-l border-border-default overflow-y-auto flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-[#1F1F23] sticky top-0 bg-[#141416] z-10">
-          <div className="mono text-[11px] uppercase tracking-[0.18em] text-[rgba(229,229,231,0.5)]">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-border-default sticky top-0 bg-bg-card z-10">
+          <div className="mono text-[11px] uppercase tracking-[0.18em] text-text-secondary">
             Action Item
           </div>
           <button
             onClick={onClose}
-            className="mono text-[11px] uppercase tracking-[0.14em] text-[rgba(229,229,231,0.5)] hover:text-[#E5E5E7] transition-colors"
+            className="mono text-[11px] uppercase tracking-[0.14em] text-text-secondary hover:text-text-primary transition-colors"
           >
             Close
           </button>
@@ -172,11 +172,11 @@ function DetailPanel({
                 {item.priority}
               </span>
             </div>
-            <div className="mono text-[15px] text-[#E5E5E7] font-medium leading-snug">
+            <div className="mono text-[15px] text-text-primary font-medium leading-snug">
               {item.title}
             </div>
             {item.description && (
-              <div className="mono text-[12px] text-[rgba(229,229,231,0.6)] mt-2 leading-relaxed">
+              <div className="mono text-[12px] text-text-secondary mt-2 leading-relaxed">
                 {item.description}
               </div>
             )}
@@ -201,10 +201,10 @@ function DetailPanel({
               },
             ].map(({ label, value }) => (
               <div key={label} className="flex items-baseline gap-3">
-                <div className="mono text-[9px] uppercase tracking-[0.16em] text-[rgba(229,229,231,0.4)] w-16 shrink-0">
+                <div className="mono text-[9px] uppercase tracking-[0.16em] text-text-muted w-16 shrink-0">
                   {label}
                 </div>
-                <div className="mono text-[12px] text-[rgba(229,229,231,0.8)]">
+                <div className="mono text-[12px] text-text-primary">
                   {value}
                 </div>
               </div>
@@ -214,10 +214,10 @@ function DetailPanel({
           {/* Evidence quote */}
           {item.evidence_quote && (
             <div>
-              <div className="mono text-[9px] uppercase tracking-[0.16em] text-[rgba(229,229,231,0.4)] mb-2">
+              <div className="mono text-[9px] uppercase tracking-[0.16em] text-text-muted mb-2">
                 Evidence
               </div>
-              <blockquote className="border-l-2 border-[#FF6B2B] pl-3 mono text-[11px] text-[rgba(229,229,231,0.7)] italic leading-relaxed">
+              <blockquote className="border-l-2 border-accent pl-3 mono text-[11px] text-text-secondary italic leading-relaxed">
                 {item.evidence_quote}
               </blockquote>
             </div>
@@ -226,10 +226,10 @@ function DetailPanel({
           {/* Linked ledger */}
           {item.ledger_id && (
             <div>
-              <div className="mono text-[9px] uppercase tracking-[0.16em] text-[rgba(229,229,231,0.4)] mb-1">
+              <div className="mono text-[9px] uppercase tracking-[0.16em] text-text-muted mb-1">
                 Ledger Row
               </div>
-              <div className="mono text-[11px] text-[rgba(229,229,231,0.6)] font-mono break-all">
+              <div className="mono text-[11px] text-text-secondary font-mono break-all">
                 {item.ledger_id}
               </div>
             </div>
@@ -238,14 +238,14 @@ function DetailPanel({
           {/* Notion link */}
           {item.kanban_card_id && (
             <div>
-              <div className="mono text-[9px] uppercase tracking-[0.16em] text-[rgba(229,229,231,0.4)] mb-1">
+              <div className="mono text-[9px] uppercase tracking-[0.16em] text-text-muted mb-1">
                 Notion Card
               </div>
               <a
                 href={`https://notion.so/${item.kanban_card_id.replace(/-/g, '')}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="mono text-[11px] text-[#FF6B2B] hover:underline break-all"
+                className="mono text-[11px] text-accent-orange hover:underline break-all"
               >
                 Open in Notion
               </a>
@@ -261,17 +261,17 @@ function DetailPanel({
         </div>
 
         {/* Footer actions */}
-        <div className="px-5 py-4 border-t border-[#1F1F23] flex gap-2">
+        <div className="px-5 py-4 border-t border-border-default flex gap-2">
           <button
             onClick={() => void handleClose()}
             disabled={saving || item.status === 'done'}
-            className="flex-1 mono text-[11px] uppercase tracking-[0.12em] py-2 bg-[#FF6B2B] text-white rounded-lg hover:bg-[#e55a1a] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            className="flex-1 mono text-[11px] uppercase tracking-[0.12em] py-2 bg-accent-orange text-white rounded-lg hover:bg-accent-press transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {saving ? '…' : 'Mark Done'}
           </button>
           <button
             onClick={onClose}
-            className="mono text-[11px] uppercase tracking-[0.12em] px-4 py-2 border border-[#1F1F23] text-[rgba(229,229,231,0.5)] rounded-lg hover:border-[#2A2A2E] hover:text-[#E5E5E7] transition-colors"
+            className="mono text-[11px] uppercase tracking-[0.12em] px-4 py-2 border border-border-default text-text-secondary rounded-lg hover:border-border-hover hover:text-text-primary transition-colors"
           >
             Cancel
           </button>
@@ -305,13 +305,13 @@ function FiltersBar({
     <div className="flex flex-wrap gap-3 items-center">
       {/* DRI */}
       <div className="flex items-center gap-2">
-        <label className="mono text-[9px] uppercase tracking-[0.16em] text-[rgba(229,229,231,0.4)]">
+        <label className="mono text-[9px] uppercase tracking-[0.16em] text-text-muted">
           DRI
         </label>
         <select
           value={filters.dri}
           onChange={(e) => setFilters({ ...filters, dri: e.target.value })}
-          className="bg-[#141416] border border-[#1F1F23] rounded-lg px-2 py-1 mono text-[11px] text-[#E5E5E7] focus:outline-none"
+          className="bg-bg-card border border-border-default rounded-lg px-2 py-1 mono text-[11px] text-text-primary focus:outline-none"
         >
           <option value="">All</option>
           {members.map((m) => (
@@ -324,7 +324,7 @@ function FiltersBar({
 
       {/* Priority multi */}
       <div className="flex items-center gap-2">
-        <span className="mono text-[9px] uppercase tracking-[0.16em] text-[rgba(229,229,231,0.4)]">
+        <span className="mono text-[9px] uppercase tracking-[0.16em] text-text-muted">
           Priority
         </span>
         {['irreversible', 'high', 'medium', 'low'].map((p) => (
@@ -342,10 +342,10 @@ function FiltersBar({
             style={{
               borderColor: filters.priority.includes(p)
                 ? PRIORITY_COLORS[p]
-                : '#1F1F23',
+                : 'var(--border-default)',
               color: filters.priority.includes(p)
                 ? PRIORITY_COLORS[p]
-                : 'rgba(229,229,231,0.45)',
+                : 'var(--text-lo)',
             }}
           >
             {p}
@@ -355,7 +355,7 @@ function FiltersBar({
 
       {/* Status multi */}
       <div className="flex items-center gap-2">
-        <span className="mono text-[9px] uppercase tracking-[0.16em] text-[rgba(229,229,231,0.4)]">
+        <span className="mono text-[9px] uppercase tracking-[0.16em] text-text-muted">
           Status
         </span>
         {Object.entries(STATUS_LABELS).map(([k, v]) => (
@@ -371,10 +371,10 @@ function FiltersBar({
             }
             className="mono text-[9px] uppercase tracking-[0.12em] px-2 py-0.5 rounded border transition-colors"
             style={{
-              borderColor: filters.status.includes(k) ? '#FF6B2B' : '#1F1F23',
+              borderColor: filters.status.includes(k) ? 'var(--accent)' : 'var(--border-default)',
               color: filters.status.includes(k)
-                ? '#FF6B2B'
-                : 'rgba(229,229,231,0.45)',
+                ? 'var(--accent)'
+                : 'var(--text-lo)',
             }}
           >
             {v}
@@ -387,7 +387,7 @@ function FiltersBar({
         value={filters.source}
         onChange={(e) => setFilters({ ...filters, source: e.target.value })}
         placeholder="Filter source…"
-        className="bg-[#141416] border border-[#1F1F23] rounded-lg px-3 py-1 mono text-[11px] text-[#E5E5E7] placeholder:text-[rgba(229,229,231,0.3)] focus:outline-none w-32"
+        className="bg-bg-card border border-border-default rounded-lg px-3 py-1 mono text-[11px] text-text-primary placeholder:text-text-muted focus:outline-none w-32"
       />
 
       {/* Clear */}
@@ -395,7 +395,7 @@ function FiltersBar({
         onClick={() =>
           setFilters({ dri: '', priority: [], status: [], source: '' })
         }
-        className="mono text-[9px] uppercase tracking-[0.14em] text-[rgba(229,229,231,0.4)] hover:text-[#E5E5E7] transition-colors"
+        className="mono text-[9px] uppercase tracking-[0.14em] text-text-muted hover:text-text-primary transition-colors"
       >
         Clear
       </button>
@@ -408,7 +408,7 @@ function FiltersBar({
       <div className="sm:hidden mb-2">
         <button
           onClick={() => setExpanded((v) => !v)}
-          className="mono text-[10px] uppercase tracking-[0.14em] px-3 py-1.5 border border-[#1F1F23] rounded-lg text-[rgba(229,229,231,0.5)] hover:text-[#E5E5E7] hover:border-[#2A2A2E] transition-colors"
+          className="mono text-[10px] uppercase tracking-[0.14em] px-3 py-1.5 border border-border-default rounded-lg text-text-secondary hover:text-text-primary hover:border-border-hover transition-colors"
         >
           {expanded ? 'Hide Filters' : 'Filters'}
         </button>
@@ -451,8 +451,8 @@ function BulkActions({
   }
 
   return (
-    <div className="mb-4 px-4 py-3 bg-[#1A1A1D] border border-[#2A2A2E] rounded-xl flex flex-wrap items-center gap-3">
-      <div className="mono text-[11px] text-[rgba(229,229,231,0.6)]">
+    <div className="mb-4 px-4 py-3 bg-bg-raised border border-border-hover rounded-xl flex flex-wrap items-center gap-3">
+      <div className="mono text-[11px] text-text-secondary">
         {selectedIds.length} selected
       </div>
 
@@ -462,7 +462,7 @@ function BulkActions({
           if (e.target.value) void applyToAll({ dri: e.target.value });
           e.target.value = '';
         }}
-        className="bg-[#141416] border border-[#1F1F23] rounded-lg px-2 py-1 mono text-[11px] text-[#E5E5E7] focus:outline-none disabled:opacity-50"
+        className="bg-bg-card border border-border-default rounded-lg px-2 py-1 mono text-[11px] text-text-primary focus:outline-none disabled:opacity-50"
       >
         <option value="">Reassign DRI…</option>
         {members.map((m) => (
@@ -478,7 +478,7 @@ function BulkActions({
           if (e.target.value) void applyToAll({ status: e.target.value as ActionItemRow['status'] });
           e.target.value = '';
         }}
-        className="bg-[#141416] border border-[#1F1F23] rounded-lg px-2 py-1 mono text-[11px] text-[#E5E5E7] focus:outline-none disabled:opacity-50"
+        className="bg-bg-card border border-border-default rounded-lg px-2 py-1 mono text-[11px] text-text-primary focus:outline-none disabled:opacity-50"
       >
         <option value="">Change Status…</option>
         {Object.entries(STATUS_LABELS).map(([k, v]) => (
@@ -521,7 +521,7 @@ function SortHeader({
   const active = sortField === field;
   return (
     <th
-      className="text-left px-3 py-2 mono text-[9px] uppercase tracking-[0.16em] text-[rgba(229,229,231,0.4)] cursor-pointer hover:text-[#E5E5E7] transition-colors whitespace-nowrap select-none"
+      className="text-left px-3 py-2 mono text-[9px] uppercase tracking-[0.16em] text-text-muted cursor-pointer hover:text-text-primary transition-colors whitespace-nowrap select-none"
       onClick={() => onSort(field)}
     >
       {label}
@@ -618,7 +618,7 @@ export function ActionItems() {
     return (
       <div className="space-y-2">
         {[0, 1, 2, 3].map((i) => (
-          <div key={i} className="h-10 bg-[#141416] rounded-xl animate-pulse" />
+          <div key={i} className="h-10 bg-bg-card rounded-xl animate-pulse" />
         ))}
       </div>
     );
@@ -630,7 +630,7 @@ export function ActionItems() {
         <div className="mono text-[12px] text-[#EF4444]">{error}</div>
         <button
           onClick={() => void reload()}
-          className="mono text-[10px] uppercase tracking-[0.12em] mt-2 text-[rgba(229,229,231,0.5)] hover:text-[#E5E5E7] transition-colors"
+          className="mono text-[10px] uppercase tracking-[0.12em] mt-2 text-text-secondary hover:text-text-primary transition-colors"
         >
           Retry
         </button>
@@ -652,23 +652,23 @@ export function ActionItems() {
       />
 
       {sorted.length === 0 ? (
-        <div className="bg-[#141416] border border-[#1F1F23] rounded-xl px-5 py-8 text-center">
-          <div className="mono text-[11px] uppercase tracking-[0.18em] text-[rgba(229,229,231,0.4)] mb-1">
+        <div className="bg-bg-card border border-border-default rounded-xl px-5 py-8 text-center">
+          <div className="mono text-[11px] uppercase tracking-[0.18em] text-text-muted mb-1">
             No action items
           </div>
-          <div className="mono text-[11px] text-[rgba(229,229,231,0.3)]">
+          <div className="mono text-[11px] text-text-muted">
             Action items are created by agents and the Orchestrator as signals
             are processed.
           </div>
         </div>
       ) : (
         /* Horizontally scrollable table with sticky first column on mobile */
-        <div className="overflow-x-auto rounded-xl border border-[#1F1F23]">
+        <div className="overflow-x-auto rounded-xl border border-border-default">
           <table className="w-full min-w-[700px]">
             <thead>
-              <tr className="bg-[#141416] border-b border-[#1F1F23]">
+              <tr className="bg-bg-card border-b border-border-default">
                 {/* Checkbox — sticky on mobile */}
-                <th className="px-3 py-2 sticky left-0 bg-[#141416] z-10">
+                <th className="px-3 py-2 sticky left-0 bg-bg-card z-10">
                   <input
                     type="checkbox"
                     checked={
@@ -676,7 +676,7 @@ export function ActionItems() {
                       sortedIds.every((id) => selected.has(id))
                     }
                     onChange={() => toggleAll(sortedIds)}
-                    className="accent-[#FF6B2B]"
+                    className="accent-accent-orange"
                   />
                 </th>
                 <SortHeader
@@ -686,10 +686,10 @@ export function ActionItems() {
                   sortDir={sortDir}
                   onSort={handleSort}
                 />
-                <th className="text-left px-3 py-2 mono text-[9px] uppercase tracking-[0.16em] text-[rgba(229,229,231,0.4)] whitespace-nowrap">
+                <th className="text-left px-3 py-2 mono text-[9px] uppercase tracking-[0.16em] text-text-muted whitespace-nowrap">
                   DRI
                 </th>
-                <th className="text-left px-3 py-2 mono text-[9px] uppercase tracking-[0.16em] text-[rgba(229,229,231,0.4)] whitespace-nowrap">
+                <th className="text-left px-3 py-2 mono text-[9px] uppercase tracking-[0.16em] text-text-muted whitespace-nowrap">
                   Surface
                 </th>
                 <SortHeader
@@ -713,7 +713,7 @@ export function ActionItems() {
                   sortDir={sortDir}
                   onSort={handleSort}
                 />
-                <th className="text-left px-3 py-2 mono text-[9px] uppercase tracking-[0.16em] text-[rgba(229,229,231,0.4)] whitespace-nowrap">
+                <th className="text-left px-3 py-2 mono text-[9px] uppercase tracking-[0.16em] text-text-muted whitespace-nowrap">
                   Source
                 </th>
               </tr>
@@ -722,12 +722,12 @@ export function ActionItems() {
               {sorted.map((item) => (
                 <tr
                   key={item.id}
-                  className="border-b border-[#1F1F23] hover:bg-[#1A1A1D] transition-colors cursor-pointer group"
+                  className="border-b border-border-default hover:bg-bg-raised transition-colors cursor-pointer group"
                   onClick={() => setDetail(item)}
                 >
                   {/* Checkbox — sticky on mobile; stop propagation so row click doesn't fire */}
                   <td
-                    className="px-3 py-2.5 sticky left-0 bg-[#141416] group-hover:bg-[#1A1A1D] transition-colors z-10"
+                    className="px-3 py-2.5 sticky left-0 bg-bg-card group-hover:bg-bg-raised transition-colors z-10"
                     onClick={(e) => {
                       e.stopPropagation();
                       toggleSelect(item.id);
@@ -737,21 +737,21 @@ export function ActionItems() {
                       type="checkbox"
                       checked={selected.has(item.id)}
                       onChange={() => toggleSelect(item.id)}
-                      className="accent-[#FF6B2B]"
+                      className="accent-accent-orange"
                     />
                   </td>
                   <td className="px-3 py-2.5 min-w-[180px] max-w-[280px]">
-                    <div className="mono text-[12px] text-[#E5E5E7] truncate">
+                    <div className="mono text-[12px] text-text-primary truncate">
                       {item.title}
                     </div>
                   </td>
                   <td className="px-3 py-2.5 whitespace-nowrap">
-                    <div className="mono text-[11px] text-[rgba(229,229,231,0.7)]">
+                    <div className="mono text-[11px] text-text-secondary">
                       {item.team_members?.name ?? '—'}
                     </div>
                   </td>
                   <td className="px-3 py-2.5 whitespace-nowrap">
-                    <div className="mono text-[11px] text-[rgba(229,229,231,0.6)]">
+                    <div className="mono text-[11px] text-text-secondary">
                       {item.surface ?? '—'}
                     </div>
                   </td>
@@ -764,12 +764,12 @@ export function ActionItems() {
                     </span>
                   </td>
                   <td className="px-3 py-2.5 whitespace-nowrap">
-                    <span className="mono text-[10px] text-[rgba(229,229,231,0.6)]">
+                    <span className="mono text-[10px] text-text-secondary">
                       {STATUS_LABELS[item.status] ?? item.status}
                     </span>
                   </td>
                   <td className="px-3 py-2.5 whitespace-nowrap">
-                    <span className="mono text-[11px] text-[rgba(229,229,231,0.5)]">
+                    <span className="mono text-[11px] text-text-secondary">
                       {item.due_at
                         ? new Date(item.due_at).toLocaleDateString('en-US', {
                             month: 'short',
@@ -779,7 +779,7 @@ export function ActionItems() {
                     </span>
                   </td>
                   <td className="px-3 py-2.5 whitespace-nowrap">
-                    <span className="mono text-[11px] text-[rgba(229,229,231,0.5)]">
+                    <span className="mono text-[11px] text-text-secondary">
                       {item.source ?? item.source_type ?? '—'}
                     </span>
                   </td>

@@ -1,8 +1,8 @@
 // GET  /api/atrium/cost-spikes — return cost spike alerts from nervous_system.ledger
-// POST /api/atrium/cost-spikes — acknowledge a spike (marks acknowledged=true on
-//   the linked connected_service or updates a ledger row payload).
+// POST /api/atrium/cost-spikes — acknowledge a spike
 //
-// Falls back to a stub empty array if nervous_system.ledger has no cost_spike rows.
+// Uses ns_list_cost_spikes / ns_acknowledge_cost_spike RPCs.
+// Graceful fallback to empty array on any error (spike monitoring is best-effort).
 // Sprint 5 Stream F.
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
@@ -13,105 +13,58 @@ function getServiceClient() {
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url) throw new Error('SUPABASE_URL not configured');
   if (!key) throw new Error('SUPABASE_SERVICE_ROLE_KEY not configured');
-  return createClient(url, key, { db: { schema: 'nervous_system' } });
+  return createClient(url, key);
 }
 
-export default async function handler(
-  req: VercelRequest,
-  res: VercelResponse,
-): Promise<void> {
+export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');
 
-  if (req.method === 'OPTIONS') {
-    res.status(204).end();
-    return;
-  }
+  if (req.method === 'OPTIONS') { res.status(204).end(); return; }
 
-  // ── GET ────────────────────────────────────────────────────────────────────
   if (req.method === 'GET') {
     try {
       const sb = getServiceClient();
+      const { data, error } = await sb.rpc('ns_list_cost_spikes');
+      if (error) { res.status(200).json({ spikes: [] }); return; }
 
-      // Query ledger for cost_spike signal_type
-      const { data, error } = await sb
-        .from('ledger')
-        .select('id, created_at, signal_type, source, payload')
-        .eq('signal_type', 'cost_spike')
-        .order('created_at', { ascending: false })
-        .limit(50);
-
-      if (error) {
-        // If ledger table doesn't exist yet or has no cost_spike rows, return stub
-        res.status(200).json({ spikes: [] });
-        return;
-      }
-
-      // Normalise ledger rows into spike shape
-      const spikes = (data ?? []).map((row) => {
-        const p = (row.payload ?? {}) as Record<string, unknown>;
+      const spikes = (data ?? []).map((row: Record<string, unknown>) => {
+        const ins = (row['insights'] ?? {}) as Record<string, unknown>;
         return {
-          id: row.id as string,
-          ts: row.created_at as string,
-          category: (p['category'] as string | undefined) ?? row.source ?? 'unknown',
-          service: (p['service'] as string | undefined) ?? row.source ?? '—',
-          baseline_amount: (p['baseline_amount'] as number | undefined) ?? 0,
-          spike_amount: (p['spike_amount'] as number | undefined) ?? 0,
-          spike_ratio: (p['spike_ratio'] as number | undefined) ?? 0,
-          reason: (p['reason'] as string | undefined) ?? '',
-          acknowledged: (p['acknowledged'] as boolean | undefined) ?? false,
+          id: row['id'],
+          ts: row['created_at'],
+          category: (ins['category'] as string | undefined) ?? row['source_id'] ?? 'unknown',
+          service: (ins['service'] as string | undefined) ?? row['source_id'] ?? '—',
+          baseline_amount: (ins['baseline_amount'] as number | undefined) ?? 0,
+          spike_amount: (ins['spike_amount'] as number | undefined) ?? 0,
+          spike_ratio: (ins['spike_ratio'] as number | undefined) ?? 0,
+          reason: (ins['reason'] as string | undefined) ?? (row['content_summary'] as string | undefined) ?? '',
+          acknowledged: (ins['acknowledged'] as boolean | undefined) ?? false,
         };
       });
 
       res.status(200).json({ spikes });
-    } catch (err) {
-      // Graceful fallback — spike monitoring is best-effort
-      const msg = err instanceof Error ? err.message : String(err);
-      console.error('[cost-spikes GET]', msg);
+    } catch {
       res.status(200).json({ spikes: [] });
     }
     return;
   }
 
-  // ── POST (acknowledge) ─────────────────────────────────────────────────────
   if (req.method === 'POST') {
     const body = req.body as Record<string, unknown> | undefined;
     const spikeId = body?.['id'];
-
     if (!spikeId || typeof spikeId !== 'string') {
       res.status(400).json({ error: 'Missing required field: id' });
       return;
     }
-
     try {
       const sb = getServiceClient();
-
-      // Read current payload and set acknowledged = true
-      const { data: row, error: fetchErr } = await sb
-        .from('ledger')
-        .select('payload')
-        .eq('id', spikeId)
-        .single();
-
-      if (fetchErr) throw fetchErr;
-
-      const updatedPayload = {
-        ...((row?.payload ?? {}) as Record<string, unknown>),
-        acknowledged: true,
-        acknowledged_at: new Date().toISOString(),
-      };
-
-      const { error: updateErr } = await sb
-        .from('ledger')
-        .update({ payload: updatedPayload })
-        .eq('id', spikeId);
-
-      if (updateErr) throw updateErr;
-
+      const { error } = await sb.rpc('ns_acknowledge_cost_spike', { p_id: spikeId });
+      if (error) throw error;
       res.status(200).json({ ok: true });
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
+      const msg = err instanceof Error ? err.message : typeof err === 'object' ? JSON.stringify(err) : String(err);
       res.status(500).json({ error: msg });
     }
     return;

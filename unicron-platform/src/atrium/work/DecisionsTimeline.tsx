@@ -12,7 +12,7 @@ interface DecisionRow {
   id: string;
   source_type: string;
   content_summary: string | null;
-  metadata: {
+  insights: {
     decision_type?: string;
     supersedes_id?: string;
     evidence_url?: string;
@@ -26,7 +26,7 @@ const DECISION_TYPE_COLORS: Record<DecisionType, string> = {
   tactical: '#3B82F6',
   strategic: '#F59E0B',
   irreversible: '#EF4444',
-  unknown: 'rgba(229,229,231,0.4)',
+  unknown: 'var(--text-lo)',
 };
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
@@ -46,15 +46,9 @@ function useDecisions(typeFilter: string) {
 
     async function load() {
       try {
-        let query = sb
-          .schema('nervous_system')
-          .from('ledger')
-          .select('id, source_type, content_summary, metadata, created_at')
-          .eq('source_type', 'elder_decision')
-          .order('created_at', { ascending: false })
-          .limit(100);
-
-        const { data, error: err } = await query.returns<DecisionRow[]>();
+        // PGRST106 fix: use ns_list_ledger_decisions RPC
+        const { data, error: err } = await sb
+          .rpc('ns_list_ledger_decisions', { p_limit: 100 });
         if (err) throw err;
 
         const rows = data ?? [];
@@ -64,7 +58,7 @@ function useDecisions(typeFilter: string) {
             typeFilter && typeFilter !== 'all'
               ? rows.filter(
                   (r) =>
-                    (r.metadata?.decision_type ?? 'unknown') === typeFilter,
+                    (r.insights?.decision_type ?? 'unknown') === typeFilter,
                 )
               : rows;
           setDecisions(filtered);
@@ -91,7 +85,7 @@ function useDecisions(typeFilter: string) {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function getDecisionType(row: DecisionRow): DecisionType {
-  const t = row.metadata?.decision_type;
+  const t = row.insights?.decision_type;
   if (t === 'tactical' || t === 'strategic' || t === 'irreversible') return t;
   return 'unknown';
 }
@@ -124,11 +118,11 @@ export function DecisionsTimeline() {
         {[0, 1, 2].map((i) => (
           <div key={i} className="flex gap-4">
             <div className="flex flex-col items-center">
-              <div className="w-3 h-3 rounded-full bg-[#1F1F23] animate-pulse" />
-              <div className="w-px flex-1 bg-[#1F1F23] mt-2" />
+              <div className="w-3 h-3 rounded-full bg-bg-raised animate-pulse" />
+              <div className="w-px flex-1 bg-bg-raised mt-2" />
             </div>
             <div
-              className="flex-1 h-16 bg-[#141416] rounded-xl animate-pulse mb-4"
+              className="flex-1 h-16 bg-bg-card rounded-xl animate-pulse mb-4"
               style={{ animationDelay: `${i * 100}ms` }}
             />
           </div>
@@ -147,16 +141,16 @@ export function DecisionsTimeline() {
 
   if (empty) {
     return (
-      <div className="bg-[#141416] border border-[#1F1F23] rounded-xl px-6 py-10 text-center">
+      <div className="bg-bg-card border border-border-default rounded-xl px-6 py-10 text-center">
         <div
-          className="w-8 h-8 rounded-full border-2 border-[#2A2A2E] mx-auto mb-4 flex items-center justify-center"
+          className="w-8 h-8 rounded-full border-2 border-border-hover mx-auto mb-4 flex items-center justify-center"
         >
-          <div className="w-2 h-2 rounded-full bg-[#2A2A2E]" />
+          <div className="w-2 h-2 rounded-full bg-border-strong" />
         </div>
-        <div className="mono text-[11px] uppercase tracking-[0.18em] text-[rgba(229,229,231,0.4)] mb-2">
+        <div className="mono text-[11px] uppercase tracking-[0.18em] text-text-muted mb-2">
           No decisions logged yet
         </div>
-        <div className="mono text-[11px] text-[rgba(229,229,231,0.3)] max-w-xs mx-auto leading-relaxed">
+        <div className="mono text-[11px] text-text-muted max-w-xs mx-auto leading-relaxed">
           Elder agent begins writing here in Sprint 3. Decisions are created
           when the Elder processes signals and logs a decision to the ledger.
         </div>
@@ -175,14 +169,14 @@ export function DecisionsTimeline() {
             className="mono text-[10px] uppercase tracking-[0.12em] px-3 py-1.5 rounded-lg border transition-colors"
             style={{
               borderColor:
-                typeFilter === f.value ? '#FF6B2B' : '#1F1F23',
+                typeFilter === f.value ? 'var(--accent)' : 'var(--border-default)',
               color:
                 typeFilter === f.value
-                  ? '#FF6B2B'
-                  : 'rgba(229,229,231,0.45)',
+                  ? 'var(--accent)'
+                  : 'var(--text-lo)',
               background:
                 typeFilter === f.value
-                  ? 'rgba(255,107,43,0.08)'
+                  ? 'rgba(232,118,58,0.08)'
                   : 'transparent',
             }}
           >
@@ -192,7 +186,7 @@ export function DecisionsTimeline() {
       </div>
 
       {decisions.length === 0 ? (
-        <div className="mono text-[11px] text-[rgba(229,229,231,0.4)] text-center py-8">
+        <div className="mono text-[11px] text-text-muted text-center py-8">
           No decisions match the selected filter.
         </div>
       ) : (
@@ -214,13 +208,13 @@ export function DecisionsTimeline() {
                     }}
                   />
                   {!isLast && (
-                    <div className="w-px flex-1 bg-[#1F1F23] mt-1 min-h-[2rem]" />
+                    <div className="w-px flex-1 bg-bg-raised mt-1 min-h-[2rem]" />
                   )}
                 </div>
 
                 {/* Entry card */}
                 <div className="flex-1 pb-6">
-                  <div className="bg-[#141416] border border-[#1F1F23] rounded-xl px-5 py-4">
+                  <div className="bg-bg-card border border-border-default rounded-xl px-5 py-4">
                     {/* Header row */}
                     <div className="flex items-center justify-between gap-3 mb-2">
                       <div className="flex items-center gap-2">
@@ -234,34 +228,34 @@ export function DecisionsTimeline() {
                           {dtype}
                         </span>
                       </div>
-                      <div className="mono text-[10px] text-[rgba(229,229,231,0.4)]">
+                      <div className="mono text-[10px] text-text-muted">
                         {formatDate(row.created_at)}
                       </div>
                     </div>
 
                     {/* Summary */}
-                    <div className="mono text-[12px] text-[rgba(229,229,231,0.85)] leading-relaxed">
+                    <div className="mono text-[12px] text-text-primary leading-relaxed">
                       {row.content_summary ?? 'No summary.'}
                     </div>
 
                     {/* Supersedes link */}
-                    {row.metadata?.supersedes_id && (
-                      <div className="mt-2 mono text-[10px] text-[rgba(229,229,231,0.4)]">
+                    {row.insights?.supersedes_id && (
+                      <div className="mt-2 mono text-[10px] text-text-muted">
                         supersedes:{' '}
-                        <span className="font-mono text-[rgba(229,229,231,0.5)]">
-                          {row.metadata.supersedes_id}
+                        <span className="font-mono text-text-secondary">
+                          {row.insights.supersedes_id}
                         </span>
                       </div>
                     )}
 
                     {/* Evidence link */}
-                    {row.metadata?.evidence_url && (
+                    {row.insights?.evidence_url && (
                       <div className="mt-2">
                         <a
-                          href={row.metadata.evidence_url}
+                          href={row.insights.evidence_url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="mono text-[10px] text-[#FF6B2B] hover:underline"
+                          className="mono text-[10px] text-accent-orange hover:underline"
                         >
                           Evidence link →
                         </a>

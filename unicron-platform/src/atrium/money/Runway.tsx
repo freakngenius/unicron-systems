@@ -78,20 +78,20 @@ function RunwayChart({
   return (
     <div>
       <div className="flex items-baseline justify-between mb-3">
-        <span className="mono text-[11px] uppercase tracking-[0.14em] text-[rgba(229,229,231,0.4)]">
+        <span className="mono text-[11px] uppercase tracking-[0.14em] text-text-muted">
           24-month burn-down
         </span>
-        <span className="mono text-[11px] text-[rgba(229,229,231,0.5)]">
+        <span className="mono text-[11px] text-text-secondary">
           Runway:{' '}
           <span
             className="font-semibold"
             style={{
               color:
                 runwayMonths > 12
-                  ? '#22C55E'
+                  ? '#4FB286'
                   : runwayMonths > 6
-                  ? '#F59E0B'
-                  : '#EF4444',
+                  ? '#D9A23A'
+                  : '#DD6262',
             }}
           >
             {runwayMonths >= months.length
@@ -121,7 +121,7 @@ function RunwayChart({
               y={padT + t * innerH + 4}
               textAnchor="end"
               fontSize="10"
-              fill="rgba(229,229,231,0.35)"
+              fill="rgba(255,255,255,0.22)"
             >
               ${Math.round(((1 - t) * maxCash) / 1000)}k
             </text>
@@ -129,9 +129,9 @@ function RunwayChart({
         ))}
 
         {/* Fill */}
-        <path d={fillD} fill="#3B82F6" opacity={0.1} />
+        <path d={fillD} fill="#6F95D6" opacity={0.1} />
         {/* Line */}
-        <path d={pathD} stroke="#3B82F6" strokeWidth="2" fill="none" />
+        <path d={pathD} stroke="#6F95D6" strokeWidth="2" fill="none" />
 
         {/* Runway-end vertical */}
         {endX !== null && (
@@ -141,7 +141,7 @@ function RunwayChart({
               x2={endX}
               y1={padT}
               y2={padT + innerH}
-              stroke="#EF4444"
+              stroke="#DD6262"
               strokeWidth="1.5"
               strokeDasharray="4 3"
             />
@@ -150,7 +150,7 @@ function RunwayChart({
               y={padT - 7}
               textAnchor="middle"
               fontSize="11"
-              fill="#EF4444"
+              fill="#DD6262"
               fontWeight="600"
             >
               Runway end
@@ -171,7 +171,7 @@ function RunwayChart({
                 y={H - 10}
                 textAnchor="middle"
                 fontSize="10"
-                fill="rgba(229,229,231,0.35)"
+                fill="rgba(255,255,255,0.22)"
               >
                 {m.label}
               </text>
@@ -295,16 +295,16 @@ export function Runway() {
   }
 
   const runwayColor =
-    runwayMonths > 12 ? '#22C55E' : runwayMonths > 6 ? '#F59E0B' : '#EF4444';
+    runwayMonths > 12 ? '#4FB286' : runwayMonths > 6 ? '#D9A23A' : '#DD6262';
 
   const inputCls =
-    'bg-[#141416] border border-[#1F1F23] rounded-lg px-3 py-2 mono text-[13px] text-[#E5E5E7] focus:outline-none focus:border-[#FF6B2B] transition-colors w-full';
+    'bg-bg-card border border-border-default rounded-lg px-3 py-2 mono text-[13px] text-text-primary focus:outline-none focus:border-accent transition-colors w-full';
 
   if (loading) {
     return (
       <div className="space-y-2">
         {[0, 1, 2].map((i) => (
-          <div key={i} className="h-16 bg-[#141416] rounded-xl animate-pulse" />
+          <div key={i} className="h-16 bg-bg-card rounded-xl animate-pulse" />
         ))}
       </div>
     );
@@ -313,16 +313,16 @@ export function Runway() {
   return (
     <div className="space-y-6">
       {error && (
-        <div className="bg-[#EF4444]/10 border border-[#EF4444]/30 rounded-xl px-4 py-3">
-          <div className="mono text-[11px] text-[#EF4444]">{error}</div>
+        <div className="bg-[#DD6262]/10 border border-[#DD6262]/30 rounded-xl px-4 py-3">
+          <div className="mono text-[11px] text-[#DD6262]">{error}</div>
         </div>
       )}
 
       {/* Inputs + big numbers */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {/* Cash on hand */}
-        <div className="bg-[#141416] border border-[#1F1F23] rounded-xl p-4">
-          <div className="mono text-[9px] uppercase tracking-[0.16em] text-[rgba(229,229,231,0.4)] mb-2">
+        <div className="bg-bg-card border border-border-default rounded-xl p-4">
+          <div className="mono text-[9px] uppercase tracking-[0.16em] text-text-muted mb-2">
             Cash on hand
           </div>
           <input
@@ -335,14 +335,14 @@ export function Runway() {
             onChange={(e) => setCashInput(e.target.value)}
             onBlur={() => void saveConfig()}
           />
-          <div className="mono text-[11px] text-[rgba(229,229,231,0.35)] mt-1.5">
+          <div className="mono text-[11px] text-text-muted mt-1.5">
             e.g. 524000
           </div>
         </div>
 
         {/* Payroll (manual) */}
-        <div className="bg-[#141416] border border-[#1F1F23] rounded-xl p-4">
-          <div className="mono text-[9px] uppercase tracking-[0.16em] text-[rgba(229,229,231,0.4)] mb-2">
+        <div className="bg-bg-card border border-border-default rounded-xl p-4">
+          <div className="mono text-[9px] uppercase tracking-[0.16em] text-text-muted mb-2">
             Monthly payroll (manual)
           </div>
           <input
@@ -355,14 +355,14 @@ export function Runway() {
             onChange={(e) => setPayrollInput(e.target.value)}
             onBlur={() => void saveConfig()}
           />
-          <div className="mono text-[11px] text-[rgba(229,229,231,0.35)] mt-1.5">
+          <div className="mono text-[11px] text-text-muted mt-1.5">
             Contractors, salary
           </div>
         </div>
 
         {/* Runway big number */}
-        <div className="bg-[#141416] border border-[#1F1F23] rounded-xl p-4 flex flex-col justify-between">
-          <div className="mono text-[9px] uppercase tracking-[0.16em] text-[rgba(229,229,231,0.4)] mb-2">
+        <div className="bg-bg-card border border-border-default rounded-xl p-4 flex flex-col justify-between">
+          <div className="mono text-[9px] uppercase tracking-[0.16em] text-text-muted mb-2">
             Runway
           </div>
           <div>
@@ -372,7 +372,7 @@ export function Runway() {
             >
               {runwayMonths >= 999 ? '∞' : runwayMonths}
             </div>
-            <div className="mono text-[11px] text-[rgba(229,229,231,0.4)] mt-1">
+            <div className="mono text-[11px] text-text-muted mt-1">
               months · ${totalBurn.toLocaleString()}/mo burn
             </div>
           </div>
@@ -380,33 +380,33 @@ export function Runway() {
       </div>
 
       {/* Burn breakdown */}
-      <div className="bg-[#141416] border border-[#1F1F23] rounded-xl p-4">
-        <div className="mono text-[9px] uppercase tracking-[0.16em] text-[rgba(229,229,231,0.4)] mb-3">
+      <div className="bg-bg-card border border-border-default rounded-xl p-4">
+        <div className="mono text-[9px] uppercase tracking-[0.16em] text-text-muted mb-3">
           Burn breakdown
         </div>
         <div className="space-y-2">
           <div className="flex justify-between">
-            <span className="mono text-[12px] text-[rgba(229,229,231,0.6)]">
+            <span className="mono text-[12px] text-text-secondary">
               Connected services ({services.length})
             </span>
-            <span className="mono text-[12px] text-[#E5E5E7] tabular-nums">
+            <span className="mono text-[12px] text-text-primary tabular-nums">
               ${servicesBurn.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/mo
             </span>
           </div>
           <div className="flex justify-between">
-            <span className="mono text-[12px] text-[rgba(229,229,231,0.6)]">
+            <span className="mono text-[12px] text-text-secondary">
               Payroll (manual)
             </span>
-            <span className="mono text-[12px] text-[#E5E5E7] tabular-nums">
+            <span className="mono text-[12px] text-text-primary tabular-nums">
               ${config.manual_payroll.toLocaleString()}/mo
             </span>
           </div>
-          <div className="h-px bg-[#1F1F23] my-1" />
+          <div className="h-px bg-bg-raised my-1" />
           <div className="flex justify-between">
-            <span className="mono text-[11px] font-semibold text-[#E5E5E7]">
+            <span className="mono text-[11px] font-semibold text-text-primary">
               Total burn
             </span>
-            <span className="mono text-[12px] font-semibold text-[#E5E5E7] tabular-nums">
+            <span className="mono text-[12px] font-semibold text-text-primary tabular-nums">
               ${totalBurn.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/mo
             </span>
           </div>
@@ -418,14 +418,14 @@ export function Runway() {
         <button
           onClick={() => void saveConfig()}
           disabled={saving}
-          className="mono text-[10px] uppercase tracking-[0.12em] px-4 py-2 bg-[#FF6B2B] text-white rounded-lg hover:bg-[#e55a1a] transition-colors disabled:opacity-40"
+          className="mono text-[10px] uppercase tracking-[0.12em] px-4 py-2 bg-accent-orange text-white rounded-lg hover:bg-[#e55a1a] transition-colors disabled:opacity-40"
         >
           {saving ? '…' : 'Save'}
         </button>
       </div>
 
       {/* Burn-down chart */}
-      <div className="bg-[#141416] border border-[#1F1F23] rounded-xl p-5">
+      <div className="bg-bg-card border border-border-default rounded-xl p-5">
         <RunwayChart cashOnHand={config.cash_on_hand} monthlyBurn={totalBurn} />
       </div>
     </div>
