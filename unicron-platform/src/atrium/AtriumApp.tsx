@@ -13,6 +13,7 @@ import { AtriumLogin } from './AtriumLogin';
 import { AtriumLayout, AtriumPlaceholder, type AtriumTab } from './AtriumLayout';
 import { AtriumNow } from './AtriumNow';
 import { Money } from './Money';
+import { People } from './People';
 import { System } from './System';
 import { Work } from './Work';
 
@@ -68,6 +69,8 @@ export function AtriumApp() {
     <AtriumLayout activeTab={activeTab} onTabChange={setActiveTab}>
       {activeTab === 'now' ? (
         <AtriumNow name={displayName} />
+      ) : activeTab === 'people' ? (
+        <People />
       ) : activeTab === 'system' ? (
         <System />
       ) : activeTab === 'work' ? (
