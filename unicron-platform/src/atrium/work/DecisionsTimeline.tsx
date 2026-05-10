@@ -20,13 +20,30 @@ interface DecisionRow {
   created_at: string;
 }
 
-type DecisionType = 'tactical' | 'strategic' | 'irreversible' | 'unknown';
+type DecisionType =
+  | 'customer_promise'
+  | 'architectural_decision'
+  | 'public_statement'
+  | 'partnership'
+  | 'regulatory'
+  | 'unknown';
 
 const DECISION_TYPE_COLORS: Record<DecisionType, string> = {
-  tactical: '#3B82F6',
-  strategic: '#F59E0B',
-  irreversible: '#EF4444',
-  unknown: 'var(--text-lo)',
+  customer_promise:       '#E8763A',
+  architectural_decision: '#7355E5',
+  public_statement:       '#2E6CD4',
+  partnership:            '#1F8A5B',
+  regulatory:             '#D14848',
+  unknown:                'var(--text-lo)',
+};
+
+const DECISION_TYPE_LABELS: Record<DecisionType, string> = {
+  customer_promise:       'Customer promise',
+  architectural_decision: 'Architecture',
+  public_statement:       'Public statement',
+  partnership:            'Partnership',
+  regulatory:             'Regulatory',
+  unknown:                'Unknown',
 };
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
@@ -86,7 +103,13 @@ function useDecisions(typeFilter: string) {
 
 function getDecisionType(row: DecisionRow): DecisionType {
   const t = row.insights?.decision_type;
-  if (t === 'tactical' || t === 'strategic' || t === 'irreversible') return t;
+  if (
+    t === 'customer_promise' ||
+    t === 'architectural_decision' ||
+    t === 'public_statement' ||
+    t === 'partnership' ||
+    t === 'regulatory'
+  ) return t;
   return 'unknown';
 }
 
@@ -105,11 +128,13 @@ export function DecisionsTimeline() {
   const [typeFilter, setTypeFilter] = useState<string>('all');
   const { decisions, loading, error, empty } = useDecisions(typeFilter);
 
-  const TYPE_FILTERS = [
+  const TYPE_FILTERS: Array<{ value: string; label: string; color?: string }> = [
     { value: 'all', label: 'All' },
-    { value: 'tactical', label: 'Tactical' },
-    { value: 'strategic', label: 'Strategic' },
-    { value: 'irreversible', label: 'Irreversible' },
+    { value: 'customer_promise',       label: 'Customer promise',  color: '#E8763A' },
+    { value: 'architectural_decision', label: 'Architecture',      color: '#7355E5' },
+    { value: 'public_statement',       label: 'Public statement',  color: '#2E6CD4' },
+    { value: 'partnership',            label: 'Partnership',       color: '#1F8A5B' },
+    { value: 'regulatory',             label: 'Regulatory',        color: '#D14848' },
   ];
 
   if (loading) {
@@ -162,27 +187,34 @@ export function DecisionsTimeline() {
     <div>
       {/* Type filter */}
       <div className="flex gap-2 mb-6 flex-wrap">
-        {TYPE_FILTERS.map((f) => (
-          <button
-            key={f.value}
-            onClick={() => setTypeFilter(f.value)}
-            className="mono text-[10px] uppercase tracking-[0.12em] px-3 py-1.5 rounded-lg border transition-colors"
-            style={{
-              borderColor:
-                typeFilter === f.value ? 'var(--accent)' : 'var(--border-default)',
-              color:
-                typeFilter === f.value
-                  ? 'var(--accent)'
-                  : 'var(--text-lo)',
-              background:
-                typeFilter === f.value
-                  ? 'rgba(232,118,58,0.08)'
-                  : 'transparent',
-            }}
-          >
-            {f.label}
-          </button>
-        ))}
+        {TYPE_FILTERS.map((f) => {
+          const active = typeFilter === f.value;
+          const c = f.color ?? 'var(--accent)';
+          return (
+            <button
+              key={f.value}
+              onClick={() => setTypeFilter(f.value)}
+              className="inline-flex items-center gap-1.5 mono text-[10px] px-3 py-1.5 rounded-full border transition-colors"
+              style={{
+                borderColor: active ? `${c}55` : 'var(--border-default)',
+                color: active ? c : 'var(--text-lo)',
+                background: active ? `${c}12` : 'transparent',
+              }}
+            >
+              {f.color && (
+                <span
+                  style={{
+                    width: 7, height: 7, borderRadius: 999,
+                    background: f.color,
+                    opacity: active ? 1 : 0.4,
+                    flexShrink: 0,
+                  }}
+                />
+              )}
+              {f.label}
+            </button>
+          );
+        })}
       </div>
 
       {decisions.length === 0 ? (
@@ -225,7 +257,7 @@ export function DecisionsTimeline() {
                             background: `${dotColor}18`,
                           }}
                         >
-                          {dtype}
+                          {DECISION_TYPE_LABELS[dtype]}
                         </span>
                       </div>
                       <div className="mono text-[10px] text-text-muted">
