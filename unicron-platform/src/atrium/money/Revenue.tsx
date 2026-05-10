@@ -155,16 +155,12 @@ export function Revenue() {
     setLoading(true);
     setError(null);
     try {
-      const sb = getSupabase();
-      const { data, error: err } = await sb
-        .schema('nervous_system')
-        .from('customers')
-        .select('id, name, status, deal_value, arr, mrr, health_score')
-        .in('status', ['Proposal', 'Contract', 'Active', 'Expansion'])
-        .returns<Customer[]>();
+      // PGRST106 fix: use ns_list_customers_pipeline RPC
+      const { data, error: err } = await getSupabase()
+        .rpc('ns_list_customers_pipeline');
 
       if (err) throw err;
-      setCustomers(data ?? []);
+      setCustomers((data as Customer[] | null) ?? []);
     } catch (e) {
       // customers table may not have deal_value — show empty state gracefully
       setCustomers([]);

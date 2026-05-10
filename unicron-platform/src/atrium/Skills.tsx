@@ -214,7 +214,6 @@ function useBudgetData() {
 
     async function load() {
       try {
-        // PGRST106 fix: use ns_list_agents_active RPC
         const { data } = await getSupabase()
           .rpc('ns_list_agents_active')
           .returns<AgentBudgetRow[]>();
@@ -222,7 +221,7 @@ function useBudgetData() {
         if (cancelled) return;
         let spent = 0;
         let limit = 0;
-        (data ?? []).forEach((a) => {
+        ((data as AgentBudgetRow[] | null) ?? []).forEach((a) => {
           if (a.budget) {
             spent += a.budget.current_spent_usd ?? 0;
             limit += a.budget.limit_usd_per_period ?? 0;

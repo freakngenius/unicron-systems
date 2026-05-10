@@ -145,35 +145,28 @@ function usePulseData(): PulseData {
 
     async function load() {
       try {
+        // PGRST106 fix: nervous_system is not in PostgREST db-schemas.
+        // Use public.ns_* SECURITY DEFINER RPCs instead of .schema('nervous_system').
+
         // 1. Agent fleet — active agents, check status field for errors
         const { data: agents } = await sb
-          .schema('nervous_system')
-          .from('agents')
-          .select('id, name, active, status, budget')
-          .eq('active', true)
-          .returns<AgentRow[]>();
+          .rpc('ns_list_agents_active');
 
-        const activeAgents = agents ?? [];
+        const activeAgents = (agents as AgentRow[] | null) ?? [];
         const hasError = activeAgents.some((a) => a.status === 'error');
         const agentStatus: 'green' | 'yellow' | 'red' =
           hasError ? 'red' : activeAgents.length === 0 ? 'yellow' : 'green';
 
         // 2. Escalations — audit_log action contains 'escalation' in last 24h
         const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-        const { count: escalationCount } = await sb
-          .schema('nervous_system')
-          .from('audit_log')
-          .select('id', { count: 'exact', head: true })
-          .like('action', '%escalation%')
-          .gte('created_at', since24h);
+        const { data: escalationData } = await sb
+          .rpc('ns_count_audit_log_escalations', { p_since: since24h });
+        const escalationCount = Number(escalationData ?? 0);
 
         // 3. Decay alerts — ledger rows where decay_at < now and status != 'archived'
-        const { count: decayCount } = await sb
-          .schema('nervous_system')
-          .from('ledger')
-          .select('id', { count: 'exact', head: true })
-          .lt('decay_at', new Date().toISOString())
-          .neq('status', 'archived');
+        const { data: decayData } = await sb
+          .rpc('ns_count_ledger_decay');
+        const decayCount = Number(decayData ?? 0);
 
         if (cancelled) return;
 
@@ -2246,18 +2239,17 @@ export function Now({ name }: Props) {
   const [teamMemberId, setTeamMemberId] = useState<string | null>(null);
 
   // Resolve team_member id from auth email
+  // PGRST106 fix: use ns_get_team_member_by_email RPC instead of .schema('nervous_system')
   useEffect(() => {
     if (auth.status !== 'signed-in') return;
     const email = auth.user.email;
     if (!email) return;
-    const sb = getSupabase();
-    sb
-      .schema('nervous_system')
-      .from('team_members')
-      .select('id')
-      .eq('email', email)
-      .maybeSingle()
-      .then(({ data }) => setTeamMemberId(data?.id ?? null));
+    getSupabase()
+      .rpc('ns_get_team_member_by_email', { p_email: email })
+      .then(({ data }) => {
+        const rows = data as Array<{ id: string }> | null;
+        setTeamMemberId(rows?.[0]?.id ?? null);
+      });
   }, [auth.status]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Global keyboard shortcuts

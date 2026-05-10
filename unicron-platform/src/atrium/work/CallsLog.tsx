@@ -10,10 +10,10 @@ interface LedgerRow {
   id: string;
   source_type: string;
   content_summary: string | null;
-  raw_content: string | null;
-  metadata: Record<string, unknown> | null;
+  content_full: string | null;
+  insights: Record<string, unknown> | null;
   created_at: string;
-  customer: string | null;
+  customer_id: string | null;
 }
 
 interface ActionItemRow {
@@ -27,11 +27,11 @@ interface ActionItemRow {
 
 function isVoiceCall(row: LedgerRow): boolean {
   if (row.source_type === 'voice_memo') return true;
-  if (!row.metadata) return false;
+  if (!row.insights) return false;
   return (
-    row.metadata['channel'] === 'voice' ||
-    Boolean(row.metadata['voice_agent']) ||
-    row.metadata['via'] === 'voice'
+    row.insights['channel'] === 'voice' ||
+    Boolean(row.insights['voice_agent']) ||
+    row.insights['via'] === 'voice'
   );
 }
 
@@ -47,24 +47,24 @@ function formatRelativeTime(iso: string): string {
   return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-function getParticipants(metadata: Record<string, unknown> | null): string {
-  if (!metadata) return '—';
-  const p = metadata['participants'];
+function getParticipants(insights: Record<string, unknown> | null): string {
+  if (!insights) return '—';
+  const p = insights['participants'];
   if (Array.isArray(p)) return p.join(', ');
   if (typeof p === 'string') return p;
   return '—';
 }
 
-function getDecisions(metadata: Record<string, unknown> | null): string[] {
-  if (!metadata) return [];
-  const d = metadata['decisions'];
+function getDecisions(insights: Record<string, unknown> | null): string[] {
+  if (!insights) return [];
+  const d = insights['decisions'];
   if (Array.isArray(d)) return d.map(String);
   return [];
 }
 
-function getQuotes(metadata: Record<string, unknown> | null): string[] {
-  if (!metadata) return [];
-  const q = metadata['quotes'];
+function getQuotes(insights: Record<string, unknown> | null): string[] {
+  if (!insights) return [];
+  const q = insights['quotes'];
   if (Array.isArray(q)) return q.map(String);
   return [];
 }
@@ -85,19 +85,12 @@ function useCallsLog(searchQuery: string) {
 
     async function load() {
       try {
-        let query = sb
-          .schema('nervous_system')
-          .from('ledger')
-          .select('id, source_type, content_summary, raw_content, metadata, created_at, customer')
-          .in('source_type', ['call', 'voice_memo'])
-          .order('created_at', { ascending: false })
-          .limit(100);
-
-        if (searchQuery.trim()) {
-          query = query.ilike('content_summary', `%${searchQuery.trim()}%`);
-        }
-
-        const { data, error: err } = await query.returns<LedgerRow[]>();
+        // PGRST106 fix: use ns_list_ledger_calls RPC
+        const { data, error: err } = await sb
+          .rpc('ns_list_ledger_calls', {
+            p_search: searchQuery.trim() || null,
+            p_limit: 100,
+          });
         if (err) throw err;
         if (!cancelled) setCalls(data ?? []);
       } catch (e) {
@@ -123,14 +116,11 @@ function useCallDetail(callId: string | null) {
     let cancelled = false;
     setLoading(true);
 
+    // PGRST106 fix: use ns_list_action_items_by_ledger RPC
     getSupabase()
-      .schema('nervous_system')
-      .from('action_items')
-      .select('id, title, priority, status')
-      .eq('ledger_id', callId)
-      .returns<ActionItemRow[]>()
+      .rpc('ns_list_action_items_by_ledger', { p_ledger_id: callId })
       .then(({ data }) => {
-        if (!cancelled) { setActionItems(data ?? []); setLoading(false); }
+        if (!cancelled) { setActionItems((data as ActionItemRow[] | null) ?? []); setLoading(false); }
       }, () => { if (!cancelled) setLoading(false); });
 
     return () => { cancelled = true; };
@@ -169,9 +159,9 @@ function VoiceBadge() {
 
 function CallDetailPanel({ call, onClose }: { call: LedgerRow; onClose: () => void }) {
   const { actionItems, loading: aiLoading } = useCallDetail(call.id);
-  const participants = getParticipants(call.metadata);
-  const decisions = getDecisions(call.metadata);
-  const quotes = getQuotes(call.metadata);
+  const participants = getParticipants(call.insights);
+  const decisions = getDecisions(call.insights);
+  const quotes = getQuotes(call.insights);
   const voice = isVoiceCall(call);
 
   return (
@@ -202,7 +192,6 @@ function CallDetailPanel({ call, onClose }: { call: LedgerRow; onClose: () => vo
         <div className="space-y-1.5">
           {[
             { label: 'Participants', value: participants },
-            { label: 'Customer', value: call.customer ?? '—' },
           ].map(({ label, value }) => (
             <div key={label} className="flex items-baseline gap-3">
               <div className="mono text-[9px] uppercase tracking-[0.16em] text-[rgba(229,229,231,0.4)] w-24 shrink-0">{label}</div>
@@ -268,11 +257,11 @@ function CallDetailPanel({ call, onClose }: { call: LedgerRow; onClose: () => vo
         )}
 
         {/* Transcript */}
-        {call.raw_content && (
+        {call.content_full && (
           <div>
             <div className="mono text-[9px] uppercase tracking-[0.16em] text-[rgba(229,229,231,0.4)] mb-1.5">Transcript</div>
             <div className="bg-[#1A1A1D] border border-[#1F1F23] rounded-lg p-3 max-h-64 overflow-y-auto">
-              <pre className="mono text-[10px] text-[rgba(229,229,231,0.7)] whitespace-pre-wrap leading-relaxed">{call.raw_content}</pre>
+              <pre className="mono text-[10px] text-[rgba(229,229,231,0.7)] whitespace-pre-wrap leading-relaxed">{call.content_full}</pre>
             </div>
           </div>
         )}
@@ -361,17 +350,12 @@ export function CallsLog() {
                         <span className="mono text-[9px] uppercase tracking-[0.14em] text-[rgba(229,229,231,0.4)]">
                           {formatRelativeTime(call.created_at)}
                         </span>
-                        {call.customer && (
-                          <span className="mono text-[9px] uppercase tracking-[0.12em] text-[#FF6B2B]">
-                            {call.customer}
-                          </span>
-                        )}
                       </div>
                       <div className={`mono text-[11px] text-[rgba(229,229,231,0.8)] leading-relaxed ${detail ? 'line-clamp-2' : 'line-clamp-2'}`}>
                         {call.content_summary
                           ? call.content_summary.slice(0, 160)
-                          : call.raw_content
-                          ? call.raw_content.slice(0, 160)
+                          : call.content_full
+                          ? call.content_full.slice(0, 160)
                           : 'No summary available.'}
                       </div>
                     </div>
