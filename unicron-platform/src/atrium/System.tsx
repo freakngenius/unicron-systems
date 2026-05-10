@@ -10,6 +10,7 @@ import ServicesHealth from './system/ServicesHealth';
 import AuditLogComponent from './system/AuditLog';
 import DecayHeatmapComponent from './system/DecayHeatmap';
 import ScheduledJobsComponent from './system/ScheduledJobs';
+import VoiceTabComponent from './system/VoiceTab';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -21,17 +22,6 @@ type SystemTab = (typeof SYSTEM_TABS)[number];
 
 // ─── Static demo data ─────────────────────────────────────────────────────────
 
-const VOICE_AGENTS = [
-  { name: 'Discovery (inbound)', role: 'Inbound discovery calls',   last: 'May 7 · 11:42', cost: 0.84, success: 0.96, runs: 88  },
-  { name: 'SDR Outbound',        role: 'Cold outbound prospecting', last: 'May 7 · 13:18', cost: 1.12, success: 0.71, runs: 142 },
-  { name: 'Procurement Pull',    role: 'Cron-driven bid pulls',     last: 'May 7 · 14:30', cost: 1.62, success: 0.83, runs: 261 },
-];
-
-const VOICE_SERVICES = [
-  { name: 'Vapi',       status: 'ok',   latency: '284ms', quota: '38%', errRate: '0.4%', note: undefined                   },
-  { name: 'ElevenLabs', status: 'warn', latency: '612ms', quota: '71%', errRate: '1.2%', note: 'p95 latency above SLA'     },
-  { name: 'Deepgram',   status: 'ok',   latency: '118ms', quota: '22%', errRate: '0.1%', note: undefined                   },
-];
 
 
 const MEMORY_RESULTS = [
@@ -59,71 +49,6 @@ const KIND_COLOR: Record<string, string> = {
   override: '#E8763A',
   refusal:  '#E14B4B',
 };
-
-// ─── Voice tab ────────────────────────────────────────────────────────────────
-
-function VoiceTab() {
-  return (
-    <div className="flex flex-col gap-5">
-      <div className="bg-bg-card border border-border-default rounded-xl overflow-hidden">
-        <div className="px-5 py-3.5 border-b border-border-subtle">
-          <div className="mono text-[14px] font-semibold text-text-primary">Voice agents</div>
-          <div className="mono text-[11.5px] text-text-secondary mt-0.5">{VOICE_AGENTS.length} active · Vapi orchestration</div>
-        </div>
-        {VOICE_AGENTS.map((a, i) => (
-          <div key={a.name} className={`flex items-center gap-4 px-5 py-3.5 ${i > 0 ? 'border-t border-border-subtle' : ''}`}>
-            <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: '#E8763A' }} />
-            <div className="flex-1 min-w-0">
-              <div className="mono text-[13px] font-medium text-text-primary">{a.name}</div>
-              <div className="mono text-[11.5px] text-text-secondary mt-0.5">{a.role}</div>
-            </div>
-            <div className="text-right flex-shrink-0">
-              <div className="mono text-[12.5px] text-text-primary">{Math.round(a.success * 100)}% structured</div>
-              <div className="mono text-[11px] text-text-secondary">${a.cost.toFixed(2)}/call · {a.runs} runs</div>
-            </div>
-            <div className="mono text-[11px] text-text-secondary flex-shrink-0 hidden sm:block">last {a.last}</div>
-          </div>
-        ))}
-      </div>
-
-      <div className="bg-bg-card border border-border-default rounded-xl overflow-hidden">
-        <div className="px-5 py-3.5 border-b border-border-subtle">
-          <div className="mono text-[14px] font-semibold text-text-primary">Voice services</div>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse" style={{ minWidth: 560 }}>
-            <thead>
-              <tr>
-                {['Service', 'Status', 'Latency', 'Quota', 'Err rate', 'Note'].map((h, i) => (
-                  <th key={i} className="text-left px-5 py-2.5 mono text-[11.5px] text-text-secondary border-b border-border-default font-medium">
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {VOICE_SERVICES.map((s, i) => (
-                <tr key={s.name} className={i > 0 ? 'border-t border-border-subtle' : ''}>
-                  <td className="px-5 py-3 mono text-[13px] font-medium text-text-primary">{s.name}</td>
-                  <td className="px-5 py-3">
-                    <span className="flex items-center gap-1.5 mono text-[12.5px]" style={{ color: s.status === 'ok' ? '#4FB286' : '#D9A23A' }}>
-                      <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: s.status === 'ok' ? '#4FB286' : '#D9A23A' }} />
-                      {s.status === 'ok' ? 'Healthy' : 'Degraded'}
-                    </span>
-                  </td>
-                  <td className="px-5 py-3 mono text-[12.5px] text-text-secondary">{s.latency}</td>
-                  <td className="px-5 py-3 mono text-[12.5px] text-text-secondary">{s.quota}</td>
-                  <td className="px-5 py-3 mono text-[12.5px] text-text-secondary">{s.errRate}</td>
-                  <td className="px-5 py-3 mono text-[11.5px] text-text-secondary">{s.note ?? '—'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 // ─── Decay heatmap — live component imported from system/DecayHeatmap.tsx ─────
 // (Sprint 7 Stream C — replaced static stub with DB-backed component)
@@ -333,7 +258,7 @@ export function System() {
         {active === 'Taboos'         && <TaboosViewer />}
         {active === 'Refusal Log'    && <RefusalLog />}
         {active === 'Services'       && <ServicesHealth />}
-        {active === 'Voice'          && <VoiceTab />}
+        {active === 'Voice'          && <VoiceTabComponent />}
         {active === 'Decay'          && <DecayHeatmapComponent />}
         {active === 'Memory'         && <MemorySearch />}
         {active === 'Scheduled Jobs' && <ScheduledJobsComponent />}
