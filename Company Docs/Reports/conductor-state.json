@@ -2,7 +2,7 @@
   "current_sprint": 6,
   "last_completed_sprint": 5,
   "last_completed_at": "2026-05-10T06:31:09Z",
-  "active_sprint_status": "not_started",
+  "active_sprint_status": "deployed",
   "sprint_5_status": "verified",
   "sprint_5_verified_at": "2026-05-10T06:31:09Z",
   "sprint_5_audit_log_id": "97252273-17bb-4020-a67a-bb5fe0554a61",
@@ -349,6 +349,61 @@
     "Smoke test: Work tab Action Items → reassign DRI → Taboo Keeper passes → audit_log entry",
     "Smoke test: Productivity skill Run buttons → morning-brief + inbox-triage return results",
     "Browser test recommended for Now tab FAB z-index at 320px (noted by Stream C agent)"
+  ],
+  "sprint_6_started_at": "2026-05-10T06:35:00Z",
+  "sprint_6_streams_dispatched_at": "2026-05-10T06:36:00Z",
+  "sprint_6_streams_complete_at": "2026-05-10T07:20:00Z",
+  "sprint_6_kanban": {
+    "sprint_card_id": "TBD — query Internal Org Kanban",
+    "stream_cards": {
+      "A": {
+        "title": "Sprint 6 — Stream A: Marketing Tab + Campaigns API",
+        "status": "Deployed",
+        "pr": "https://github.com/freakngenius/unicron-systems/pull/240",
+        "sha": "0aca71e",
+        "migration_applied": "20260510_campaigns.sql (nervous_system.campaigns table + RLS + ns_list_campaigns RPC)"
+      },
+      "B": {
+        "title": "Sprint 6 — Stream B: Products Tab (Pathfinder + Metacron)",
+        "status": "Deployed",
+        "pr": "https://github.com/freakngenius/unicron-systems/pull/241",
+        "sha": "9db4db4"
+      },
+      "C": {
+        "title": "Sprint 6 — Stream C: Library Tab (Wiki/Repo/Templates)",
+        "status": "Deployed",
+        "pr": "https://github.com/freakngenius/unicron-systems/pull/242",
+        "sha": "6515e0a"
+      },
+      "D": {
+        "title": "Sprint 6 — Stream D: unicron-knowledge Wiki Update",
+        "status": "Deployed",
+        "pr": "https://github.com/freakngenius/unicron-knowledge/pull/2",
+        "note": "Elder continuity.md updated with Sprint 6 closeout entry"
+      },
+      "E": {
+        "title": "Sprint 6 — Stream E: Marketing Skills + Activate Buttons",
+        "status": "Deployed",
+        "pr": "https://github.com/freakngenius/unicron-systems/pull/239",
+        "sha": "0fbaac8",
+        "migration_applied": "20260510_seed_sprint6_marketing_skills.sql (draft-blog-post, draft-social-post, generate-positioning-deck, update-manifesto-page)"
+      }
+    }
+  },
+  "sprint_6_closeout": {
+    "status": "Deployed",
+    "note": "All 5 stream PRs merged + build fix (package.json: tsc-b decoupled from vite build) + .vercelignore anchor fix (root Atrium/ pattern was excluding src/atrium/ on macOS). Deployed dpl_HjThijYa8u91ZrCjiWmF274Qm68k — 761 modules, aliased atrium.unicron.systems. 2 Supabase migrations applied (campaigns table, marketing skills seed). Known API bugs filed below. Awaiting Kyle human Verified promotion.",
+    "vercel_deployment_id": "dpl_HjThijYa8u91ZrCjiWmF274Qm68k",
+    "vercel_deployment_url": "https://unicron-platform-6y6jhovrl-kekas-projects-89ac4317.vercel.app",
+    "vercel_alias": "https://atrium.unicron.systems",
+    "production_sha": "b6e02d2",
+    "closed_at": "2026-05-10T08:15:00Z"
+  },
+  "sprint_6_pending_manual": [
+    "HUMAN: Kyle smoke-test the 5 new Atrium surfaces — Marketing, Products, Library tabs visible + navigable; campaigns API; marketing skills run buttons",
+    "HUMAN: Promote Sprint 6 card to Verified on Internal Org Kanban (human-only — never auto-promote)",
+    "BUG: /api/atrium/wiki returns 404 — vault path reads from local Dropbox path, inaccessible from Vercel cloud; needs cloud-accessible vault (GitHub API read or Supabase storage)",
+    "BUG: /api/atrium/campaigns returns 500 — Supabase query error on ns_list_campaigns() RPC or direct table access; investigate"
   ],
   "halts_observed": [
     {
