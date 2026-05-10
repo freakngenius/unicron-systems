@@ -117,32 +117,21 @@ function useRecentRuns(): { runs: RunRow[]; loading: boolean } {
 
     async function load() {
       try {
+        // PGRST106 fix: use ns_list_skill_runs RPC (cost_usd absent from ledger schema)
         const { data } = await getSupabase()
-          .schema('nervous_system')
-          .from('ledger')
-          .select('id, content_summary, created_at, cost_usd, source_type')
-          .eq('source_type', 'skill_run')
-          .order('created_at', { ascending: false })
-          .limit(10)
-          .returns<Array<{
-            id: string;
-            content_summary: string | null;
-            created_at: string;
-            cost_usd: number | null;
-            source_type: string | null;
-          }>>();
+          .rpc('ns_list_skill_runs', { p_limit: 10 });
 
         if (cancelled) return;
-        if (data && data.length > 0) {
+        if (data && (data as unknown[]).length > 0) {
           setRuns(
-            data.map((row) => ({
+            (data as Array<{ id: string; content_summary: string | null; created_at: string }>).map((row) => ({
               skill: row.content_summary ?? 'Unknown skill',
               ts: new Date(row.created_at).toLocaleTimeString('en-US', {
                 hour: 'numeric',
                 minute: '2-digit',
               }),
               status: 'ok' as const,
-              cost: row.cost_usd != null ? `$${row.cost_usd.toFixed(2)}` : '—',
+              cost: '—',
               dur: '—',
             })),
           );
@@ -225,11 +214,9 @@ function useBudgetData() {
 
     async function load() {
       try {
+        // PGRST106 fix: use ns_list_agents_active RPC
         const { data } = await getSupabase()
-          .schema('nervous_system')
-          .from('agents')
-          .select('budget')
-          .eq('active', true)
+          .rpc('ns_list_agents_active')
           .returns<AgentBudgetRow[]>();
 
         if (cancelled) return;
