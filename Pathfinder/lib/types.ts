@@ -817,6 +817,22 @@ export interface DailyBrief {
 }
 
 // Multi-tenant org store (migration 20260509_organizations).
+// Phase 2A: operator auth interfaces (migration 20260509_phase2a_auth).
+export interface OrgMembership {
+  id: string;
+  organization_id: string;
+  user_id: string;
+  email: string;
+  role: 'operator' | 'admin';
+  created_at: string;
+}
+
+export interface OperatorAllowlistEntry {
+  email: string;
+  role: 'operator' | 'admin';
+  created_at: string;
+}
+
 // Spec: MEMORY/operator-todos/2026-05-04-pathfinder-needs-organizations-schema.md
 export interface Organization {
   id: string;
@@ -1003,6 +1019,19 @@ export interface PathfinderDatabase {
           updated_at?: string;
         };
         Update: Partial<Organization>;
+        Relationships: [];
+      };
+      // Phase 2A: operator auth tables (migration 20260509_phase2a_auth).
+      org_memberships: {
+        Row: OrgMembership;
+        Insert: Omit<OrgMembership, 'id' | 'created_at'> & { id?: string; created_at?: string };
+        Update: Partial<OrgMembership>;
+        Relationships: [];
+      };
+      operator_allowlist: {
+        Row: OperatorAllowlistEntry;
+        Insert: Omit<OperatorAllowlistEntry, 'created_at'> & { created_at?: string };
+        Update: Partial<OperatorAllowlistEntry>;
         Relationships: [];
       };
     };

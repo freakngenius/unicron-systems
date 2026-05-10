@@ -51,7 +51,7 @@ export function CustomerDetailView({ org, onBack }: Props) {
           </span>
         </div>
         <a
-          href={`https://unicron.systems/pathfinder/?org=${encodeURIComponent(org.id)}`}
+          href={`https://unicron.systems/pathfinder/${encodeURIComponent(org.slug)}`}
           target="_blank"
           rel="noopener noreferrer"
           data-testid="customer-detail-open-pathfinder"
