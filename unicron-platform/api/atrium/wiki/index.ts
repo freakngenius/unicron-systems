@@ -87,7 +87,8 @@ function collectPages(wikiRoot: string, dir: string, pages: WikiPage[]): void {
 /** Derive a display title from slug when blob content is unavailable. */
 function titleFromSlug(slug: string): string {
   const name = slug.split('/').pop() ?? slug;
-  return name.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+  const cleaned = name.replace(/^_+/, '').replace(/[-_]/g, ' ').trim();
+  return (cleaned || name).replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 async function listFromGitHub(): Promise<WikiPage[]> {
