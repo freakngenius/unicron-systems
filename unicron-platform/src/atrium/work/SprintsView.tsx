@@ -12,9 +12,8 @@ interface AuditRow {
   id: string;
   action: string;
   table_name: string | null;
-  record_id: string | null;
-  actor: string | null;
-  metadata: {
+  actor_id: string | null;
+  payload: {
     sprint_number?: number | string;
     sprint_name?: string;
     surface?: string;
@@ -37,9 +36,9 @@ interface SprintGroup {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function extractSprintNumber(action: string, metadata: AuditRow['metadata']): string {
-  if (metadata?.sprint_number !== undefined)
-    return String(metadata.sprint_number);
+function extractSprintNumber(action: string, payload: AuditRow['payload']): string {
+  if (payload?.sprint_number !== undefined)
+    return String(payload.sprint_number);
   // Try parsing from action string: 'sprint_4_start', 'sprint_3_complete' etc.
   const m = /sprint[_-](\d+)/i.exec(action);
   return m ? m[1] : 'unknown';
@@ -84,7 +83,7 @@ function useSprints() {
           // Group by sprint number
           const grouped: Record<string, AuditRow[]> = {};
           for (const row of rows) {
-            const num = extractSprintNumber(row.action, row.metadata);
+            const num = extractSprintNumber(row.action, row.payload);
             (grouped[num] ??= []).push(row);
           }
 
@@ -96,7 +95,7 @@ function useSprints() {
             })
             .map(([num, sprintRows]) => {
               const latest = sprintRows[0]; // already sorted desc
-              const meta = latest.metadata;
+              const meta = latest.payload;
               return {
                 number: num,
                 name: meta?.sprint_name ?? `Sprint ${num}`,

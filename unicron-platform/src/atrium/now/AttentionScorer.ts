@@ -48,7 +48,7 @@ async function fetchRecentIngestCalls(): Promise<ScoredItem[]> {
 
   return (data ?? [])
     .filter((row) => {
-      const confidence = (row.metadata as Record<string, unknown> | null)?.confidence;
+      const confidence = (row.insights as Record<string, unknown> | null)?.confidence;
       return typeof confidence === 'number' ? confidence >= 0.7 : true;
     })
     .map((row) => ({
