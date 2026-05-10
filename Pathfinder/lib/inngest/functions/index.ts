@@ -21,3 +21,5 @@ export { hubspotReconCron } from './hubspot-recon-cron';
 export { verifierRetry } from './verifier-retry';
 // Sprint 0 — Nervous System Foundation. Placeholder; Sprint 1 wires real ingest skill.
 export { ingestRouter } from './ingest-router';
+// Sprint 5 Stream A — daily email ingest cron (08:00 PT = 16:00 UTC).
+export { emailDailyCron } from './email-cron';
