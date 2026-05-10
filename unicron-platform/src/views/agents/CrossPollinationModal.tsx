@@ -4,7 +4,6 @@ import { AgentHistoryGrid } from '../../components/agent-console/AgentHistoryGri
 import { crossPollinationAgent } from '../../lib/agents/crossPollinationAgent';
 import { createDispatch, requeueDispatch, verifyDispatch } from '../../lib/agentConsoleClient';
 import { listCrossPollinationMatches } from '../../lib/crossPollinationClient';
-import { crossPollinationMatchesMock } from '../../data/mocks';
 import {
   type CrossPollinationMatch,
   bucketFor,
@@ -28,7 +27,6 @@ const REAL_BRIDGE: CrossPollinationBridge = {
   listMatches: listCrossPollinationMatches,
 };
 
-const ARCHITECT_API_MOCK = import.meta.env.VITE_CROSS_POLL_API_ENABLED !== 'true';
 const ORG_ID = 'zedcor';
 
 type Phase =
@@ -45,8 +43,6 @@ export function CrossPollinationModal({ onClose, bridge = REAL_BRIDGE }: Props) 
   const [rejectedIds, setRejectedIds] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
 
-  const isMockRuntime = ARCHITECT_API_MOCK && bridge === REAL_BRIDGE;
-
   const onSearch = async () => {
     setPhase({ kind: 'loading' });
     try {
@@ -59,13 +55,11 @@ export function CrossPollinationModal({ onClose, bridge = REAL_BRIDGE }: Props) 
         customer_org_id: ORG_ID,
         min_confidence: threshold,
       });
-      const dispatch = isMockRuntime
-        ? synthesizeDispatch(ids, threshold)
-        : await bridge.createDispatch({
-            agent_name: crossPollinationAgent.name,
-            customer_org_id: ORG_ID,
-            input_payload: { lead_ids: ids, threshold, summary: summarize(ids, threshold) },
-          });
+      const dispatch = await bridge.createDispatch({
+        agent_name: crossPollinationAgent.name,
+        customer_org_id: ORG_ID,
+        input_payload: { lead_ids: ids, threshold, summary: summarize(ids, threshold) },
+      });
       setPhase({ kind: 'review', matches, dispatch });
       // Auto-verify high-confidence matches on load so the operator only
       // reviews the ambiguous band. Done at transition time rather than via
@@ -88,16 +82,14 @@ export function CrossPollinationModal({ onClose, bridge = REAL_BRIDGE }: Props) 
       // 2026-05-02-pathfinder-cross-pollination-verify-schema.md). Record the
       // operator decision in unicron.agent_dispatches only — when Pathfinder
       // ships the schema, M5 flips a flag to also write the Pathfinder row.
-      if (!isMockRuntime) {
-        await bridge.verifyDispatch({
-          id: phase.dispatch.id,
-          verified_by_user_id: 'operator-mock',
-          result_payload: {
-            verified_match_ids: [...Array.from(verifiedIds), match.id],
-            rejected_match_ids: Array.from(rejectedIds),
-          },
-        });
-      }
+      await bridge.verifyDispatch({
+        id: phase.dispatch.id,
+        verified_by_user_id: 'operator-mock',
+        result_payload: {
+          verified_match_ids: [...Array.from(verifiedIds), match.id],
+          rejected_match_ids: Array.from(rejectedIds),
+        },
+      });
       setVerifiedIds((prev) => {
         const next = new Set(prev);
         next.add(match.id);
@@ -144,7 +136,7 @@ export function CrossPollinationModal({ onClose, bridge = REAL_BRIDGE }: Props) 
       agent={crossPollinationAgent}
       status={status}
       costUsd={null}
-      recentRunsCount={isMockRuntime ? 1 : null}
+      recentRunsCount={null}
       onClose={onClose}
     >
       <div className="max-w-4xl mx-auto flex flex-col gap-6">
@@ -335,16 +327,6 @@ export function CrossPollinationModal({ onClose, bridge = REAL_BRIDGE }: Props) 
           <AgentHistoryGrid
             agentName={crossPollinationAgent.name}
             customerOrgId={ORG_ID}
-            initialDispatches={
-              isMockRuntime
-                ? [
-                    synthesizeDispatch(
-                      crossPollinationMatchesMock.map((m) => m.lead_id),
-                      0.7,
-                    ),
-                  ]
-                : undefined
-            }
             onRerun={(d) => {
               void requeueDispatch({ dispatch_id: d.id }).catch((err) => {
                 console.error('requeueDispatch failed', err);
@@ -357,37 +339,10 @@ export function CrossPollinationModal({ onClose, bridge = REAL_BRIDGE }: Props) 
   );
 }
 
-function synthesizeDispatch(leadIds: string[], threshold: number): AgentDispatch {
-  const now = new Date().toISOString();
-  return {
-    id: cryptoRandomId(),
-    agent_name: crossPollinationAgent.name,
-    customer_org_id: ORG_ID,
-    dispatched_by_user_id: null,
-    input_payload: { lead_ids: leadIds, threshold, summary: summarize(leadIds, threshold) },
-    status: 'awaiting_review',
-    result_payload: null,
-    rejection_reason: null,
-    verified_by_user_id: null,
-    verified_at: null,
-    cost_usd: null,
-    duration_ms: null,
-    agent_run_id: null,
-    parent_dispatch_id: null,
-    created_at: now,
-    updated_at: now,
-  };
-}
-
 function summarize(leadIds: string[], threshold: number): string {
   if (leadIds.length === 0) return `org-wide · threshold ${threshold.toFixed(2)}`;
   if (leadIds.length === 1) return `${leadIds[0]} · threshold ${threshold.toFixed(2)}`;
   return `${leadIds.length} leads · threshold ${threshold.toFixed(2)}`;
-}
-
-function cryptoRandomId(): string {
-  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID();
-  return `evt-${Math.random().toString(36).slice(2)}-${Date.now()}`;
 }
 
 function FieldRow({

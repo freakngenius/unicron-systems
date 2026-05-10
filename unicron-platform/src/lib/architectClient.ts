@@ -1,10 +1,9 @@
-// Architect client.
+// Architect client — real-only.
 //
-// When `VITE_ARCHITECT_API_ENABLED=true`, calls the same-origin Vercel
-// serverless proxy at `/api/architect/decompose-proxy`, which injects the
-// server-side `ARCHITECT_API_TOKEN` and forwards to Stream D's real HTTP
-// API at `ARCHITECT_API_URL`. Otherwise returns mock fixtures shaped to
-// the legacy UI types.
+// Calls the same-origin Vercel serverless proxy at
+// `/api/architect/decompose-proxy`, which injects the server-side
+// `ARCHITECT_API_TOKEN` and forwards to Stream D's real HTTP API at
+// `ARCHITECT_API_URL`.
 //
 // Why the proxy: holding the bearer token server-side keeps it out of
 // the browser bundle (Wave 3 Phase B). The proxy adds the Authorization
@@ -31,10 +30,6 @@ import {
   decompositionApiToLegacy,
 } from './architectAdapters';
 import {
-  proposals as mockProposals,
-  architectDecompositionMock,
-} from '../data/mocks';
-import {
   type ArchitectProposalRow,
   type ApproveProposalResponse,
   type DecompositionApiRequest,
@@ -43,13 +38,8 @@ import {
   type DecompositionResponse,
   type DismissProposalResponse,
   type ListProposalsResponse,
-  type Proposal,
 } from './contracts/architect';
 import { __testing as systemTesting } from '../context/SystemContext';
-
-function realEnabled(): boolean {
-  return getEnv().architectApiEnabled;
-}
 
 async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
   const headers: Record<string, string> = {
@@ -70,84 +60,43 @@ async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
 export async function postDecomposition(
   req: DecompositionRequest,
 ): Promise<DecompositionResponse> {
-  if (realEnabled()) {
-    const body: DecompositionApiRequest = { buyer_pain_prompt: req.buyerPain };
-    const api = await fetchJson<DecompositionApiResponse>('/api/architect/decompose-proxy', {
-      method: 'POST',
-      body: JSON.stringify(body),
-    });
-    return decompositionApiToLegacy(api, req.buyerPain);
-  }
-
-  // Mock: derive a structured architecture from the canonical mock and echo
-  // the user's buyer-pain into the `buyer` field so two distinct inputs
-  // produce visibly distinct architectures (the rendered BUYER + the
-  // recommendedConfig.buyerPain both reflect the input). Real-mode uses the
-  // /decompose endpoint; this branch only runs when VITE_ARCHITECT_API_ENABLED
-  // is unset / false.
-  const trimmed = req.buyerPain.trim();
-  const echoedBuyer = trimmed.length > 0 ? trimmed : architectDecompositionMock.architecture.buyer;
-  const mockArchitecture = {
-    ...architectDecompositionMock.architecture,
-    buyer: echoedBuyer,
-  };
-  const apiResponse: DecompositionApiResponse = {
-    ...architectDecompositionMock,
-    session_id: `mock-${Date.now()}`,
-    architecture: mockArchitecture,
-  };
-  return decompositionApiToLegacy(apiResponse, req.buyerPain);
+  const body: DecompositionApiRequest = { buyer_pain_prompt: req.buyerPain };
+  const api = await fetchJson<DecompositionApiResponse>('/api/architect/decompose-proxy', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+  return decompositionApiToLegacy(api, req.buyerPain);
 }
 
 // ---- Proposals -----------------------------------------------------------
 
 export async function listProposals(): Promise<ListProposalsResponse> {
-  if (realEnabled()) {
-    const supabase = getSupabase();
-    const { data, error } = await supabase
-      .schema('pathfinder')
-      .from('architect_proposals')
-      .select('id, session_id, vertical_id, type, headline, body, details, confidence, status, resolved_at, resolved_by_user_email, resolution_notes, source_input_summary, created_at')
-      .eq('status', 'pending')
-      .order('created_at', { ascending: false })
-      .limit(50);
-    if (error) throw new Error(`architect_proposals read failed: ${error.message}`);
-    const rows = (data ?? []) as unknown as ArchitectProposalRow[];
-    return { proposals: rows.map(archProposalRowToLegacy) };
-  }
-
-  const proposals: Proposal[] = mockProposals.map((p) => ({
-    id: p.id,
-    category: p.category,
-    type: p.type,
-    time: p.time,
-    headline: p.headline,
-    body: p.body,
-    details: p.details,
-  }));
-  return { proposals };
+  const supabase = getSupabase();
+  const { data, error } = await supabase
+    .schema('pathfinder')
+    .from('architect_proposals')
+    .select('id, session_id, vertical_id, type, headline, body, details, confidence, status, resolved_at, resolved_by_user_email, resolution_notes, source_input_summary, created_at')
+    .eq('status', 'pending')
+    .order('created_at', { ascending: false })
+    .limit(50);
+  if (error) throw new Error(`architect_proposals read failed: ${error.message}`);
+  const rows = (data ?? []) as unknown as ArchitectProposalRow[];
+  return { proposals: rows.map(archProposalRowToLegacy) };
 }
 
 export async function approveProposal(
   id: string,
 ): Promise<ApproveProposalResponse> {
-  if (realEnabled()) {
-    await writeProposalStatus(id, 'approved');
-    // Server-side dispatch (Source Onboarder, agent installs) is not yet
-    // wired — Stream D doesn't ship an approve HTTP endpoint. Operator UI
-    // applies the SystemContext mutation client-side (fallbackApply in
-    // ArchitectInbox.tsx) until the server-side flow lands. The returned
-    // SystemConfig is whatever's in scope; we echo the test default since
-    // there's no canonical "post-apply config" the server returns.
-    return {
-      ok: true as const,
-      systemConfig: systemTesting.buildDefaultArchitecture('approved'),
-    };
-  }
-  // Mock: client-side apply is handled by ArchitectInbox.tsx via SystemContext.
+  await writeProposalStatus(id, 'approved');
+  // Server-side dispatch (Source Onboarder, agent installs) is not yet
+  // wired — Stream D doesn't ship an approve HTTP endpoint. Operator UI
+  // applies the SystemContext mutation client-side (fallbackApply in
+  // ArchitectInbox.tsx) until the server-side flow lands. The returned
+  // SystemConfig is whatever's in scope; we echo the test default since
+  // there's no canonical "post-apply config" the server returns.
   return {
     ok: true as const,
-    systemConfig: systemTesting.buildDefaultArchitecture('mock'),
+    systemConfig: systemTesting.buildDefaultArchitecture('approved'),
   };
 }
 
@@ -155,10 +104,7 @@ export async function dismissProposal(
   id: string,
   reason?: string,
 ): Promise<DismissProposalResponse> {
-  if (realEnabled()) {
-    await writeProposalStatus(id, 'dismissed', reason);
-    return { ok: true as const };
-  }
+  await writeProposalStatus(id, 'dismissed', reason);
   return { ok: true as const };
 }
 

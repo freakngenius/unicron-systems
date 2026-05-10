@@ -1,4 +1,4 @@
-// Contract-level tests for the C↔D boundary.
+// Contract-level tests for the C↔D boundary (real-only).
 //
 // Stream D shipped on 2026-05-01 (PR #37). The boundary is:
 //   - POST /api/architect/decompose with body `{ buyer_pain_prompt, ... }`
@@ -9,9 +9,8 @@
 //   - approveProposal / dismissProposal write `architect_proposals.status`
 //     via supabase update (Stream D ships no HTTP approve endpoint).
 //
-// Tests pin both:
-//   - Mock-mode behavior (the default until VITE_ARCHITECT_API_ENABLED=true)
-//   - Real-mode behavior with `fetch` + supabase client mocked
+// Mock-mode tests were removed when the env-flag-gated mock fallback was
+// stripped from architectClient.ts.
 
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import {
@@ -70,13 +69,11 @@ vi.mock('./supabase', () => {
 beforeEach(() => {
   __resetEnvForTests();
   __resetSupabaseForTests();
-  // Default: feature flag off, mock mode.
   vi.stubEnv('VITE_SUPABASE_URL', 'https://example.supabase.co');
   vi.stubEnv('VITE_SUPABASE_ANON_KEY', 'anon');
-  vi.stubEnv('VITE_ARCHITECT_API_ENABLED', 'false');
-  vi.stubEnv('VITE_ARCHITECT_API_URL', '');
-  vi.stubEnv('VITE_ARCHITECT_API_TOKEN', '');
-  vi.stubEnv('VITE_OPERATOR_EMAIL', '');
+  vi.stubEnv('VITE_ARCHITECT_API_URL', 'https://architect.example/');
+  vi.stubEnv('VITE_ARCHITECT_API_TOKEN', 'token-abc');
+  vi.stubEnv('VITE_OPERATOR_EMAIL', 'kyle@example.com');
 });
 
 afterEach(() => {
@@ -84,62 +81,7 @@ afterEach(() => {
   global.fetch = ORIGINAL_FETCH;
 });
 
-// ---- Mock mode -----------------------------------------------------------
-
-describe('Architect client — mock mode', () => {
-  it('postDecomposition returns a non-empty lines array and a recommended config', async () => {
-    const res = await postDecomposition({ buyerPain: 'sample pain' });
-    expect(res.sessionId).toBeTruthy();
-    expect(res.lines.length).toBeGreaterThan(0);
-    expect(res.recommendedConfig.status).toBe('configured');
-    expect(res.recommendedConfig.agents.length).toBeGreaterThan(0);
-    expect(res.confidence).toBeGreaterThan(0);
-    expect(res.confidence).toBeLessThanOrEqual(1);
-    expect(res.architecture.buyer).toContain('sample pain');
-  });
-
-  it('postDecomposition produces visibly distinct architectures for two distinct inputs', async () => {
-    const a = await postDecomposition({ buyerPain: 'distributors of temporary site security' });
-    const b = await postDecomposition({ buyerPain: 'M&A advisors with finance ops gaps' });
-    expect(a.architecture.buyer).not.toBe(b.architecture.buyer);
-    expect(a.lines.some((l) => l.text.includes('temporary site security'))).toBe(true);
-    expect(b.lines.some((l) => l.text.includes('M&A advisors'))).toBe(true);
-  });
-
-  it('listProposals returns proposals shaped against the contract', async () => {
-    const res = await listProposals();
-    expect(Array.isArray(res.proposals)).toBe(true);
-    expect(res.proposals.length).toBeGreaterThan(0);
-    for (const p of res.proposals) {
-      expect(typeof p.id).toBe('string');
-      expect(['sources', 'agents', 'tuning']).toContain(p.category);
-      expect(typeof p.headline).toBe('string');
-      expect(Array.isArray(p.details)).toBe(true);
-    }
-  });
-
-  it('approveProposal returns ok:true with a SystemConfig snapshot', async () => {
-    const res = await approveProposal('p1');
-    expect(res.ok).toBe(true);
-    expect(res.systemConfig.status).toBe('live');
-  });
-
-  it('dismissProposal returns ok:true', async () => {
-    const res = await dismissProposal('p1');
-    expect(res.ok).toBe(true);
-  });
-});
-
-// ---- Real mode -----------------------------------------------------------
-
 describe('Architect client — real mode', () => {
-  beforeEach(() => {
-    vi.stubEnv('VITE_ARCHITECT_API_ENABLED', 'true');
-    vi.stubEnv('VITE_ARCHITECT_API_URL', 'https://architect.example/');
-    vi.stubEnv('VITE_ARCHITECT_API_TOKEN', 'token-abc');
-    vi.stubEnv('VITE_OPERATOR_EMAIL', 'kyle@example.com');
-    __resetEnvForTests();
-  });
 
   it('postDecomposition POSTs to the same-origin proxy with the canonical body and adapts the response', async () => {
     const apiResponse: DecompositionApiResponse = {
