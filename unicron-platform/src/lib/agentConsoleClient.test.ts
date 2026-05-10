@@ -161,6 +161,65 @@ describe('agentConsoleClient', () => {
     expect(lastBuilder?.eq).toHaveBeenCalledWith('id', FIXTURE_DISPATCH.id);
   });
 
+  it('verifyDispatch writes to pathfinder.agent_verifications when summary is provided (Phase 1F bridge)', async () => {
+    const verified = { ...FIXTURE_DISPATCH, status: 'verified' as const };
+    // Build a supabase mock where the second schema('pathfinder') call returns
+    // a builder that records the insert.
+    const pathfinderInsertBuilder = makeBuilder({ data: null, error: null });
+    const pathfinderFrom = vi.fn(() => pathfinderInsertBuilder);
+    const unicronFrom = vi.fn(() => makeBuilder({ data: verified, error: null }));
+    const schemaFn = vi.fn((s: string) =>
+      s === 'pathfinder' ? { from: pathfinderFrom } : { from: unicronFrom },
+    );
+    const supa = { schema: schemaFn };
+    const { getSupabase } = await import('./supabase');
+    (getSupabase as unknown as { mockReturnValue: (v: unknown) => void }).mockReturnValue(supa);
+
+    await verifyDispatch({
+      id: FIXTURE_DISPATCH.id,
+      verified_by_user_id: 'op-123',
+      verified_by_user_email: 'op@example.com',
+      summary: 'Coverage goal completed: 3 sources onboarded.',
+    });
+
+    // unicron write happened
+    expect(unicronFrom).toHaveBeenCalledWith('agent_dispatches');
+    // pathfinder bridge write happened
+    expect(pathfinderFrom).toHaveBeenCalledWith('agent_verifications');
+    const insertArg = (pathfinderInsertBuilder.insert as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(insertArg.dispatch_id).toBe(FIXTURE_DISPATCH.id);
+    expect(insertArg.customer_org_id).toBe('zedcor');
+    expect(insertArg.agent_name).toBe('test-agent');
+    expect(insertArg.verified_by_user_id).toBe('op-123');
+    expect(insertArg.verified_by_user_email).toBe('op@example.com');
+    expect(insertArg.summary).toBe('Coverage goal completed: 3 sources onboarded.');
+  });
+
+  it('verifyDispatch does not throw when pathfinder bridge write fails (failure-tolerant)', async () => {
+    const verified = { ...FIXTURE_DISPATCH, status: 'verified' as const };
+    const bridgeBuilder = makeBuilder({ data: null, error: null });
+    // Make the bridge insert reject
+    bridgeBuilder.then = vi.fn((onFulfilled: (v: unknown) => unknown) =>
+      Promise.resolve({ data: null, error: new Error('bridge write failed') }).then(onFulfilled),
+    );
+    const pathfinderFrom = vi.fn(() => bridgeBuilder);
+    const unicronFrom = vi.fn(() => makeBuilder({ data: verified, error: null }));
+    const schemaFn = vi.fn((s: string) =>
+      s === 'pathfinder' ? { from: pathfinderFrom } : { from: unicronFrom },
+    );
+    const supa = { schema: schemaFn };
+    const { getSupabase } = await import('./supabase');
+    (getSupabase as unknown as { mockReturnValue: (v: unknown) => void }).mockReturnValue(supa);
+
+    // Should resolve successfully despite bridge failure
+    const result = await verifyDispatch({
+      id: FIXTURE_DISPATCH.id,
+      verified_by_user_id: 'op-123',
+      summary: 'test summary',
+    });
+    expect(result.status).toBe('verified');
+  });
+
   it('rejectDispatch sets status=rejected and writes the rejection_reason', async () => {
     const rejected = {
       ...FIXTURE_DISPATCH,
