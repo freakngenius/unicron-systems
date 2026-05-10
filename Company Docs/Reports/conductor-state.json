@@ -354,9 +354,12 @@
   "sprint_6_streams_dispatched_at": "2026-05-10T06:36:00Z",
   "sprint_6_streams_complete_at": "2026-05-10T07:20:00Z",
   "sprint_6_kanban": {
-    "sprint_card_id": "TBD — query Internal Org Kanban",
+    "sprint_card_id": "35c785c6-7e72-81c9-96bf-fcf008e52eb6",
+    "sprint_card_url": "https://www.notion.so/35c785c67e7281c996bffcf008e52eb6",
+    "sprint_card_status": "Deployed",
     "stream_cards": {
       "A": {
+        "id": "35c785c6-7e72-8194-b3a6-c47032f26c55",
         "title": "Sprint 6 — Stream A: Marketing Tab + Campaigns API",
         "status": "Deployed",
         "pr": "https://github.com/freakngenius/unicron-systems/pull/240",
@@ -364,24 +367,28 @@
         "migration_applied": "20260510_campaigns.sql (nervous_system.campaigns table + RLS + ns_list_campaigns RPC)"
       },
       "B": {
+        "id": "35c785c6-7e72-8174-9dbb-c1cb84b8ccfe",
         "title": "Sprint 6 — Stream B: Products Tab (Pathfinder + Metacron)",
         "status": "Deployed",
         "pr": "https://github.com/freakngenius/unicron-systems/pull/241",
         "sha": "9db4db4"
       },
       "C": {
+        "id": "35c785c6-7e72-8153-a5b2-f2d0415bf422",
         "title": "Sprint 6 — Stream C: Library Tab (Wiki/Repo/Templates)",
         "status": "Deployed",
         "pr": "https://github.com/freakngenius/unicron-systems/pull/242",
         "sha": "6515e0a"
       },
       "D": {
-        "title": "Sprint 6 — Stream D: unicron-knowledge Wiki Update",
+        "id": "35c785c6-7e72-8121-9cd6-d775f7ad1df8",
+        "title": "Sprint 6 — Stream D: Wiki Content — 11 Pages",
         "status": "Deployed",
         "pr": "https://github.com/freakngenius/unicron-knowledge/pull/2",
-        "note": "Elder continuity.md updated with Sprint 6 closeout entry"
+        "note": "11 wiki pages + Elder continuity.md Sprint 6 closeout entry"
       },
       "E": {
+        "id": "35c785c6-7e72-81c9-9df2-cab7b18086c9",
         "title": "Sprint 6 — Stream E: Marketing Skills + Activate Buttons",
         "status": "Deployed",
         "pr": "https://github.com/freakngenius/unicron-systems/pull/239",
