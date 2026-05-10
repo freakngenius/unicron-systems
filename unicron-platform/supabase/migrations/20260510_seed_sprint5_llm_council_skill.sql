@@ -2,13 +2,17 @@
 --
 -- Registers the llm-council-deliberate skill in nervous_system.skills.
 -- Follows the column shape established in 20260508_seed_sprint3_skills.sql:
---   name, description, domain, type, inputs, outputs, schedule_cron,
---   refusal_gate, budget_usd_per_run, skill_path
+--   name, description, domain, type, inputs_schema, outputs_schema, schedule_cron,
+--   refusal_gate, budget_usd_per_run, skill_md_path
+--
+-- Column alignment patch (2026-05-09): corrected inputs→inputs_schema,
+-- outputs→outputs_schema, skill_path→skill_md_path to match live schema.
+-- Dropped updated_at from ON CONFLICT DO UPDATE (column does not exist in live schema).
 --
 -- This migration is additive only — no DROP, no destructive ALTER.
 
 INSERT INTO nervous_system.skills
-  (name, description, domain, type, inputs, outputs, schedule_cron, trigger_event, refusal_gate, budget_usd_per_run, skill_path)
+  (name, description, domain, type, inputs_schema, outputs_schema, schedule_cron, trigger_event, refusal_gate, budget_usd_per_run, skill_md_path)
 VALUES
   (
     'llm-council-deliberate',
@@ -26,11 +30,10 @@ ON CONFLICT (name) DO UPDATE SET
   description        = EXCLUDED.description,
   domain             = EXCLUDED.domain,
   type               = EXCLUDED.type,
-  inputs             = EXCLUDED.inputs,
-  outputs            = EXCLUDED.outputs,
+  inputs_schema      = EXCLUDED.inputs_schema,
+  outputs_schema     = EXCLUDED.outputs_schema,
   schedule_cron      = EXCLUDED.schedule_cron,
   trigger_event      = EXCLUDED.trigger_event,
   refusal_gate       = EXCLUDED.refusal_gate,
   budget_usd_per_run = EXCLUDED.budget_usd_per_run,
-  skill_path         = EXCLUDED.skill_path,
-  updated_at         = now();
+  skill_md_path      = EXCLUDED.skill_md_path;
