@@ -1,7 +1,7 @@
 // PATCH /api/atrium/connected-services/:id — update cost, status, notes
 //
-// Taboo-checked on notes/name changes.
-// Writes to audit_log via ledger signal_type='audit'.
+// Uses ns_patch_connected_service RPC (public schema, SECURITY DEFINER).
+// Taboo-checked. Audit-logged via ns_append_ledger_signal.
 // Sprint 5 Stream F.
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
@@ -12,7 +12,7 @@ function getServiceClient() {
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url) throw new Error('SUPABASE_URL not configured');
   if (!key) throw new Error('SUPABASE_SERVICE_ROLE_KEY not configured');
-  return createClient(url, key, { db: { schema: 'nervous_system' } });
+  return createClient(url, key);
 }
 
 async function tabooCheck(text: string): Promise<{ blocked: boolean; reason?: string }> {
@@ -32,52 +32,33 @@ async function tabooCheck(text: string): Promise<{ blocked: boolean; reason?: st
     if (!res.ok) return { blocked: false };
     const content = await res.text();
     const lc = text.toLowerCase();
-    const lines = content.split('\n').filter((l) => l.trim().startsWith('-'));
-    for (const line of lines) {
+    for (const line of content.split('\n').filter((l) => l.trim().startsWith('-'))) {
       const phrase = line.replace(/^-+\s*/, '').trim().toLowerCase();
-      if (phrase && lc.includes(phrase)) {
-        return { blocked: true, reason: `Taboo match: "${phrase}"` };
-      }
+      if (phrase && lc.includes(phrase)) return { blocked: true, reason: `Taboo match: "${phrase}"` };
     }
-  } catch {
-    // fail open
-  }
+  } catch { /* fail open */ }
   return { blocked: false };
 }
 
-async function auditLog(
-  action: string,
-  payload: Record<string, unknown>,
-): Promise<void> {
+async function auditLog(action: string, payload: Record<string, unknown>): Promise<void> {
   try {
     const sb = getServiceClient();
-    await sb.from('ledger').insert({
-      signal_type: 'audit',
-      source: 'atrium/connected-services/:id',
-      payload: { action, ...payload },
+    await sb.rpc('ns_append_ledger_signal', {
+      p_source_type: 'audit',
+      p_source_id: 'atrium/connected-services/:id',
+      p_summary: action,
+      p_insights: payload,
     });
-  } catch {
-    // non-fatal
-  }
+  } catch { /* non-fatal */ }
 }
 
-export default async function handler(
-  req: VercelRequest,
-  res: VercelResponse,
-): Promise<void> {
+export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'PATCH,OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');
 
-  if (req.method === 'OPTIONS') {
-    res.status(204).end();
-    return;
-  }
-
-  if (req.method !== 'PATCH') {
-    res.status(405).json({ error: 'Method not allowed' });
-    return;
-  }
+  if (req.method === 'OPTIONS') { res.status(204).end(); return; }
+  if (req.method !== 'PATCH') { res.status(405).json({ error: 'Method not allowed' }); return; }
 
   const id = req.query['id'];
   if (!id || typeof id !== 'string') {
@@ -91,40 +72,33 @@ export default async function handler(
     return;
   }
 
-  // Taboo check on text fields that may be included in the patch
-  const textToCheck = [body.name ?? '', body.notes ?? ''].join(' ');
-  const taboo = await tabooCheck(textToCheck);
+  const taboo = await tabooCheck([body.name ?? '', body.notes ?? ''].join(' '));
   if (taboo.blocked) {
     res.status(422).json({ error: 'Taboo check failed', reason: taboo.reason });
     return;
   }
 
-  // Allowlist patchable fields
-  const allowed: Array<keyof typeof body> = [
-    'name', 'category', 'status', 'monthly_cost_usd',
-    'last_billed_at', 'config_url', 'notes',
-    'owner_team_member_id', 'acknowledged',
-    'last_health_check_at',
-  ];
-  const patch: Record<string, unknown> = {};
-  for (const key of allowed) {
-    if (key in body) patch[key] = body[key];
-  }
-
   try {
     const sb = getServiceClient();
-    const { data, error } = await sb
-      .from('connected_services')
-      .update(patch)
-      .eq('id', id)
-      .select()
-      .single();
-
+    const { data, error } = await sb.rpc('ns_patch_connected_service', {
+      p_id: id,
+      p_name: body.name ?? null,
+      p_category: body.category ?? null,
+      p_status: body.status ?? null,
+      p_monthly_cost_usd: body.monthly_cost_usd ?? null,
+      p_last_billed_at: body.last_billed_at ?? null,
+      p_config_url: body.config_url ?? null,
+      p_notes: body.notes ?? null,
+      p_owner_team_member_id: body.owner_team_member_id ?? null,
+      p_acknowledged: body.acknowledged ?? null,
+      p_last_health_check_at: body.last_health_check_at ?? null,
+    });
     if (error) throw error;
-    await auditLog('patch', { service_id: id, patch });
-    res.status(200).json({ service: data });
+    const service = Array.isArray(data) ? data[0] : data;
+    await auditLog('patch', { service_id: id, patch: body });
+    res.status(200).json({ service });
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
+    const msg = err instanceof Error ? err.message : typeof err === 'object' ? JSON.stringify(err) : String(err);
     res.status(500).json({ error: msg });
   }
 }
