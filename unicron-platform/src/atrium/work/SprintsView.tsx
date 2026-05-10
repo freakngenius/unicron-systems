@@ -135,20 +135,20 @@ function SprintLogFeed({ rows }: { rows: AuditRow[] }) {
       {display.map((row) => (
         <div
           key={row.id}
-          className="flex items-start gap-3 px-3 py-2 bg-[#1A1A1D] border border-[#1F1F23] rounded-lg"
+          className="flex items-start gap-3 px-3 py-2 bg-bg-raised border border-border-default rounded-lg"
         >
-          <div className="w-1.5 h-1.5 rounded-full bg-[#2A2A2E] mt-1.5 shrink-0" />
+          <div className="w-1.5 h-1.5 rounded-full bg-border-strong mt-1.5 shrink-0" />
           <div className="min-w-0 flex-1">
             <div className="flex items-baseline justify-between gap-2">
-              <div className="mono text-[11px] text-[rgba(229,229,231,0.8)] truncate">
+              <div className="mono text-[11px] text-text-primary truncate">
                 {row.action}
               </div>
-              <div className="mono text-[9px] text-[rgba(229,229,231,0.4)] shrink-0">
+              <div className="mono text-[9px] text-text-muted shrink-0">
                 {formatTime(row.created_at)}
               </div>
             </div>
             {row.actor && (
-              <div className="mono text-[9px] text-[rgba(229,229,231,0.4)] mt-0.5">
+              <div className="mono text-[9px] text-text-muted mt-0.5">
                 {row.actor}
                 {row.table_name && ` · ${row.table_name}`}
               </div>
@@ -175,8 +175,8 @@ function SprintCard({
     <div
       className="border rounded-xl overflow-hidden"
       style={{
-        borderColor: isActive ? 'rgba(255,107,43,0.4)' : '#1F1F23',
-        background: isActive ? 'rgba(255,107,43,0.04)' : '#141416',
+        borderColor: isActive ? 'rgba(232,118,58,0.40)' : 'var(--border-default)',
+        background: isActive ? 'rgba(232,118,58,0.06)' : 'var(--bg-elevated)',
       }}
     >
       {/* Card header */}
@@ -189,10 +189,10 @@ function SprintCard({
             <div className="w-2 h-2 rounded-full bg-[#22C55E] animate-pulse shrink-0" />
           )}
           <div>
-            <div className="mono text-[13px] text-[#E5E5E7] font-medium">
+            <div className="mono text-[13px] text-text-primary font-medium">
               {group.name}
             </div>
-            <div className="mono text-[10px] text-[rgba(229,229,231,0.5)] mt-0.5 flex items-center gap-2">
+            <div className="mono text-[10px] text-text-secondary mt-0.5 flex items-center gap-2">
               <span>{group.surface}</span>
               <span>·</span>
               <span>DRI: {group.dri}</span>
@@ -208,15 +208,15 @@ function SprintCard({
               target="_blank"
               rel="noopener noreferrer"
               onClick={(e) => e.stopPropagation()}
-              className="mono text-[9px] uppercase tracking-[0.12em] text-[#FF6B2B] hover:underline"
+              className="mono text-[9px] uppercase tracking-[0.12em] text-accent-orange hover:underline"
             >
               Notion →
             </a>
           )}
-          <span className="mono text-[11px] text-[rgba(229,229,231,0.45)] bg-[#1F1F23] px-2 py-0.5 rounded">
+          <span className="mono text-[11px] text-text-muted bg-bg-raised px-2 py-0.5 rounded">
             {group.latestStatus}
           </span>
-          <span className="mono text-[11px] text-[rgba(229,229,231,0.4)]">
+          <span className="mono text-[11px] text-text-muted">
             {expanded ? '↑' : '↓'}
           </span>
         </div>
@@ -224,7 +224,7 @@ function SprintCard({
 
       {/* Log feed */}
       {expanded && (
-        <div className="px-5 pb-5 border-t border-[#1F1F23]">
+        <div className="px-5 pb-5 border-t border-border-default">
           <SprintLogFeed rows={group.rows} />
         </div>
       )}
@@ -241,7 +241,7 @@ export function SprintsView() {
     return (
       <div className="space-y-3">
         {[0, 1, 2].map((i) => (
-          <div key={i} className="h-20 bg-[#141416] rounded-xl animate-pulse" />
+          <div key={i} className="h-20 bg-bg-card rounded-xl animate-pulse" />
         ))}
       </div>
     );
@@ -257,13 +257,13 @@ export function SprintsView() {
 
   if (empty) {
     return (
-      <div className="bg-[#141416] border border-[#1F1F23] rounded-xl px-6 py-10 text-center">
-        <div className="mono text-[11px] uppercase tracking-[0.18em] text-[rgba(229,229,231,0.4)] mb-2">
+      <div className="bg-bg-card border border-border-default rounded-xl px-6 py-10 text-center">
+        <div className="mono text-[11px] uppercase tracking-[0.18em] text-text-muted mb-2">
           No sprint data yet
         </div>
-        <div className="mono text-[11px] text-[rgba(229,229,231,0.3)] max-w-sm mx-auto leading-relaxed">
+        <div className="mono text-[11px] text-text-muted max-w-sm mx-auto leading-relaxed">
           Sprint tracking begins once Conductor sprints land. The Orchestrator
-          writes audit_log entries with action matching <code className="text-[rgba(229,229,231,0.5)]">sprint_*</code>{' '}
+          writes audit_log entries with action matching <code className="text-text-secondary">sprint_*</code>{' '}
           as it dispatches each sprint.
         </div>
       </div>
