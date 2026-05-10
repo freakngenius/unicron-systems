@@ -43,8 +43,8 @@ const PRIORITY_COLORS: Record<string, string> = {
   low: 'var(--text-lo)',
 };
 
-// Distinct color per workspace (cycles if more than 5)
-const WORKSPACE_COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#8B5CF6', '#EC4899'];
+// v3 palette: Pathfinder orange, Metacron violet, Internal blue, sky, sage
+const WORKSPACE_COLORS = ['#E8763A', '#7355E5', '#2E6CD4', '#0EA5E9', '#4FB286'];
 
 function workspaceColor(index: number): string {
   return WORKSPACE_COLORS[index % WORKSPACE_COLORS.length];
@@ -253,12 +253,15 @@ function WorkspaceBoard({
   );
 
   return (
-    <div className="mb-8">
-      {/* Colored workspace header */}
-      <div
-        className="flex items-center gap-2 px-3 py-2 rounded-lg mb-3"
-        style={{ background: `${color}14`, borderLeft: `3px solid ${color}` }}
-      >
+    <div
+      className="mb-8 bg-bg-card rounded-xl overflow-hidden"
+      style={{
+        borderTop: `3px solid ${color}`,
+        boxShadow: '0 1px 2px rgba(11,21,48,0.04), 0 4px 16px rgba(11,21,48,0.06)',
+      }}
+    >
+      {/* Workspace header */}
+      <div className="flex items-center gap-2 px-4 py-3 border-b border-border-default">
         <div className="mono text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color }}>
           {workspace}
         </div>
@@ -266,7 +269,7 @@ function WorkspaceBoard({
       </div>
 
       {/* Status columns */}
-      <div className="overflow-x-auto">
+      <div className="p-4 overflow-x-auto">
         <div className="flex gap-3 min-w-[600px]">
           {STATUS_COLUMNS.map((col) => {
             const colItems = byStatus[col.key];

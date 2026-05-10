@@ -144,7 +144,7 @@ function useDebounce<T>(value: T, ms: number): T {
 
 function VoiceBadge() {
   return (
-    <span className="inline-flex items-center gap-1 mono text-[9px] uppercase tracking-[0.12em] px-1.5 py-0.5 rounded border border-[#A855F740] bg-[#A855F710] text-[#A855F7]">
+    <span className="inline-flex items-center gap-1 mono text-[9px] uppercase tracking-[0.12em] px-1.5 py-0.5 rounded border border-[rgba(232,118,58,0.25)] bg-[rgba(232,118,58,0.10)] text-[#E8763A]">
       <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
         <rect x="2.5" y="0.5" width="3" height="5" rx="1.5" fill="currentColor" />
         <path d="M1 3.5C1 5.16 2.34 6.5 4 6.5C5.66 6.5 7 5.16 7 3.5" stroke="currentColor" strokeWidth="1" strokeLinecap="round" />
