@@ -107,7 +107,7 @@ $$;
 -- ---------------------------------------------------------------------------
 
 INSERT INTO nervous_system.skills
-  (name, description, domain, type, inputs, outputs, schedule_cron, refusal_gate, budget_usd_per_run, skill_path)
+  (name, description, domain, type, inputs_schema, outputs_schema, schedule_cron, refusal_gate, budget_usd_per_run, skill_md_path)
 VALUES
   (
     'run-decay-tick',
@@ -203,13 +203,12 @@ ON CONFLICT (name) DO UPDATE SET
   description        = EXCLUDED.description,
   domain             = EXCLUDED.domain,
   type               = EXCLUDED.type,
-  inputs             = EXCLUDED.inputs,
-  outputs            = EXCLUDED.outputs,
+  inputs_schema      = EXCLUDED.inputs_schema,
+  outputs_schema     = EXCLUDED.outputs_schema,
   schedule_cron      = EXCLUDED.schedule_cron,
   refusal_gate       = EXCLUDED.refusal_gate,
   budget_usd_per_run = EXCLUDED.budget_usd_per_run,
-  skill_path         = EXCLUDED.skill_path,
-  updated_at         = now();
+  skill_md_path      = EXCLUDED.skill_md_path;
 
 -- ---------------------------------------------------------------------------
 -- ns_list_skills() — public RPC used by Atrium and agents
@@ -218,6 +217,7 @@ ON CONFLICT (name) DO UPDATE SET
 -- schema not being exposed via standard PostgREST schema routing.
 -- ---------------------------------------------------------------------------
 
+DROP FUNCTION IF EXISTS public.ns_list_skills();
 CREATE OR REPLACE FUNCTION public.ns_list_skills()
 RETURNS TABLE (
   id                 uuid,
@@ -225,13 +225,17 @@ RETURNS TABLE (
   description        text,
   domain             text,
   type               text,
-  inputs             jsonb,
-  outputs            jsonb,
+  inputs_schema      jsonb,
+  outputs_schema     jsonb,
   schedule_cron      text,
   refusal_gate       boolean,
   budget_usd_per_run numeric,
   active             boolean,
-  skill_path         text
+  status             text,
+  run_endpoint       text,
+  skill_md_path      text,
+  last_run_at        timestamptz,
+  total_runs         integer
 )
 LANGUAGE sql
 SECURITY DEFINER
@@ -239,8 +243,9 @@ SET search_path = nervous_system, public
 AS $$
   SELECT
     id, name, description, domain, type,
-    inputs, outputs, schedule_cron, refusal_gate,
-    budget_usd_per_run, active, skill_path
+    inputs_schema, outputs_schema, schedule_cron, refusal_gate,
+    budget_usd_per_run, active, status, run_endpoint, skill_md_path,
+    last_run_at, total_runs
   FROM nervous_system.skills
   WHERE active = true
   ORDER BY domain, name;
