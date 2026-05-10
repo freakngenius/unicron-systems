@@ -88,8 +88,8 @@ export function AtriumApp() {
         <Library />
       ) : (
         <AtriumPlaceholder
-          tab={activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}
-          sprint={TAB_SPRINT[activeTab]}
+          tab={(activeTab as string).charAt(0).toUpperCase() + (activeTab as string).slice(1)}
+          sprint={TAB_SPRINT[activeTab as AtriumTab]}
         />
       )}
     </AtriumLayout>
