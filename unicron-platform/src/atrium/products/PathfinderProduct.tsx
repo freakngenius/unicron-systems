@@ -144,21 +144,19 @@ function KpiPanel() {
   );
 }
 
-// ── Fallback Tenant Card ───────────────────────────────────────────────────────
+// ── Empty Tenants State ────────────────────────────────────────────────────────
 
-function ZedcorFallbackCard() {
+function EmptyTenantsState({ error }: { error?: string | null }) {
   return (
-    <div className="bg-bg-card border border-border-default rounded-xl px-5 py-4 flex items-center justify-between">
-      <div>
-        <div className="mono text-[13px] text-text-primary font-semibold">Zedcor</div>
-        <div className="mono text-[10px] text-text-muted mt-0.5 uppercase tracking-[0.1em]">
-          Customer-zero · Construction security · 24 branches
+    <div className="bg-bg-card border border-border-default rounded-xl px-5 py-6 text-center">
+      <div className="mono text-[11px] text-text-muted mb-1">
+        No active tenants
+      </div>
+      {error && (
+        <div className="mono text-[10px] text-accent-orange mt-2">
+          Live data unavailable: {error}
         </div>
-      </div>
-      <div className="flex items-center gap-2">
-        <span className="w-2 h-2 rounded-full bg-accent-orange" />
-        <span className="mono text-[10px] uppercase tracking-[0.1em] text-accent-orange">Pilot</span>
-      </div>
+      )}
     </div>
   );
 }
@@ -220,14 +218,7 @@ export function PathfinderProduct() {
         </div>
 
         {err ? (
-          <>
-            <div className="bg-[#D9A23A]/10 border border-[#D9A23A]/30 rounded-xl px-4 py-3 mb-3">
-              <div className="mono text-[11px] text-[#D9A23A]">
-                Live data unavailable — showing stub. ({err})
-              </div>
-            </div>
-            <ZedcorFallbackCard />
-          </>
+          <EmptyTenantsState error={err} />
         ) : hasTenants ? (
           <div className="space-y-2">
             {stats.tenants.map((t) => (
@@ -260,7 +251,7 @@ export function PathfinderProduct() {
             ))}
           </div>
         ) : (
-          <ZedcorFallbackCard />
+          <EmptyTenantsState />
         )}
       </section>
 
