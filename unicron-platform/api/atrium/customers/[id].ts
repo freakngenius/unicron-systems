@@ -3,7 +3,7 @@
 //
 // Flow:
 //   1. Validate request
-//   2. Taboo check — GET /api/atrium/taboo/check?action=update_customer_status&entity_id={id}
+//   2. Taboo check — inline vault fetch from unicron-knowledge/wiki/memory/taboos.md
 //   3. Load current row (before_state)
 //   4. Apply update via Supabase service role
 //   5. Write audit_log entry
@@ -48,20 +48,34 @@ function jsonResponse(res: ServerResponse, status: number, body: unknown): void 
   res.end(payload);
 }
 
-async function tabooCheck(action: string, entityId: string): Promise<boolean> {
+async function tabooCheck(text: string): Promise<{ blocked: boolean; reason?: string }> {
+  const token = process.env.GITHUB_VAULT_TOKEN;
+  if (!token) return { blocked: false };
   try {
-    const base =
-      process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000';
     const res = await fetch(
-      `${base}/api/atrium/taboo/check?action=${encodeURIComponent(action)}&entity_id=${encodeURIComponent(entityId)}`,
-      { signal: AbortSignal.timeout(3000) },
+      'https://api.github.com/repos/freakngenius/unicron-knowledge/contents/wiki/memory/taboos.md',
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/vnd.github.v3.raw',
+          'User-Agent': 'unicron-platform/1.0',
+        },
+      },
     );
-    if (!res.ok) return true;
-    const json = (await res.json()) as { allow?: boolean };
-    return json.allow !== false;
+    if (!res.ok) return { blocked: false };
+    const content = await res.text();
+    const lc = text.toLowerCase();
+    const lines = content.split('\n').filter((l) => l.trim().startsWith('-'));
+    for (const line of lines) {
+      const phrase = line.replace(/^-+\s*/, '').trim().toLowerCase();
+      if (phrase && lc.includes(phrase)) {
+        return { blocked: true, reason: `Taboo match: "${phrase}"` };
+      }
+    }
   } catch {
-    return true;
+    // Vault unreachable — allow through (fail open)
   }
+  return { blocked: false };
 }
 
 export default async function handler(req: IncomingMessage, res: ServerResponse): Promise<void> {
@@ -109,10 +123,11 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     return;
   }
 
-  // Taboo check
-  const allowed = await tabooCheck('update_customer_status', id);
-  if (!allowed) {
-    jsonResponse(res, 403, { error: 'Taboo check blocked this action' });
+  // Taboo check — scan free-text fields for vault taboo phrases
+  const tabooText = [status ?? '', String(notes ?? ''), primary_contact ?? ''].join(' ');
+  const taboo = await tabooCheck(tabooText);
+  if (taboo.blocked) {
+    jsonResponse(res, 403, { error: 'Taboo check blocked this action', reason: taboo.reason });
     return;
   }
 

@@ -43,20 +43,34 @@ function jsonResponse(res: ServerResponse, status: number, body: unknown): void 
   res.end(payload);
 }
 
-async function tabooCheck(action: string, entityId: string): Promise<boolean> {
+async function tabooCheck(text: string): Promise<{ blocked: boolean; reason?: string }> {
+  const token = process.env.GITHUB_VAULT_TOKEN;
+  if (!token) return { blocked: false };
   try {
-    const base =
-      process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000';
     const res = await fetch(
-      `${base}/api/atrium/taboo/check?action=${encodeURIComponent(action)}&entity_id=${encodeURIComponent(entityId)}`,
-      { signal: AbortSignal.timeout(3000) },
+      'https://api.github.com/repos/freakngenius/unicron-knowledge/contents/wiki/memory/taboos.md',
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/vnd.github.v3.raw',
+          'User-Agent': 'unicron-platform/1.0',
+        },
+      },
     );
-    if (!res.ok) return true;
-    const json = (await res.json()) as { allow?: boolean };
-    return json.allow !== false;
+    if (!res.ok) return { blocked: false };
+    const content = await res.text();
+    const lc = text.toLowerCase();
+    const lines = content.split('\n').filter((l) => l.trim().startsWith('-'));
+    for (const line of lines) {
+      const phrase = line.replace(/^-+\s*/, '').trim().toLowerCase();
+      if (phrase && lc.includes(phrase)) {
+        return { blocked: true, reason: `Taboo match: "${phrase}"` };
+      }
+    }
   } catch {
-    return true; // allow on failure — non-blocking
+    // Vault unreachable — allow through (fail open)
   }
+  return { blocked: false };
 }
 
 async function writeAuditLog(
@@ -147,9 +161,9 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       return;
     }
 
-    const allowed = await tabooCheck('create_customer', body.name);
-    if (!allowed) {
-      jsonResponse(res, 403, { error: 'Taboo check blocked this action' });
+    const taboo = await tabooCheck(body.name);
+    if (taboo.blocked) {
+      jsonResponse(res, 403, { error: 'Taboo check blocked this action', reason: taboo.reason });
       return;
     }
 
