@@ -75,7 +75,6 @@ async function buildScoringAgent(config: ForkConfig): Promise<ScoringAgent> {
       // Stream B (llm-council.ts) is a separate merge stream — the module may not
       // exist yet. We import by path string at runtime so TypeScript cannot
       // resolve it statically; the .catch(() => null) is the graceful fallback.
-      // @ts-expect-error — intentional dynamic import of a not-yet-merged Stream B module
       const mod = await import('./agents/llm-council.js').catch(() => null) as LLMCouncilModule | null;
 
       if (mod?.createLLMCouncilScorer) {
