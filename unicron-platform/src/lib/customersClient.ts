@@ -1,17 +1,9 @@
-// Multi-tenant customer client (Phase 1 / Stream M3 + 2026-05-04 persistence).
+// Multi-tenant customer client.
 //
-// Reads + writes for `pathfinder.organizations`. Until Pathfinder ships the
-// schema (see MEMORY/operator-todos/2026-05-04-pathfinder-needs-organizations-schema.md),
-// the write path falls back to localStorage so the demo flow stays continuous.
-//
-// Modes:
-//   - `VITE_CUSTOMER_PERSISTENCE_ENABLED=true`:
-//     real path — POST/GET via the server-side proxy at /api/internal/organizations.
-//   - Otherwise: mock-mode — merges `customersMock` with locally-persisted
-//     orgs in `localStorage`. Slug uniqueness still enforced.
-//
-// Health rollups (`getOrgHealth`) continue to gate on `VITE_PATHFINDER_DB_ENABLED`
-// and read from `pathfinder.*` directly via Supabase anon client.
+// Real-only: reads/writes go through the server-side proxy at
+// /api/internal/organizations (backed by pathfinder.organizations) and
+// health rollups read pathfinder.* directly via the Supabase anon client.
+// No env-flag-gated mock fallbacks; callers handle empty-state arrays.
 
 import { getSupabase } from './supabase';
 import type {
@@ -20,29 +12,6 @@ import type {
   OrgHealthRollup,
 } from './contracts/customers';
 import { SlugConflictError } from './contracts/customers';
-import { customersMock, customerHealthMock } from '../data/mocks';
-
-const LOCAL_STORAGE_KEY = 'unicron.customer_orgs.local';
-
-const KNOWN_ORGS: CustomerOrg[] = [
-  {
-    id: 'zedcor',
-    slug: 'zedcor',
-    display_name: 'Zedcor Security Solutions',
-    status: 'active',
-    onboarded_at: '2026-04-01T00:00:00.000Z',
-    primary_contact_email: 'ops@zedcor.example.com',
-    architecture: null,
-  },
-];
-
-function dbEnabled(): boolean {
-  return import.meta.env.VITE_PATHFINDER_DB_ENABLED === 'true';
-}
-
-export function customerPersistenceEnabled(): boolean {
-  return import.meta.env.VITE_CUSTOMER_PERSISTENCE_ENABLED === 'true';
-}
 
 const SLUG_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$/;
 
@@ -68,91 +37,41 @@ export function validateSlug(slug: string, existing: string[]): string | null {
   return null;
 }
 
-function readLocalOrgs(): CustomerOrg[] {
-  if (typeof window === 'undefined') return [];
-  try {
-    const raw = window.localStorage.getItem(LOCAL_STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw) as CustomerOrg[];
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
-function writeLocalOrgs(orgs: CustomerOrg[]): void {
-  if (typeof window === 'undefined') return;
-  try {
-    window.localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(orgs));
-  } catch {
-    // localStorage may be unavailable (private mode, quota); the in-memory
-    // demo continues without persistence.
-  }
-}
-
-/** Test seam — clears the localStorage scratch list. */
-export function __resetLocalCustomerOrgsForTests(): void {
-  if (typeof window === 'undefined') return;
-  try {
-    window.localStorage.removeItem(LOCAL_STORAGE_KEY);
-  } catch {
-    /* noop */
-  }
-}
-
 /**
  * Returns the list of customer orgs metacron operates.
- *
- * Real-mode (`customerPersistenceEnabled()`): GET Pathfinder /api/organizations.
- * Mock-mode: merges `customersMock` (or KNOWN_ORGS when DB flag set) with any
- * localStorage-persisted orgs from prior Approve & Deploy runs.
+ * GET /api/internal/organizations — returns [] when no rows exist.
  */
 export async function listCustomerOrgs(): Promise<CustomerOrg[]> {
-  if (customerPersistenceEnabled()) {
-    const res = await fetch('/api/internal/organizations', {
-      method: 'GET',
-      headers: { accept: 'application/json' },
-    });
-    if (!res.ok) {
-      const body = await res.text().catch(() => '');
-      throw new Error(`Organizations API ${res.status}: ${body || res.statusText}`);
-    }
-    return (await res.json()) as CustomerOrg[];
+  const res = await fetch('/api/internal/organizations', {
+    method: 'GET',
+    headers: { accept: 'application/json' },
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    throw new Error(`Organizations API ${res.status}: ${body || res.statusText}`);
   }
-
-  await new Promise((r) => setTimeout(r, 100));
-  const base = dbEnabled() ? KNOWN_ORGS : customersMock;
-  const local = readLocalOrgs();
-  const seen = new Set(base.map((o) => o.slug));
-  return [...base, ...local.filter((o) => !seen.has(o.slug))];
+  return (await res.json()) as CustomerOrg[];
 }
 
 /** Fetch one org by slug. Returns null on 404 / unknown. */
 export async function getCustomerOrgBySlug(
   slug: string,
 ): Promise<CustomerOrg | null> {
-  if (customerPersistenceEnabled()) {
-    const res = await fetch(
-      `/api/internal/organizations?slug=${encodeURIComponent(slug)}`,
-      { method: 'GET', headers: { accept: 'application/json' } },
-    );
-    if (res.status === 404) return null;
-    if (!res.ok) {
-      const body = await res.text().catch(() => '');
-      throw new Error(`Organizations API ${res.status}: ${body || res.statusText}`);
-    }
-    return (await res.json()) as CustomerOrg;
+  const res = await fetch(
+    `/api/internal/organizations?slug=${encodeURIComponent(slug)}`,
+    { method: 'GET', headers: { accept: 'application/json' } },
+  );
+  if (res.status === 404) return null;
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    throw new Error(`Organizations API ${res.status}: ${body || res.statusText}`);
   }
-
-  const all = await listCustomerOrgs();
-  return all.find((o) => o.slug === slug) ?? null;
+  return (await res.json()) as CustomerOrg;
 }
 
 /**
  * Persist a newly-onboarded customer org. Throws SlugConflictError on collision.
- *
- * Real-mode: POST `/api/organizations`. 409 → SlugConflictError.
- * Mock-mode: append to localStorage. Pre-flight slug check throws on collision.
+ * POST /api/internal/organizations. 409 → SlugConflictError.
  */
 export async function createCustomerOrg(
   input: CreateCustomerOrgInput,
@@ -163,58 +82,34 @@ export async function createCustomerOrg(
     throw new SlugConflictError(slug);
   }
 
-  if (customerPersistenceEnabled()) {
-    const res = await fetch('/api/internal/organizations', {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        accept: 'application/json',
-      },
-      body: JSON.stringify({
-        name: input.name,
-        slug,
-        customer_org_id: slug,
-        architecture: input.architecture ?? {},
-        primary_contact_email: input.primary_contact_email,
-      }),
-    });
-    if (res.status === 409) throw new SlugConflictError(slug);
-    if (!res.ok) {
-      const body = await res.text().catch(() => '');
-      throw new Error(`Organizations API ${res.status}: ${body || res.statusText}`);
-    }
-    return (await res.json()) as CustomerOrg;
+  const res = await fetch('/api/internal/organizations', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      accept: 'application/json',
+    },
+    body: JSON.stringify({
+      name: input.name,
+      slug,
+      customer_org_id: slug,
+      architecture: input.architecture ?? {},
+      primary_contact_email: input.primary_contact_email,
+    }),
+  });
+  if (res.status === 409) throw new SlugConflictError(slug);
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    throw new Error(`Organizations API ${res.status}: ${body || res.statusText}`);
   }
-
-  // Mock-mode persistence: localStorage continuity for the demo.
-  const row: CustomerOrg = {
-    id: slug,
-    slug,
-    display_name: input.name,
-    status: 'onboarding',
-    onboarded_at: new Date().toISOString(),
-    primary_contact_email: input.primary_contact_email,
-    architecture: input.architecture,
-  };
-  const local = readLocalOrgs();
-  writeLocalOrgs([...local, row]);
-  return row;
+  return (await res.json()) as CustomerOrg;
 }
 
 /**
  * Per-org health rollup — trailing 7d / 30d windows. Issues a small set of
  * SELECT queries against `pathfinder.projects` + `pathfinder.agent_log` +
- * `pathfinder.outreach_drafts` / `outreach_sends` and `pathfinder.data_sources`.
- *
- * Mock-mode returns the customerHealthMock fixture which mirrors the live
- * shape so the dashboard renders identically without Supabase access.
+ * `pathfinder.data_sources`. Always reads live data from Supabase.
  */
 export async function getOrgHealth(orgId: string): Promise<OrgHealthRollup> {
-  if (!dbEnabled()) {
-    await new Promise((r) => setTimeout(r, 150));
-    return { ...customerHealthMock, org_id: orgId };
-  }
-
   const supabase = getSupabase();
   const since30d = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
   const since7d = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
