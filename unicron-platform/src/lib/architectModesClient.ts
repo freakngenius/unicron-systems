@@ -18,20 +18,6 @@ import type {
   DiscoveryApiRequest,
   DiscoveryApiResponse,
 } from './contracts/architect';
-import {
-  architectDecompositionMock,
-  architectTuningMock,
-  architectDiscoveryMock,
-} from '../data/mocks';
-
-interface ArchitectEnv {
-  enabled: boolean;
-}
-
-function readEnv(): ArchitectEnv {
-  const enabled = import.meta.env.VITE_ARCHITECT_API_ENABLED === 'true';
-  return { enabled };
-}
 
 async function postJson<TReq, TRes>(path: string, body: TReq): Promise<TRes> {
   const headers: Record<string, string> = {
@@ -50,10 +36,6 @@ async function postJson<TReq, TRes>(path: string, body: TReq): Promise<TRes> {
   return (await res.json()) as TRes;
 }
 
-async function mockDelay(ms = 350): Promise<void> {
-  await new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 /**
  * Canonical-shape decomposition POST. The existing `architectClient.postDecomposition`
  * is kept for backwards compat with the legacy `{ buyerPain }` shape used by
@@ -63,38 +45,18 @@ async function mockDelay(ms = 350): Promise<void> {
 export async function postArchitectDecompose(
   req: DecompositionApiRequest,
 ): Promise<DecompositionApiResponse> {
-  const env = readEnv();
-  if (env.enabled) {
-    return postJson<DecompositionApiRequest, DecompositionApiResponse>(
-      '/api/architect/decompose-proxy',
-      req,
-    );
-  }
-  await mockDelay();
-  return architectDecompositionMock;
+  return postJson<DecompositionApiRequest, DecompositionApiResponse>(
+    '/api/architect/decompose-proxy',
+    req,
+  );
 }
 
 export async function postArchitectTune(req: TuningApiRequest): Promise<TuningApiResponse> {
-  const env = readEnv();
-  if (env.enabled) {
-    return postJson<TuningApiRequest, TuningApiResponse>('/api/architect/tune-proxy', req);
-  }
-  await mockDelay();
-  return architectTuningMock;
+  return postJson<TuningApiRequest, TuningApiResponse>('/api/architect/tune-proxy', req);
 }
 
 export async function postArchitectDiscover(
   req: DiscoveryApiRequest,
 ): Promise<DiscoveryApiResponse> {
-  const env = readEnv();
-  if (env.enabled) {
-    return postJson<DiscoveryApiRequest, DiscoveryApiResponse>('/api/architect/discover-proxy', req);
-  }
-  await mockDelay();
-  return architectDiscoveryMock;
-}
-
-/** Test seam — returns the snapshotted env for assertions. */
-export function __debugReadEnv(): ArchitectEnv {
-  return readEnv();
+  return postJson<DiscoveryApiRequest, DiscoveryApiResponse>('/api/architect/discover-proxy', req);
 }

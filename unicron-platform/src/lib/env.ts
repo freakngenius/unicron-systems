@@ -12,12 +12,6 @@ type RuntimeEnv = {
   supabaseAnonKey: string;
   /** When true, the app requires a signed-in Supabase session before rendering. */
   authRequired: boolean;
-  /**
-   * Feature flags that swap mocked panel implementations for the real
-   * downstream agent contracts. Default false until streams D and E ship.
-   */
-  architectApiEnabled: boolean;
-  sourceOnboarderEnabled: boolean;
   /** Operator email recorded against architect_proposals.resolved_by_user_email when approving / dismissing. */
   operatorEmail?: string;
   /** Atrium internal cockpit — enabled when VITE_ATRIUM_ENABLED=true. */
@@ -52,8 +46,6 @@ export function getEnv(): RuntimeEnv {
     supabaseUrl,
     supabaseAnonKey,
     authRequired: import.meta.env.VITE_AUTH_REQUIRED === 'true',
-    architectApiEnabled: import.meta.env.VITE_ARCHITECT_API_ENABLED === 'true',
-    sourceOnboarderEnabled: import.meta.env.VITE_SOURCE_ONBOARDER_ENABLED === 'true',
     operatorEmail: operatorEmail && operatorEmail.length > 0 ? operatorEmail : undefined,
     atriumEnabled: import.meta.env.VITE_ATRIUM_ENABLED === 'true',
     atriumEmailAllowlist: atriumAllowlistRaw
