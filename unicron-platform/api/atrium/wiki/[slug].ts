@@ -9,7 +9,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import * as fs from 'fs';
 import * as path from 'path';
-import { ghFetchFile } from './_github';
+import { ghFetchFile } from './_github.js';
 
 function getWikiRoot(): string | null {
   const vaultPath = process.env.VAULT_PATH;

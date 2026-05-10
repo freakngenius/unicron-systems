@@ -7,7 +7,7 @@
 import type { IncomingMessage, ServerResponse } from 'http';
 import * as fs from 'fs';
 import * as path from 'path';
-import { ghListWikiFiles, ghFetchBlob } from './_github';
+import { ghListWikiFiles, ghFetchBlob } from './_github.js';
 
 export interface WikiPage {
   slug: string;

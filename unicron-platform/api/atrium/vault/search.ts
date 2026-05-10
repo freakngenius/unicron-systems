@@ -8,7 +8,7 @@ import type { IncomingMessage, ServerResponse } from 'http';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as url from 'url';
-import { ghListWikiFiles, ghFetchBlob } from '../wiki/_github';
+import { ghListWikiFiles, ghFetchBlob } from '../wiki/_github.js';
 
 export interface SearchResult {
   slug: string;
