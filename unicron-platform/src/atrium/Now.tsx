@@ -760,7 +760,7 @@ interface SkillDispatchState {
   triageMessage: string | null;
 }
 
-// Sprint 5: modal state for active Research/Sales skills that need input
+// Sprint 5+6: modal state for active skills that need input
 type SkillModalState =
   | { open: false }
   | {
@@ -776,30 +776,36 @@ type SkillModalState =
       customerId?: string;
       newStage?: string;
       note?: string;
+      // marketing fields (Sprint 6)
+      targetAudience?: string;
+      platform?: string;
+      audience?: string;
+      product?: string;
+      pageSlug?: string;
+      proposedChanges?: string;
     };
 
 // Slugs that route to /api/atrium/skills/run instead of /api/skills/dispatch
 const PRODUCTIVITY_SLUGS = new Set(['morning-brief', 'inbox-triage']);
 
-// Sprint 5: slugs that route to /api/atrium/skills/run and need a modal for input
+// Sprint 5+6: slugs that route to /api/atrium/skills/run and need a modal for input
 const MODAL_SKILL_SLUGS = new Set([
   'deep-research',
   'llm-council-deliberate',
   'track-pipeline-stage',
+  // Marketing (Sprint 6)
+  'draft-blog-post',
+  'draft-social-post',
+  'generate-positioning-deck',
+  'update-manifesto-page',
 ]);
 
 // Future-sprint placeholder skills not yet in the DB.
 // Shown as disabled stubs until seeded.
 // Sprint 4: Productivity domain is now live — removed from stubs.
 // Sprint 5: Research, Discovery, Sales domains are now DB-registered — removed from stubs.
-const FUTURE_SKILL_STUBS: { label: string; key: string; names: string[]; sprint: number }[] = [
-  {
-    label: 'Marketing',
-    key: 'marketing',
-    names: ['Blog Post', 'Social Post'],
-    sprint: 6,
-  },
-];
+// Sprint 6: Marketing domain is now DB-registered — removed from stubs.
+const FUTURE_SKILL_STUBS: { label: string; key: string; names: string[]; sprint: number }[] = [];
 
 function formatSkillName(name: string): string {
   return name.split('-').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
@@ -872,6 +878,18 @@ function SkillsSurface({ onOpenQuickCapture }: { onOpenQuickCapture?: () => void
         bodyPayload.customer_id = modal.customerId ?? '';
         bodyPayload.new_stage = modal.newStage ?? '';
         if (modal.note) bodyPayload.note = modal.note;
+      } else if (skill.name === 'draft-blog-post') {
+        bodyPayload.topic = modal.topic ?? '';
+        if (modal.targetAudience) bodyPayload.target_audience = modal.targetAudience;
+      } else if (skill.name === 'draft-social-post') {
+        bodyPayload.topic = modal.topic ?? '';
+        bodyPayload.platform = modal.platform ?? 'both';
+      } else if (skill.name === 'generate-positioning-deck') {
+        bodyPayload.audience = modal.audience ?? '';
+        bodyPayload.product = modal.product ?? 'pathfinder';
+      } else if (skill.name === 'update-manifesto-page') {
+        bodyPayload.page_slug = modal.pageSlug ?? '';
+        bodyPayload.proposed_changes = modal.proposedChanges ?? '';
       }
 
       const res = await fetch('/api/atrium/skills/run', {
@@ -898,6 +916,23 @@ function SkillsSurface({ onOpenQuickCapture }: { onOpenQuickCapture?: () => void
           ? (json.synthesis as string | undefined) ?? JSON.stringify(json, null, 2)
           : skill.name === 'track-pipeline-stage'
           ? `Stage updated → ${(json.stage as string | undefined) ?? 'unknown'}`
+          : skill.name === 'draft-blog-post'
+          ? (json.draft as string | undefined) ?? JSON.stringify(json, null, 2)
+          : skill.name === 'draft-social-post'
+          ? [
+              json.linkedin ? `**LinkedIn:**\n${json.linkedin as string}` : '',
+              json.twitter ? `**Twitter/X:**\n${json.twitter as string}` : '',
+            ].filter(Boolean).join('\n\n') || JSON.stringify(json, null, 2)
+          : skill.name === 'generate-positioning-deck'
+          ? (() => {
+              const slides = json.slides as Array<{ title: string; bullet_points: string[] }> | undefined;
+              if (!slides || !Array.isArray(slides)) return JSON.stringify(json, null, 2);
+              return slides.map((s, i) =>
+                `**Slide ${i + 1}: ${s.title}**\n${(s.bullet_points ?? []).map((b) => `• ${b}`).join('\n')}`
+              ).join('\n\n');
+            })()
+          : skill.name === 'update-manifesto-page'
+          ? (json.proposed_edit as string | undefined) ?? JSON.stringify(json, null, 2)
           : JSON.stringify(json, null, 2);
 
       setState((s) => ({
@@ -930,9 +965,28 @@ function SkillsSurface({ onOpenQuickCapture }: { onOpenQuickCapture?: () => void
       return;
     }
 
-    // Sprint 5: modal-driven active skills — open input modal
+    // Sprint 5+6: modal-driven active skills — open input modal
     if (MODAL_SKILL_SLUGS.has(skill.name)) {
-      setModal({ open: true, skill, topic: '', depth: 'standard', question: '', criteria: '', customerId: '', newStage: 'qualified', note: '' });
+      setModal({
+        open: true,
+        skill,
+        // research
+        topic: '',
+        depth: 'standard',
+        question: '',
+        criteria: '',
+        // sales
+        customerId: '',
+        newStage: 'qualified',
+        note: '',
+        // marketing
+        targetAudience: '',
+        platform: 'both',
+        audience: '',
+        product: 'pathfinder',
+        pageSlug: '',
+        proposedChanges: '',
+      });
       return;
     }
 
@@ -1424,6 +1478,138 @@ function SkillsSurface({ onOpenQuickCapture }: { onOpenQuickCapture?: () => void
                       placeholder="What happened? Any context for this stage change."
                       value={modal.note ?? ''}
                       onChange={(e) => setModal((m) => m.open ? { ...m, note: e.target.value } : m)}
+                      className="w-full bg-[#1A1A1D] border border-[#1F1F23] rounded-lg px-3 py-2 mono text-[13px] text-[#E5E5E7] placeholder:text-[rgba(229,229,231,0.3)] focus:outline-none focus:border-[#2A2A2E] resize-none"
+                    />
+                  </div>
+                </>
+              )}
+
+              {/* draft-blog-post fields */}
+              {modal.skill.name === 'draft-blog-post' && (
+                <>
+                  <div>
+                    <label className="mono text-[9px] uppercase tracking-[0.18em] text-[rgba(229,229,231,0.5)] block mb-1.5">
+                      Topic *
+                    </label>
+                    <textarea
+                      autoFocus
+                      required
+                      rows={2}
+                      placeholder="e.g. How surveillance operators can win more bids with procurement intelligence"
+                      value={modal.topic ?? ''}
+                      onChange={(e) => setModal((m) => m.open ? { ...m, topic: e.target.value } : m)}
+                      className="w-full bg-[#1A1A1D] border border-[#1F1F23] rounded-lg px-3 py-2 mono text-[13px] text-[#E5E5E7] placeholder:text-[rgba(229,229,231,0.3)] focus:outline-none focus:border-[#2A2A2E] resize-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="mono text-[9px] uppercase tracking-[0.18em] text-[rgba(229,229,231,0.5)] block mb-1.5">
+                      Target Audience (optional)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. construction security buyers, investors"
+                      value={modal.targetAudience ?? ''}
+                      onChange={(e) => setModal((m) => m.open ? { ...m, targetAudience: e.target.value } : m)}
+                      className="w-full bg-[#1A1A1D] border border-[#1F1F23] rounded-lg px-3 py-2 mono text-[13px] text-[#E5E5E7] placeholder:text-[rgba(229,229,231,0.3)] focus:outline-none focus:border-[#2A2A2E]"
+                    />
+                  </div>
+                </>
+              )}
+
+              {/* draft-social-post fields */}
+              {modal.skill.name === 'draft-social-post' && (
+                <>
+                  <div>
+                    <label className="mono text-[9px] uppercase tracking-[0.18em] text-[rgba(229,229,231,0.5)] block mb-1.5">
+                      Topic / Milestone *
+                    </label>
+                    <textarea
+                      autoFocus
+                      required
+                      rows={2}
+                      placeholder="e.g. We just shipped procurement signal scoring for Zedcor"
+                      value={modal.topic ?? ''}
+                      onChange={(e) => setModal((m) => m.open ? { ...m, topic: e.target.value } : m)}
+                      className="w-full bg-[#1A1A1D] border border-[#1F1F23] rounded-lg px-3 py-2 mono text-[13px] text-[#E5E5E7] placeholder:text-[rgba(229,229,231,0.3)] focus:outline-none focus:border-[#2A2A2E] resize-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="mono text-[9px] uppercase tracking-[0.18em] text-[rgba(229,229,231,0.5)] block mb-1.5">
+                      Platform
+                    </label>
+                    <select
+                      value={modal.platform ?? 'both'}
+                      onChange={(e) => setModal((m) => m.open ? { ...m, platform: e.target.value } : m)}
+                      className="w-full bg-[#1A1A1D] border border-[#1F1F23] rounded-lg px-3 py-2 mono text-[13px] text-[#E5E5E7] focus:outline-none focus:border-[#2A2A2E]"
+                    >
+                      <option value="both">Both (LinkedIn + Twitter/X)</option>
+                      <option value="linkedin">LinkedIn only</option>
+                      <option value="twitter">Twitter/X only</option>
+                    </select>
+                  </div>
+                </>
+              )}
+
+              {/* generate-positioning-deck fields */}
+              {modal.skill.name === 'generate-positioning-deck' && (
+                <>
+                  <div>
+                    <label className="mono text-[9px] uppercase tracking-[0.18em] text-[rgba(229,229,231,0.5)] block mb-1.5">
+                      Audience Segment *
+                    </label>
+                    <input
+                      autoFocus
+                      required
+                      type="text"
+                      placeholder="e.g. construction security buyers, municipal procurement officers"
+                      value={modal.audience ?? ''}
+                      onChange={(e) => setModal((m) => m.open ? { ...m, audience: e.target.value } : m)}
+                      className="w-full bg-[#1A1A1D] border border-[#1F1F23] rounded-lg px-3 py-2 mono text-[13px] text-[#E5E5E7] placeholder:text-[rgba(229,229,231,0.3)] focus:outline-none focus:border-[#2A2A2E]"
+                    />
+                  </div>
+                  <div>
+                    <label className="mono text-[9px] uppercase tracking-[0.18em] text-[rgba(229,229,231,0.5)] block mb-1.5">
+                      Product
+                    </label>
+                    <select
+                      value={modal.product ?? 'pathfinder'}
+                      onChange={(e) => setModal((m) => m.open ? { ...m, product: e.target.value } : m)}
+                      className="w-full bg-[#1A1A1D] border border-[#1F1F23] rounded-lg px-3 py-2 mono text-[13px] text-[#E5E5E7] focus:outline-none focus:border-[#2A2A2E]"
+                    >
+                      <option value="pathfinder">Pathfinder</option>
+                      <option value="metacron">Metacron</option>
+                    </select>
+                  </div>
+                </>
+              )}
+
+              {/* update-manifesto-page fields */}
+              {modal.skill.name === 'update-manifesto-page' && (
+                <>
+                  <div>
+                    <label className="mono text-[9px] uppercase tracking-[0.18em] text-[rgba(229,229,231,0.5)] block mb-1.5">
+                      Page Slug *
+                    </label>
+                    <input
+                      autoFocus
+                      required
+                      type="text"
+                      placeholder="e.g. why-we-build, seven-generations, operating-principles"
+                      value={modal.pageSlug ?? ''}
+                      onChange={(e) => setModal((m) => m.open ? { ...m, pageSlug: e.target.value } : m)}
+                      className="w-full bg-[#1A1A1D] border border-[#1F1F23] rounded-lg px-3 py-2 mono text-[13px] text-[#E5E5E7] placeholder:text-[rgba(229,229,231,0.3)] focus:outline-none focus:border-[#2A2A2E]"
+                    />
+                  </div>
+                  <div>
+                    <label className="mono text-[9px] uppercase tracking-[0.18em] text-[rgba(229,229,231,0.5)] block mb-1.5">
+                      Proposed Changes *
+                    </label>
+                    <textarea
+                      required
+                      rows={3}
+                      placeholder="Describe what to add, remove, or reframe — e.g. 'Add a paragraph about Zedcor pilot outcomes to the proof section'"
+                      value={modal.proposedChanges ?? ''}
+                      onChange={(e) => setModal((m) => m.open ? { ...m, proposedChanges: e.target.value } : m)}
                       className="w-full bg-[#1A1A1D] border border-[#1F1F23] rounded-lg px-3 py-2 mono text-[13px] text-[#E5E5E7] placeholder:text-[rgba(229,229,231,0.3)] focus:outline-none focus:border-[#2A2A2E] resize-none"
                     />
                   </div>
