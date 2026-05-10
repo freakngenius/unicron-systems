@@ -802,3 +802,19 @@ Operator setup: `MEMORY/operator-todos/2026-05-03-teams-user-setup.md` — Micro
 **Drift:** none.
 **Tests:** `Pathfinder/__tests__/architect/decomposition-session.test.ts` confirms `business_summary` is emitted on the output JSON and persisted into `architect_proposals.details`. `Pathfinder/__tests__/architect/eval-score.test.ts` updated for the new required field.
 
+---
+
+## Architect output quality fixes — PR #174
+
+**State:** PR #174 open. Fixes cross-vertical noise in `data_sources_rejected` and cleans the customer name title in the decomposition system prompt.
+
+#### Pathfinder/services/architect/prompts/decomposition.ts
+**Implements:** SPEC §"Phase A — Architect agent → System prompt extension". Bumped to `2026-05-04-v3`; appended REJECTED SOURCES DISCIPLINE block instructing the model to only include in-vertical rejected sources and omit cross-industry non-candidates entirely.
+**Last verified against spec:** 2026-05-09.
+**Drift:** additive only — v3 extends v2 prompt without removing any existing instruction.
+
+#### Pathfinder/services/architect/sessions/decomposition.ts
+**Implements:** SPEC §"Phase A — Architect agent → Decomposition runtime". Adds `filterRejectedSources(rejected, proposed)` post-processing step — derives relevant industries from proposed sources via `SOURCE_CATALOG`, keeps only rejected entries whose catalog industries overlap, drops catalog-unknown entries (hallucinated or out-of-catalog types). Applied unconditionally after agent finalization so the prompt instruction and runtime filter are defense-in-depth.
+**Last verified against spec:** 2026-05-09.
+**Drift:** none — pure additive filter, no removal of existing session logic.
+
