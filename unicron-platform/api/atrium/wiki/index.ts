@@ -7,7 +7,7 @@
 import type { IncomingMessage, ServerResponse } from 'http';
 import * as fs from 'fs';
 import * as path from 'path';
-import { ghListWikiFiles, ghFetchBlob } from './_github.js';
+import { ghListWikiFiles } from './_github.js';
 
 export interface WikiPage {
   slug: string;
@@ -84,21 +84,25 @@ function collectPages(wikiRoot: string, dir: string, pages: WikiPage[]): void {
   }
 }
 
+/** Derive a display title from slug when blob content is unavailable. */
+function titleFromSlug(slug: string): string {
+  const name = slug.split('/').pop() ?? slug;
+  return name.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 async function listFromGitHub(): Promise<WikiPage[]> {
+  // Use tree listing only (1 request) — avoids N blob fetches that exhaust
+  // the 60 req/hr unauthenticated GitHub rate limit.
   const files = await ghListWikiFiles();
-  const pages = await Promise.all(
-    files.map(async (file) => {
-      const content = await ghFetchBlob(file.sha);
-      const slug = file.path.replace(/^wiki\//, '').replace(/\.md$/, '');
-      return {
-        slug,
-        title: extractTitle(content, slug),
-        path: file.path.replace(/^wiki\//, ''),
-        frontmatter: parseFrontmatter(content),
-      };
-    }),
-  );
-  return pages;
+  return files.map((file) => {
+    const slug = file.path.replace(/^wiki\//, '').replace(/\.md$/, '');
+    return {
+      slug,
+      title: titleFromSlug(slug),
+      path: file.path.replace(/^wiki\//, ''),
+      frontmatter: {},
+    };
+  });
 }
 
 export default async function handler(req: IncomingMessage, res: ServerResponse): Promise<void> {
