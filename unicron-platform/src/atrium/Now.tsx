@@ -1,6 +1,12 @@
-// Atrium Now tab — Sprint 4 Stream C upgrade.
+// Atrium Now tab — Sprint 5 Stream G upgrade (extends Sprint 4 Stream C).
 //
-// Upgrades over Sprint 2:
+// Sprint 5 upgrades:
+//  1. SkillsSurface — Research + Sales skills from DB; active skills show run modals;
+//                     scaffolded skills show dimmed disabled button ("Coming in Sprint 6")
+//  2. FUTURE_SKILL_STUBS — Research/Sales/Discovery domains removed (now in DB)
+//  3. SkillRow type — extended with status + run_endpoint from updated ns_list_skills()
+//
+// Sprint 4 upgrades (preserved):
 //  1. StatusPulse   — fully wired: agents (status field), escalations (audit_log 24h),
 //                     budget (budget jsonb), decay (ledger decay_at)
 //  2. TopOfMind     — replaced with attention-scored list (AttentionScorer)
@@ -14,6 +20,7 @@ import {
   useRef,
   useCallback,
   type KeyboardEvent,
+  type FormEvent,
 } from 'react';
 import { getSupabase } from '../lib/supabase';
 import { useAuth } from '../lib/auth';
@@ -37,6 +44,10 @@ interface SkillRow {
   domain: string;
   active: boolean;
   refusal_gate: boolean;
+  // Sprint 5: status distinguishes live vs. scaffolded skills
+  status?: 'active' | 'scaffolded' | 'deprecated' | null;
+  // Sprint 5: explicit routing metadata
+  run_endpoint?: string | null;
   // config is an opaque JSON column — we only read ui_trigger here
   config?: { ui_trigger?: boolean } | null;
 }
@@ -749,31 +760,39 @@ interface SkillDispatchState {
   triageMessage: string | null;
 }
 
+// Sprint 5: modal state for active Research/Sales skills that need input
+type SkillModalState =
+  | { open: false }
+  | {
+      open: true;
+      skill: SkillRow;
+      // deep-research fields
+      topic?: string;
+      depth?: string;
+      // llm-council-deliberate fields
+      question?: string;
+      criteria?: string;
+      // track-pipeline-stage fields
+      customerId?: string;
+      newStage?: string;
+      note?: string;
+    };
+
 // Slugs that route to /api/atrium/skills/run instead of /api/skills/dispatch
 const PRODUCTIVITY_SLUGS = new Set(['morning-brief', 'inbox-triage']);
+
+// Sprint 5: slugs that route to /api/atrium/skills/run and need a modal for input
+const MODAL_SKILL_SLUGS = new Set([
+  'deep-research',
+  'llm-council-deliberate',
+  'track-pipeline-stage',
+]);
 
 // Future-sprint placeholder skills not yet in the DB.
 // Shown as disabled stubs until seeded.
 // Sprint 4: Productivity domain is now live — removed from stubs.
+// Sprint 5: Research, Discovery, Sales domains are now DB-registered — removed from stubs.
 const FUTURE_SKILL_STUBS: { label: string; key: string; names: string[]; sprint: number }[] = [
-  {
-    label: 'Research',
-    key: 'research',
-    names: ['Deep Research', 'LightRAG Query', 'Morning Trend'],
-    sprint: 5,
-  },
-  {
-    label: 'Discovery',
-    key: 'discovery',
-    names: ['Schedule Call', 'Extract Signals'],
-    sprint: 5,
-  },
-  {
-    label: 'Sales',
-    key: 'sales',
-    names: ['Pipeline Stage', 'Generate Proposal'],
-    sprint: 5,
-  },
   {
     label: 'Marketing',
     key: 'marketing',
@@ -813,6 +832,9 @@ function SkillsSurface({ onOpenQuickCapture }: { onOpenQuickCapture?: () => void
     triageMessage: null,
   });
 
+  // Sprint 5: modal state for active skills that need user input before running
+  const [modal, setModal] = useState<SkillModalState>({ open: false });
+
   const byDomain = skills.reduce<Record<string, SkillRow[]>>((acc, s) => {
     (acc[s.domain] ??= []).push(s);
     return acc;
@@ -820,12 +842,97 @@ function SkillsSurface({ onOpenQuickCapture }: { onOpenQuickCapture?: () => void
 
   const registeredNames = new Set(skills.map((s) => s.name));
 
+  // Sprint 5: submit handler for modal-driven active skills
+  async function handleModalSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!modal.open) return;
+    const skill = modal.skill;
+    setModal({ open: false });
+
+    setState((s) => ({
+      ...s,
+      running: true,
+      runningSlug: skill.name,
+      result: null,
+      error: null,
+      triageItems: null,
+      triageMessage: null,
+    }));
+
+    try {
+      const bodyPayload: Record<string, unknown> = { skill_slug: skill.name };
+
+      if (skill.name === 'deep-research') {
+        bodyPayload.topic = modal.topic ?? '';
+        if (modal.depth) bodyPayload.depth = modal.depth;
+      } else if (skill.name === 'llm-council-deliberate') {
+        bodyPayload.question = modal.question ?? '';
+        if (modal.criteria) bodyPayload.criteria = modal.criteria;
+      } else if (skill.name === 'track-pipeline-stage') {
+        bodyPayload.customer_id = modal.customerId ?? '';
+        bodyPayload.new_stage = modal.newStage ?? '';
+        if (modal.note) bodyPayload.note = modal.note;
+      }
+
+      const res = await fetch('/api/atrium/skills/run', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(bodyPayload),
+      });
+      const json = await res.json().catch(() => ({})) as Record<string, unknown>;
+
+      if (!res.ok) {
+        setState((s) => ({
+          ...s,
+          running: false,
+          runningSlug: null,
+          error: (json.error as string | undefined) ?? `${skill.name} failed (${res.status})`,
+        }));
+        return;
+      }
+
+      const resultText =
+        skill.name === 'deep-research'
+          ? (json.summary as string | undefined) ?? JSON.stringify(json, null, 2)
+          : skill.name === 'llm-council-deliberate'
+          ? (json.synthesis as string | undefined) ?? JSON.stringify(json, null, 2)
+          : skill.name === 'track-pipeline-stage'
+          ? `Stage updated → ${(json.stage as string | undefined) ?? 'unknown'}`
+          : JSON.stringify(json, null, 2);
+
+      setState((s) => ({
+        ...s,
+        running: false,
+        runningSlug: null,
+        result: resultText,
+      }));
+    } catch (err) {
+      setState((s) => ({
+        ...s,
+        running: false,
+        runningSlug: null,
+        error: err instanceof Error ? err.message : 'Unknown error',
+      }));
+    }
+  }
+
   async function handleSkillClick(skill: SkillRow) {
     if (state.running) return;
 
     // quick-capture: UI trigger — open the modal directly, no API call
     if (skill.name === 'quick-capture' || skill.config?.ui_trigger === true) {
       onOpenQuickCapture?.();
+      return;
+    }
+
+    // Sprint 5: scaffolded skills — do nothing (button is disabled in the UI)
+    if (skill.status === 'scaffolded') {
+      return;
+    }
+
+    // Sprint 5: modal-driven active skills — open input modal
+    if (MODAL_SKILL_SLUGS.has(skill.name)) {
+      setModal({ open: true, skill, topic: '', depth: 'standard', question: '', criteria: '', customerId: '', newStage: 'qualified', note: '' });
       return;
     }
 
@@ -1083,28 +1190,40 @@ function SkillsSurface({ onOpenQuickCapture }: { onOpenQuickCapture?: () => void
                 const isThisRunning = state.running && state.runningSlug === skill.name;
                 const isUiTrigger =
                   skill.name === 'quick-capture' || skill.config?.ui_trigger === true;
+                // Sprint 5: scaffolded skills render as disabled/dimmed
+                const isScaffolded = skill.status === 'scaffolded';
+                const isDisabled = isScaffolded || (state.running && !isUiTrigger);
                 return (
                   <button
                     key={skill.id}
                     title={
-                      isUiTrigger
+                      isScaffolded
+                        ? 'Coming in Sprint 6'
+                        : isUiTrigger
                         ? 'Opens Quick Capture modal'
                         : skill.description
                     }
                     onClick={() => void handleSkillClick(skill)}
-                    disabled={state.running && !isUiTrigger}
+                    disabled={isDisabled}
                     className={[
                       'text-left px-3 py-2 rounded-lg border mono text-[11px] tracking-[0.08em] transition-colors',
                       isThisRunning
                         ? 'border-[#FF6B2B] text-[#FF6B2B] opacity-70 cursor-wait'
+                        : isScaffolded
+                        ? 'border-[#1F1F23] text-[rgba(229,229,231,0.25)] cursor-not-allowed opacity-60'
                         : 'border-[#2A2A2E] text-[#E5E5E7] hover:border-[#FF6B2B] hover:text-[#FF6B2B] cursor-pointer',
-                      state.running && !isUiTrigger
+                      isDisabled && !isThisRunning && !isScaffolded
                         ? 'disabled:opacity-50 disabled:cursor-not-allowed'
                         : '',
                     ].join(' ')}
                   >
                     {isThisRunning ? '…' : formatSkillName(skill.name)}
-                    {skill.refusal_gate && !isThisRunning && (
+                    {isScaffolded && (
+                      <span className="ml-1 mono text-[8px] text-[rgba(229,229,231,0.2)]">
+                        S6
+                      </span>
+                    )}
+                    {skill.refusal_gate && !isThisRunning && !isScaffolded && (
                       <span
                         className="ml-1 mono text-[8px] text-orange-400"
                         title="Requires human approval before running"
@@ -1166,6 +1285,171 @@ function SkillsSurface({ onOpenQuickCapture }: { onOpenQuickCapture?: () => void
           </div>
         ))}
       </div>
+
+      {/* ─── Sprint 5: Skill Input Modals ─── */}
+      {modal.open && (
+        <div
+          className="fixed inset-0 z-[90] flex items-start justify-center pt-[12vh] px-4"
+          onClick={(e) => e.target === e.currentTarget && setModal({ open: false })}
+        >
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setModal({ open: false })} />
+          <div className="relative bg-[#141416] border border-[#2A2A2E] rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+            {/* Modal header */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-[#1F1F23]">
+              <div>
+                <div className="mono text-[12px] text-[#E5E5E7] font-medium">
+                  {formatSkillName(modal.skill.name)}
+                </div>
+                <div className="mono text-[10px] text-[rgba(229,229,231,0.4)] mt-0.5 line-clamp-1">
+                  {modal.skill.description}
+                </div>
+              </div>
+              <button
+                onClick={() => setModal({ open: false })}
+                className="mono text-[10px] uppercase tracking-[0.16em] text-[rgba(229,229,231,0.5)] hover:text-[#E5E5E7] transition-colors ml-4"
+              >
+                esc
+              </button>
+            </div>
+
+            {/* Modal form */}
+            <form onSubmit={(e) => void handleModalSubmit(e)} className="px-5 py-5 space-y-4">
+              {/* deep-research fields */}
+              {modal.skill.name === 'deep-research' && (
+                <>
+                  <div>
+                    <label className="mono text-[9px] uppercase tracking-[0.18em] text-[rgba(229,229,231,0.5)] block mb-1.5">
+                      Topic *
+                    </label>
+                    <textarea
+                      autoFocus
+                      required
+                      rows={3}
+                      placeholder="What should the system research? Be specific."
+                      value={modal.topic ?? ''}
+                      onChange={(e) => setModal((m) => m.open ? { ...m, topic: e.target.value } : m)}
+                      className="w-full bg-[#1A1A1D] border border-[#1F1F23] rounded-lg px-3 py-2 mono text-[13px] text-[#E5E5E7] placeholder:text-[rgba(229,229,231,0.3)] focus:outline-none focus:border-[#2A2A2E] resize-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="mono text-[9px] uppercase tracking-[0.18em] text-[rgba(229,229,231,0.5)] block mb-1.5">
+                      Depth
+                    </label>
+                    <select
+                      value={modal.depth ?? 'standard'}
+                      onChange={(e) => setModal((m) => m.open ? { ...m, depth: e.target.value } : m)}
+                      className="w-full bg-[#1A1A1D] border border-[#1F1F23] rounded-lg px-3 py-2 mono text-[13px] text-[#E5E5E7] focus:outline-none focus:border-[#2A2A2E]"
+                    >
+                      <option value="quick">Quick (2-4 pages)</option>
+                      <option value="standard">Standard (6-10 pages)</option>
+                      <option value="deep">Deep (12-15 pages)</option>
+                    </select>
+                  </div>
+                </>
+              )}
+
+              {/* llm-council-deliberate fields */}
+              {modal.skill.name === 'llm-council-deliberate' && (
+                <>
+                  <div>
+                    <label className="mono text-[9px] uppercase tracking-[0.18em] text-[rgba(229,229,231,0.5)] block mb-1.5">
+                      Question *
+                    </label>
+                    <textarea
+                      autoFocus
+                      required
+                      rows={3}
+                      placeholder="What question or decision should the council deliberate on?"
+                      value={modal.question ?? ''}
+                      onChange={(e) => setModal((m) => m.open ? { ...m, question: e.target.value } : m)}
+                      className="w-full bg-[#1A1A1D] border border-[#1F1F23] rounded-lg px-3 py-2 mono text-[13px] text-[#E5E5E7] placeholder:text-[rgba(229,229,231,0.3)] focus:outline-none focus:border-[#2A2A2E] resize-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="mono text-[9px] uppercase tracking-[0.18em] text-[rgba(229,229,231,0.5)] block mb-1.5">
+                      Evaluation Criteria (optional)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. speed, cost, risk, market fit"
+                      value={modal.criteria ?? ''}
+                      onChange={(e) => setModal((m) => m.open ? { ...m, criteria: e.target.value } : m)}
+                      className="w-full bg-[#1A1A1D] border border-[#1F1F23] rounded-lg px-3 py-2 mono text-[13px] text-[#E5E5E7] placeholder:text-[rgba(229,229,231,0.3)] focus:outline-none focus:border-[#2A2A2E]"
+                    />
+                  </div>
+                </>
+              )}
+
+              {/* track-pipeline-stage fields */}
+              {modal.skill.name === 'track-pipeline-stage' && (
+                <>
+                  <div>
+                    <label className="mono text-[9px] uppercase tracking-[0.18em] text-[rgba(229,229,231,0.5)] block mb-1.5">
+                      Customer ID *
+                    </label>
+                    <input
+                      autoFocus
+                      required
+                      type="text"
+                      placeholder="UUID of the customer record"
+                      value={modal.customerId ?? ''}
+                      onChange={(e) => setModal((m) => m.open ? { ...m, customerId: e.target.value } : m)}
+                      className="w-full bg-[#1A1A1D] border border-[#1F1F23] rounded-lg px-3 py-2 mono text-[13px] text-[#E5E5E7] placeholder:text-[rgba(229,229,231,0.3)] focus:outline-none focus:border-[#2A2A2E] font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="mono text-[9px] uppercase tracking-[0.18em] text-[rgba(229,229,231,0.5)] block mb-1.5">
+                      New Stage *
+                    </label>
+                    <select
+                      required
+                      value={modal.newStage ?? 'qualified'}
+                      onChange={(e) => setModal((m) => m.open ? { ...m, newStage: e.target.value } : m)}
+                      className="w-full bg-[#1A1A1D] border border-[#1F1F23] rounded-lg px-3 py-2 mono text-[13px] text-[#E5E5E7] focus:outline-none focus:border-[#2A2A2E]"
+                    >
+                      <option value="lead">Lead</option>
+                      <option value="qualified">Qualified</option>
+                      <option value="proposal">Proposal</option>
+                      <option value="negotiation">Negotiation</option>
+                      <option value="closed_won">Closed Won</option>
+                      <option value="closed_lost">Closed Lost</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mono text-[9px] uppercase tracking-[0.18em] text-[rgba(229,229,231,0.5)] block mb-1.5">
+                      Note (optional)
+                    </label>
+                    <textarea
+                      rows={2}
+                      placeholder="What happened? Any context for this stage change."
+                      value={modal.note ?? ''}
+                      onChange={(e) => setModal((m) => m.open ? { ...m, note: e.target.value } : m)}
+                      className="w-full bg-[#1A1A1D] border border-[#1F1F23] rounded-lg px-3 py-2 mono text-[13px] text-[#E5E5E7] placeholder:text-[rgba(229,229,231,0.3)] focus:outline-none focus:border-[#2A2A2E] resize-none"
+                    />
+                  </div>
+                </>
+              )}
+
+              {/* Modal actions */}
+              <div className="flex items-center justify-end gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setModal({ open: false })}
+                  className="mono text-[11px] uppercase tracking-[0.14em] px-4 py-2 rounded-lg border border-[#1F1F23] text-[rgba(229,229,231,0.5)] hover:text-[#E5E5E7] hover:border-[#2A2A2E] transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="mono text-[11px] uppercase tracking-[0.14em] bg-[#FF6B2B] text-white px-4 py-2 rounded-lg hover:bg-[#e55a1a] transition-colors"
+                >
+                  Run →
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

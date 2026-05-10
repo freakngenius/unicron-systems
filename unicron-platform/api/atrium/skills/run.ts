@@ -1,15 +1,21 @@
-// api/atrium/skills/run.ts — Sprint 4 Stream E
-// POST /api/atrium/skills/run — execute a productivity skill server-side.
+// api/atrium/skills/run.ts — Sprint 5 Stream G (extends Sprint 4 Stream E)
+// POST /api/atrium/skills/run — execute a skill server-side.
 //
 // Auth: x-unicron-api-key header (shared internal key from UNICRON_INTERNAL_API_KEY).
-// Body: { skill_slug: string; team_member_id?: string }
+// Body: { skill_slug: string; [params]: unknown }
 //
-// Implemented slugs:
-//   morning-brief  — query ledger + action_items; format brief; post Slack DM if token set
-//   inbox-triage   — query nervous_system.ledger where status='inbox'; score + sort; return top 5
+// Sprint 4 implemented slugs (productivity):
+//   morning-brief     — query ledger + action_items; format brief; post Slack DM if token set
+//   inbox-triage      — query nervous_system.ledger where status='inbox'; score + sort; return top 5
+//
+// Sprint 5 adds (research + sales):
+//   deep-research          — proxy to POST /api/skills/deep-research (Pathfinder Stream C)
+//   llm-council-deliberate — proxy to POST /api/atrium/council-deliberate (Stream B)
+//   track-pipeline-stage   — DB update: customer stage + ledger audit row
+//   [all other new slugs]  — scaffolded: return 202 + message
 //
 // quick-capture is a UI trigger — handled client-side, never reaches this endpoint.
-// Any other slug returns 404.
+// Any unrecognised slug returns 404.
 
 import type { IncomingMessage, ServerResponse } from 'http';
 import { createClient } from '@supabase/supabase-js';
@@ -18,8 +24,20 @@ import { createClient } from '@supabase/supabase-js';
 
 interface RunBody {
   skill_slug: string;
+  // Productivity (Sprint 4)
   team_member_id?: string;
   limit?: number;
+  // Research (Sprint 5)
+  topic?: string;
+  depth?: string;
+  question?: string;
+  criteria?: string;
+  // Sales (Sprint 5)
+  customer_id?: string;
+  new_stage?: string;
+  note?: string;
+  // Passthrough for proxied skills
+  params?: Record<string, unknown>;
 }
 
 interface LedgerRow {
@@ -38,6 +56,29 @@ interface ActionItemRow {
   status: string;
   break_off_signal_id: string | null;
 }
+
+// ─── Scaffolded slugs (202 response) ─────────────────────────────────────────
+
+const SCAFFOLDED_SLUGS = new Set([
+  'light-rag-query',
+  'morning-trend-scan',
+  'competitor-watch',
+  'schedule-discovery-call',
+  'extract-vertical-signals',
+  'draft-follow-up-email',
+  'generate-proposal',
+]);
+
+// ─── Pipeline stage allowlist ─────────────────────────────────────────────────
+
+const VALID_PIPELINE_STAGES = new Set([
+  'lead',
+  'qualified',
+  'proposal',
+  'negotiation',
+  'closed_won',
+  'closed_lost',
+]);
 
 // ─── Source type scoring weights ──────────────────────────────────────────────
 
@@ -87,15 +128,41 @@ function jsonResponse(res: ServerResponse, status: number, body: unknown): void 
   res.end(payload);
 }
 
-// ─── Skills ───────────────────────────────────────────────────────────────────
+function makeSupabase() {
+  return createClient(
+    process.env.VITE_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  );
+}
+
+// ─── Audit log helper ─────────────────────────────────────────────────────────
+
+async function auditSkillRun(
+  skillSlug: string,
+  outcome: 'success' | 'scaffolded' | 'error',
+  meta?: Record<string, unknown>,
+): Promise<void> {
+  try {
+    const supabase = makeSupabase();
+    await supabase
+      .schema('nervous_system')
+      .from('audit_log')
+      .insert({
+        table_name: 'skills',
+        action: `skill_run:${skillSlug}`,
+        new_data: { outcome, ...meta },
+      });
+  } catch {
+    // Non-fatal — audit logging must never break the skill response
+  }
+}
+
+// ─── Sprint 4 Skills ──────────────────────────────────────────────────────────
 
 async function runMorningBrief(
   teamMemberId?: string,
 ): Promise<{ message: string; delivered_via_slack: boolean }> {
-  const supabase = createClient(
-    process.env.VITE_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  );
+  const supabase = makeSupabase();
 
   const now = new Date();
   const todayStart = new Date(now);
@@ -224,11 +291,7 @@ async function runMorningBrief(
 async function runInboxTriage(
   limitParam?: number,
 ): Promise<{ items: (LedgerRow & { score: number })[]; message?: string }> {
-  const supabase = createClient(
-    process.env.VITE_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  );
-
+  const supabase = makeSupabase();
   const limit = Math.min(Math.max(1, limitParam ?? 5), 20);
 
   // Fetch up to 50 inbox rows
@@ -264,6 +327,112 @@ async function runInboxTriage(
   scored.sort((a, b) => b.score - a.score);
 
   return { items: scored.slice(0, limit) };
+}
+
+// ─── Sprint 5 Skills ──────────────────────────────────────────────────────────
+
+async function runDeepResearch(
+  topic: string,
+  depth?: string,
+): Promise<unknown> {
+  const pathfinderBase = process.env.VITE_PATHFINDER_INTERNAL_URL ?? '';
+  if (!pathfinderBase) {
+    throw new Error(
+      'VITE_PATHFINDER_INTERNAL_URL is not configured — cannot proxy to deep-research endpoint.',
+    );
+  }
+
+  const url = `${pathfinderBase.replace(/\/$/, '')}/api/skills/deep-research`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ topic, depth: depth ?? 'standard' }),
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`deep-research upstream error ${res.status}: ${text}`);
+  }
+
+  return res.json();
+}
+
+async function runLlmCouncilDeliberate(
+  question: string,
+  criteria?: string,
+): Promise<unknown> {
+  // council-deliberate is served by the same unicron-platform Vercel deployment
+  // (delivered by Stream B). We call it as an internal server-to-server request
+  // using the absolute URL derived from VERCEL_URL (set automatically by Vercel).
+  const baseUrl = process.env.VERCEL_URL
+    ? `https://${process.env.VERCEL_URL}`
+    : 'http://localhost:5173';
+
+  const url = `${baseUrl}/api/atrium/council-deliberate`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-unicron-api-key': process.env.UNICRON_INTERNAL_API_KEY ?? '',
+    },
+    body: JSON.stringify({ question, criteria }),
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`council-deliberate upstream error ${res.status}: ${text}`);
+  }
+
+  return res.json();
+}
+
+async function runTrackPipelineStage(
+  customerId: string,
+  newStage: string,
+  note?: string,
+): Promise<{ updated: boolean; customer_id: string; stage: string }> {
+  if (!VALID_PIPELINE_STAGES.has(newStage)) {
+    throw new Error(
+      `Invalid pipeline stage '${newStage}'. Valid stages: ${[...VALID_PIPELINE_STAGES].join(', ')}`,
+    );
+  }
+
+  const supabase = makeSupabase();
+
+  // Update customer stage in nervous_system.customers (or public.customers — try both)
+  // We try nervous_system first since that's the primary schema for this system.
+  const { error: nsError } = await supabase
+    .schema('nervous_system')
+    .from('customers')
+    .update({ stage: newStage, updated_at: new Date().toISOString() })
+    .eq('id', customerId);
+
+  if (nsError) {
+    // Fallback: try public schema
+    const { error: pubError } = await supabase
+      .from('customers')
+      .update({ stage: newStage, updated_at: new Date().toISOString() })
+      .eq('id', customerId);
+
+    if (pubError) {
+      throw new Error(
+        `Failed to update customer stage: ${pubError.message}`,
+      );
+    }
+  }
+
+  // Write a ledger row for the audit trail
+  await supabase
+    .schema('nervous_system')
+    .from('ledger')
+    .insert({
+      source_type: 'manual',
+      content_summary: `Pipeline stage updated: customer ${customerId} → ${newStage}${note ? ` · ${note}` : ''}`,
+      status: 'processed',
+      confidence: 1.0,
+    });
+
+  return { updated: true, customer_id: customerId, stage: newStage };
 }
 
 // ─── Handler ──────────────────────────────────────────────────────────────────
@@ -303,10 +472,29 @@ export default async function handler(
     return;
   }
 
+  // ─── Scaffolded skills: 202 + message ─────────────────────────────────────
+
+  if (SCAFFOLDED_SLUGS.has(skill_slug)) {
+    void auditSkillRun(skill_slug, 'scaffolded');
+    jsonResponse(res, 202, {
+      ok: true,
+      status: 'scaffolded',
+      skill_slug,
+      message: 'Full implementation coming in Sprint 6',
+    });
+    return;
+  }
+
+  // ─── Implemented skills ───────────────────────────────────────────────────
+
   try {
     switch (skill_slug) {
+
+      // ── Sprint 4 productivity skills ────────────────────────────────────────
+
       case 'morning-brief': {
         const result = await runMorningBrief(team_member_id);
+        void auditSkillRun(skill_slug, 'success');
         jsonResponse(res, 200, { ok: true, skill_slug, ...result });
         return;
       }
@@ -314,6 +502,7 @@ export default async function handler(
       case 'inbox-triage': {
         const limitParam = typeof limit === 'number' ? limit : undefined;
         const result = await runInboxTriage(limitParam);
+        void auditSkillRun(skill_slug, 'success');
         jsonResponse(res, 200, { ok: true, skill_slug, ...result });
         return;
       }
@@ -328,6 +517,54 @@ export default async function handler(
         return;
       }
 
+      // ── Sprint 5 research skills ─────────────────────────────────────────────
+
+      case 'deep-research': {
+        const topic = body.topic ?? (body.params?.topic as string | undefined);
+        if (!topic || typeof topic !== 'string') {
+          jsonResponse(res, 400, { ok: false, error: 'topic is required for deep-research' });
+          return;
+        }
+        const depth = body.depth ?? (body.params?.depth as string | undefined);
+        const result = await runDeepResearch(topic, depth);
+        void auditSkillRun(skill_slug, 'success', { topic });
+        jsonResponse(res, 200, { ok: true, skill_slug, ...Object(result) });
+        return;
+      }
+
+      case 'llm-council-deliberate': {
+        const question = body.question ?? (body.params?.question as string | undefined);
+        if (!question || typeof question !== 'string') {
+          jsonResponse(res, 400, { ok: false, error: 'question is required for llm-council-deliberate' });
+          return;
+        }
+        const criteria = body.criteria ?? (body.params?.criteria as string | undefined);
+        const result = await runLlmCouncilDeliberate(question, criteria);
+        void auditSkillRun(skill_slug, 'success');
+        jsonResponse(res, 200, { ok: true, skill_slug, ...Object(result) });
+        return;
+      }
+
+      // ── Sprint 5 sales skills ────────────────────────────────────────────────
+
+      case 'track-pipeline-stage': {
+        const customerId = body.customer_id ?? (body.params?.customer_id as string | undefined);
+        const newStage = body.new_stage ?? (body.params?.new_stage as string | undefined);
+        if (!customerId || typeof customerId !== 'string') {
+          jsonResponse(res, 400, { ok: false, error: 'customer_id is required for track-pipeline-stage' });
+          return;
+        }
+        if (!newStage || typeof newStage !== 'string') {
+          jsonResponse(res, 400, { ok: false, error: 'new_stage is required for track-pipeline-stage' });
+          return;
+        }
+        const note = body.note ?? (body.params?.note as string | undefined);
+        const result = await runTrackPipelineStage(customerId, newStage, note);
+        void auditSkillRun(skill_slug, 'success', { customer_id: customerId, new_stage: newStage });
+        jsonResponse(res, 200, { ok: true, skill_slug, ...result });
+        return;
+      }
+
       default: {
         jsonResponse(res, 404, {
           ok: false,
@@ -338,6 +575,7 @@ export default async function handler(
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : 'unexpected error';
+    void auditSkillRun(skill_slug, 'error', { error: message });
     jsonResponse(res, 500, { ok: false, error: message });
   }
 }
