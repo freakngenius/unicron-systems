@@ -1,5 +1,6 @@
 // GET /api/atrium/vault/search?q=<query>&tags=<comma-separated-tags>
 // Full-text + tag search across wiki markdown files.
+// Falls back to GitHub API when VAULT_PATH is unavailable (Vercel cloud).
 // Returns: { results: SearchResult[] }
 // Sprint 6 Stream C.
 
@@ -7,6 +8,7 @@ import type { IncomingMessage, ServerResponse } from 'http';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as url from 'url';
+import { ghListWikiFiles, ghFetchBlob } from '../wiki/_github';
 
 export interface SearchResult {
   slug: string;
@@ -79,7 +81,8 @@ function makeExcerpt(content: string, query: string, maxLen = 200): string {
 
 interface FileEntry {
   slug: string;
-  fullPath: string;
+  fullPath: string | null;
+  content: string | null;
   mtime: Date;
 }
 
@@ -101,9 +104,21 @@ function collectFiles(wikiRoot: string, dir: string, entries: FileEntry[]): void
       } catch { /* noop */ }
       const relativePath = path.relative(wikiRoot, fullPath);
       const slug = relativePath.replace(/\\/g, '/').replace(/\.md$/, '');
-      entries.push({ slug, fullPath, mtime });
+      entries.push({ slug, fullPath, content: null, mtime });
     }
   }
+}
+
+async function collectFromGitHub(): Promise<FileEntry[]> {
+  const files = await ghListWikiFiles();
+  const entries = await Promise.all(
+    files.map(async (file) => {
+      const content = await ghFetchBlob(file.sha);
+      const slug = file.path.replace(/^wiki\//, '').replace(/\.md$/, '');
+      return { slug, fullPath: null, content, mtime: new Date(0) };
+    }),
+  );
+  return entries;
 }
 
 export default async function handler(req: IncomingMessage, res: ServerResponse): Promise<void> {
@@ -118,18 +133,6 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     return;
   }
 
-  const vaultPath = process.env.VAULT_PATH;
-  if (!vaultPath) {
-    jsonResponse(res, 503, { error: 'VAULT_PATH not configured' });
-    return;
-  }
-
-  const wikiRoot = path.join(vaultPath, 'wiki');
-  if (!fs.existsSync(wikiRoot)) {
-    jsonResponse(res, 404, { error: 'wiki directory not found' });
-    return;
-  }
-
   const parsed = url.parse(req.url ?? '', true);
   const query = (parsed.query.q as string | undefined) ?? '';
   const tagsParam = (parsed.query.tags as string | undefined) ?? '';
@@ -137,20 +140,36 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     ? tagsParam.split(',').map((t) => t.trim().toLowerCase()).filter(Boolean)
     : [];
 
-  const fileEntries: FileEntry[] = [];
-  collectFiles(wikiRoot, wikiRoot, fileEntries);
+  const vaultPath = process.env.VAULT_PATH;
+  const wikiRoot = vaultPath ? path.join(vaultPath, 'wiki') : null;
 
-  // Sort by mtime descending (most recent first)
+  let fileEntries: FileEntry[] = [];
+
+  if (wikiRoot && fs.existsSync(wikiRoot)) {
+    collectFiles(wikiRoot, wikiRoot, fileEntries);
+  } else {
+    try {
+      fileEntries = await collectFromGitHub();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      jsonResponse(res, 503, { error: `vault unavailable: ${msg}` });
+      return;
+    }
+  }
+
+  // Sort by mtime descending (most recent first; GitHub entries have mtime=0 so order is stable)
   fileEntries.sort((a, b) => b.mtime.getTime() - a.mtime.getTime());
 
   const results: SearchResult[] = [];
 
   for (const entry of fileEntries) {
-    let content = '';
-    try {
-      content = fs.readFileSync(entry.fullPath, 'utf-8');
-    } catch {
-      continue;
+    let content = entry.content;
+    if (content === null) {
+      try {
+        content = fs.readFileSync(entry.fullPath!, 'utf-8');
+      } catch {
+        continue;
+      }
     }
 
     const fm = parseFrontmatter(content);
@@ -174,7 +193,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       path: entry.slug + '.md',
       excerpt: makeExcerpt(content, query),
       tags,
-      created_at: fm.date ?? fm.created_at ?? entry.mtime.toISOString(),
+      created_at: fm.date ?? fm.created_at ?? (entry.mtime.getTime() > 0 ? entry.mtime.toISOString() : null),
     });
   }
 

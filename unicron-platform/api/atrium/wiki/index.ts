@@ -1,11 +1,13 @@
 // GET /api/atrium/wiki
 // List all wiki pages from unicron-knowledge/wiki/ recursively.
+// Falls back to GitHub API when VAULT_PATH is unavailable (Vercel cloud).
 // Returns: { pages: WikiPage[] }
 // Sprint 6 Stream C.
 
 import type { IncomingMessage, ServerResponse } from 'http';
 import * as fs from 'fs';
 import * as path from 'path';
+import { ghListWikiFiles, ghFetchBlob } from './_github';
 
 export interface WikiPage {
   slug: string;
@@ -82,6 +84,23 @@ function collectPages(wikiRoot: string, dir: string, pages: WikiPage[]): void {
   }
 }
 
+async function listFromGitHub(): Promise<WikiPage[]> {
+  const files = await ghListWikiFiles();
+  const pages = await Promise.all(
+    files.map(async (file) => {
+      const content = await ghFetchBlob(file.sha);
+      const slug = file.path.replace(/^wiki\//, '').replace(/\.md$/, '');
+      return {
+        slug,
+        title: extractTitle(content, slug),
+        path: file.path.replace(/^wiki\//, ''),
+        frontmatter: parseFrontmatter(content),
+      };
+    }),
+  );
+  return pages;
+}
+
 export default async function handler(req: IncomingMessage, res: ServerResponse): Promise<void> {
   if (req.method === 'OPTIONS') {
     res.writeHead(204, { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET,OPTIONS' });
@@ -94,20 +113,22 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     return;
   }
 
+  let pages: WikiPage[] = [];
+
   const vaultPath = process.env.VAULT_PATH;
-  if (!vaultPath) {
-    jsonResponse(res, 503, { error: 'VAULT_PATH not configured' });
-    return;
-  }
+  const wikiRoot = vaultPath ? path.join(vaultPath, 'wiki') : null;
 
-  const wikiRoot = path.join(vaultPath, 'wiki');
-  if (!fs.existsSync(wikiRoot)) {
-    jsonResponse(res, 404, { error: 'wiki directory not found' });
-    return;
+  if (wikiRoot && fs.existsSync(wikiRoot)) {
+    collectPages(wikiRoot, wikiRoot, pages);
+  } else {
+    try {
+      pages = await listFromGitHub();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      jsonResponse(res, 503, { error: `wiki unavailable: ${msg}` });
+      return;
+    }
   }
-
-  const pages: WikiPage[] = [];
-  collectPages(wikiRoot, wikiRoot, pages);
 
   // Sort: _master-index first, then alphabetically by slug
   pages.sort((a, b) => {

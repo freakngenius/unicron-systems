@@ -9,6 +9,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import * as fs from 'fs';
 import * as path from 'path';
+import { ghFetchFile } from './_github';
 
 function getWikiRoot(): string | null {
   const vaultPath = process.env.VAULT_PATH;
@@ -40,44 +41,50 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     return;
   }
 
-  const wikiRoot = getWikiRoot();
-  if (!wikiRoot) {
-    res.status(503).json({ error: 'VAULT_PATH not configured' });
-    return;
-  }
-
   const slug = resolveSlug(req.query.slug);
   if (!slug) {
     res.status(400).json({ error: 'invalid slug' });
     return;
   }
 
-  const filePath = path.join(wikiRoot, slug + '.md');
+  const wikiRoot = getWikiRoot();
 
-  // Safety: ensure resolved path is under wikiRoot
-  if (!filePath.startsWith(path.resolve(wikiRoot))) {
-    res.status(403).json({ error: 'path traversal denied' });
+  if (wikiRoot && fs.existsSync(wikiRoot)) {
+    // Filesystem path
+    const filePath = path.join(wikiRoot, slug + '.md');
+    if (!filePath.startsWith(path.resolve(wikiRoot))) {
+      res.status(403).json({ error: 'path traversal denied' });
+      return;
+    }
+    if (!fs.existsSync(filePath)) {
+      res.status(404).json({ error: `wiki page not found: ${slug}` });
+      return;
+    }
+    let content: string;
+    try {
+      content = fs.readFileSync(filePath, 'utf-8');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      res.status(500).json({ error: `failed to read file: ${msg}` });
+      return;
+    }
+    let mtime: string | null = null;
+    try { mtime = fs.statSync(filePath).mtime.toISOString(); } catch { /* noop */ }
+    res.status(200).json({ slug, content, mtime });
     return;
   }
 
-  if (!fs.existsSync(filePath)) {
-    res.status(404).json({ error: `wiki page not found: ${slug}` });
-    return;
-  }
-
-  let content: string;
+  // GitHub fallback
   try {
-    content = fs.readFileSync(filePath, 'utf-8');
+    const repoPath = `wiki/${slug}.md`;
+    const result = await ghFetchFile(repoPath);
+    if (!result) {
+      res.status(404).json({ error: `wiki page not found: ${slug}` });
+      return;
+    }
+    res.status(200).json({ slug, content: result.content, mtime: null });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    res.status(500).json({ error: `failed to read file: ${msg}` });
-    return;
+    res.status(503).json({ error: `wiki unavailable: ${msg}` });
   }
-
-  let mtime: string | null = null;
-  try {
-    mtime = fs.statSync(filePath).mtime.toISOString();
-  } catch { /* noop */ }
-
-  res.status(200).json({ slug, content, mtime });
 }
