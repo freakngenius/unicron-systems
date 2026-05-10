@@ -59,6 +59,7 @@ next-env.d.ts
 # git worktrees (transient feature branches, not files in main tree)
 /Pathfinder-worktrees/
 /Phase2-worktrees/
+/unicron-platform-worktrees/
 
 # Cowork session artifacts (per-developer, not part of repo)
 .claude/
