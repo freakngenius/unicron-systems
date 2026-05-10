@@ -31,15 +31,15 @@ export function Products() {
     <div className="max-w-5xl w-full">
       {/* Page header */}
       <div className="mb-5">
-        <h1 className="mono text-[18px] text-[#E5E5E7] font-semibold">Products</h1>
-        <p className="mono text-[11px] text-[rgba(229,229,231,0.5)] mt-1">
+        <h1 className="mono text-[18px] text-text-primary font-semibold">Products</h1>
+        <p className="mono text-[11px] text-text-secondary mt-1">
           {PRODUCTS_TAB_DESCRIPTIONS[active]}
         </p>
       </div>
 
       {/* Sub-tab nav — scrollable on mobile */}
       <nav
-        className="flex gap-0.5 border-b border-[#1F1F23] mb-6 overflow-x-auto"
+        className="flex gap-0.5 border-b border-border-default mb-6 overflow-x-auto"
         aria-label="Products sub-tabs"
         role="tablist"
       >
@@ -54,15 +54,15 @@ export function Products() {
               onClick={() => setActive(tab)}
               className="mono text-[11px] uppercase tracking-[0.12em] px-4 py-2.5 rounded-t-lg transition-colors relative shrink-0 whitespace-nowrap focus:outline-none focus:ring-2 focus:ring-zinc-500"
               style={{
-                color: isActive ? '#E5E5E7' : 'rgba(229,229,231,0.45)',
-                background: isActive ? '#141416' : 'transparent',
+                color: isActive ? 'var(--text-hi)' : 'var(--text-lo)',
+                background: isActive ? 'var(--bg-elevated)' : 'transparent',
               }}
             >
               {PRODUCTS_TAB_LABELS[tab]}
               {isActive && (
                 <span
                   className="absolute bottom-0 left-0 right-0 h-0.5 rounded-t-full"
-                  style={{ backgroundColor: '#FF6B2B' }}
+                  style={{ backgroundColor: 'var(--accent)' }}
                 />
               )}
             </button>

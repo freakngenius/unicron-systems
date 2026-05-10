@@ -70,20 +70,20 @@ function DetailDrawer({ drawer, onClose }: { drawer: DrawerState; onClose: () =>
         className="relative h-full flex flex-col overflow-hidden"
         style={{
           width: 'min(480px, 92vw)',
-          background: '#141416',
-          borderLeft: '1px solid rgba(229,229,231,0.08)',
+          background: 'var(--bg-elevated)',
+          borderLeft: '1px solid rgba(255,255,255,0.04)',
         }}
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-[rgba(229,229,231,0.08)]">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-[rgba(255,255,255,0.04)]">
           <div>
             <div className="mono text-[13px] font-semibold text-text-primary">{r.action}</div>
             <div className="mono text-[11px] text-text-secondary mt-0.5">{fmtDate(r.created_at)}</div>
           </div>
           <button
             onClick={onClose}
-            className="mono text-[11px] text-text-secondary px-2.5 py-1 rounded-md border border-[rgba(229,229,231,0.12)] hover:border-[rgba(229,229,231,0.25)] transition-colors"
+            className="mono text-[11px] text-text-secondary px-2.5 py-1 rounded-md border border-[rgba(255,255,255,0.07)] hover:border-[rgba(255,255,255,0.10)] transition-colors"
           >
             Close
           </button>
@@ -209,7 +209,7 @@ export default function AuditLog() {
             </div>
             <button
               onClick={() => exportCsv(filtered)}
-              className="mono text-[11.5px] px-3 py-1.5 rounded-lg border border-[rgba(229,229,231,0.15)] text-text-secondary hover:border-[rgba(229,229,231,0.3)] hover:text-text-primary transition-colors"
+              className="mono text-[11.5px] px-3 py-1.5 rounded-lg border border-[rgba(255,255,255,0.07)] text-text-secondary hover:border-border-default hover:text-text-primary transition-colors"
             >
               Export CSV
             </button>
@@ -220,8 +220,8 @@ export default function AuditLog() {
             {/* Text search */}
             <div className="flex items-center gap-2 px-3 py-1.5 bg-bg-raised border border-border-subtle rounded-lg flex-1 min-w-[200px]">
               <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                <circle cx="5" cy="5" r="3.5" stroke="rgba(229,229,231,0.4)" strokeWidth="1.2"/>
-                <path d="M8 8l2.5 2.5" stroke="rgba(229,229,231,0.4)" strokeWidth="1.2" strokeLinecap="round"/>
+                <circle cx="5" cy="5" r="3.5" stroke="rgba(255,255,255,0.25)" strokeWidth="1.2"/>
+                <path d="M8 8l2.5 2.5" stroke="rgba(255,255,255,0.25)" strokeWidth="1.2" strokeLinecap="round"/>
               </svg>
               <input
                 value={q}
@@ -352,7 +352,7 @@ export default function AuditLog() {
           {hasMore && !loading && (
             <button
               onClick={() => fetchPage(page + 1, false)}
-              className="mono text-[11.5px] px-3 py-1.5 rounded-lg border border-[rgba(229,229,231,0.15)] text-text-secondary hover:border-[rgba(229,229,231,0.3)] hover:text-text-primary transition-colors"
+              className="mono text-[11.5px] px-3 py-1.5 rounded-lg border border-[rgba(255,255,255,0.07)] text-text-secondary hover:border-border-default hover:text-text-primary transition-colors"
             >
               Load next {PAGE_SIZE}
             </button>

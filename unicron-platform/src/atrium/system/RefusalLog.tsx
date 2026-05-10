@@ -46,7 +46,7 @@ export default function RefusalLog() {
     return (
       <div className="space-y-2">
         {[0, 1, 2].map((i) => (
-          <div key={i} className="h-10 bg-[#141416] rounded-lg animate-pulse border border-[#1F1F23]" />
+          <div key={i} className="h-10 bg-bg-card rounded-lg animate-pulse border border-border-default" />
         ))}
       </div>
     );
@@ -54,11 +54,11 @@ export default function RefusalLog() {
 
   if (entries.length === 0) {
     return (
-      <div className="bg-[#141416] border border-[#1F1F23] rounded-xl px-5 py-8 text-center">
-        <div className="mono text-[11px] text-[rgba(229,229,231,0.5)]">
+      <div className="bg-bg-card border border-border-default rounded-xl px-5 py-8 text-center">
+        <div className="mono text-[11px] text-text-secondary">
           No taboo bounces recorded yet.
         </div>
-        <div className="mono text-[9px] uppercase tracking-[0.14em] text-[rgba(229,229,231,0.3)] mt-1">
+        <div className="mono text-[9px] uppercase tracking-[0.14em] text-text-muted mt-1">
           The system is clean.
         </div>
       </div>
@@ -69,20 +69,20 @@ export default function RefusalLog() {
     <div className="overflow-x-auto">
       <table className="w-full">
         <thead>
-          <tr className="text-left border-b border-[#1F1F23]">
-            <th className="pb-3 pr-4 mono text-[9px] uppercase tracking-[0.16em] text-[rgba(229,229,231,0.4)] font-normal">
+          <tr className="text-left border-b border-border-default">
+            <th className="pb-3 pr-4 mono text-[9px] uppercase tracking-[0.16em] text-text-muted font-normal">
               When
             </th>
-            <th className="pb-3 pr-4 mono text-[9px] uppercase tracking-[0.16em] text-[rgba(229,229,231,0.4)] font-normal">
+            <th className="pb-3 pr-4 mono text-[9px] uppercase tracking-[0.16em] text-text-muted font-normal">
               Agent
             </th>
-            <th className="pb-3 pr-4 mono text-[9px] uppercase tracking-[0.16em] text-[rgba(229,229,231,0.4)] font-normal">
+            <th className="pb-3 pr-4 mono text-[9px] uppercase tracking-[0.16em] text-text-muted font-normal">
               Action type
             </th>
-            <th className="pb-3 pr-4 mono text-[9px] uppercase tracking-[0.16em] text-[rgba(229,229,231,0.4)] font-normal">
+            <th className="pb-3 pr-4 mono text-[9px] uppercase tracking-[0.16em] text-text-muted font-normal">
               Taboo matched
             </th>
-            <th className="pb-3 mono text-[9px] uppercase tracking-[0.16em] text-[rgba(229,229,231,0.4)] font-normal">
+            <th className="pb-3 mono text-[9px] uppercase tracking-[0.16em] text-text-muted font-normal">
               Status
             </th>
           </tr>
@@ -93,18 +93,18 @@ export default function RefusalLog() {
             return (
               <tr
                 key={e.id}
-                className="border-b border-[#1A1A1D] hover:bg-[#141416] transition-colors"
+                className="border-b border-border-subtle hover:bg-bg-card transition-colors"
               >
-                <td className="py-3 pr-4 mono text-[11px] text-[rgba(229,229,231,0.6)] whitespace-nowrap">
+                <td className="py-3 pr-4 mono text-[11px] text-text-secondary whitespace-nowrap">
                   {new Date(e.created_at).toLocaleString()}
                 </td>
-                <td className="py-3 pr-4 mono text-[11px] text-[rgba(229,229,231,0.6)]">
+                <td className="py-3 pr-4 mono text-[11px] text-text-secondary">
                   {e.payload?.agent_name ?? '—'}
                 </td>
-                <td className="py-3 pr-4 mono text-[11px] text-[rgba(229,229,231,0.7)]">
+                <td className="py-3 pr-4 mono text-[11px] text-text-secondary">
                   {e.payload?.action_type ?? 'unknown'}
                 </td>
-                <td className="py-3 pr-4 mono text-[11px] text-[#EF4444]">
+                <td className="py-3 pr-4 mono text-[11px] text-[#DD6262]">
                   {e.payload?.matched_taboo ?? '—'}
                 </td>
                 <td className="py-3">
@@ -112,8 +112,8 @@ export default function RefusalLog() {
                     className="mono text-[9px] uppercase tracking-[0.12em] px-2 py-0.5 rounded"
                     style={
                       isOverridden
-                        ? { background: 'rgba(245,158,11,0.15)', color: '#F59E0B' }
-                        : { background: 'rgba(239,68,68,0.15)', color: '#EF4444' }
+                        ? { background: 'rgba(245,158,11,0.15)', color: '#D9A23A' }
+                        : { background: 'rgba(239,68,68,0.15)', color: '#DD6262' }
                     }
                   >
                     {e.payload?.override_status ?? 'bounced'}
@@ -124,7 +124,7 @@ export default function RefusalLog() {
           })}
         </tbody>
       </table>
-      <div className="mt-3 mono text-[9px] text-[rgba(229,229,231,0.3)]">
+      <div className="mt-3 mono text-[9px] text-text-muted">
         Showing last 50 events · {entries.length} total displayed
       </div>
     </div>

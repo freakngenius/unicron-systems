@@ -37,11 +37,11 @@ interface MetacronStats {
 // ── Design constants ───────────────────────────────────────────────────────────
 
 const ARCHETYPE_COLORS: Record<string, string> = {
-  orchestrator: '#FF6B2B',
-  analyst:      '#3B82F6',
+  orchestrator: 'var(--accent)',
+  analyst:      '#6F95D6',
   elder:        '#A855F7',
-  taboo_keeper: '#EF4444',
-  specialist:   '#22C55E',
+  taboo_keeper: '#DD6262',
+  specialist:   '#4FB286',
 };
 
 function archetypeColor(a: string) {
@@ -49,9 +49,9 @@ function archetypeColor(a: string) {
 }
 
 const STATUS_COLORS: Record<string, string> = {
-  pending:  '#F59E0B',
-  approved: '#22C55E',
-  rejected: '#EF4444',
+  pending:  '#D9A23A',
+  approved: '#4FB286',
+  rejected: '#DD6262',
 };
 
 function proposalStatusColor(s: string) {
@@ -86,7 +86,7 @@ function KpiPanel() {
     return (
       <div className="space-y-2">
         {[0, 1, 2].map((i) => (
-          <div key={i} className="h-6 bg-[#141416] rounded animate-pulse" />
+          <div key={i} className="h-6 bg-bg-card rounded animate-pulse" />
         ))}
       </div>
     );
@@ -94,8 +94,8 @@ function KpiPanel() {
 
   if (err) {
     return (
-      <div className="bg-[#EF4444]/10 border border-[#EF4444]/30 rounded-xl px-4 py-3">
-        <div className="mono text-[11px] text-[#EF4444]">KPI vault unavailable: {err}</div>
+      <div className="bg-[#DD6262]/10 border border-[#DD6262]/30 rounded-xl px-4 py-3">
+        <div className="mono text-[11px] text-[#DD6262]">KPI vault unavailable: {err}</div>
       </div>
     );
   }
@@ -119,7 +119,7 @@ function KpiPanel() {
                 prevLine.split('|').slice(1, -1).every((c) => /^:?-+:?$/.test(c.trim()));
               const isHeader = i === 0 || prevIsSeparator;
               return (
-                <tr key={i} className="border-b border-[#1F1F23]">
+                <tr key={i} className="border-b border-border-default">
                   {cells.map((cell, j) => {
                     const Tag = isHeader ? 'th' : 'td';
                     return (
@@ -128,8 +128,8 @@ function KpiPanel() {
                         className={[
                           'px-3 py-2 mono text-left',
                           isHeader
-                            ? 'text-[9px] uppercase tracking-[0.16em] text-[rgba(229,229,231,0.4)] bg-[#141416]'
-                            : 'text-[11px] text-[#E5E5E7]',
+                            ? 'text-[9px] uppercase tracking-[0.16em] text-text-muted bg-bg-card'
+                            : 'text-[11px] text-text-primary',
                         ].join(' ')}
                       >
                         {cell}
@@ -142,7 +142,7 @@ function KpiPanel() {
           </tbody>
         </table>
       ) : (
-        <pre className="mono text-[11px] text-[rgba(229,229,231,0.6)] whitespace-pre-wrap leading-relaxed">
+        <pre className="mono text-[11px] text-text-secondary whitespace-pre-wrap leading-relaxed">
           {md}
         </pre>
       )}
@@ -181,7 +181,7 @@ export function MetacronProduct() {
     return (
       <div className="space-y-3">
         {[0, 1, 2, 3].map((i) => (
-          <div key={i} className="h-14 bg-[#141416] rounded-xl animate-pulse" />
+          <div key={i} className="h-14 bg-bg-card rounded-xl animate-pulse" />
         ))}
       </div>
     );
@@ -193,25 +193,25 @@ export function MetacronProduct() {
       {/* ── Agent Fleet ─────────────────────────────────────────────────────── */}
       <section>
         <div className="flex items-center justify-between mb-3">
-          <div className="mono text-[10px] uppercase tracking-[0.18em] text-[rgba(229,229,231,0.4)]">
+          <div className="mono text-[10px] uppercase tracking-[0.18em] text-text-muted">
             Agent Fleet
           </div>
           {stats && (
-            <span className="mono text-[10px] text-[rgba(229,229,231,0.3)]">
+            <span className="mono text-[10px] text-text-muted">
               {stats.agents.filter((a) => a.active).length} active
             </span>
           )}
         </div>
 
         {err || !stats ? (
-          <div className="bg-[#F59E0B]/10 border border-[#F59E0B]/30 rounded-xl px-4 py-3">
-            <div className="mono text-[11px] text-[#F59E0B]">
+          <div className="bg-[#D9A23A]/10 border border-[#D9A23A]/30 rounded-xl px-4 py-3">
+            <div className="mono text-[11px] text-[#D9A23A]">
               {err ? `Live data unavailable: ${err}` : 'No agent data.'}
             </div>
           </div>
         ) : stats.agents.length === 0 ? (
-          <div className="bg-[#141416] border border-[#1F1F23] rounded-xl px-5 py-6 text-center">
-            <div className="mono text-[11px] text-[rgba(229,229,231,0.3)]">
+          <div className="bg-bg-card border border-border-default rounded-xl px-5 py-6 text-center">
+            <div className="mono text-[11px] text-text-muted">
               No agents found in nervous_system.agents.
             </div>
           </div>
@@ -222,7 +222,7 @@ export function MetacronProduct() {
               return (
                 <div
                   key={agent.id}
-                  className="bg-[#141416] border rounded-xl px-4 py-4 flex items-start gap-3"
+                  className="bg-bg-card border rounded-xl px-4 py-4 flex items-start gap-3"
                   style={{ borderColor: color + '33' }}
                 >
                   <span
@@ -230,7 +230,7 @@ export function MetacronProduct() {
                     style={{ backgroundColor: agent.active ? color : '#6B7280' }}
                   />
                   <div className="flex-1 min-w-0">
-                    <div className="mono text-[13px] font-semibold text-[#E5E5E7]">
+                    <div className="mono text-[13px] font-semibold text-text-primary">
                       {agent.name}
                     </div>
                     <div
@@ -240,7 +240,7 @@ export function MetacronProduct() {
                       {agent.archetype.replace('_', ' ')}
                     </div>
                     {agent.specialty && (
-                      <div className="mono text-[10px] text-[rgba(229,229,231,0.4)] mt-1 leading-relaxed line-clamp-2">
+                      <div className="mono text-[10px] text-text-muted mt-1 leading-relaxed line-clamp-2">
                         {agent.specialty}
                       </div>
                     )}
@@ -266,15 +266,15 @@ export function MetacronProduct() {
       {/* ── Architect Proposals ──────────────────────────────────────────────── */}
       <section>
         <div className="flex items-center justify-between mb-3">
-          <div className="mono text-[10px] uppercase tracking-[0.18em] text-[rgba(229,229,231,0.4)]">
+          <div className="mono text-[10px] uppercase tracking-[0.18em] text-text-muted">
             Architect Proposals — This Week
           </div>
           {stats && (
             <div className="flex gap-3">
-              <span className="mono text-[10px] text-[#F59E0B]">
+              <span className="mono text-[10px] text-[#D9A23A]">
                 {stats.proposals_pending} pending
               </span>
-              <span className="mono text-[10px] text-[#22C55E]">
+              <span className="mono text-[10px] text-status-green">
                 {stats.proposals_approved_week} approved
               </span>
             </div>
@@ -282,14 +282,14 @@ export function MetacronProduct() {
         </div>
 
         {!stats ? (
-          <div className="bg-[#141416] border border-[#1F1F23] rounded-xl px-5 py-6 text-center">
-            <div className="mono text-[11px] text-[rgba(229,229,231,0.3)]">
+          <div className="bg-bg-card border border-border-default rounded-xl px-5 py-6 text-center">
+            <div className="mono text-[11px] text-text-muted">
               architect_proposals table not yet seeded.
             </div>
           </div>
         ) : stats.proposals_this_week.length === 0 ? (
-          <div className="bg-[#141416] border border-[#1F1F23] rounded-xl px-5 py-6 text-center">
-            <div className="mono text-[11px] text-[rgba(229,229,231,0.3)]">
+          <div className="bg-bg-card border border-border-default rounded-xl px-5 py-6 text-center">
+            <div className="mono text-[11px] text-text-muted">
               No proposals this week.
             </div>
           </div>
@@ -300,23 +300,23 @@ export function MetacronProduct() {
               return (
                 <div
                   key={p.id}
-                  className="bg-[#141416] border border-[#1F1F23] rounded-xl px-4 py-3 flex items-start justify-between gap-4"
+                  className="bg-bg-card border border-border-default rounded-xl px-4 py-3 flex items-start justify-between gap-4"
                 >
                   <div className="flex-1 min-w-0">
-                    <div className="mono text-[11px] text-[#E5E5E7] leading-relaxed line-clamp-2">
+                    <div className="mono text-[11px] text-text-primary leading-relaxed line-clamp-2">
                       {p.headline}
                     </div>
                     <div className="flex items-center gap-3 mt-1.5">
-                      <span className="mono text-[9px] uppercase tracking-[0.1em] text-[rgba(229,229,231,0.35)]">
+                      <span className="mono text-[9px] uppercase tracking-[0.1em] text-text-muted">
                         {p.type.replace('_', ' ')}
                       </span>
-                      <span className="mono text-[9px] text-[rgba(229,229,231,0.3)]">
+                      <span className="mono text-[9px] text-text-muted">
                         {new Date(p.created_at).toLocaleDateString('en-US', {
                           month: 'short',
                           day: 'numeric',
                         })}
                       </span>
-                      <span className="mono text-[9px] text-[rgba(229,229,231,0.3)]">
+                      <span className="mono text-[9px] text-text-muted">
                         {Math.round(p.confidence * 100)}% confidence
                       </span>
                     </div>
@@ -346,25 +346,25 @@ export function MetacronProduct() {
           onClick={() => setKpiOpen((o) => !o)}
           className="flex items-center gap-2 mb-3 group"
         >
-          <div className="mono text-[10px] uppercase tracking-[0.18em] text-[rgba(229,229,231,0.4)] group-hover:text-[rgba(229,229,231,0.7)] transition-colors">
+          <div className="mono text-[10px] uppercase tracking-[0.18em] text-text-muted group-hover:text-text-secondary transition-colors">
             KPI Targets
           </div>
-          <span className="mono text-[10px] text-[rgba(229,229,231,0.3)]">
+          <span className="mono text-[10px] text-text-muted">
             {kpiOpen ? '▲' : '▼'}
           </span>
         </button>
 
         {kpiOpen && (
-          <div className="bg-[#141416] border border-[#1F1F23] rounded-xl overflow-hidden">
-            <div className="px-4 py-3 border-b border-[#1F1F23] flex items-center justify-between">
-              <span className="mono text-[9px] uppercase tracking-[0.18em] text-[rgba(229,229,231,0.35)]">
+          <div className="bg-bg-card border border-border-default rounded-xl overflow-hidden">
+            <div className="px-4 py-3 border-b border-border-default flex items-center justify-between">
+              <span className="mono text-[9px] uppercase tracking-[0.18em] text-text-muted">
                 unicron-knowledge/wiki/products/metacron/kpis.md
               </span>
               <a
                 href="https://github.com/freakngenius/unicron-knowledge/blob/main/wiki/products/metacron/kpis.md"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="mono text-[10px] text-[#3B82F6] hover:underline"
+                className="mono text-[10px] text-status-blue hover:underline"
               >
                 Edit ↗
               </a>

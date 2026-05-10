@@ -39,10 +39,10 @@ interface TenantRow {
 // ── Design constants ───────────────────────────────────────────────────────────
 
 const STATUS_COLORS: Record<string, string> = {
-  success:     '#22C55E',
+  success:     '#4FB286',
   empty_queue: '#6B7280',
-  error:       '#EF4444',
-  running:     '#3B82F6',
+  error:       '#DD6262',
+  running:     '#6F95D6',
 };
 
 function statusColor(s: string) {
@@ -77,7 +77,7 @@ function KpiPanel() {
     return (
       <div className="space-y-2">
         {[0, 1, 2].map((i) => (
-          <div key={i} className="h-6 bg-[#141416] rounded animate-pulse" />
+          <div key={i} className="h-6 bg-bg-card rounded animate-pulse" />
         ))}
       </div>
     );
@@ -85,8 +85,8 @@ function KpiPanel() {
 
   if (err) {
     return (
-      <div className="bg-[#EF4444]/10 border border-[#EF4444]/30 rounded-xl px-4 py-3">
-        <div className="mono text-[11px] text-[#EF4444]">KPI vault unavailable: {err}</div>
+      <div className="bg-[#DD6262]/10 border border-[#DD6262]/30 rounded-xl px-4 py-3">
+        <div className="mono text-[11px] text-[#DD6262]">KPI vault unavailable: {err}</div>
       </div>
     );
   }
@@ -113,7 +113,7 @@ function KpiPanel() {
                 prevLine.split('|').slice(1, -1).every((c) => /^:?-+:?$/.test(c.trim()));
               const isHeader = i === 0 || prevIsSeparator;
               return (
-                <tr key={i} className="border-b border-[#1F1F23]">
+                <tr key={i} className="border-b border-border-default">
                   {cells.map((cell, j) => {
                     const Tag = isHeader ? 'th' : 'td';
                     return (
@@ -122,8 +122,8 @@ function KpiPanel() {
                         className={[
                           'px-3 py-2 mono text-left',
                           isHeader
-                            ? 'text-[9px] uppercase tracking-[0.16em] text-[rgba(229,229,231,0.4)] bg-[#141416]'
-                            : 'text-[11px] text-[#E5E5E7]',
+                            ? 'text-[9px] uppercase tracking-[0.16em] text-text-muted bg-bg-card'
+                            : 'text-[11px] text-text-primary',
                         ].join(' ')}
                       >
                         {cell}
@@ -136,7 +136,7 @@ function KpiPanel() {
           </tbody>
         </table>
       ) : (
-        <pre className="mono text-[11px] text-[rgba(229,229,231,0.6)] whitespace-pre-wrap leading-relaxed">
+        <pre className="mono text-[11px] text-text-secondary whitespace-pre-wrap leading-relaxed">
           {md}
         </pre>
       )}
@@ -148,16 +148,16 @@ function KpiPanel() {
 
 function ZedcorFallbackCard() {
   return (
-    <div className="bg-[#141416] border border-[#1F1F23] rounded-xl px-5 py-4 flex items-center justify-between">
+    <div className="bg-bg-card border border-border-default rounded-xl px-5 py-4 flex items-center justify-between">
       <div>
-        <div className="mono text-[13px] text-[#E5E5E7] font-semibold">Zedcor</div>
-        <div className="mono text-[10px] text-[rgba(229,229,231,0.4)] mt-0.5 uppercase tracking-[0.1em]">
+        <div className="mono text-[13px] text-text-primary font-semibold">Zedcor</div>
+        <div className="mono text-[10px] text-text-muted mt-0.5 uppercase tracking-[0.1em]">
           Customer-zero · Construction security · 24 branches
         </div>
       </div>
       <div className="flex items-center gap-2">
-        <span className="w-2 h-2 rounded-full bg-[#FF6B2B]" />
-        <span className="mono text-[10px] uppercase tracking-[0.1em] text-[#FF6B2B]">Pilot</span>
+        <span className="w-2 h-2 rounded-full bg-accent-orange" />
+        <span className="mono text-[10px] uppercase tracking-[0.1em] text-accent-orange">Pilot</span>
       </div>
     </div>
   );
@@ -194,7 +194,7 @@ export function PathfinderProduct() {
     return (
       <div className="space-y-3">
         {[0, 1, 2, 3].map((i) => (
-          <div key={i} className="h-14 bg-[#141416] rounded-xl animate-pulse" />
+          <div key={i} className="h-14 bg-bg-card rounded-xl animate-pulse" />
         ))}
       </div>
     );
@@ -209,11 +209,11 @@ export function PathfinderProduct() {
       {/* ── Tenants ─────────────────────────────────────────────────────────── */}
       <section>
         <div className="flex items-center justify-between mb-3">
-          <div className="mono text-[10px] uppercase tracking-[0.18em] text-[rgba(229,229,231,0.4)]">
+          <div className="mono text-[10px] uppercase tracking-[0.18em] text-text-muted">
             Active Tenants
           </div>
           {stats && (
-            <span className="mono text-[10px] text-[rgba(229,229,231,0.3)]">
+            <span className="mono text-[10px] text-text-muted">
               {stats.tenants.length} tenant{stats.tenants.length !== 1 ? 's' : ''}
             </span>
           )}
@@ -221,8 +221,8 @@ export function PathfinderProduct() {
 
         {err ? (
           <>
-            <div className="bg-[#F59E0B]/10 border border-[#F59E0B]/30 rounded-xl px-4 py-3 mb-3">
-              <div className="mono text-[11px] text-[#F59E0B]">
+            <div className="bg-[#D9A23A]/10 border border-[#D9A23A]/30 rounded-xl px-4 py-3 mb-3">
+              <div className="mono text-[11px] text-[#D9A23A]">
                 Live data unavailable — showing stub. ({err})
               </div>
             </div>
@@ -233,25 +233,25 @@ export function PathfinderProduct() {
             {stats.tenants.map((t) => (
               <div
                 key={t.id}
-                className="bg-[#141416] border border-[#1F1F23] rounded-xl px-5 py-4 flex items-center justify-between"
+                className="bg-bg-card border border-border-default rounded-xl px-5 py-4 flex items-center justify-between"
               >
                 <div>
-                  <div className="mono text-[13px] text-[#E5E5E7] font-semibold">{t.name}</div>
+                  <div className="mono text-[13px] text-text-primary font-semibold">{t.name}</div>
                   {t.customer_since && (
-                    <div className="mono text-[10px] text-[rgba(229,229,231,0.4)] mt-0.5">
+                    <div className="mono text-[10px] text-text-muted mt-0.5">
                       Customer since {t.customer_since}
                     </div>
                   )}
                 </div>
                 <div className="text-right">
                   {t.monthly_value != null && (
-                    <div className="mono text-[13px] text-[#E5E5E7] tabular-nums">
+                    <div className="mono text-[13px] text-text-primary tabular-nums">
                       ${t.monthly_value.toLocaleString('en-US')}/mo
                     </div>
                   )}
                   <div className="flex items-center gap-2 justify-end mt-1">
-                    <span className="w-2 h-2 rounded-full bg-[#FF6B2B]" />
-                    <span className="mono text-[10px] uppercase tracking-[0.1em] text-[#FF6B2B]">
+                    <span className="w-2 h-2 rounded-full bg-accent-orange" />
+                    <span className="mono text-[10px] uppercase tracking-[0.1em] text-accent-orange">
                       Active
                     </span>
                   </div>
@@ -267,7 +267,7 @@ export function PathfinderProduct() {
       {/* ── Top-line stats ───────────────────────────────────────────────────── */}
       {stats && !err && (
         <section>
-          <div className="mono text-[10px] uppercase tracking-[0.18em] text-[rgba(229,229,231,0.4)] mb-3">
+          <div className="mono text-[10px] uppercase tracking-[0.18em] text-text-muted mb-3">
             Pipeline Stats
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -277,11 +277,11 @@ export function PathfinderProduct() {
               { label: 'Cross-Pollination', value: stats.cross_pollination_signals.toLocaleString() },
               { label: 'Outreach Drafts', value: stats.outreach_drafts.toLocaleString() },
             ].map(({ label, value }) => (
-              <div key={label} className="bg-[#141416] border border-[#1F1F23] rounded-xl px-4 py-4">
-                <div className="mono text-[9px] uppercase tracking-[0.16em] text-[rgba(229,229,231,0.4)] mb-1">
+              <div key={label} className="bg-bg-card border border-border-default rounded-xl px-4 py-4">
+                <div className="mono text-[9px] uppercase tracking-[0.16em] text-text-muted mb-1">
                   {label}
                 </div>
-                <div className="mono text-[22px] text-[#E5E5E7] font-semibold tabular-nums leading-none">
+                <div className="mono text-[22px] text-text-primary font-semibold tabular-nums leading-none">
                   {value}
                 </div>
               </div>
@@ -292,25 +292,25 @@ export function PathfinderProduct() {
 
       {/* ── Agent Run Health ─────────────────────────────────────────────────── */}
       <section>
-        <div className="mono text-[10px] uppercase tracking-[0.18em] text-[rgba(229,229,231,0.4)] mb-3">
+        <div className="mono text-[10px] uppercase tracking-[0.18em] text-text-muted mb-3">
           Agent Run Health (Last 24h)
         </div>
 
         {!hasAgentRuns ? (
-          <div className="bg-[#141416] border border-[#1F1F23] rounded-xl px-5 py-6 text-center">
-            <div className="mono text-[11px] text-[rgba(229,229,231,0.3)]">
+          <div className="bg-bg-card border border-border-default rounded-xl px-5 py-6 text-center">
+            <div className="mono text-[11px] text-text-muted">
               No agent runs recorded yet.
             </div>
           </div>
         ) : (
-          <div className="overflow-x-auto rounded-xl border border-[#1F1F23]">
+          <div className="overflow-x-auto rounded-xl border border-border-default">
             <table className="w-full min-w-[560px]">
               <thead>
-                <tr className="bg-[#141416] border-b border-[#1F1F23]">
+                <tr className="bg-bg-card border-b border-border-default">
                   {['Agent', 'Last Status', 'Last Run', 'Runs (24h)', 'Processed', 'New'].map((h, i) => (
                     <th
                       key={i}
-                      className="px-4 py-2.5 mono text-[9px] uppercase tracking-[0.16em] text-[rgba(229,229,231,0.4)] text-left whitespace-nowrap"
+                      className="px-4 py-2.5 mono text-[9px] uppercase tracking-[0.16em] text-text-muted text-left whitespace-nowrap"
                     >
                       {h}
                     </th>
@@ -319,8 +319,8 @@ export function PathfinderProduct() {
               </thead>
               <tbody>
                 {stats!.agent_runs.map((run) => (
-                  <tr key={run.agent_name} className="border-b border-[#1F1F23] hover:bg-[#1A1A1D] transition-colors">
-                    <td className="px-4 py-3 mono text-[12px] text-[#E5E5E7] font-medium">
+                  <tr key={run.agent_name} className="border-b border-border-default hover:bg-bg-raised transition-colors">
+                    <td className="px-4 py-3 mono text-[12px] text-text-primary font-medium">
                       {run.agent_name}
                     </td>
                     <td className="px-4 py-3">
@@ -337,7 +337,7 @@ export function PathfinderProduct() {
                         </span>
                       </div>
                     </td>
-                    <td className="px-4 py-3 mono text-[11px] text-[rgba(229,229,231,0.5)]">
+                    <td className="px-4 py-3 mono text-[11px] text-text-secondary">
                       {run.last_run_at
                         ? new Date(run.last_run_at).toLocaleTimeString('en-US', {
                             hour: '2-digit',
@@ -346,13 +346,13 @@ export function PathfinderProduct() {
                           })
                         : '—'}
                     </td>
-                    <td className="px-4 py-3 mono text-[12px] text-[#E5E5E7] tabular-nums">
+                    <td className="px-4 py-3 mono text-[12px] text-text-primary tabular-nums">
                       {run.run_count_24h}
                     </td>
-                    <td className="px-4 py-3 mono text-[12px] text-[#E5E5E7] tabular-nums">
+                    <td className="px-4 py-3 mono text-[12px] text-text-primary tabular-nums">
                       {run.records_processed_24h.toLocaleString()}
                     </td>
-                    <td className="px-4 py-3 mono text-[12px] text-[#22C55E] tabular-nums">
+                    <td className="px-4 py-3 mono text-[12px] text-status-green tabular-nums">
                       +{run.records_new_24h.toLocaleString()}
                     </td>
                   </tr>
@@ -369,25 +369,25 @@ export function PathfinderProduct() {
           onClick={() => setKpiOpen((o) => !o)}
           className="flex items-center gap-2 mb-3 group"
         >
-          <div className="mono text-[10px] uppercase tracking-[0.18em] text-[rgba(229,229,231,0.4)] group-hover:text-[rgba(229,229,231,0.7)] transition-colors">
+          <div className="mono text-[10px] uppercase tracking-[0.18em] text-text-muted group-hover:text-text-secondary transition-colors">
             KPI Targets
           </div>
-          <span className="mono text-[10px] text-[rgba(229,229,231,0.3)]">
+          <span className="mono text-[10px] text-text-muted">
             {kpiOpen ? '▲' : '▼'}
           </span>
         </button>
 
         {kpiOpen && (
-          <div className="bg-[#141416] border border-[#1F1F23] rounded-xl overflow-hidden">
-            <div className="px-4 py-3 border-b border-[#1F1F23] flex items-center justify-between">
-              <span className="mono text-[9px] uppercase tracking-[0.18em] text-[rgba(229,229,231,0.35)]">
+          <div className="bg-bg-card border border-border-default rounded-xl overflow-hidden">
+            <div className="px-4 py-3 border-b border-border-default flex items-center justify-between">
+              <span className="mono text-[9px] uppercase tracking-[0.18em] text-text-muted">
                 unicron-knowledge/wiki/products/pathfinder/kpis.md
               </span>
               <a
                 href="https://github.com/freakngenius/unicron-knowledge/blob/main/wiki/products/pathfinder/kpis.md"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="mono text-[10px] text-[#3B82F6] hover:underline"
+                className="mono text-[10px] text-status-blue hover:underline"
               >
                 Edit ↗
               </a>

@@ -47,9 +47,9 @@ const EXT_ICON: Record<string, string> = {
 function FileIcon({ ext }: { ext: string }) {
   const label = EXT_ICON[ext] ?? (ext.slice(1).toUpperCase().slice(0, 4) || 'FILE');
   const color =
-    ext === '.pdf' ? '#EF4444'
-    : ext === '.md' ? '#3B82F6'
-    : ext === '.html' ? '#F59E0B'
+    ext === '.pdf' ? '#DD6262'
+    : ext === '.md' ? '#6F95D6'
+    : ext === '.html' ? '#D9A23A'
     : ext === '.svg' ? '#7C3AED'
     : '#6B7280';
 
@@ -77,7 +77,7 @@ function AssetCard({ asset }: { asset: BrandAsset }) {
       href={fileUrl}
       target="_blank"
       rel="noopener noreferrer"
-      className="group bg-[#141416] border border-[#1F1F23] rounded-xl overflow-hidden hover:border-[#FF6B2B]/40 transition-colors flex flex-col"
+      className="group bg-bg-card border border-border-default rounded-xl overflow-hidden hover:border-accent/40 transition-colors flex flex-col"
       title={asset.name}
     >
       {/* Thumbnail / icon */}
@@ -102,17 +102,17 @@ function AssetCard({ asset }: { asset: BrandAsset }) {
 
       {/* Meta */}
       <div className="px-3 py-2.5 flex-1 flex flex-col gap-0.5">
-        <div className="mono text-[11px] text-[#E5E5E7] truncate font-medium leading-tight">
+        <div className="mono text-[11px] text-text-primary truncate font-medium leading-tight">
           {asset.name}
         </div>
-        <div className="mono text-[9px] text-[rgba(229,229,231,0.35)] uppercase tracking-[0.08em]">
+        <div className="mono text-[9px] text-text-muted uppercase tracking-[0.08em]">
           {formatSize(asset.sizeBytes)}
         </div>
       </div>
 
       {/* Open hint on hover */}
       <div className="px-3 pb-2 opacity-0 group-hover:opacity-100 transition-opacity">
-        <div className="mono text-[9px] text-[#FF6B2B] uppercase tracking-[0.1em]">
+        <div className="mono text-[9px] text-accent-orange uppercase tracking-[0.1em]">
           Open ↗
         </div>
       </div>
@@ -159,7 +159,7 @@ export function BrandAssets() {
     return (
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
         {[0, 1, 2, 3, 4, 5].map((i) => (
-          <div key={i} className="h-36 bg-[#141416] rounded-xl animate-pulse" />
+          <div key={i} className="h-36 bg-bg-card rounded-xl animate-pulse" />
         ))}
       </div>
     );
@@ -167,11 +167,11 @@ export function BrandAssets() {
 
   if (error) {
     return (
-      <div className="bg-[#EF4444]/10 border border-[#EF4444]/30 rounded-xl px-5 py-4">
-        <div className="mono text-[12px] text-[#EF4444]">{error}</div>
+      <div className="bg-[#DD6262]/10 border border-[#DD6262]/30 rounded-xl px-5 py-4">
+        <div className="mono text-[12px] text-[#DD6262]">{error}</div>
         <button
           onClick={() => void load()}
-          className="mono text-[10px] uppercase tracking-[0.12em] mt-2 text-[rgba(229,229,231,0.5)] hover:text-[#E5E5E7] transition-colors"
+          className="mono text-[10px] uppercase tracking-[0.12em] mt-2 text-text-secondary hover:text-text-primary transition-colors"
         >
           Retry
         </button>
@@ -181,15 +181,15 @@ export function BrandAssets() {
 
   if (!mounted) {
     return (
-      <div className="bg-[#141416] border border-[#1F1F23] rounded-xl px-6 py-8 text-center">
-        <div className="mono text-[11px] uppercase tracking-[0.18em] text-[rgba(229,229,231,0.4)] mb-2">
+      <div className="bg-bg-card border border-border-default rounded-xl px-6 py-8 text-center">
+        <div className="mono text-[11px] uppercase tracking-[0.18em] text-text-muted mb-2">
           Brand directory not mounted
         </div>
-        <div className="mono text-[12px] text-[rgba(229,229,231,0.3)] mb-3 max-w-sm mx-auto">
+        <div className="mono text-[12px] text-text-muted mb-3 max-w-sm mx-auto">
           {hint ?? 'Brand assets are not accessible on this server.'}
         </div>
-        <div className="mono text-[10px] text-[rgba(229,229,231,0.2)]">
-          Set <span className="text-[#FF6B2B]">BRAND_DIR</span> env var to the absolute path of the Brand/ directory.
+        <div className="mono text-[10px] text-text-faint">
+          Set <span className="text-accent-orange">BRAND_DIR</span> env var to the absolute path of the Brand/ directory.
         </div>
       </div>
     );
@@ -205,21 +205,21 @@ export function BrandAssets() {
             onClick={() => setActiveFolder(folder)}
             className="mono text-[10px] uppercase tracking-[0.1em] px-3 py-1.5 rounded-lg shrink-0 transition-colors"
             style={{
-              background: activeFolder === folder ? '#FF6B2B22' : '#1F1F23',
-              color: activeFolder === folder ? '#FF6B2B' : 'rgba(229,229,231,0.45)',
+              background: activeFolder === folder ? `rgba(232,118,58,0.13)` : 'var(--border-default)',
+              color: activeFolder === folder ? 'var(--accent)' : 'var(--text-lo)',
             }}
           >
             {folder}
           </button>
         ))}
-        <span className="ml-auto mono text-[10px] text-[rgba(229,229,231,0.3)] shrink-0">
+        <span className="ml-auto mono text-[10px] text-text-muted shrink-0">
           {filtered.length} file{filtered.length !== 1 ? 's' : ''}
         </span>
       </div>
 
       {filtered.length === 0 ? (
-        <div className="bg-[#141416] border border-[#1F1F23] rounded-xl px-5 py-10 text-center">
-          <div className="mono text-[11px] text-[rgba(229,229,231,0.3)]">
+        <div className="bg-bg-card border border-border-default rounded-xl px-5 py-10 text-center">
+          <div className="mono text-[11px] text-text-muted">
             No files in this folder.
           </div>
         </div>

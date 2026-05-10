@@ -102,13 +102,13 @@ function SignalModal({
         style={{
           width: 'min(640px, 95vw)',
           maxHeight: '80vh',
-          background: '#141416',
-          border: '1px solid rgba(229,229,231,0.1)',
+          background: 'var(--bg-elevated)',
+          border: '1px solid rgba(255,255,255,0.06)',
         }}
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-[rgba(229,229,231,0.08)]">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-[rgba(255,255,255,0.04)]">
           <div>
             <div className="mono text-[14px] font-semibold text-text-primary">{topic}</div>
             <div className="mono text-[11px] text-text-secondary mt-0.5">
@@ -122,8 +122,8 @@ function SignalModal({
               disabled={archiveState !== 'idle' && archiveState !== 'confirming'}
               className="mono text-[11.5px] px-2.5 py-1 rounded-md border transition-all"
               style={{
-                border:     `1px solid ${archiveState === 'blocked' ? '#ef4444' : archiveState === 'done' ? '#22c55e' : 'rgba(229,229,231,0.15)'}`,
-                color:      archiveState === 'blocked' ? '#ef4444' : archiveState === 'done' ? '#22c55e' : 'rgba(229,229,231,0.6)',
+                border:     `1px solid ${archiveState === 'blocked' ? '#DD6262' : archiveState === 'done' ? '#4FB286' : 'rgba(255,255,255,0.07)'}`,
+                color:      archiveState === 'blocked' ? '#DD6262' : archiveState === 'done' ? '#4FB286' : 'var(--text-md)',
                 background: archiveState === 'blocked' ? 'rgba(239,68,68,0.08)' : archiveState === 'done' ? 'rgba(34,197,94,0.08)' : 'transparent',
               }}
             >
@@ -136,7 +136,7 @@ function SignalModal({
             </button>
             <button
               onClick={onClose}
-              className="mono text-[11px] text-text-secondary px-2.5 py-1 rounded-md border border-[rgba(229,229,231,0.12)] hover:border-[rgba(229,229,231,0.25)] transition-colors"
+              className="mono text-[11px] text-text-secondary px-2.5 py-1 rounded-md border border-[rgba(255,255,255,0.07)] hover:border-[rgba(255,255,255,0.10)] transition-colors"
             >
               Close
             </button>
@@ -156,7 +156,7 @@ function SignalModal({
               No active signals for this topic.
             </div>
           ) : (
-            <div className="divide-y divide-[rgba(229,229,231,0.06)]">
+            <div className="divide-y divide-[rgba(255,255,255,0.04)]">
               {signals.map(s => (
                 <div key={s.id} className="px-5 py-4">
                   <div className="flex items-baseline gap-2 flex-wrap mb-1">
@@ -317,7 +317,7 @@ export default function DecayHeatmap() {
                     key={t.topic}
                     onClick={() => openTopic(t.topic)}
                     className={`text-left p-4 rounded-xl transition-all hover:scale-[1.02] active:scale-[0.98] ${textCls}`}
-                    style={{ background: bg, border: '1px solid rgba(229,229,231,0.06)' }}
+                    style={{ background: bg, border: '1px solid rgba(255,255,255,0.04)' }}
                   >
                     <div className="mono font-semibold text-[13px] leading-tight mb-2 truncate">
                       {t.topic}
@@ -346,7 +346,7 @@ export default function DecayHeatmap() {
                 { label: 'Dormant', bg: 'rgba(63,63,70,0.45)'   },
               ].map(({ label, bg }) => (
                 <span key={label} className="flex items-center gap-1.5 mono text-[10.5px] text-text-secondary">
-                  <span style={{ width: 12, height: 12, borderRadius: 3, background: bg, display: 'inline-block', border: '1px solid rgba(229,229,231,0.08)' }} />
+                  <span style={{ width: 12, height: 12, borderRadius: 3, background: bg, display: 'inline-block', border: '1px solid rgba(255,255,255,0.04)' }} />
                   {label}
                 </span>
               ))}
