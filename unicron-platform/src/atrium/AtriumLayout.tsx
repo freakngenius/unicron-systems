@@ -248,6 +248,22 @@ export function AtriumLayout({ activeTab, onTabChange, children }: Props) {
   const tabLabel = (id: AtriumTab) =>
     TABS.find((t) => t.id === id)?.label ?? id;
 
+  function TabIcon({ id, active }: { id: AtriumTab; active: boolean }) {
+    const c = active ? '#E8763A' : 'rgba(229,229,231,0.45)';
+    const w = 16;
+    switch (id) {
+      case 'now':       return <svg width={w} height={w} viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="5.5" stroke={c} strokeWidth="1.4"/><path d="M8 5v3.2l2 1.5" stroke={c} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>;
+      case 'people':    return <svg width={w} height={w} viewBox="0 0 16 16" fill="none"><circle cx="8" cy="6" r="2.5" stroke={c} strokeWidth="1.4"/><path d="M3.5 14c0-2.5 2-4.5 4.5-4.5s4.5 2 4.5 4.5" stroke={c} strokeWidth="1.4" strokeLinecap="round"/></svg>;
+      case 'work':      return <svg width={w} height={w} viewBox="0 0 16 16" fill="none"><rect x="2" y="6.5" width="12" height="7.5" rx="1.5" stroke={c} strokeWidth="1.4"/><path d="M5.5 6.5V5C5.5 4 6.2 3 7.5 3h1c1.3 0 2 1 2 2v1.5" stroke={c} strokeWidth="1.4" strokeLinecap="round"/></svg>;
+      case 'money':     return <svg width={w} height={w} viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="5.5" stroke={c} strokeWidth="1.4"/><path d="M8 5v1m0 4v1" stroke={c} strokeWidth="1.4" strokeLinecap="round"/><path d="M6.5 9.5a1.5 1.5 0 003 0c0-1-1.5-1.5-1.5-1.5S6.5 7.5 6.5 6.5a1.5 1.5 0 013 0" stroke={c} strokeWidth="1.2" strokeLinecap="round"/></svg>;
+      case 'marketing': return <svg width={w} height={w} viewBox="0 0 16 16" fill="none"><path d="M12.5 3L4 6.5V9.5L12.5 13V3z" stroke={c} strokeWidth="1.4" strokeLinejoin="round"/><path d="M4 8H2.5" stroke={c} strokeWidth="1.4" strokeLinecap="round"/><path d="M5 9.5L3.5 13.5" stroke={c} strokeWidth="1.4" strokeLinecap="round"/></svg>;
+      case 'products':  return <svg width={w} height={w} viewBox="0 0 16 16" fill="none"><path d="M8 2L14 5.5v5L8 14l-6-3.5v-5L8 2z" stroke={c} strokeWidth="1.4" strokeLinejoin="round"/><path d="M8 2v12M2.5 5.5l5.5 3 5.5-3" stroke={c} strokeWidth="1.3"/></svg>;
+      case 'system':    return <svg width={w} height={w} viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="2" stroke={c} strokeWidth="1.4"/><path d="M8 2v1.5m0 9V14m4.2-1.8-1-1M4.8 4.8l-1-1M14 8h-1.5m-9 0H2m9.2 2.2-1 1M4.8 11.2l-1 1" stroke={c} strokeWidth="1.3" strokeLinecap="round"/></svg>;
+      case 'library':   return <svg width={w} height={w} viewBox="0 0 16 16" fill="none"><rect x="2" y="3" width="4" height="10" rx="1" stroke={c} strokeWidth="1.4"/><rect x="7" y="3" width="4" height="10" rx="1" stroke={c} strokeWidth="1.4"/><path d="M12.5 3.5l2 9" stroke={c} strokeWidth="1.4" strokeLinecap="round"/></svg>;
+      case 'skills':    return <svg width={w} height={w} viewBox="0 0 16 16" fill="none"><path d="M9.5 2L4 9h5l-2 5 7-7H9l2.5-5z" stroke={c} strokeWidth="1.4" strokeLinejoin="round"/></svg>;
+    }
+  }
+
   return (
     <div className="atrium-shell min-h-screen bg-bg-base text-text-primary flex flex-col">
       {/* Header */}
@@ -311,25 +327,46 @@ export function AtriumLayout({ activeTab, onTabChange, children }: Props) {
 
       {/* Body */}
       <div className="atrium-body flex flex-1 min-h-0">
-        {/* Sidebar nav (hidden on mobile) */}
-        <nav className="atrium-nav hidden md:flex w-44 shrink-0 border-r border-border-default bg-bg-panel py-4 flex-col gap-1 px-2">
-          {TABS.map((tab) => {
-            const active = tab.id === activeTab;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => onTabChange(tab.id)}
-                className={[
-                  'w-full text-left px-3 py-2 rounded-md mono text-[11px] uppercase tracking-[0.14em] transition-colors',
-                  active
-                    ? 'bg-bg-card text-text-primary'
-                    : 'text-text-secondary hover:text-text-primary hover:bg-bg-card/50',
-                ].join(' ')}
-              >
-                {tab.label}
-              </button>
-            );
-          })}
+        {/* Sidebar nav (hidden on mobile) — 64px icon-only rail */}
+        <nav className="atrium-nav hidden md:flex w-16 shrink-0 border-r border-border-default bg-bg-panel py-3 flex-col items-center">
+          {/* Gradient A logo tile */}
+          <div
+            className="w-8 h-8 rounded-lg flex items-center justify-center mono text-[13px] font-bold text-white mb-4 flex-shrink-0"
+            style={{ background: 'linear-gradient(135deg, #E8763A, #B5532A)' }}
+          >
+            A
+          </div>
+
+          {/* Tab icon buttons */}
+          <div className="flex flex-col gap-0.5 w-full px-1.5 flex-1">
+            {TABS.map((tab) => {
+              const active = tab.id === activeTab;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => onTabChange(tab.id)}
+                  className="relative group flex items-center justify-center w-full h-9 rounded-md transition-colors hover:bg-bg-card/60"
+                  style={{ background: active ? 'rgba(229,229,231,0.06)' : undefined }}
+                  aria-label={tab.label}
+                >
+                  {/* 2px orange active bar */}
+                  {active && (
+                    <span className="absolute left-0 top-2 bottom-2 w-0.5 rounded-r" style={{ background: '#FF6B2B' }} />
+                  )}
+                  <TabIcon id={tab.id} active={active} />
+                  {/* Hover tooltip */}
+                  <span className="absolute left-full ml-2.5 px-2 py-1 bg-bg-elevated border border-border-default rounded-md mono text-[10px] font-medium text-text-primary whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-[60]">
+                    {tab.label}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* User avatar at bottom */}
+          <div className="mt-auto mb-2 w-7 h-7 rounded-full bg-bg-card border border-border-default flex items-center justify-center mono text-[10px] text-text-secondary flex-shrink-0">
+            {initials || '?'}
+          </div>
         </nav>
 
         {/* Main content — pb-20 on mobile clears the 60px bottom nav */}
