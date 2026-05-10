@@ -15,6 +15,7 @@ import { AtriumNow } from './AtriumNow';
 import { Marketing } from './Marketing';
 import { Money } from './Money';
 import { People } from './People';
+import { Products } from './Products';
 import { System } from './System';
 import { Work } from './Work';
 
@@ -80,6 +81,8 @@ export function AtriumApp() {
         <Money />
       ) : activeTab === 'marketing' ? (
         <Marketing />
+      ) : activeTab === 'products' ? (
+        <Products />
       ) : (
         <AtriumPlaceholder
           tab={activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}
