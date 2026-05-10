@@ -5,7 +5,6 @@ import { supabaseAdmin } from '@/lib/supabase';
 
 export async function sendMagicLink(email: string): Promise<{ error?: string }> {
   // Check allowlist before sending OTP — don't send magic links to unauthorized emails.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = supabaseAdmin() as unknown as { from: (t: string) => any };
   const { data: entry } = (await admin
     .from('operator_allowlist')

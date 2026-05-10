@@ -21,7 +21,6 @@ export default async function OrgLayout({ children, params }: LayoutProps) {
   const { slug } = await params;
 
   // Fetch org
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const adminAny = supabaseAdmin() as unknown as { from: (t: string) => any };
   const { data: org } = (await adminAny
     .from('organizations')
@@ -47,7 +46,6 @@ export default async function OrgLayout({ children, params }: LayoutProps) {
   if (authError || !user?.email) redirect('/login');
 
   // Allowlist check
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const adminWrite = supabaseAdmin() as unknown as { from: (t: string) => any };
   const { data: entry } = (await adminWrite
     .from('operator_allowlist')

@@ -49,7 +49,6 @@ export async function GET(req: NextRequest) {
   const { session, user } = data;
 
   // Defense-in-depth allowlist check (login action already checked, this catches edge cases).
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = supabaseAdmin() as unknown as { from: (t: string) => any };
   const { data: entry } = (await admin
     .from('operator_allowlist')

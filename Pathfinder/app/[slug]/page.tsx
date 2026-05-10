@@ -16,7 +16,6 @@ export default async function OrgPage({ params }: Props) {
   const { slug } = await params;
 
   // Re-fetch org for display (layout already validated it exists + auth).
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const adminAny = supabaseAdmin() as unknown as { from: (t: string) => any };
   const { data: org } = (await adminAny
     .from('organizations')
