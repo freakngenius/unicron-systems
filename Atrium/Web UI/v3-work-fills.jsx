@@ -552,7 +552,330 @@ const V3WorkRefusals = () => (
   </div>
 );
 
+// ============================================================
+// ACTION ITEMS — W-2
+// Production addition: not in original v3-work-fills design.
+// Source: nervous_system.action_items (Sprint 4 Stream D).
+// This stub documents the production sub-tab for design parity.
+// ============================================================
+
+const V3_ACTION_ITEMS = [
+  { id: "ai-001", title: "Reply to Zenith Labs proposal scope", priority: "high",        status: "open",        dri: "Kyle B",   due: "May 10", workspace: "pathfinder",   source: "call" },
+  { id: "ai-002", title: "Rotate agent API keys (quarterly)",   priority: "high",        status: "in_progress", dri: "Keenan O", due: "May 9",  workspace: "metacron",     source: "sprint_plan" },
+  { id: "ai-003", title: "Tier-3 feature copy revisions",       priority: "medium",      status: "in_progress", dri: "Curtis L", due: "May 9",  workspace: "pathfinder",   source: "call" },
+  { id: "ai-004", title: "Northwind tiered proposal",           priority: "high",        status: "open",        dri: "Maya I",   due: "May 9",  workspace: "pathfinder",   source: "call" },
+  { id: "ai-005", title: "Q3 OKR seed — Kyle to initiate",      priority: "high",        status: "open",        dri: "Kyle B",   due: "May 16", workspace: "internal_org", source: "cowork" },
+  { id: "ai-006", title: "Audit log retention bump to 365d",    priority: "medium",      status: "done",        dri: "Keenan O", due: null,     workspace: "metacron",     source: "sprint_plan" },
+  { id: "ai-007", title: "Refresh handbook — runtime principles", priority: "low",       status: "open",        dri: "Curtis L", due: null,     workspace: "internal_org", source: "cowork" },
+  { id: "ai-008", title: "ABQ procurement portal nightly scrape", priority: "medium",    status: "blocked",     dri: "Keenan O", due: null,     workspace: "pathfinder",   source: "voice_agent" },
+  { id: "ai-009", title: "Verifier threshold A/B writeup",      priority: "medium",      status: "in_progress", dri: "Keenan O", due: "May 11", workspace: "metacron",     source: "sprint_plan" },
+  { id: "ai-010", title: "Investor update — May",               priority: "irreversible",status: "open",        dri: "Kyle B",   due: "May 12", workspace: "internal_org", source: "cowork" },
+];
+
+const AI_PRIORITY_COLORS = {
+  low:         { bg: "rgba(107,114,128,0.10)", fg: "var(--v3-ink-lo)" },
+  medium:      { bg: "rgba(232,158,58,0.12)",  fg: "var(--v3-amber)" },
+  high:        { bg: "rgba(209,72,72,0.10)",   fg: "var(--v3-red)" },
+  irreversible:{ bg: "rgba(115,85,229,0.12)",  fg: "#7355E5" },
+};
+
+const AI_STATUS_LABELS = {
+  open:        "Open",
+  in_progress: "In progress",
+  done:        "Done",
+  blocked:     "Blocked",
+  broken_off:  "Broken off",
+};
+
+const V3WorkActionItems = () => {
+  const [filterPriority, setFilterPriority] = React.useState([]);
+  const [filterStatus,   setFilterStatus]   = React.useState([]);
+  const [filterDri,      setFilterDri]       = React.useState("");
+  const [sortField,      setSortField]       = React.useState("priority");
+  const [openItem,       setOpenItem]        = React.useState(null);
+
+  const PRIORITY_ORDER = { irreversible: 0, high: 1, medium: 2, low: 3 };
+
+  const filtered = V3_ACTION_ITEMS
+    .filter(it =>
+      (!filterPriority.length || filterPriority.includes(it.priority)) &&
+      (!filterStatus.length   || filterStatus.includes(it.status))     &&
+      (!filterDri             || it.dri.toLowerCase().includes(filterDri.toLowerCase()))
+    )
+    .sort((a, b) => {
+      if (sortField === "priority") return (PRIORITY_ORDER[a.priority] ?? 9) - (PRIORITY_ORDER[b.priority] ?? 9);
+      if (sortField === "status")   return a.status.localeCompare(b.status);
+      if (sortField === "dri")      return a.dri.localeCompare(b.dri);
+      if (sortField === "due")      return (a.due || "zzz").localeCompare(b.due || "zzz");
+      return 0;
+    });
+
+  const toggleChip = (arr, set, val) =>
+    arr.includes(val) ? set(arr.filter(x => x !== val)) : set([...arr, val]);
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+        <h2 style={{ fontSize: 20, fontWeight: 600, color: "var(--v3-ink)", margin: 0, letterSpacing: -0.3 }}>Action Items</h2>
+        <span style={{ fontSize: 13, color: "var(--v3-ink-lo)" }}>nervous_system.action_items · {filtered.length} shown</span>
+        <V3DemoTag/>
+        <div style={{ flex: 1 }}/>
+        {/* Sort selector */}
+        <select value={sortField} onChange={e => setSortField(e.target.value)} style={{
+          padding: "6px 10px", fontSize: 12, background: "var(--v3-surface)",
+          border: "1px solid var(--v3-line-strong)", borderRadius: 6, color: "var(--v3-ink-md)", fontFamily: "inherit",
+        }}>
+          <option value="priority">Sort: Priority</option>
+          <option value="status">Sort: Status</option>
+          <option value="dri">Sort: DRI</option>
+          <option value="due">Sort: Due</option>
+        </select>
+      </div>
+
+      {/* Filter chips */}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
+        <span style={{ fontSize: 11, color: "var(--v3-ink-lo)", marginRight: 4 }}>Priority</span>
+        {["low","medium","high","irreversible"].map(p => {
+          const on = filterPriority.includes(p);
+          const c  = AI_PRIORITY_COLORS[p];
+          return (
+            <button key={p} onClick={() => toggleChip(filterPriority, setFilterPriority, p)} style={{
+              padding: "4px 10px", fontSize: 11.5, fontWeight: 500, borderRadius: 999, cursor: "pointer",
+              background: on ? c.bg : "transparent", color: on ? c.fg : "var(--v3-ink-lo)",
+              border: `1px solid ${on ? c.fg + "55" : "var(--v3-line-strong)"}`,
+            }}>{p}</button>
+          );
+        })}
+        <span style={{ fontSize: 11, color: "var(--v3-ink-lo)", marginLeft: 8, marginRight: 4 }}>Status</span>
+        {Object.entries(AI_STATUS_LABELS).map(([k, v]) => {
+          const on = filterStatus.includes(k);
+          return (
+            <button key={k} onClick={() => toggleChip(filterStatus, setFilterStatus, k)} style={{
+              padding: "4px 10px", fontSize: 11.5, fontWeight: 500, borderRadius: 999, cursor: "pointer",
+              background: on ? "var(--v3-ink)" : "transparent", color: on ? "#FFF" : "var(--v3-ink-lo)",
+              border: `1px solid ${on ? "var(--v3-ink)" : "var(--v3-line-strong)"}`,
+            }}>{v}</button>
+          );
+        })}
+        <input value={filterDri} onChange={e => setFilterDri(e.target.value)} placeholder="Filter DRI…" style={{
+          marginLeft: 8, padding: "5px 10px", fontSize: 12,
+          background: "var(--v3-surface)", border: "1px solid var(--v3-line-strong)",
+          borderRadius: 6, color: "var(--v3-ink)", fontFamily: "inherit", width: 140,
+        }}/>
+        {(filterPriority.length || filterStatus.length || filterDri) ? (
+          <button onClick={() => { setFilterPriority([]); setFilterStatus([]); setFilterDri(""); }} style={{
+            fontSize: 11, color: "var(--v3-ink-lo)", padding: "4px 8px",
+            border: "1px solid var(--v3-line-strong)", borderRadius: 6, cursor: "pointer",
+          }}>Clear</button>
+        ) : null}
+      </div>
+
+      {/* Table + detail split */}
+      <div style={{ display: "grid", gridTemplateColumns: openItem ? "1fr 380px" : "1fr", gap: 16 }}>
+        {/* Item list */}
+        <div style={{
+          background: "var(--v3-surface)", borderRadius: 12,
+          boxShadow: "0 1px 2px rgba(11,21,48,0.04), 0 4px 16px rgba(11,21,48,0.06)",
+          overflow: "hidden",
+        }}>
+          {/* Column headers */}
+          <div style={{
+            display: "grid", gridTemplateColumns: "1fr 90px 90px 80px 80px",
+            padding: "9px 16px", borderBottom: "1px solid var(--v3-line-soft)",
+            fontSize: 10.5, fontWeight: 600, color: "var(--v3-ink-lo)",
+            textTransform: "uppercase", letterSpacing: 0.5,
+          }}>
+            <span>Title</span><span>Priority</span><span>Status</span><span>DRI</span><span>Due</span>
+          </div>
+          {filtered.map((it, i) => {
+            const c = AI_PRIORITY_COLORS[it.priority];
+            return (
+              <button key={it.id} onClick={() => setOpenItem(it)} style={{
+                display: "grid", gridTemplateColumns: "1fr 90px 90px 80px 80px",
+                width: "100%", textAlign: "left",
+                padding: "11px 16px",
+                borderTop: i === 0 ? "none" : "1px solid var(--v3-line-soft)",
+                background: openItem?.id === it.id ? "rgba(46,108,212,0.05)" : "transparent",
+                borderLeft: openItem?.id === it.id ? "3px solid var(--v3-blue)" : "3px solid transparent",
+                cursor: "pointer", alignItems: "center", gap: 8,
+              }}>
+                <span style={{ fontSize: 13, color: it.status === "done" ? "var(--v3-ink-lo)" : "var(--v3-ink)", textDecoration: it.status === "done" ? "line-through" : "none" }}>{it.title}</span>
+                <span style={{ fontSize: 10.5, fontWeight: 700, padding: "2px 7px", borderRadius: 4, textTransform: "uppercase", background: c.bg, color: c.fg }}>{it.priority}</span>
+                <span style={{ fontSize: 11.5, color: it.status === "blocked" ? "var(--v3-red)" : it.status === "done" ? "var(--v3-green)" : "var(--v3-ink-md)" }}>{AI_STATUS_LABELS[it.status]}</span>
+                <div style={{ display: "flex", alignItems: "center", gap: 5 }}><Avatar name={it.dri} size={18}/><span style={{ fontSize: 11, color: "var(--v3-ink-md)" }}>{it.dri.split(" ")[0]}</span></div>
+                <span style={{ fontSize: 11, color: "var(--v3-ink-lo)" }}>{it.due || "—"}</span>
+              </button>
+            );
+          })}
+          {filtered.length === 0 && (
+            <div style={{ padding: "40px 20px", textAlign: "center", fontSize: 13, color: "var(--v3-ink-lo)", fontStyle: "italic" }}>No action items match current filters.</div>
+          )}
+        </div>
+
+        {/* Detail panel */}
+        {openItem && (
+          <div style={{
+            background: "var(--v3-surface)", borderRadius: 12, padding: "20px 22px",
+            boxShadow: "0 1px 2px rgba(11,21,48,0.04), 0 4px 16px rgba(11,21,48,0.06)",
+            display: "flex", flexDirection: "column", gap: 14,
+          }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+              <h3 style={{ fontSize: 16, fontWeight: 600, color: "var(--v3-ink)", margin: 0, letterSpacing: -0.2, lineHeight: 1.4 }}>{openItem.title}</h3>
+              <button onClick={() => setOpenItem(null)} style={{ padding: 6, color: "var(--v3-ink-lo)" }}><I.X size={14}/></button>
+            </div>
+            {[
+              { k: "Priority",  v: <span style={{ fontSize: 11.5, fontWeight: 700, padding: "2px 7px", borderRadius: 4, textTransform: "uppercase", background: AI_PRIORITY_COLORS[openItem.priority].bg, color: AI_PRIORITY_COLORS[openItem.priority].fg }}>{openItem.priority}</span> },
+              { k: "Status",    v: AI_STATUS_LABELS[openItem.status] },
+              { k: "DRI",       v: <div style={{ display: "flex", alignItems: "center", gap: 6 }}><Avatar name={openItem.dri} size={18}/>{openItem.dri}</div> },
+              { k: "Due",       v: openItem.due || "—" },
+              { k: "Workspace", v: <span className="mono" style={{ fontSize: 12 }}>{openItem.workspace}</span> },
+              { k: "Source",    v: openItem.source },
+            ].map((row, i) => (
+              <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, fontSize: 13, borderTop: i === 0 ? "none" : "1px solid var(--v3-line-soft)", paddingTop: i === 0 ? 0 : 10 }}>
+                <span style={{ minWidth: 76, color: "var(--v3-ink-lo)", textTransform: "uppercase", fontSize: 10.5, fontWeight: 600, letterSpacing: 0.4 }}>{row.k}</span>
+                <div style={{ color: "var(--v3-ink)" }}>{row.v}</div>
+              </div>
+            ))}
+            <div style={{ marginTop: 4 }}>
+              <div style={{ fontSize: 10.5, color: "var(--v3-ink-lo)", textTransform: "uppercase", fontWeight: 600, letterSpacing: 0.5, marginBottom: 6 }}>Verify Criteria</div>
+              <div style={{ fontSize: 12.5, color: "var(--v3-ink-md)", lineHeight: 1.5, padding: "10px 12px", background: "var(--v3-bg)", borderRadius: 6, fontStyle: "italic" }}>
+                Not set. Add before moving to In Process.
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// ============================================================
+// SPRINTS — W-3
+// Production addition: not in original v3-work-fills design.
+// Source: nervous_system.audit_log WHERE action LIKE 'sprint_%' (Sprint 4 Stream D).
+// Groups by sprint number descending; most recent non-complete = active.
+// This stub documents the production sub-tab for design parity.
+// ============================================================
+
+const V3_SPRINT_GROUPS = [
+  {
+    num: "7",
+    name: "Sprint 7 — Polish + PWA + Notifications + Audit",
+    status: "dispatched",
+    rows: [
+      { action: "sprint_7_dispatch", ts: "2026-05-09T00:00:00Z", note: "Master Conductor dispatched Sprint 7." },
+    ],
+  },
+  {
+    num: "6",
+    name: "Sprint 6 — DTU + Cowork Infra",
+    status: "complete",
+    rows: [
+      { action: "sprint_6_complete", ts: "2026-05-07T18:00:00Z", note: "Sprint 6 verified by Kyle." },
+      { action: "sprint_6_dispatch", ts: "2026-05-05T09:00:00Z", note: "Master Conductor dispatched Sprint 6." },
+    ],
+  },
+  {
+    num: "5",
+    name: "Sprint 5 — Scenarios + Satisfaction + Voice",
+    status: "complete",
+    rows: [
+      { action: "sprint_5_complete", ts: "2026-05-04T16:00:00Z", note: "Sprint 5 verified by Kyle." },
+      { action: "sprint_5_dispatch", ts: "2026-05-02T09:00:00Z", note: "Master Conductor dispatched Sprint 5." },
+    ],
+  },
+];
+
+const SPRINT_STATUS_STYLE = {
+  dispatched: { bg: "rgba(232,158,58,0.12)", fg: "var(--v3-amber)", label: "Active" },
+  complete:   { bg: "rgba(31,138,91,0.12)",  fg: "var(--v3-green)", label: "Complete" },
+  failed:     { bg: "rgba(209,72,72,0.10)",  fg: "var(--v3-red)",   label: "Failed" },
+};
+
+const V3WorkSprints = () => {
+  const [expanded, setExpanded] = React.useState(new Set(["7"]));
+
+  const toggle = (num) => {
+    const next = new Set(expanded);
+    next.has(num) ? next.delete(num) : next.add(num);
+    setExpanded(next);
+  };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <h2 style={{ fontSize: 20, fontWeight: 600, color: "var(--v3-ink)", margin: 0, letterSpacing: -0.3 }}>Sprints</h2>
+        <span style={{ fontSize: 13, color: "var(--v3-ink-lo)" }}>audit_log · action LIKE sprint_%</span>
+        <V3DemoTag/>
+      </div>
+
+      {/* Sprint cards */}
+      {V3_SPRINT_GROUPS.map(group => {
+        const st = SPRINT_STATUS_STYLE[group.status] ?? SPRINT_STATUS_STYLE.dispatched;
+        const isOpen = expanded.has(group.num);
+        const isActive = group.status !== "complete";
+
+        return (
+          <div key={group.num} style={{
+            background: "var(--v3-surface)", borderRadius: 12,
+            boxShadow: "0 1px 2px rgba(11,21,48,0.04), 0 4px 16px rgba(11,21,48,0.06)",
+            borderLeft: isActive ? "3px solid var(--v3-amber)" : "3px solid var(--v3-line-strong)",
+            overflow: "hidden",
+          }}>
+            <button onClick={() => toggle(group.num)} style={{
+              display: "flex", width: "100%", textAlign: "left", alignItems: "center", gap: 14,
+              padding: "14px 18px", cursor: "pointer", background: "transparent",
+            }}>
+              <span className="mono" style={{
+                fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 4,
+                background: "var(--v3-bg)", color: "var(--v3-ink-lo)",
+              }}>S{group.num}</span>
+              <span style={{ flex: 1, fontSize: 14, fontWeight: 600, color: "var(--v3-ink)" }}>{group.name}</span>
+              <span style={{
+                fontSize: 10.5, fontWeight: 600, padding: "2px 8px", borderRadius: 999,
+                textTransform: "uppercase", letterSpacing: 0.5,
+                background: st.bg, color: st.fg,
+              }}>{st.label}</span>
+              <I.ChevRight size={13} style={{ color: "var(--v3-ink-lo)", transform: isOpen ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 0.15s" }}/>
+            </button>
+
+            {isOpen && (
+              <div style={{ borderTop: "1px solid var(--v3-line-soft)", padding: "12px 18px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
+                {group.rows.map((row, i) => (
+                  <div key={i} style={{ display: "flex", gap: 12, alignItems: "flex-start", fontSize: 12.5 }}>
+                    <span className="mono" style={{ fontSize: 10.5, color: "var(--v3-ink-lo)", whiteSpace: "nowrap", paddingTop: 1 }}>
+                      {new Date(row.ts).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                    </span>
+                    <span className="mono" style={{ fontSize: 10.5, color: "var(--v3-blue)", whiteSpace: "nowrap", paddingTop: 1 }}>{row.action}</span>
+                    <span style={{ color: "var(--v3-ink-md)", lineHeight: 1.5 }}>{row.note}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })}
+
+      {/* Empty state (shown when no sprint data in DB) */}
+      <div style={{ display: "none" }}>
+        <div style={{ padding: "40px 20px", textAlign: "center" }}>
+          <div style={{ fontSize: 15, fontWeight: 600, color: "var(--v3-ink)", marginBottom: 6 }}>No sprint data yet</div>
+          <div style={{ fontSize: 13, color: "var(--v3-ink-lo)", lineHeight: 1.6, maxWidth: 380, margin: "0 auto" }}>
+            Sprint tracking begins once Conductor sprints land. The Orchestrator writes
+            audit_log entries with action matching <code style={{ fontSize: 11.5, color: "var(--v3-ink-md)" }}>sprint_*</code> as
+            it dispatches each sprint.
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 window.V3WorkKanban = V3WorkKanban;
 window.V3WorkCalls = V3WorkCalls;
 window.V3WorkDecisions = V3WorkDecisions;
 window.V3WorkRefusals = V3WorkRefusals;
+window.V3WorkActionItems = V3WorkActionItems;
+window.V3WorkSprints = V3WorkSprints;
