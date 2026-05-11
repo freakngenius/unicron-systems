@@ -5,7 +5,10 @@
 //   - Navigation requests when offline: serve /offline.html fallback
 //   - Background sync: voice-memo-sync tag for queued voice memo ingest payloads
 
-const CACHE_VERSION = 'atrium-v1';
+// Bumped 2026-05-11 after Pass 2 (8 streams) + logo replacement caused
+// stale cache-first JS chunks to linger. Activate handler deletes any
+// 'atrium-*' cache that isn't the current shell, forcing a fresh fetch.
+const CACHE_VERSION = 'atrium-v2-pass2';
 const APP_SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const OFFLINE_URL = '/offline.html';
 
