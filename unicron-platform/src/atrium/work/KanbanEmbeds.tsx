@@ -37,9 +37,9 @@ const STATUS_COLUMNS = [
 type KanbanStatus = (typeof STATUS_COLUMNS)[number]['key'];
 
 const PRIORITY_COLORS: Record<string, string> = {
-  irreversible: '#EF4444',
-  high: '#F59E0B',
-  medium: '#3B82F6',
+  irreversible: '#DD6262',
+  high: '#D9A23A',
+  medium: '#6F95D6',
   low: 'var(--text-lo)',
 };
 
