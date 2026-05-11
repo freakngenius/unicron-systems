@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "typecheck": "tsc -b --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "slack:audit": "node scripts/slack-membership-audit.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.52.0",

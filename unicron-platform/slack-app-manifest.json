@@ -23,8 +23,11 @@
         "app_mentions:read",
         "im:read",
         "im:write",
+        "channels:read",
         "channels:history",
+        "groups:read",
         "groups:history",
+        "mpim:read",
         "users:read",
         "commands"
       ]
