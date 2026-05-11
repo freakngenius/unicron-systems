@@ -418,7 +418,7 @@ export function Runway() {
         <button
           onClick={() => void saveConfig()}
           disabled={saving}
-          className="mono text-[10px] uppercase tracking-[0.12em] px-4 py-2 bg-accent-orange text-white rounded-lg hover:bg-[#e55a1a] transition-colors disabled:opacity-40"
+          className="mono text-[10px] uppercase tracking-[0.12em] px-4 py-2 bg-accent-orange text-white rounded-lg hover:bg-[#D4652E] transition-colors disabled:opacity-40"
         >
           {saving ? '…' : 'Save'}
         </button>

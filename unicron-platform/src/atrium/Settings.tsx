@@ -59,8 +59,8 @@ function Toggle({ checked, onChange, disabled, id }: ToggleProps) {
       aria-checked={checked}
       disabled={disabled}
       onClick={() => onChange(!checked)}
-      className="relative inline-flex h-5 w-9 flex-shrink-0 rounded-full border-2 border-transparent transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FF6B2B] focus-visible:ring-offset-2 focus-visible:ring-offset-[#101012] disabled:opacity-40 disabled:cursor-not-allowed"
-      style={{ background: checked ? '#FF6B2B' : '#2A2A2E' }}
+      className="relative inline-flex h-5 w-9 flex-shrink-0 rounded-full border-2 border-transparent transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#E8763A] focus-visible:ring-offset-2 focus-visible:ring-offset-[#101012] disabled:opacity-40 disabled:cursor-not-allowed"
+      style={{ background: checked ? 'var(--accent)' : '#2A2A2E' }}
     >
       <span
         className="pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow-sm transition-transform"
@@ -307,7 +307,7 @@ export function Settings({ memberId, onClose }: SettingsProps) {
             id="pref-calendar-advance"
             value={prefs.atrium_badges.calendar_minutes_before}
             onChange={(e) => setBadge('calendar_minutes_before', Number(e.target.value))}
-            className="bg-[#1A1A1D] border border-[#2A2A2E] rounded-md px-2 py-1 mono text-[11px] text-[#E5E5E7] focus:outline-none focus:border-[#FF6B2B] cursor-pointer"
+            className="bg-[#1A1A1D] border border-[#2A2A2E] rounded-md px-2 py-1 mono text-[11px] text-[#E5E5E7] focus:outline-none focus:border-[#E8763A] cursor-pointer"
           >
             {CALENDAR_MINUTES_OPTIONS.map((m) => (
               <option key={m} value={m}>
@@ -348,10 +348,10 @@ export function Settings({ memberId, onClose }: SettingsProps) {
       <div className="flex items-center justify-between gap-3 mt-5">
         <div className="flex-1">
           {saveState === 'success' && (
-            <span className="mono text-[11px] text-[#22C55E]">Preferences saved</span>
+            <span className="mono text-[11px] text-[#4FB286]">Preferences saved</span>
           )}
           {saveState === 'error' && (
-            <span className="mono text-[11px] text-[#EF4444]">{errorMsg || 'Save failed'}</span>
+            <span className="mono text-[11px] text-[#DD6262]">{errorMsg || 'Save failed'}</span>
           )}
           {!memberId && (
             <span className="mono text-[10px] text-[rgba(229,229,231,0.35)]">
@@ -363,7 +363,7 @@ export function Settings({ memberId, onClose }: SettingsProps) {
           onClick={handleSave}
           disabled={saveState === 'loading' || !memberId}
           className="mono text-[11px] uppercase tracking-[0.14em] px-4 py-2 rounded-md transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-          style={{ background: '#FF6B2B', color: '#fff' }}
+          style={{ background: 'var(--accent)', color: '#fff' }}
         >
           {saveState === 'loading' ? 'Saving…' : 'Save preferences'}
         </button>

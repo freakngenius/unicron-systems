@@ -98,7 +98,7 @@ export function ErrorState({
   onRetry?: () => void;
 }) {
   return (
-    <div className="flex flex-col items-center justify-center py-16 text-center bg-[#EF4444]/10 border border-[#EF4444]/30 rounded-xl px-5">
+    <div className="flex flex-col items-center justify-center py-16 text-center bg-[#DD6262]/10 border border-[#DD6262]/30 rounded-xl px-5">
       <p className="mono text-[12px] text-red-400">Something went wrong</p>
       <p className="mono text-[11px] text-zinc-600 mt-1 max-w-sm leading-relaxed">
         {message}

@@ -49,7 +49,7 @@ interface MetacronStats {
 const ARCHETYPE_COLORS: Record<string, string> = {
   orchestrator: 'var(--accent)',
   analyst:      '#6F95D6',
-  elder:        '#A855F7',
+  elder:        '#8B7CD8',
   taboo_keeper: '#DD6262',
   specialist:   '#4FB286',
 };

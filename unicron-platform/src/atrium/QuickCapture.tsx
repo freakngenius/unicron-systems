@@ -228,7 +228,7 @@ export function QuickCapture({ open, onClose, onToast, teamMemberId }: Props) {
               className={[
                 'flex-1 py-3 mono text-[11px] uppercase tracking-[0.16em] transition-colors',
                 tab === t.id
-                  ? 'text-[#FF6B2B] border-b-2 border-[#FF6B2B]'
+                  ? 'text-[#E8763A] border-b-2 border-[#E8763A]'
                   : 'text-[rgba(229,229,231,0.6)] hover:text-[#E5E5E7]',
               ].join(' ')}
             >
@@ -258,7 +258,7 @@ export function QuickCapture({ open, onClose, onToast, teamMemberId }: Props) {
                 <button
                   onClick={handleTextSubmit}
                   disabled={submitting || !textValue.trim()}
-                  className="mono text-[12px] uppercase tracking-[0.14em] bg-[#FF6B2B] text-white px-4 py-2 rounded-lg hover:bg-[#e55a1a] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="mono text-[12px] uppercase tracking-[0.14em] bg-[#E8763A] text-white px-4 py-2 rounded-lg hover:bg-[#D4652E] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   {submitting ? 'Sending…' : 'Capture →'}
                 </button>
@@ -269,7 +269,7 @@ export function QuickCapture({ open, onClose, onToast, teamMemberId }: Props) {
           {/* Photo tab */}
           {tab === 'photo' && (
             <div className="space-y-4">
-              <label className="flex flex-col items-center justify-center w-full h-36 border-2 border-dashed border-[#2A2A2E] rounded-lg cursor-pointer hover:border-[#FF6B2B] transition-colors bg-[#1A1A1D]">
+              <label className="flex flex-col items-center justify-center w-full h-36 border-2 border-dashed border-[#2A2A2E] rounded-lg cursor-pointer hover:border-[#E8763A] transition-colors bg-[#1A1A1D]">
                 <input
                   type="file"
                   accept="image/*"
@@ -298,7 +298,7 @@ export function QuickCapture({ open, onClose, onToast, teamMemberId }: Props) {
                 <button
                   onClick={handlePhotoSubmit}
                   disabled={submitting || !photoFile}
-                  className="mono text-[12px] uppercase tracking-[0.14em] bg-[#FF6B2B] text-white px-4 py-2 rounded-lg hover:bg-[#e55a1a] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="mono text-[12px] uppercase tracking-[0.14em] bg-[#E8763A] text-white px-4 py-2 rounded-lg hover:bg-[#D4652E] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   {submitting ? 'Uploading…' : 'Capture →'}
                 </button>
@@ -310,8 +310,8 @@ export function QuickCapture({ open, onClose, onToast, teamMemberId }: Props) {
           {tab === 'voice' && (
             <div className="space-y-4">
               {/* Sprint 4 banner */}
-              <div className="bg-[#1A1A1D] border border-[#F59E0B]/30 rounded-lg px-4 py-3">
-                <div className="mono text-[10px] uppercase tracking-[0.16em] text-[#F59E0B] mb-1">
+              <div className="bg-[#1A1A1D] border border-[#D9A23A]/30 rounded-lg px-4 py-3">
+                <div className="mono text-[10px] uppercase tracking-[0.16em] text-[#D9A23A] mb-1">
                   Sprint 4 Feature
                 </div>
                 <div className="mono text-[11px] text-[rgba(229,229,231,0.7)]">
@@ -324,7 +324,7 @@ export function QuickCapture({ open, onClose, onToast, teamMemberId }: Props) {
                 {!recording && !audioUrl && (
                   <button
                     onClick={startRecording}
-                    className="w-16 h-16 rounded-full bg-[#EF4444] flex items-center justify-center hover:bg-[#dc2626] transition-colors shadow-lg"
+                    className="w-16 h-16 rounded-full bg-[#DD6262] flex items-center justify-center hover:bg-[#C85252] transition-colors shadow-lg"
                     aria-label="Start recording"
                   >
                     <div className="w-6 h-6 rounded-full bg-white" />
@@ -334,7 +334,7 @@ export function QuickCapture({ open, onClose, onToast, teamMemberId }: Props) {
                 {recording && (
                   <button
                     onClick={stopRecording}
-                    className="w-16 h-16 rounded-full bg-[#EF4444] flex items-center justify-center hover:bg-[#dc2626] transition-colors shadow-lg animate-pulse"
+                    className="w-16 h-16 rounded-full bg-[#DD6262] flex items-center justify-center hover:bg-[#C85252] transition-colors shadow-lg animate-pulse"
                     aria-label="Stop recording"
                   >
                     <div className="w-5 h-5 bg-white rounded-sm" />
@@ -342,7 +342,7 @@ export function QuickCapture({ open, onClose, onToast, teamMemberId }: Props) {
                 )}
 
                 {recording && (
-                  <div className="mono text-[11px] uppercase tracking-[0.16em] text-[#EF4444] animate-pulse">
+                  <div className="mono text-[11px] uppercase tracking-[0.16em] text-[#DD6262] animate-pulse">
                     Recording…
                   </div>
                 )}
@@ -360,7 +360,7 @@ export function QuickCapture({ open, onClose, onToast, teamMemberId }: Props) {
                       <button
                         onClick={handleVoiceSubmit}
                         disabled={submitting}
-                        className="mono text-[12px] uppercase tracking-[0.14em] bg-[#FF6B2B] text-white px-4 py-2 rounded-lg hover:bg-[#e55a1a] transition-colors disabled:opacity-40"
+                        className="mono text-[12px] uppercase tracking-[0.14em] bg-[#E8763A] text-white px-4 py-2 rounded-lg hover:bg-[#D4652E] transition-colors disabled:opacity-40"
                       >
                         {submitting ? 'Sending…' : 'Capture →'}
                       </button>
@@ -379,8 +379,8 @@ export function QuickCapture({ open, onClose, onToast, teamMemberId }: Props) {
 
           {/* Error */}
           {error && (
-            <div className="mt-3 bg-[#EF4444]/10 border border-[#EF4444]/40 rounded-lg px-3 py-2">
-              <div className="mono text-[11px] text-[#EF4444]">{error}</div>
+            <div className="mt-3 bg-[#DD6262]/10 border border-[#DD6262]/40 rounded-lg px-3 py-2">
+              <div className="mono text-[11px] text-[#DD6262]">{error}</div>
             </div>
           )}
         </div>

@@ -104,7 +104,7 @@ export function LibraryTemplates({
                 'text-left border rounded-lg p-5 transition-all',
                 'hover:border-[rgba(229,229,231,0.2)] focus:outline-none focus:ring-1 focus:ring-[rgba(229,229,231,0.15)]',
                 isCreating
-                  ? 'border-[#FF6B2B]/40 opacity-70'
+                  ? 'border-[#E8763A]/40 opacity-70'
                   : creating !== null
                     ? 'border-[#1F1F23] opacity-40 cursor-not-allowed'
                     : 'border-[#1F1F23] hover:bg-[#0D0D0F]',
@@ -118,7 +118,7 @@ export function LibraryTemplates({
                 {card.description}
               </div>
               {isCreating && (
-                <div className="mono text-[10px] text-[#FF6B2B] mt-3 animate-pulse">
+                <div className="mono text-[10px] text-[#E8763A] mt-3 animate-pulse">
                   Creating…
                 </div>
               )}
@@ -143,7 +143,7 @@ export function LibraryTemplates({
               onNavigateToRepo?.(toast.slug);
               setToast(null);
             }}
-            className="mono text-[10px] uppercase tracking-[0.14em] text-[#FF6B2B] hover:opacity-80 transition-opacity"
+            className="mono text-[10px] uppercase tracking-[0.14em] text-[#E8763A] hover:opacity-80 transition-opacity"
           >
             Open in Repo →
           </button>

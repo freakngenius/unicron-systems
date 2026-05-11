@@ -43,7 +43,7 @@ function StripeStub() {
         </div>
       </div>
       <button
-        className="mono text-[11px] uppercase tracking-[0.12em] px-4 py-2.5 bg-accent-orange text-white rounded-lg hover:bg-[#e55a1a] transition-colors shrink-0"
+        className="mono text-[11px] uppercase tracking-[0.12em] px-4 py-2.5 bg-accent-orange text-white rounded-lg hover:bg-[#D4652E] transition-colors shrink-0"
         onClick={() => alert('Stripe connection — add STRIPE_SECRET_KEY to environment and deploy /api/atrium/stripe-mrr endpoint.')}
       >
         Connect Stripe
