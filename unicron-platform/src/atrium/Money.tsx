@@ -1,4 +1,8 @@
-// Money.tsx — Pass 2 (R4): cut fiction, wire what's real.
+// Money.tsx — S5b restores Cash on hand via nervous_system.cash_balance.
+// Manual entry path (default). Plaid integration ships as a skeleton at
+// /api/atrium/plaid/sync until credentials land.
+//
+// Original Pass 2 (R4) note retained:
 //
 // SLOT MATRIX (Pass 2 R4):
 //  - Cash on hand · status: CUT · no bank integration / cash table.
@@ -20,6 +24,7 @@ import { Accounts } from './money/Accounts';
 import { Revenue } from './money/Revenue';
 import { Expenses } from './money/Expenses';
 import { CostSpikes } from './money/CostSpikes';
+import CashOnHandCard from './money/CashOnHandCard';
 
 const MONEY_TABS = [
   { id: 'revenue',  label: 'Revenue' },
@@ -89,8 +94,9 @@ export function Money() {
         </h1>
       </div>
 
-      {/* 2 real metric cards — Cash on hand + Runway months CUT, will return when bank integration lands */}
+      {/* S5b — Cash on hand restored (manual entry default; Plaid skeleton at /api/atrium/plaid/sync) */}
       <div className="px-7 pb-4 grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
+        <CashOnHandCard />
         <MetricCard
           label="Net MRR"
           value="$0"
