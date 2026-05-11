@@ -94,7 +94,7 @@ const MAX_CONTENT_CHARS = 6_000;
 
 export async function vaultEmbeddingsRebuild(): Promise<RebuildResult> {
   if (!GITHUB_TOKEN || !OPENAI_API_KEY) {
-    await nervous().schema('nervous_system').from('audit_log').insert({
+    await nervous().schema('nervous_system').from('audit_log').insert({ table_name: 'nervous_system.vault_embeddings',
       action: 'vault_embeddings_awaiting_credentials',
       payload: {
         missing_env: [
@@ -208,7 +208,7 @@ export async function vaultEmbeddingsRebuild(): Promise<RebuildResult> {
       embeddedNew += rows.length;
     }
 
-    await sb.schema('nervous_system').from('audit_log').insert({
+    await sb.schema('nervous_system').from('audit_log').insert({ table_name: 'nervous_system.vault_embeddings',
       action: 'vault_embeddings_ok',
       payload: { total_files: candidates.length, embedded_new: embeddedNew, skipped_unchanged: skippedUnchanged },
     });
@@ -221,7 +221,7 @@ export async function vaultEmbeddingsRebuild(): Promise<RebuildResult> {
     };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    await nervous().schema('nervous_system').from('audit_log').insert({
+    await nervous().schema('nervous_system').from('audit_log').insert({ table_name: 'nervous_system.vault_embeddings',
       action: 'vault_embeddings_error',
       payload: { error: message },
     });

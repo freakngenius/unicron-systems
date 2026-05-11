@@ -54,8 +54,7 @@ interface GhTreeEntry {
 
 export async function vaultStatsSync(): Promise<VaultStatsResult> {
   if (!GITHUB_TOKEN) {
-    await nervous().schema('nervous_system').from('audit_log').insert({
-      action: 'vault_stats_awaiting_credentials',
+    await nervous().schema('nervous_system').from('audit_log').insert({ table_name: 'nervous_system.vault_stats', action: 'vault_stats_awaiting_credentials',
       payload: { missing_env: ['GITHUB_VAULT_TOKEN'] },
     });
     return {
@@ -118,16 +117,14 @@ export async function vaultStatsSync(): Promise<VaultStatsResult> {
       .insert(row);
     if (writeErr) throw new Error(`vault_stats insert: ${writeErr.message}`);
 
-    await nervous().schema('nervous_system').from('audit_log').insert({
-      action: 'vault_stats_ok',
+    await nervous().schema('nervous_system').from('audit_log').insert({ table_name: 'nervous_system.vault_stats', action: 'vault_stats_ok',
       payload: { ...row, truncated: tree.truncated },
     });
 
     return { status: 'ok', ...row };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    await nervous().schema('nervous_system').from('audit_log').insert({
-      action: 'vault_stats_error',
+    await nervous().schema('nervous_system').from('audit_log').insert({ table_name: 'nervous_system.vault_stats', action: 'vault_stats_error',
       payload: { error: message },
     });
     return {
@@ -221,8 +218,7 @@ export function parseContinuityMarkdown(content: string): ParsedEntry[] {
 
 export async function continuityIngest(): Promise<ContinuityIngestResult> {
   if (!GITHUB_TOKEN) {
-    await nervous().schema('nervous_system').from('audit_log').insert({
-      action: 'continuity_ingest_awaiting_credentials',
+    await nervous().schema('nervous_system').from('audit_log').insert({ table_name: 'nervous_system.continuity_log', action: 'continuity_ingest_awaiting_credentials',
       payload: { missing_env: ['GITHUB_VAULT_TOKEN'] },
     });
     return { status: 'awaiting_credentials', entries_total: 0, entries_new: 0 };
@@ -235,8 +231,7 @@ export async function continuityIngest(): Promise<ContinuityIngestResult> {
       { headers: ghHeaders() }
     );
     if (fileRes.status === 404) {
-      await nervous().schema('nervous_system').from('audit_log').insert({
-        action: 'continuity_ingest_not_found',
+      await nervous().schema('nervous_system').from('audit_log').insert({ table_name: 'nervous_system.continuity_log', action: 'continuity_ingest_not_found',
         payload: { path },
       });
       return { status: 'not_found', entries_total: 0, entries_new: 0 };
@@ -267,16 +262,14 @@ export async function continuityIngest(): Promise<ContinuityIngestResult> {
       if (writeErr) throw new Error(`continuity_log insert: ${writeErr.message}`);
     }
 
-    await nervous().schema('nervous_system').from('audit_log').insert({
-      action: 'continuity_ingest_ok',
+    await nervous().schema('nervous_system').from('audit_log').insert({ table_name: 'nervous_system.continuity_log', action: 'continuity_ingest_ok',
       payload: { entries_total: parsed.length, entries_new: fresh.length },
     });
 
     return { status: 'ok', entries_total: parsed.length, entries_new: fresh.length };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    await nervous().schema('nervous_system').from('audit_log').insert({
-      action: 'continuity_ingest_error',
+    await nervous().schema('nervous_system').from('audit_log').insert({ table_name: 'nervous_system.continuity_log', action: 'continuity_ingest_error',
       payload: { error: message },
     });
     return { status: 'error', entries_total: 0, entries_new: 0, error: message };
