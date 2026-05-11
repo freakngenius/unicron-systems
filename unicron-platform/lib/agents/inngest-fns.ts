@@ -410,3 +410,23 @@ export const slackDailyScanRun = inngest.createFunction(
     return result;
   }
 );
+
+// ---------------------------------------------------------------------------
+// Slack daily digest post-back — Stream S4 (optional, env-gated)
+// ---------------------------------------------------------------------------
+
+/**
+ * Listens for slack/daily-digest.posted (fired by the cron + manual run on
+ * completion). If SLACK_DAILY_DIGEST_CHANNEL_ID is set, posts a Block Kit
+ * summary to that channel. Otherwise silently skips with a structured
+ * 'skipped' return value — the listener stays registered regardless so that
+ * setting the env var on Vercel "switches on" post-back without a redeploy.
+ */
+export const slackDailyDigestPost = inngest.createFunction(
+  { id: 'slack-daily-digest-post', name: 'Slack Daily Digest Post', retries: 1 },
+  { event: 'slack/daily-digest.posted' },
+  async ({ event, step }) => {
+    const { postSlackDailyDigest } = await import('./slack-daily-digest-post.js');
+    return step.run('slack-daily-digest-post', () => postSlackDailyDigest(event.data));
+  }
+);
