@@ -534,8 +534,14 @@ function SortHeader({
 
 // ─── Main export ──────────────────────────────────────────────────────────────
 
-export function ActionItems() {
+export function ActionItems({ refreshSignal }: { refreshSignal?: number } = {}) {
   const { items, loading, error, members, reload } = useActionItems();
+
+  useEffect(() => {
+    if (refreshSignal === undefined) return;
+    void reload();
+  }, [refreshSignal, reload]);
+
   const [filters, setFilters] = useState<Filters>({
     dri: '',
     priority: [],
