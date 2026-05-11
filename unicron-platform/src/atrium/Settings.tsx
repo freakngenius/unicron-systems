@@ -79,13 +79,13 @@ interface RowProps {
 
 function PrefRow({ label, description, id, children }: RowProps) {
   return (
-    <div className="flex items-start justify-between gap-4 py-3 border-b border-[#1F1F23] last:border-b-0">
+    <div className="flex items-start justify-between gap-4 py-3 border-b border-border-default last:border-b-0">
       <div className="flex-1 min-w-0">
-        <label htmlFor={id} className="mono text-[12px] text-[#E5E5E7] block cursor-pointer">
+        <label htmlFor={id} className="mono text-[12px] text-text-primary block cursor-pointer">
           {label}
         </label>
         {description && (
-          <p className="mono text-[10px] text-[rgba(229,229,231,0.45)] mt-0.5">{description}</p>
+          <p className="mono text-[10px] text-text-muted mt-0.5">{description}</p>
         )}
       </div>
       <div className="flex-shrink-0 flex items-center">{children}</div>
@@ -100,9 +100,9 @@ interface SectionProps {
 
 function Section({ title, children }: SectionProps) {
   return (
-    <div className="bg-[#141416] border border-[#1F1F23] rounded-lg mb-4">
-      <div className="px-4 pt-3 pb-1 border-b border-[#1F1F23]">
-        <span className="mono text-[9px] uppercase tracking-[0.18em] text-[rgba(229,229,231,0.45)]">
+    <div className="bg-white border border-border-default rounded-lg mb-4">
+      <div className="px-4 pt-3 pb-1 border-b border-border-default">
+        <span className="mono text-[9px] uppercase tracking-[0.18em] text-text-muted">
           {title}
         </span>
       </div>
@@ -215,7 +215,7 @@ export function Settings({ memberId, onClose }: SettingsProps) {
     return (
       <div className="max-w-xl w-full">
         <SettingsHeader onClose={onClose} />
-        <div className="flex items-center justify-center py-16 mono text-[11px] text-[rgba(229,229,231,0.45)] animate-pulse">
+        <div className="flex items-center justify-center py-16 mono text-[11px] text-text-muted animate-pulse">
           loading preferences…
         </div>
       </div>
@@ -307,7 +307,7 @@ export function Settings({ memberId, onClose }: SettingsProps) {
             id="pref-calendar-advance"
             value={prefs.atrium_badges.calendar_minutes_before}
             onChange={(e) => setBadge('calendar_minutes_before', Number(e.target.value))}
-            className="bg-[#1A1A1D] border border-[#2A2A2E] rounded-md px-2 py-1 mono text-[11px] text-[#E5E5E7] focus:outline-none focus:border-[#E8763A] cursor-pointer"
+            className="bg-bg-raised border border-border-default rounded-md px-2 py-1 mono text-[11px] text-text-primary focus:outline-none focus:border-[#E8763A] cursor-pointer"
           >
             {CALENDAR_MINUTES_OPTIONS.map((m) => (
               <option key={m} value={m}>
@@ -354,7 +354,7 @@ export function Settings({ memberId, onClose }: SettingsProps) {
             <span className="mono text-[11px] text-[#DD6262]">{errorMsg || 'Save failed'}</span>
           )}
           {!memberId && (
-            <span className="mono text-[10px] text-[rgba(229,229,231,0.35)]">
+            <span className="mono text-[10px] text-text-faint">
               Sign in to save preferences to your profile
             </span>
           )}
@@ -378,15 +378,15 @@ function SettingsHeader({ onClose }: { onClose?: () => void }) {
   return (
     <div className="flex items-center justify-between mb-5">
       <div>
-        <h1 className="mono text-[18px] text-[#E5E5E7] font-semibold">Settings</h1>
-        <p className="mono text-[11px] text-[rgba(229,229,231,0.5)] mt-1">
+        <h1 className="mono text-[18px] text-text-primary font-semibold">Settings</h1>
+        <p className="mono text-[11px] text-text-muted mt-1">
           Notification preferences and account settings
         </p>
       </div>
       {onClose && (
         <button
           onClick={onClose}
-          className="mono text-[10px] uppercase tracking-[0.16em] text-[rgba(229,229,231,0.45)] hover:text-[#E5E5E7] transition-colors"
+          className="mono text-[10px] uppercase tracking-[0.16em] text-text-muted hover:text-text-primary transition-colors"
           aria-label="Close settings"
         >
           Close

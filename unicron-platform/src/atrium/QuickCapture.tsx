@@ -202,17 +202,17 @@ export function QuickCapture({ open, onClose, onToast, teamMemberId }: Props) {
 
       {/* Modal */}
       <div
-        className="relative bg-[#141416] border border-[#1F1F23] rounded-xl shadow-2xl w-full max-w-lg"
+        className="relative bg-white border border-border-default rounded-xl shadow-xl w-full max-w-lg"
         style={{ boxShadow: '0 8px 40px rgba(0,0,0,0.6)' }}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-[#1F1F23]">
-          <div className="mono text-[11px] uppercase tracking-[0.22em] text-[#E5E5E7]">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-border-default">
+          <div className="mono text-[11px] uppercase tracking-[0.22em] text-text-primary">
             Quick Capture
           </div>
           <button
             onClick={handleClose}
-            className="mono text-[11px] text-[rgba(229,229,231,0.6)] hover:text-[#E5E5E7] transition-colors"
+            className="mono text-[11px] text-text-secondary hover:text-text-primary transition-colors"
             aria-label="Close"
           >
             ✕
@@ -220,7 +220,7 @@ export function QuickCapture({ open, onClose, onToast, teamMemberId }: Props) {
         </div>
 
         {/* Tabs */}
-        <div className="flex border-b border-[#1F1F23]">
+        <div className="flex border-b border-border-default">
           {TABS.map((t) => (
             <button
               key={t.id}
@@ -229,7 +229,7 @@ export function QuickCapture({ open, onClose, onToast, teamMemberId }: Props) {
                 'flex-1 py-3 mono text-[11px] uppercase tracking-[0.16em] transition-colors',
                 tab === t.id
                   ? 'text-[#E8763A] border-b-2 border-[#E8763A]'
-                  : 'text-[rgba(229,229,231,0.6)] hover:text-[#E5E5E7]',
+                  : 'text-text-secondary hover:text-text-primary',
               ].join(' ')}
             >
               {t.label}
@@ -247,14 +247,14 @@ export function QuickCapture({ open, onClose, onToast, teamMemberId }: Props) {
                 onChange={(e) => setTextValue(e.target.value)}
                 placeholder="What's on your mind? A note, a decision, an observation…"
                 rows={5}
-                className="w-full bg-[#1A1A1D] border border-[#1F1F23] rounded-lg px-3 py-2 mono text-[13px] text-[#E5E5E7] placeholder:text-[rgba(229,229,231,0.4)] focus:outline-none focus:border-[#2A2A2E] resize-none"
+                className="w-full bg-bg-raised border border-border-default rounded-lg px-3 py-2 mono text-[13px] text-text-primary placeholder:text-text-muted focus:outline-none focus:border-border-strong resize-none"
                 autoFocus
                 onKeyDown={(e) => {
                   if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') handleTextSubmit();
                 }}
               />
               <div className="flex justify-between items-center">
-                <span className="mono text-[10px] text-[rgba(229,229,231,0.4)]">⌘↵ to submit</span>
+                <span className="mono text-[10px] text-text-muted">⌘↵ to submit</span>
                 <button
                   onClick={handleTextSubmit}
                   disabled={submitting || !textValue.trim()}
@@ -269,7 +269,7 @@ export function QuickCapture({ open, onClose, onToast, teamMemberId }: Props) {
           {/* Photo tab */}
           {tab === 'photo' && (
             <div className="space-y-4">
-              <label className="flex flex-col items-center justify-center w-full h-36 border-2 border-dashed border-[#2A2A2E] rounded-lg cursor-pointer hover:border-[#E8763A] transition-colors bg-[#1A1A1D]">
+              <label className="flex flex-col items-center justify-center w-full h-36 border-2 border-dashed border-border-default rounded-lg cursor-pointer hover:border-[#E8763A] transition-colors bg-bg-raised">
                 <input
                   type="file"
                   accept="image/*"
@@ -278,17 +278,17 @@ export function QuickCapture({ open, onClose, onToast, teamMemberId }: Props) {
                 />
                 {photoFile ? (
                   <div className="text-center px-4">
-                    <div className="mono text-[13px] text-[#E5E5E7] truncate">{photoFile.name}</div>
-                    <div className="mono text-[10px] text-[rgba(229,229,231,0.5)] mt-1">
+                    <div className="mono text-[13px] text-text-primary truncate">{photoFile.name}</div>
+                    <div className="mono text-[10px] text-text-muted mt-1">
                       {(photoFile.size / 1024).toFixed(0)} KB — click to change
                     </div>
                   </div>
                 ) : (
                   <div className="text-center">
-                    <div className="mono text-[11px] uppercase tracking-[0.16em] text-[rgba(229,229,231,0.6)]">
+                    <div className="mono text-[11px] uppercase tracking-[0.16em] text-text-secondary">
                       Click to select image
                     </div>
-                    <div className="mono text-[10px] text-[rgba(229,229,231,0.4)] mt-1">
+                    <div className="mono text-[10px] text-text-muted mt-1">
                       JPG, PNG, HEIC, WEBP
                     </div>
                   </div>
@@ -310,11 +310,11 @@ export function QuickCapture({ open, onClose, onToast, teamMemberId }: Props) {
           {tab === 'voice' && (
             <div className="space-y-4">
               {/* Sprint 4 banner */}
-              <div className="bg-[#1A1A1D] border border-[#D9A23A]/30 rounded-lg px-4 py-3">
+              <div className="bg-bg-raised border border-[#D9A23A]/30 rounded-lg px-4 py-3">
                 <div className="mono text-[10px] uppercase tracking-[0.16em] text-[#D9A23A] mb-1">
                   Sprint 4 Feature
                 </div>
-                <div className="mono text-[11px] text-[rgba(229,229,231,0.7)]">
+                <div className="mono text-[11px] text-text-secondary">
                   Voice transcription arrives in Sprint 4. Your recording is captured and stored —
                   transcription will be applied retroactively.
                 </div>
@@ -353,7 +353,7 @@ export function QuickCapture({ open, onClose, onToast, teamMemberId }: Props) {
                     <div className="flex gap-2 justify-end">
                       <button
                         onClick={() => { setAudioBlob(null); setAudioUrl(null); }}
-                        className="mono text-[11px] uppercase tracking-[0.14em] text-[rgba(229,229,231,0.6)] hover:text-[#E5E5E7] px-3 py-2 border border-[#1F1F23] rounded-lg transition-colors"
+                        className="mono text-[11px] uppercase tracking-[0.14em] text-text-secondary hover:text-text-primary px-3 py-2 border border-border-default rounded-lg transition-colors"
                       >
                         Discard
                       </button>
@@ -369,7 +369,7 @@ export function QuickCapture({ open, onClose, onToast, teamMemberId }: Props) {
                 )}
 
                 {!recording && !audioUrl && (
-                  <div className="mono text-[10px] text-[rgba(229,229,231,0.4)]">
+                  <div className="mono text-[10px] text-text-muted">
                     Tap the circle to record
                   </div>
                 )}

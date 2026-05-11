@@ -219,7 +219,7 @@ export function LibraryWiki({ initialSlug }: { initialSlug?: string } = {}) {
     <div className="flex gap-4 min-h-[600px]" style={{ maxWidth: '100%' }}>
       {/* Sidebar */}
       <aside
-        className="shrink-0 border-r border-[#1F1F23] pr-4 overflow-y-auto"
+        className="shrink-0 border-r border-border-default pr-4 overflow-y-auto"
         style={{ width: sidebarOpen ? 220 : 32, transition: 'width 0.2s ease', minHeight: 400 }}
       >
         <button
@@ -245,8 +245,8 @@ export function LibraryWiki({ initialSlug }: { initialSlug?: string } = {}) {
               className={[
                 'w-full text-left mono text-[10px] px-2 py-1 rounded mb-1 truncate',
                 selectedSlug === '_master-index'
-                  ? 'text-[#E5E5E7] bg-[#1F1F23]'
-                  : 'text-text-secondary hover:text-text-primary hover:bg-[#1F1F23]/50',
+                  ? 'text-text-primary bg-bg-raised'
+                  : 'text-text-secondary hover:text-text-primary hover:bg-bg-raised',
               ].join(' ')}
             >
               Index
@@ -268,8 +268,8 @@ export function LibraryWiki({ initialSlug }: { initialSlug?: string } = {}) {
                         className={[
                           'w-full text-left mono text-[10px] px-2 py-1 rounded mb-0.5 truncate',
                           selectedSlug === page.slug
-                            ? 'text-[#E5E5E7] bg-[#1F1F23]'
-                            : 'text-text-secondary hover:text-text-primary hover:bg-[#1F1F23]/50',
+                            ? 'text-text-primary bg-bg-raised'
+                            : 'text-text-secondary hover:text-text-primary hover:bg-bg-raised',
                         ].join(' ')}
                         title={page.slug}
                       >
@@ -303,7 +303,7 @@ export function LibraryWiki({ initialSlug }: { initialSlug?: string } = {}) {
                     setEditing(true);
                     setSaveMsg(null);
                   }}
-                  className="mono text-[10px] uppercase tracking-[0.12em] px-3 py-1.5 rounded border border-[#1F1F23] text-text-secondary hover:text-text-primary hover:border-[rgba(229,229,231,0.2)] transition-colors"
+                  className="mono text-[10px] uppercase tracking-[0.12em] px-3 py-1.5 rounded border border-border-default text-text-secondary hover:text-text-primary hover:border-border-strong transition-colors"
                 >
                   Edit
                 </button>
@@ -315,7 +315,7 @@ export function LibraryWiki({ initialSlug }: { initialSlug?: string } = {}) {
                     setEditing(true);
                     setSaveMsg(null);
                   }}
-                  className="mono text-[10px] uppercase tracking-[0.12em] px-3 py-1.5 rounded border border-[#1F1F23] text-text-secondary hover:text-text-primary hover:border-[rgba(229,229,231,0.2)] transition-colors"
+                  className="mono text-[10px] uppercase tracking-[0.12em] px-3 py-1.5 rounded border border-border-default text-text-secondary hover:text-text-primary hover:border-border-strong transition-colors"
                 >
                   Propose edit
                 </button>
@@ -334,7 +334,7 @@ export function LibraryWiki({ initialSlug }: { initialSlug?: string } = {}) {
                       setEditing(false);
                       setSaveMsg(null);
                     }}
-                    className="mono text-[10px] uppercase tracking-[0.12em] px-3 py-1.5 rounded border border-[#1F1F23] text-text-secondary hover:text-text-primary transition-colors"
+                    className="mono text-[10px] uppercase tracking-[0.12em] px-3 py-1.5 rounded border border-border-default text-text-secondary hover:text-text-primary transition-colors"
                   >
                     Cancel
                   </button>
@@ -359,7 +359,7 @@ export function LibraryWiki({ initialSlug }: { initialSlug?: string } = {}) {
             <textarea
               value={editDraft}
               onChange={(e) => setEditDraft(e.target.value)}
-              className="w-full min-h-[500px] bg-[#0D0D0F] border border-[#1F1F23] rounded p-4 mono text-[11px] text-[#E5E5E7] resize-y focus:outline-none focus:border-[rgba(229,229,231,0.2)]"
+              className="w-full min-h-[500px] bg-bg-raised border border-border-default rounded p-4 mono text-[11px] text-text-primary resize-y focus:outline-none focus:border-border-strong"
               spellCheck={false}
             />
           ) : contentLoading ? (

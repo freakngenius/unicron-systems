@@ -1,56 +1,66 @@
-/* Source: Brand/Atrium Design System/tokens.css (canonical).
-   Adopted globally by unicron-platform (Metacron + Atrium + previews inherit).
-   Pass 1 of the Metacron → Atrium rebrand (SPEC: Company Docs/Metacron/SPEC - Metacron Atrium Rebrand.md).
+/* Source: Atrium/Web UI/v3.jsx (canonical).
+   v3 light design — Stellate-inspired editorial language.
+   Cool gray pages, white cards, dark navy rail + topbar.
+   Orange accent is brand/live-state only; blue is primary action.
 
-   Note on resets: the canonical tokens.css ships global resets (* box-sizing,
-   html/body, scrollbar, focus ring) — those live in index.css for this repo
-   so Metacron's existing layout (which scrolls the document body) is not
-   broken by Atrium's `body { overflow: hidden }`. Tokens + utility classes
-   ONLY here. */
+   Note: global resets (box-sizing, html/body, scrollbar, focus ring)
+   live in index.css. Tokens + utility classes only here. */
 
 :root {
-  /* ---------- Color: Surfaces (cool charcoal scale) ---------- */
-  --bg-ground:    #0A0C10;   /* page background, behind everything */
-  --bg-surface:   #11141A;   /* main content surface */
-  --bg-elevated:  #181C24;   /* cards, panels */
-  --bg-raised:    #1F242E;   /* hover, active rows, popovers */
-  --bg-overlay:   rgba(8,10,14,0.72); /* modal scrim */
+  /* ---------- Color: Surfaces (v3 light scale) ---------- */
+  --bg-ground:    #F6F7F9;   /* page/content background */
+  --bg-surface:   #ECEEF2;   /* filter rail, soft inset areas */
+  --bg-elevated:  #FFFFFF;   /* cards, panels */
+  --bg-raised:    #EEF0F4;   /* hover rows, popovers */
+  --bg-overlay:   rgba(11,21,48,0.55); /* modal scrim */
+
+  /* ---------- Color: Rail + Topbar (dark navy) ---------- */
+  --rail-bg:         #1D2D4F;
+  --rail-bg-hover:   #243861;
+  --topbar-bg:       #1D2D4F;
+  --topbar-text:     #C2CADB;
+  --topbar-text-lo:  #6E7A95;
 
   /* ---------- Color: Borders ---------- */
-  --border-faint:   rgba(255,255,255,0.04);
-  --border-subtle:  rgba(255,255,255,0.07);
-  --border-default: rgba(255,255,255,0.10);
-  --border-strong:  rgba(255,255,255,0.16);
+  --border-faint:   #EEF0F4;
+  --border-subtle:  #EEF0F4;
+  --border-default: #E5E8EE;
+  --border-strong:  #D8DCE5;
   --border-accent:  rgba(232,118,58,0.40);
 
-  /* ---------- Color: Text ---------- */
-  --text-hi:   #F2F4F7;   /* primary */
-  --text-md:   #A8B0BD;   /* secondary */
-  --text-lo:   #6B7280;   /* tertiary, captions */
-  --text-faint:#4A5160;   /* dividers in text, table empty */
-  --text-on-accent: #14100C;
+  /* ---------- Color: Text (on light surfaces) ---------- */
+  --text-hi:   #0B1530;   /* primary — near-black navy */
+  --text-md:   #46506A;   /* secondary */
+  --text-lo:   #7E8AA3;   /* tertiary, captions */
+  --text-faint:#BAC2D2;   /* dividers in text, table empty */
+  --text-on-accent: #FFFFFF;
 
-  /* ---------- Color: Accent (Unicron Orange) ---------- */
+  /* ---------- Color: Accent (Unicron Orange — brand + live state) ---------- */
   --accent:        #E8763A;
-  --accent-soft:   rgba(232,118,58,0.14);
-  --accent-hover:  #F08749;
-  --accent-press:  #D26A33;
+  --accent-soft:   rgba(232,118,58,0.10);
+  --accent-hover:  #D4652E;
+  --accent-press:  #C25A28;
+
+  /* ---------- Color: Primary action (blue) ---------- */
+  --primary:       #6081BE;
+  --primary-soft:  rgba(96,129,190,0.12);
+  --primary-hover: #5070AD;
 
   /* ---------- Color: Semantic ---------- */
-  --ok:       #4FB286;  /* success / healthy */
-  --ok-soft:  rgba(79,178,134,0.14);
-  --warn:     #D9A23A;  /* warning */
-  --warn-soft:rgba(217,162,58,0.14);
-  --err:      #DD6262;  /* error */
-  --err-soft: rgba(221,98,98,0.14);
-  --info:     #6F95D6;  /* info / neutral pings */
-  --info-soft:rgba(111,149,214,0.14);
+  --ok:       #2E8E66;  /* success / healthy */
+  --ok-soft:  rgba(46,142,102,0.12);
+  --warn:     #C28A1F;  /* warning */
+  --warn-soft:rgba(194,138,31,0.12);
+  --err:      #E14B4B;  /* error */
+  --err-soft: rgba(225,75,75,0.12);
+  --info:     #6081BE;  /* info — same as primary */
+  --info-soft:rgba(96,129,190,0.12);
 
-  /* ---------- Color: Category tags (skills) ---------- */
-  --cat-memory:        #8B7CD8;
-  --cat-productivity:  #4FB286;
-  --cat-research:      #6F95D6;
-  --cat-discovery:     #D9A23A;
+  /* ---------- Color: Category tags ---------- */
+  --cat-memory:        #7355E5;
+  --cat-productivity:  #2E8E66;
+  --cat-research:      #6081BE;
+  --cat-discovery:     #C28A1F;
   --cat-sales:         #E8763A;
   --cat-marketing:     #C76FA8;
   --cat-operations:    #5BB5BC;
@@ -60,7 +70,7 @@
   --font-display: "Inter Tight", "Geist", -apple-system, sans-serif;
   --font-mono: "Geist Mono", "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
 
-  /* Type scale (rem-ish, in px) */
+  /* Type scale */
   --text-2xs: 10px;
   --text-xs:  11px;
   --text-sm:  12px;
@@ -89,35 +99,35 @@
 
   /* ---------- Radius ---------- */
   --r-sm: 6px;
-  --r-md: 8px;       /* buttons */
-  --r-lg: 12px;      /* cards */
-  --r-xl: 16px;      /* big surfaces */
+  --r-md: 8px;
+  --r-lg: 12px;
+  --r-xl: 16px;
   --r-pill: 999px;
 
-  /* ---------- Shadow (subtle, layered) ---------- */
-  --sh-1: 0 1px 0 rgba(255,255,255,0.03) inset, 0 1px 2px rgba(0,0,0,0.2);
-  --sh-2: 0 4px 12px rgba(0,0,0,0.25), 0 1px 0 rgba(255,255,255,0.04) inset;
-  --sh-3: 0 12px 32px rgba(0,0,0,0.4), 0 1px 0 rgba(255,255,255,0.05) inset;
+  /* ---------- Shadow (on light surfaces) ---------- */
+  --sh-1: 0 1px 2px rgba(11,21,48,0.06), 0 1px 0 rgba(255,255,255,0.8) inset;
+  --sh-2: 0 4px 12px rgba(11,21,48,0.10), 0 1px 0 rgba(255,255,255,0.8) inset;
+  --sh-3: 0 12px 32px rgba(11,21,48,0.18);
   --sh-glow-accent: 0 0 0 1px rgba(232,118,58,0.4), 0 4px 24px rgba(232,118,58,0.18);
 
   /* ---------- Motion ---------- */
   --ease: cubic-bezier(0.4, 0, 0.2, 1);
-  --d-hover: 200ms;
-  --d-panel: 400ms;
+  --d-hover: 180ms;
+  --d-panel: 380ms;
 
   /* ---------- Layout ---------- */
-  --rail-w: 64px;
+  --rail-w: 68px;
   --rail-w-expanded: 220px;
-  --header-h: 56px;
+  --header-h: 68px;
   --filter-w: 240px;
   --detail-w: 480px;
 }
 
-/* Utility classes shared across Atrium components (and now Metacron). */
+/* Utility classes shared across Atrium components. */
 .atrium-mono   { font-family: var(--font-mono); font-feature-settings: "ss01", "ss02"; letter-spacing: -0.01em; }
 .atrium-muted  { color: var(--text-md); }
 .atrium-faint  { color: var(--text-lo); }
-.atrium-hairline { background: var(--border-subtle); height: 1px; width: 100%; }
+.atrium-hairline { background: var(--border-default); height: 1px; width: 100%; }
 
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }

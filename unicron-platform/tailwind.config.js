@@ -5,71 +5,64 @@ export default {
     extend: {
       colors: {
         bg: {
-          base:     '#0A0C10',  // v3 --bg-ground
-          panel:    '#11141A',  // v3 --bg-surface
-          card:     '#181C24',  // v3 --bg-elevated (was #141416)
-          elevated: '#181C24',  // alias for bg-card
-          raised:   '#1F242E',  // v3 --bg-raised (was bg-input)
-          input:    '#1F242E',  // back-compat alias for bg-raised
+          base:     '#F6F7F9',  // v3 cool gray page
+          panel:    '#F6F7F9',  // same as base
+          card:     '#FFFFFF',  // v3 white cards
+          elevated: '#FFFFFF',  // alias for bg-card
+          raised:   '#EEF0F4',  // hover rows, popovers
+          input:    '#EEF0F4',  // input backgrounds
         },
         border: {
-          faint:   'rgba(255,255,255,0.04)',
-          subtle:  'rgba(255,255,255,0.07)',
-          default: 'rgba(255,255,255,0.10)',  // was #1F1F23
-          strong:  'rgba(255,255,255,0.16)',
-          hover:   'rgba(255,255,255,0.16)',  // was #2A2A2E
+          faint:   '#EEF0F4',
+          subtle:  '#EEF0F4',
+          default: '#E5E8EE',
+          strong:  '#D8DCE5',
+          hover:   '#D8DCE5',
           accent:  'rgba(232,118,58,0.40)',
         },
         text: {
-          primary:   '#F2F4F7',   // v3 --text-hi (was #E5E5E7)
-          secondary: '#A8B0BD',   // v3 --text-md (was rgba(229,229,231,0.6))
-          muted:     '#6B7280',   // v3 --text-lo
-          faint:     '#4A5160',   // v3 --text-faint
+          primary:   '#0B1530',  // v3 ink — near-black navy
+          secondary: '#46506A',  // v3 ink-md
+          muted:     '#7E8AA3',  // v3 ink-lo
+          faint:     '#BAC2D2',  // v3 ink-faint
         },
         accent: {
-          // Pass 2 of the Metacron → Atrium rebrand: each legacy accent color
-          // is re-pointed at the closest Atrium category-tag token so existing
-          // class strings (`bg-accent-cyan`, `text-accent-magenta`, etc.)
-          // resolve to on-brand colors without rewriting every consumer.
-          cyan:    '#5BB5BC',  // → --cat-operations (was #22D3EE) — also serves as success
-          gold:    '#E8763A',  // → --accent
-          violet:  '#8B7CD8',  // → --cat-memory (was #8B5CF6)
-          magenta: '#DD6262',  // → --err (was #EC4899) — used as fail indicator + category pill
-          orange:  '#E8763A',  // → --accent
+          primary: '#6081BE',  // v3 blue — primary actions
+          cyan:    '#5BB5BC',
+          gold:    '#E8763A',  // orange — brand + live state
+          violet:  '#7355E5',  // v3 purple
+          magenta: '#E14B4B',  // v3 red
+          orange:  '#E8763A',
         },
         status: {
-          green:  '#4FB286',  // v3 --ok  (was #22C55E)
-          yellow: '#D9A23A',  // v3 --warn (was #F59E0B)
-          red:    '#DD6262',  // v3 --err  (was #EF4444)
-          blue:   '#6F95D6',  // v3 --info (was #3B82F6)
+          green:  '#2E8E66',   // v3 --ok
+          yellow: '#C28A1F',   // v3 --warn
+          red:    '#E14B4B',   // v3 --err
+          blue:   '#6081BE',   // v3 --info / primary
         },
         // ----------------------------------------------------------------
-        // Atrium semantic aliases for Tailwind's native named palettes.
-        // Pass 2 of the Metacron → Atrium rebrand: existing components use
-        // `text-rose-400`, `border-emerald-400/40`, `bg-rose-400/10` etc;
-        // re-mapping the named scales here flips those to Atrium semantic
-        // colors without rewriting every class string. The 300/400/500
-        // entries cover the variants in use today.
+        // Remap named Tailwind palettes to v3 light equivalents so that
+        // existing class strings resolve without a full component rewrite.
         // ----------------------------------------------------------------
         rose: {
-          300: '#E58383',         // err lightened ~12% for hover-on-hover
-          400: '#DD6262',         // → --err
-          500: '#DD6262',         // → --err
+          300: '#E87777',
+          400: '#E14B4B',   // → v3 err
+          500: '#E14B4B',
         },
         red: {
-          300: '#E58383',
-          400: '#DD6262',         // → --err
-          500: '#DD6262',
+          300: '#E87777',
+          400: '#E14B4B',   // → v3 err
+          500: '#E14B4B',
         },
         emerald: {
-          300: '#71C39E',
-          400: '#4FB286',         // → --ok
-          500: '#4FB286',
+          300: '#5EB594',
+          400: '#2E8E66',   // → v3 ok
+          500: '#2E8E66',
         },
         amber: {
-          300: '#E5B763',
-          400: '#D9A23A',         // → --warn
-          500: '#D9A23A',
+          300: '#D9B45A',
+          400: '#C28A1F',   // → v3 warn
+          500: '#C28A1F',
         },
       },
       fontFamily: {
