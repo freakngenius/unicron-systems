@@ -1195,7 +1195,7 @@ type SkillModalState =
     };
 
 // Slugs that route to /api/atrium/skills/run instead of /api/skills/dispatch
-const PRODUCTIVITY_SLUGS = new Set(['morning-brief', 'inbox-triage']);
+const PRODUCTIVITY_SLUGS = new Set(['morning-brief', 'inbox-triage', 'slack-daily-scan']);
 
 // Sprint 5+6: slugs that route to /api/atrium/skills/run and need a modal for input
 const MODAL_SKILL_SLUGS = new Set([
