@@ -250,6 +250,35 @@ export const vaultEmbeddingsRebuildRun = inngest.createFunction(
 );
 
 // ---------------------------------------------------------------------------
+// Notion Internal Org Kanban sync — every 5 minutes
+// ---------------------------------------------------------------------------
+
+/**
+ * Pulls the Internal Org Notion Kanban into nervous_system.notion_kanban_mirror
+ * every 5 minutes. Atrium Work > Kanban reads from the mirror via
+ * public.ns_notion_kanban_view, so the cron keeps the read view fresh without
+ * the UI ever calling Notion directly.
+ */
+export const notionKanbanSyncCron = inngest.createFunction(
+  { id: 'notion-kanban-sync-pull', name: 'Notion Kanban Sync Pull', retries: 2 },
+  { cron: '*/5 * * * *' },
+  async ({ step }) => {
+    const { notionKanbanPull } = await import('./notion-kanban-sync.js');
+    return step.run('notion-kanban-pull-internal', () => notionKanbanPull('internal', 'inngest_cron'));
+  },
+);
+
+export const notionKanbanSyncRun = inngest.createFunction(
+  { id: 'notion-kanban-sync-run', name: 'Notion Kanban Sync Run', retries: 1 },
+  { event: 'notion-kanban/sync' },
+  async ({ event, step }) => {
+    const { notionKanbanPull } = await import('./notion-kanban-sync.js');
+    const workspace = (event.data as { workspace?: string } | undefined)?.workspace ?? 'internal';
+    return step.run('notion-kanban-pull', () => notionKanbanPull(workspace, 'inngest_cron'));
+  },
+);
+
+// ---------------------------------------------------------------------------
 // Pathfinder cross-project sync — S4a
 // ---------------------------------------------------------------------------
 
