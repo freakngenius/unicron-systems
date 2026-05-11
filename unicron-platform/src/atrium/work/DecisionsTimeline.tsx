@@ -1,7 +1,7 @@
 // DecisionsTimeline.tsx — Sprint 4 Stream D
-// Vertical timeline of nervous_system.ledger rows where
-// source_type='elder_decision'. Gracefully degrades to empty state if no
-// elder_decision rows exist yet (Elder agent writes here from Sprint 3 forward).
+// Vertical timeline of nervous_system.ledger rows where source_type='elder_decision'.
+// Gracefully degrades to empty state when the Elder agent has not yet logged a
+// decision row. Wired via the public.ns_list_ledger_decisions RPC.
 
 import { useState, useEffect } from 'react';
 import { getSupabase } from '../../lib/supabase';
@@ -176,8 +176,9 @@ export function DecisionsTimeline() {
           No decisions logged yet
         </div>
         <div className="mono text-[11px] text-text-muted max-w-xs mx-auto leading-relaxed">
-          Elder agent begins writing here in Sprint 3. Decisions are created
-          when the Elder processes signals and logs a decision to the ledger.
+          The Elder agent writes here when it processes signals and logs a
+          strategic decision to the ledger. Run Elder via Skills or trigger
+          manually from System &rsaquo; Agents.
         </div>
       </div>
     );
