@@ -348,10 +348,10 @@ export function Settings({ memberId, onClose }: SettingsProps) {
       <div className="flex items-center justify-between gap-3 mt-5">
         <div className="flex-1">
           {saveState === 'success' && (
-            <span className="mono text-[11px] text-[#4FB286]">Preferences saved</span>
+            <span className="mono text-[11px] text-[#2E8E66]">Preferences saved</span>
           )}
           {saveState === 'error' && (
-            <span className="mono text-[11px] text-[#DD6262]">{errorMsg || 'Save failed'}</span>
+            <span className="mono text-[11px] text-[#E14B4B]">{errorMsg || 'Save failed'}</span>
           )}
           {!memberId && (
             <span className="mono text-[10px] text-[rgba(229,229,231,0.35)]">

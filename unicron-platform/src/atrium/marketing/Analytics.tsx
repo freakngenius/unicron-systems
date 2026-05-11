@@ -284,7 +284,7 @@ function Funnels() {
                 className="h-full rounded-full"
                 style={{
                   width: `${pct}%`,
-                  background: pct > 50 ? '#4FB286' : pct > 10 ? '#D9A23A' : 'var(--accent)',
+                  background: pct > 50 ? '#2E8E66' : pct > 10 ? '#C28A1F' : 'var(--accent)',
                   opacity: 0.4,
                 }}
               />

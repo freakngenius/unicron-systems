@@ -52,7 +52,7 @@ export default function ServicesHealth() {
           >
             <span
               className="w-2 h-2 mt-1.5 rounded-full shrink-0"
-              style={{ backgroundColor: '#4FB286', boxShadow: '0 0 4px #4FB28660' }}
+              style={{ backgroundColor: '#2E8E66', boxShadow: '0 0 4px #2E8E6660' }}
             />
             <div className="min-w-0">
               <div className="mono text-[12px] text-text-primary font-medium">{svc.name}</div>

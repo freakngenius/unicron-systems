@@ -47,9 +47,9 @@ const EXT_ICON: Record<string, string> = {
 function FileIcon({ ext }: { ext: string }) {
   const label = EXT_ICON[ext] ?? (ext.slice(1).toUpperCase().slice(0, 4) || 'FILE');
   const color =
-    ext === '.pdf' ? '#DD6262'
-    : ext === '.md' ? '#6F95D6'
-    : ext === '.html' ? '#D9A23A'
+    ext === '.pdf' ? '#E14B4B'
+    : ext === '.md' ? '#6081BE'
+    : ext === '.html' ? '#C28A1F'
     : ext === '.svg' ? '#7C3AED'
     : '#6B7280';
 
@@ -167,8 +167,8 @@ export function BrandAssets() {
 
   if (error) {
     return (
-      <div className="bg-[#DD6262]/10 border border-[#DD6262]/30 rounded-xl px-5 py-4">
-        <div className="mono text-[12px] text-[#DD6262]">{error}</div>
+      <div className="bg-[#E14B4B]/10 border border-[#E14B4B]/30 rounded-xl px-5 py-4">
+        <div className="mono text-[12px] text-[#E14B4B]">{error}</div>
         <button
           onClick={() => void load()}
           className="mono text-[10px] uppercase tracking-[0.12em] mt-2 text-text-secondary hover:text-text-primary transition-colors"

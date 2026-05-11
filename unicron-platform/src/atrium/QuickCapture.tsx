@@ -310,8 +310,8 @@ export function QuickCapture({ open, onClose, onToast, teamMemberId }: Props) {
           {tab === 'voice' && (
             <div className="space-y-4">
               {/* Sprint 4 banner */}
-              <div className="bg-[#1A1A1D] border border-[#D9A23A]/30 rounded-lg px-4 py-3">
-                <div className="mono text-[10px] uppercase tracking-[0.16em] text-[#D9A23A] mb-1">
+              <div className="bg-[#1A1A1D] border border-[#C28A1F]/30 rounded-lg px-4 py-3">
+                <div className="mono text-[10px] uppercase tracking-[0.16em] text-[#C28A1F] mb-1">
                   Sprint 4 Feature
                 </div>
                 <div className="mono text-[11px] text-[rgba(229,229,231,0.7)]">
@@ -324,7 +324,7 @@ export function QuickCapture({ open, onClose, onToast, teamMemberId }: Props) {
                 {!recording && !audioUrl && (
                   <button
                     onClick={startRecording}
-                    className="w-16 h-16 rounded-full bg-[#DD6262] flex items-center justify-center hover:bg-[#C85252] transition-colors shadow-lg"
+                    className="w-16 h-16 rounded-full bg-[#E14B4B] flex items-center justify-center hover:bg-[#C85252] transition-colors shadow-lg"
                     aria-label="Start recording"
                   >
                     <div className="w-6 h-6 rounded-full bg-white" />
@@ -334,7 +334,7 @@ export function QuickCapture({ open, onClose, onToast, teamMemberId }: Props) {
                 {recording && (
                   <button
                     onClick={stopRecording}
-                    className="w-16 h-16 rounded-full bg-[#DD6262] flex items-center justify-center hover:bg-[#C85252] transition-colors shadow-lg animate-pulse"
+                    className="w-16 h-16 rounded-full bg-[#E14B4B] flex items-center justify-center hover:bg-[#C85252] transition-colors shadow-lg animate-pulse"
                     aria-label="Stop recording"
                   >
                     <div className="w-5 h-5 bg-white rounded-sm" />
@@ -342,7 +342,7 @@ export function QuickCapture({ open, onClose, onToast, teamMemberId }: Props) {
                 )}
 
                 {recording && (
-                  <div className="mono text-[11px] uppercase tracking-[0.16em] text-[#DD6262] animate-pulse">
+                  <div className="mono text-[11px] uppercase tracking-[0.16em] text-[#E14B4B] animate-pulse">
                     Recording…
                   </div>
                 )}
@@ -379,8 +379,8 @@ export function QuickCapture({ open, onClose, onToast, teamMemberId }: Props) {
 
           {/* Error */}
           {error && (
-            <div className="mt-3 bg-[#DD6262]/10 border border-[#DD6262]/40 rounded-lg px-3 py-2">
-              <div className="mono text-[11px] text-[#DD6262]">{error}</div>
+            <div className="mt-3 bg-[#E14B4B]/10 border border-[#E14B4B]/40 rounded-lg px-3 py-2">
+              <div className="mono text-[11px] text-[#E14B4B]">{error}</div>
             </div>
           )}
         </div>

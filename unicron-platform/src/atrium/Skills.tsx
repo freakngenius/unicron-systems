@@ -271,7 +271,7 @@ function BudgetForecast() {
               <>
                 <div className="absolute inset-y-0 left-0 rounded-full" style={{ width: `${forecast * 100}%`, background: 'rgba(232,118,58,0.25)' }} />
                 <div className="absolute inset-y-0 left-0 rounded-full bg-accent-gold" style={{ width: `${used * 100}%` }} />
-                <div className="absolute inset-y-0 opacity-50" style={{ left: `${danger * 100}%`, width: 1.5, background: '#DD6262' }} />
+                <div className="absolute inset-y-0 opacity-50" style={{ left: `${danger * 100}%`, width: 1.5, background: '#E14B4B' }} />
               </>
             )}
             {loading && <div className="absolute inset-0 bg-bg-raised animate-pulse rounded-full" />}

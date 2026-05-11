@@ -88,10 +88,10 @@ function RunwayChart({
             style={{
               color:
                 runwayMonths > 12
-                  ? '#4FB286'
+                  ? '#2E8E66'
                   : runwayMonths > 6
-                  ? '#D9A23A'
-                  : '#DD6262',
+                  ? '#C28A1F'
+                  : '#E14B4B',
             }}
           >
             {runwayMonths >= months.length
@@ -129,9 +129,9 @@ function RunwayChart({
         ))}
 
         {/* Fill */}
-        <path d={fillD} fill="#6F95D6" opacity={0.1} />
+        <path d={fillD} fill="#6081BE" opacity={0.1} />
         {/* Line */}
-        <path d={pathD} stroke="#6F95D6" strokeWidth="2" fill="none" />
+        <path d={pathD} stroke="#6081BE" strokeWidth="2" fill="none" />
 
         {/* Runway-end vertical */}
         {endX !== null && (
@@ -141,7 +141,7 @@ function RunwayChart({
               x2={endX}
               y1={padT}
               y2={padT + innerH}
-              stroke="#DD6262"
+              stroke="#E14B4B"
               strokeWidth="1.5"
               strokeDasharray="4 3"
             />
@@ -150,7 +150,7 @@ function RunwayChart({
               y={padT - 7}
               textAnchor="middle"
               fontSize="11"
-              fill="#DD6262"
+              fill="#E14B4B"
               fontWeight="600"
             >
               Runway end
@@ -295,7 +295,7 @@ export function Runway() {
   }
 
   const runwayColor =
-    runwayMonths > 12 ? '#4FB286' : runwayMonths > 6 ? '#D9A23A' : '#DD6262';
+    runwayMonths > 12 ? '#2E8E66' : runwayMonths > 6 ? '#C28A1F' : '#E14B4B';
 
   const inputCls =
     'bg-bg-card border border-border-default rounded-lg px-3 py-2 mono text-[13px] text-text-primary focus:outline-none focus:border-accent transition-colors w-full';
@@ -313,8 +313,8 @@ export function Runway() {
   return (
     <div className="space-y-6">
       {error && (
-        <div className="bg-[#DD6262]/10 border border-[#DD6262]/30 rounded-xl px-4 py-3">
-          <div className="mono text-[11px] text-[#DD6262]">{error}</div>
+        <div className="bg-[#E14B4B]/10 border border-[#E14B4B]/30 rounded-xl px-4 py-3">
+          <div className="mono text-[11px] text-[#E14B4B]">{error}</div>
         </div>
       )}
 

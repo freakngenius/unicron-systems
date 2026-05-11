@@ -103,7 +103,7 @@ export function Avatar({ name, color, size = 24, src }: AvatarProps) {
       width: size, height: size, borderRadius: '50%',
       background: src ? `url(${src}) center/cover` : (color || 'linear-gradient(135deg,#3a4253,#1f242e)'),
       display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-      fontSize: size * 0.38, fontWeight: 600, color: '#F2F4F7',
+      fontSize: size * 0.38, fontWeight: 600, color: '#0B1530',
       flexShrink: 0,
       boxShadow: '0 0 0 1px rgba(255,255,255,0.07) inset',
     }}>

@@ -38,10 +38,10 @@ type StatusTone = 'ok' | 'warn' | 'info' | 'error';
 type StatusItem = { label: string; tone: StatusTone; detail: string };
 
 function toneColor(tone: StatusTone) {
-  if (tone === 'ok')    return '#4FB286';
-  if (tone === 'warn')  return '#D9A23A';
-  if (tone === 'error') return '#DD6262';
-  return '#6F95D6';
+  if (tone === 'ok')    return '#2E8E66';
+  if (tone === 'warn')  return '#C28A1F';
+  if (tone === 'error') return '#E14B4B';
+  return '#6081BE';
 }
 
 function StatusPulseHeader({ items }: { items: StatusItem[] }) {
@@ -381,7 +381,11 @@ export function AtriumLayout({ activeTab, onTabChange, children, onOpenSettings 
       {/* Body */}
       <div className="atrium-body flex flex-1 min-h-0">
         {/* Sidebar nav (hidden on mobile) — 64px icon-only rail */}
-        <nav className="atrium-nav hidden md:flex w-16 shrink-0 border-r border-border-default bg-bg-panel py-3 flex-col items-center" aria-label="Atrium main navigation">
+        <nav
+          className="atrium-nav hidden md:flex w-16 shrink-0 py-3 flex-col items-center"
+          style={{ background: 'var(--v3-rail)', borderRight: '1px solid var(--v3-rail-2)' }}
+          aria-label="Atrium main navigation"
+        >
           {/* Gradient A logo tile */}
           <div
             className="w-8 h-8 rounded-lg flex items-center justify-center mono text-[13px] font-bold text-white mb-4 flex-shrink-0"

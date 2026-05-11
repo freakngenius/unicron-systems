@@ -228,16 +228,16 @@ function resolveToken(token: string, fallback: string): string {
 }
 
 const LAYER2_TOKENS: ReadonlyArray<[string, string]> = [
-  ['--cat-research', '#6F95D6'],
-  ['--info', '#6F95D6'],
+  ['--cat-research', '#6081BE'],
+  ['--info', '#6081BE'],
   ['--cat-operations', '#5BB5BC'],
 ];
 const LAYER3_TOKENS: ReadonlyArray<[string, string]> = [
-  ['--cat-discovery', '#D9A23A'],
-  ['--warn', '#D9A23A'],
+  ['--cat-discovery', '#C28A1F'],
+  ['--warn', '#C28A1F'],
 ];
 const LAYER4_TOKENS: ReadonlyArray<[string, string]> = [
-  ['--err', '#DD6262'],
+  ['--err', '#E14B4B'],
   ['--cat-sales', '#E8763A'],
 ];
 

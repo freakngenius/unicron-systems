@@ -6,9 +6,9 @@ import React, { useState } from 'react';
 import { X, Check, Plus, ChevronDown, Phone } from 'lucide-react';
 
 // ── Token shortcuts ───────────────────────────────────────────────────────────
-const GREEN  = '#4FB286';
-const AMBER  = '#D9A23A';
-const RED    = '#DD6262';
+const GREEN  = '#2E8E66';
+const AMBER  = '#C28A1F';
+const RED    = '#E14B4B';
 const BLUE   = '#2E6CD4';
 const ORANGE = '#E8763A';
 

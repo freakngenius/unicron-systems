@@ -42,7 +42,7 @@ function resolveTokenValue(token: string, fallback: string): string {
   return v || fallback;
 }
 
-const CANVAS_BG = resolveTokenValue('--bg-ground', '#0A0C10');
+const CANVAS_BG = resolveTokenValue('--bg-ground', '#F6F7F9');
 
 const CONFIG = {
   realSecondsPerDay: 180,
@@ -71,17 +71,17 @@ const CONFIG = {
 // Idle/highlight RGB constants for the dash + node passes. The baked-in
 // fallbacks track the canonical Atrium token values:
 //   --text-lo   #6B7280  (idle dash)
-//   --text-hi   #F2F4F7  (hot dash, white-ish high-contrast)
+//   --text-hi   #0B1530  (hot dash, white-ish high-contrast)
 //   --text-faint#4A5160  (idle node) — was #374151; aligned to faint-text.
 const COLOR_DASH_IDLE = hexToRgb(resolveTokenValue('--text-lo', '#6B7280'));
-const COLOR_DASH_HOT = hexToRgb(resolveTokenValue('--text-hi', '#F2F4F7'));
+const COLOR_DASH_HOT = hexToRgb(resolveTokenValue('--text-hi', '#0B1530'));
 const COLOR_NODE_IDLE = hexToRgb(resolveTokenValue('--text-faint', '#4A5160'));
 
 // Trail colors per-layer use the semantic palette: warn for layer 3,
 // err for layer 4, text-hi for the special inner-ring case.
-const _AMBER_RGB = hexToRgb(resolveTokenValue('--warn', '#D9A23A'));
-const _RED_RGB = hexToRgb(resolveTokenValue('--err', '#DD6262'));
-const _WHITE_RGB = hexToRgb(resolveTokenValue('--text-hi', '#F2F4F7'));
+const _AMBER_RGB = hexToRgb(resolveTokenValue('--warn', '#C28A1F'));
+const _RED_RGB = hexToRgb(resolveTokenValue('--err', '#E14B4B'));
+const _WHITE_RGB = hexToRgb(resolveTokenValue('--text-hi', '#0B1530'));
 
 function trailColorForLayer(layer: 2 | 3 | 4 | 5, color: string) {
   if (layer === 2) return hexToRgb(color);

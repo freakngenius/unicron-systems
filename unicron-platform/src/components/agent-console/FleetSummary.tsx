@@ -26,10 +26,10 @@ interface MetacronStats {
 
 const ARCHETYPE_COLORS: Record<string, string> = {
   orchestrator: 'var(--accent)',
-  analyst:      '#6F95D6',
+  analyst:      '#6081BE',
   elder:        '#8B7CD8',
-  taboo_keeper: '#DD6262',
-  specialist:   '#4FB286',
+  taboo_keeper: '#E14B4B',
+  specialist:   '#2E8E66',
 };
 
 function archetypeColor(a: string) {
@@ -83,8 +83,8 @@ export function FleetSummary() {
           ))}
         </div>
       ) : err ? (
-        <div className="bg-[#D9A23A]/10 border border-[#D9A23A]/30 rounded-xl px-4 py-3">
-          <div className="mono text-[11px] text-[#D9A23A]">
+        <div className="bg-[#C28A1F]/10 border border-[#C28A1F]/30 rounded-xl px-4 py-3">
+          <div className="mono text-[11px] text-[#C28A1F]">
             Live data unavailable: {err}
           </div>
         </div>

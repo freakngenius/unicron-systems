@@ -39,10 +39,10 @@ interface TenantRow {
 // ── Design constants ───────────────────────────────────────────────────────────
 
 const STATUS_COLORS: Record<string, string> = {
-  success:     '#4FB286',
+  success:     '#2E8E66',
   empty_queue: '#6B7280',
-  error:       '#DD6262',
-  running:     '#6F95D6',
+  error:       '#E14B4B',
+  running:     '#6081BE',
 };
 
 function statusColor(s: string) {
@@ -85,8 +85,8 @@ function KpiPanel() {
 
   if (err) {
     return (
-      <div className="bg-[#DD6262]/10 border border-[#DD6262]/30 rounded-xl px-4 py-3">
-        <div className="mono text-[11px] text-[#DD6262]">KPI vault unavailable: {err}</div>
+      <div className="bg-[#E14B4B]/10 border border-[#E14B4B]/30 rounded-xl px-4 py-3">
+        <div className="mono text-[11px] text-[#E14B4B]">KPI vault unavailable: {err}</div>
       </div>
     );
   }

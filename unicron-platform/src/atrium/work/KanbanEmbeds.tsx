@@ -37,14 +37,14 @@ const STATUS_COLUMNS = [
 type KanbanStatus = (typeof STATUS_COLUMNS)[number]['key'];
 
 const PRIORITY_COLORS: Record<string, string> = {
-  irreversible: '#DD6262',
-  high: '#D9A23A',
-  medium: '#6F95D6',
+  irreversible: '#E14B4B',
+  high: '#C28A1F',
+  medium: '#6081BE',
   low: 'var(--text-lo)',
 };
 
 // v3 palette: Pathfinder orange, Metacron violet, Internal blue, sky, sage
-const WORKSPACE_COLORS = ['#E8763A', '#7355E5', '#2E6CD4', '#0EA5E9', '#4FB286'];
+const WORKSPACE_COLORS = ['#E8763A', '#7355E5', '#2E6CD4', '#0EA5E9', '#2E8E66'];
 
 function workspaceColor(index: number): string {
   return WORKSPACE_COLORS[index % WORKSPACE_COLORS.length];
@@ -332,8 +332,8 @@ export function KanbanEmbeds() {
 
   if (error) {
     return (
-      <div className="bg-[#DD6262]/10 border border-[#DD6262]/30 rounded-xl px-5 py-4">
-        <div className="mono text-[12px] text-[#DD6262]">{error}</div>
+      <div className="bg-[#E14B4B]/10 border border-[#E14B4B]/30 rounded-xl px-5 py-4">
+        <div className="mono text-[12px] text-[#E14B4B]">{error}</div>
       </div>
     );
   }

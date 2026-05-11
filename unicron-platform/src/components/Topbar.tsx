@@ -31,7 +31,10 @@ const tabs: { id: TabId; label: string }[] = [
 
 export function Topbar({ active, onTab, onOpenSettings }: Props) {
   return (
-    <header className="fixed top-0 inset-x-0 z-30 h-14 bg-bg-base border-b border-border-default">
+    <header
+      className="fixed top-0 inset-x-0 z-30 h-14"
+      style={{ background: 'var(--v3-topbar)', borderBottom: '1px solid var(--v3-rail-2)' }}
+    >
       <div className="h-full px-6 flex items-center justify-between">
         <button
           type="button"
@@ -40,7 +43,7 @@ export function Topbar({ active, onTab, onOpenSettings }: Props) {
           aria-label="unicron"
         >
           <DiamondGlyph />
-          <span className="mono text-[14px] tracking-wide text-text-primary">unicron</span>
+          <span className="mono text-[14px] tracking-wide" style={{ color: '#FFFFFF' }}>unicron</span>
         </button>
 
         <nav className="flex items-center gap-8">
@@ -50,13 +53,11 @@ export function Topbar({ active, onTab, onOpenSettings }: Props) {
               <button
                 key={t.id}
                 onClick={() => onTab(t.id)}
-                className={[
-                  'mono text-[12px] uppercase tracking-[0.18em] py-4 border-b-2 transition-colors',
-                  isActive
-                    ? 'text-text-primary'
-                    : 'border-transparent text-text-secondary hover:text-text-primary',
-                ].join(' ')}
-                style={isActive ? { borderBottomColor: 'var(--accent)' } : undefined}
+                className="mono text-[12px] uppercase tracking-[0.18em] py-4 border-b-2 transition-colors"
+                style={{
+                  color: isActive ? '#FFFFFF' : 'var(--v3-topbar-text)',
+                  borderBottomColor: isActive ? 'var(--v3-blue)' : 'transparent',
+                }}
               >
                 {t.label}
               </button>
@@ -68,7 +69,8 @@ export function Topbar({ active, onTab, onOpenSettings }: Props) {
           type="button"
           onClick={onOpenSettings}
           aria-label="Settings"
-          className="text-text-primary/60 hover:text-text-primary transition-colors p-1 rounded-md"
+          className="transition-colors p-1 rounded-md"
+          style={{ color: 'var(--v3-topbar-text)' }}
         >
           <GearIcon />
         </button>

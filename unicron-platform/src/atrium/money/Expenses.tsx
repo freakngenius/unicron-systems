@@ -22,10 +22,10 @@ interface ConnectedService {
 // ── Category config (matching v3-money.jsx color palette) ─────────────────────
 
 const CATEGORIES: Array<{ id: string; label: string; color: string }> = [
-  { id: 'infrastructure', label: 'Infrastructure',  color: '#6F95D6' },
+  { id: 'infrastructure', label: 'Infrastructure',  color: '#6081BE' },
   { id: 'ai',            label: 'AI / LLM',         color: '#7C3AED' },
   { id: 'communication', label: 'Communication',    color: 'var(--accent)' },
-  { id: 'payroll',       label: 'Payroll',          color: '#D9A23A' },
+  { id: 'payroll',       label: 'Payroll',          color: '#C28A1F' },
   { id: 'contractors',   label: 'Contractors',      color: '#EC4899' },
   { id: 'marketing',     label: 'Marketing',        color: '#C026D3' },
   { id: 'other',         label: 'Other',            color: '#6B7280' },
@@ -94,7 +94,7 @@ function CategorySection({
                 <div className="flex items-center gap-2">
                   <span className="mono text-[12px] text-text-primary">{svc.name}</span>
                   {isManual(svc) && (
-                    <span className="mono text-[9px] px-1.5 py-0.5 rounded bg-[#D9A23A]/15 text-[#D9A23A] uppercase tracking-[0.08em]">
+                    <span className="mono text-[9px] px-1.5 py-0.5 rounded bg-[#C28A1F]/15 text-[#C28A1F] uppercase tracking-[0.08em]">
                       Manual
                     </span>
                   )}
@@ -187,8 +187,8 @@ export function Expenses() {
 
   if (error) {
     return (
-      <div className="bg-[#DD6262]/10 border border-[#DD6262]/30 rounded-xl px-5 py-4">
-        <div className="mono text-[12px] text-[#DD6262]">{error}</div>
+      <div className="bg-[#E14B4B]/10 border border-[#E14B4B]/30 rounded-xl px-5 py-4">
+        <div className="mono text-[12px] text-[#E14B4B]">{error}</div>
         <button
           onClick={() => void load()}
           className="mono text-[10px] uppercase tracking-[0.12em] mt-2 text-text-secondary hover:text-text-primary transition-colors"

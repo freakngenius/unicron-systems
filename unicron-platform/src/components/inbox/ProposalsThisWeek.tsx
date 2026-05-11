@@ -29,9 +29,9 @@ interface MetacronStats {
 }
 
 const STATUS_COLORS: Record<string, string> = {
-  pending:  '#D9A23A',
-  approved: '#4FB286',
-  rejected: '#DD6262',
+  pending:  '#C28A1F',
+  approved: '#2E8E66',
+  rejected: '#E14B4B',
 };
 
 function statusColor(s: string) {
@@ -77,7 +77,7 @@ export function ProposalsThisWeek() {
         </div>
         {stats && (
           <div className="flex gap-3">
-            <span className="mono text-[10px] text-[#D9A23A]">
+            <span className="mono text-[10px] text-[#C28A1F]">
               {stats.proposals_pending} pending
             </span>
             <span className="mono text-[10px] text-status-green">
@@ -94,8 +94,8 @@ export function ProposalsThisWeek() {
           ))}
         </div>
       ) : err ? (
-        <div className="bg-[#D9A23A]/10 border border-[#D9A23A]/30 rounded-xl px-4 py-3">
-          <div className="mono text-[11px] text-[#D9A23A]">
+        <div className="bg-[#C28A1F]/10 border border-[#C28A1F]/30 rounded-xl px-4 py-3">
+          <div className="mono text-[11px] text-[#C28A1F]">
             Live data unavailable: {err}
           </div>
         </div>

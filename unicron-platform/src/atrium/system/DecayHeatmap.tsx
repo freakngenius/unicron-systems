@@ -122,8 +122,8 @@ function SignalModal({
               disabled={archiveState !== 'idle' && archiveState !== 'confirming'}
               className="mono text-[11.5px] px-2.5 py-1 rounded-md border transition-all"
               style={{
-                border:     `1px solid ${archiveState === 'blocked' ? '#DD6262' : archiveState === 'done' ? '#4FB286' : 'rgba(255,255,255,0.07)'}`,
-                color:      archiveState === 'blocked' ? '#DD6262' : archiveState === 'done' ? '#4FB286' : 'var(--text-md)',
+                border:     `1px solid ${archiveState === 'blocked' ? '#E14B4B' : archiveState === 'done' ? '#2E8E66' : 'rgba(255,255,255,0.07)'}`,
+                color:      archiveState === 'blocked' ? '#E14B4B' : archiveState === 'done' ? '#2E8E66' : 'var(--text-md)',
                 background: archiveState === 'blocked' ? 'rgba(239,68,68,0.08)' : archiveState === 'done' ? 'rgba(34,197,94,0.08)' : 'transparent',
               }}
             >

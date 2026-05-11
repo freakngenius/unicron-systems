@@ -202,9 +202,9 @@ function usePulseData(): PulseData {
 }
 
 const STATUS_COLORS = {
-  green: '#4FB286',
-  yellow: '#D9A23A',
-  red: '#DD6262',
+  green: '#2E8E66',
+  yellow: '#C28A1F',
+  red: '#E14B4B',
   loading: 'var(--border-strong)',
 };
 
@@ -306,11 +306,11 @@ function useAttentionItems() {
 }
 
 const CATEGORY_COLORS: Record<ScoredItem['category'], string> = {
-  escalation: '#DD6262',
-  ingest: '#D9A23A',
-  sprint: '#6F95D6',
+  escalation: '#E14B4B',
+  ingest: '#C28A1F',
+  sprint: '#6081BE',
   health: '#8B7CD8',
-  calendar: '#4FB286',
+  calendar: '#2E8E66',
 };
 
 const CATEGORY_LABELS: Record<ScoredItem['category'], string> = {
@@ -654,7 +654,7 @@ const SOURCE_TYPE_COLORS: Record<string, string> = {
   audit_log:      '#5B6580',
   ledger_write:   '#0B9488',
   apple_note:     '#C9A227',
-  cowork_session: '#4FB286',
+  cowork_session: '#2E8E66',
   manual:         '#7E8AA3',
 };
 
@@ -683,7 +683,7 @@ function ActivityFeed() {
           Live Activity
         </div>
         <div className="flex items-center gap-1.5">
-          <div className="w-1.5 h-1.5 rounded-full bg-[#4FB286] animate-pulse" />
+          <div className="w-1.5 h-1.5 rounded-full bg-[#2E8E66] animate-pulse" />
           <div className="mono text-[9px] uppercase tracking-[0.14em] text-text-muted">
             Live
           </div>
@@ -884,7 +884,7 @@ function ActivityTab() {
               {filtered.length} event{filtered.length !== 1 ? 's' : ''}
             </span>
             <div className="flex items-center gap-1.5">
-              <div className="w-1.5 h-1.5 rounded-full bg-[#4FB286] animate-pulse" />
+              <div className="w-1.5 h-1.5 rounded-full bg-[#2E8E66] animate-pulse" />
               <span className="mono text-[9px] uppercase tracking-[0.14em] text-text-muted">Live</span>
             </div>
           </div>
@@ -1665,8 +1665,8 @@ function SkillsSurface({ onOpenQuickCapture }: { onOpenQuickCapture?: () => void
         )}
 
         {state.error && (
-          <div className="mt-3 bg-[#DD6262]/10 border border-[#DD6262]/30 rounded-lg px-3 py-2">
-            <div className="mono text-[11px] text-[#DD6262]">{state.error}</div>
+          <div className="mt-3 bg-[#E14B4B]/10 border border-[#E14B4B]/30 rounded-lg px-3 py-2">
+            <div className="mono text-[11px] text-[#E14B4B]">{state.error}</div>
           </div>
         )}
       </div>
@@ -2214,7 +2214,7 @@ function RecentRunsPanel() {
       {RECENT_AGENT_RUNS.map((r, i) => (
         <div key={i} className={`flex items-center gap-2.5 px-4 py-2 ${i > 0 ? 'border-t border-border-subtle' : ''}`}>
           <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{
-            background: r.status === 'ok' ? '#4FB286' : '#D9A23A',
+            background: r.status === 'ok' ? '#2E8E66' : '#C28A1F',
           }} />
           <span className="mono text-[11.5px] text-text-primary flex-1 truncate">{r.name}</span>
           <span className="mono text-[10.5px] text-text-secondary">{r.t}</span>
@@ -2235,13 +2235,13 @@ function VaultPulse() {
         <span className="mono text-[11px] text-text-primary">1,247</span>
       </div>
       <div className="flex flex-col gap-2.5">
-        <DistBar label="Fresh (≤30d)"   percent={62} color="#4FB286" />
-        <DistBar label="Aging (30–90d)" percent={26} color="#D9A23A" />
-        <DistBar label="Decaying (90+)" percent={12} color="#DD6262" />
+        <DistBar label="Fresh (≤30d)"   percent={62} color="#2E8E66" />
+        <DistBar label="Aging (30–90d)" percent={26} color="#C28A1F" />
+        <DistBar label="Decaying (90+)" percent={12} color="#E14B4B" />
       </div>
       <div className="flex justify-between items-baseline mt-3 pt-2.5 border-t border-border-subtle">
         <span className="mono text-[10.5px] text-text-secondary">Embed coverage</span>
-        <span className="mono text-[10.5px] text-[#4FB286]">98.3%</span>
+        <span className="mono text-[10.5px] text-[#2E8E66]">98.3%</span>
       </div>
     </div>
   );
