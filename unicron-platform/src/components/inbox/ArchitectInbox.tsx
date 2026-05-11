@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ProposalCard } from './ProposalCard';
+import { ProposalsThisWeek } from './ProposalsThisWeek';
 import { useSystem, type AgentDef, type DataSource } from '../../context/SystemContext';
 import {
   approveProposal,
@@ -142,6 +143,14 @@ export function ArchitectInbox() {
       <p className="text-[15px] text-text-secondary mb-8">
         proposals from the system that need your attention
       </p>
+
+      {/* This Week — Pass 3 of the rebrand. Folds the
+          pathfinder.architect_proposals weekly digest (previously rendered
+          at the top of the Atrium Products → Metacron preview) into the
+          Architect Inbox tab as the default featured view. The existing
+          listProposals() grid below remains the working surface for
+          approve/dismiss actions on the broader queue. */}
+      <ProposalsThisWeek />
 
       <div className="flex items-center gap-2 mb-8 flex-wrap">
         {pills.map((p) => {
