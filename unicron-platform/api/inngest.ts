@@ -18,6 +18,8 @@ import {
   analystQuarterlyCron,
   elderRun,
   tabooKeeperRun,
+  pathfinderSyncRun,
+  pathfinderSyncCron,
   vaultStatsCron,
   vaultStatsRun,
   continuityIngestCron,
@@ -41,6 +43,9 @@ export default serve({
     // Elder + Taboo Keeper (Sprint 3 Stream B — placeholder shells)
     elderRun,
     tabooKeeperRun,
+    // Pathfinder cross-project sync (S4a)
+    pathfinderSyncRun,
+    pathfinderSyncCron,
     // Vault stats + continuity ingestion (S4b + S4c)
     vaultStatsCron,
     vaultStatsRun,

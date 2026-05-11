@@ -1,6 +1,8 @@
-// ServicesHealth.tsx — Sprint 3 Stream D
+// ServicesHealth.tsx — Sprint 3 Stream D + S4a Pathfinder sync panel.
 // Static health cards for all configured Unicron services.
 // Live health checks wire in Sprint 7.
+
+import { PathfinderSyncPanel } from './PathfinderSyncPanel';
 
 export default function ServicesHealth() {
   const SERVICES = [
@@ -66,6 +68,8 @@ export default function ServicesHealth() {
           </div>
         ))}
       </div>
+
+      <PathfinderSyncPanel />
 
       <div className="bg-bg-card border border-border-default rounded-xl px-5 py-4">
         <div className="mono text-[9px] uppercase tracking-[0.16em] text-text-muted mb-1">
