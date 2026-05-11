@@ -45,3 +45,14 @@ $$;
 
 REVOKE EXECUTE ON FUNCTION public.ns_money_cash_set(numeric, text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.ns_money_cash_set(numeric, text) TO authenticated, service_role;
+
+-- Secondary fix: the original sweep migrations REVOKE'd from PUBLIC but
+-- Supabase platform appears to re-grant anon EXECUTE on functions in
+-- public schema in some cases. Verified via information_schema.routine_privileges
+-- that anon had EXECUTE on ns_money_cash_latest, ns_money_cash_set, and
+-- ns_vault_search_by_vector despite the REVOKE FROM PUBLIC in the original
+-- migrations. Explicitly revoke from anon here too. Idempotent.
+
+REVOKE EXECUTE ON FUNCTION public.ns_money_cash_latest() FROM anon;
+REVOKE EXECUTE ON FUNCTION public.ns_money_cash_set(numeric, text) FROM anon;
+REVOKE EXECUTE ON FUNCTION public.ns_vault_search_by_vector(public.vector(1536), int) FROM anon;
