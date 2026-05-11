@@ -18,6 +18,10 @@ import {
   analystQuarterlyCron,
   elderRun,
   tabooKeeperRun,
+  vaultStatsCron,
+  vaultStatsRun,
+  continuityIngestCron,
+  continuityIngestRun,
 } from '../lib/agents/inngest-fns.js';
 
 // Disable Vercel's automatic JSON body parsing — inngest/node reads the raw stream.
@@ -37,5 +41,10 @@ export default serve({
     // Elder + Taboo Keeper (Sprint 3 Stream B — placeholder shells)
     elderRun,
     tabooKeeperRun,
+    // Vault stats + continuity ingestion (S4b + S4c)
+    vaultStatsCron,
+    vaultStatsRun,
+    continuityIngestCron,
+    continuityIngestRun,
   ],
 });

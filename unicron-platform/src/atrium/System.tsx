@@ -11,6 +11,7 @@ import AuditLogComponent from './system/AuditLog';
 import DecayHeatmapComponent from './system/DecayHeatmap';
 import ScheduledJobsComponent from './system/ScheduledJobs';
 import VoiceTabComponent from './system/VoiceTab';
+import ContinuityTimeline from './system/ContinuityTimeline';
 import { AtriumIcon, type AtriumIconName } from './icons';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -110,18 +111,7 @@ export function System() {
         )}
         {active === 'Scheduled Jobs' && <ScheduledJobsComponent />}
         {active === 'Audit Log'      && <AuditLogComponent />}
-        {/* Pass 2 R7: ContinuityTimeline (CONTINUITY_EVENTS hardcoded array) CUT. */}
-        {active === 'Continuity'     && (
-          <div className="bg-bg-card border border-border-default rounded-xl px-6 py-12 text-center">
-            <div className="text-[14px] text-text-primary font-semibold mb-1.5" style={{ fontFamily: 'var(--font-display)' }}>
-              Continuity needs vault elder/continuity ingestion
-            </div>
-            <div className="text-[12px] text-text-muted max-w-md mx-auto leading-relaxed">
-              Pass 2 cut the hard-coded events list. Returns when the elder agent's
-              continuity ledger writes are queryable.
-            </div>
-          </div>
-        )}
+        {active === 'Continuity'     && <ContinuityTimeline />}
       </section>
     </div>
   );
