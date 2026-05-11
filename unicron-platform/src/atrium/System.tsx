@@ -206,18 +206,18 @@ export function System() {
   const [active, setActive] = useState<SystemTab>('Agents');
 
   return (
-    <div className="max-w-5xl w-full">
-      {/* Page header */}
-      <div className="mb-5">
-        <h1 className="mono text-[18px] text-text-primary font-semibold">System</h1>
-        <p className="mono text-[11px] text-text-secondary mt-1">
-          Configure agents, review taboos, audit refused actions, and monitor service health.
-        </p>
+    <div className="w-full">
+      {/* Page header — v3 Geist display */}
+      <div className="px-7 pt-6 pb-3">
+        <div className="text-[11.5px] text-text-muted mb-1.5">Agents, taboos, audit, continuity</div>
+        <h1 className="text-[36px] font-semibold text-text-primary leading-none tracking-tight" style={{ fontFamily: 'var(--font-display)', letterSpacing: -0.7 }}>
+          System
+        </h1>
       </div>
 
-      {/* Sub-tab nav */}
+      {/* Sub-tab nav — v3 blue underline */}
       <nav
-        className="flex gap-0.5 border-b border-border-default mb-6 overflow-x-auto"
+        className="flex gap-1 px-7 border-b border-border-default overflow-x-auto"
         aria-label="System sub-tabs"
         role="tablist"
       >
@@ -230,19 +230,11 @@ export function System() {
               aria-selected={isActive}
               aria-controls={`system-panel-${tab.replace(/\s+/g, '-').toLowerCase()}`}
               onClick={() => setActive(tab)}
-              className="mono text-[11px] uppercase tracking-[0.12em] px-4 py-2.5 rounded-t-lg transition-colors relative whitespace-nowrap flex-shrink-0 focus:outline-none focus:ring-2 focus:ring-zinc-500"
-              style={{
-                color: isActive ? '#2E6CD4' : 'var(--text-lo)',
-                background: isActive ? 'var(--bg-elevated)' : 'transparent',
-              }}
+              className={`px-3.5 py-3 -mb-px text-[13px] font-medium border-b-2 transition-colors whitespace-nowrap ${
+                isActive ? 'border-[#6081BE] text-[#6081BE]' : 'border-transparent text-text-secondary hover:text-text-primary'
+              }`}
             >
               {tab}
-              {isActive && (
-                <span
-                  className="absolute bottom-0 left-0 right-0 h-0.5 rounded-t-full"
-                  style={{ backgroundColor: '#2E6CD4' }}
-                />
-              )}
             </button>
           );
         })}
@@ -253,6 +245,7 @@ export function System() {
         id={`system-panel-${active.replace(/\s+/g, '-').toLowerCase()}`}
         role="tabpanel"
         aria-label={active}
+        className="px-7 py-5"
       >
         {active === 'Agents'         && <AgentsGalaxy />}
         {active === 'Taboos'         && <TaboosViewer />}
