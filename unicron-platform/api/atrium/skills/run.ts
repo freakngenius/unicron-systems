@@ -118,7 +118,7 @@ function errMsg(err: unknown): string {
 
 async function auditSkillRun(
   skillSlug: string,
-  outcome: 'success' | 'scaffolded' | 'error',
+  outcome: 'success' | 'scaffolded' | 'error' | 'dispatched',
   meta?: Record<string, unknown>,
 ): Promise<void> {
   try {
@@ -804,6 +804,71 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
         const result = await runGeneratePositioningDeck(audience, product);
         void auditSkillRun(skill_slug, 'success', { audience, product });
         res.status(200).json({ ok: true, skill_slug, ...result });
+        return;
+      }
+
+      case 'slack-daily-scan': {
+        // Dispatches the same Inngest event the 06:00 PT cron fires. The
+        // function (slackDailyScanRun in lib/agents/inngest-fns.ts) handles
+        // the actual scan + writes; we don't await execution here — Inngest
+        // executes async and the result lands in nervous_system.slack_daily_digest
+        // for the Atrium UI to pick up via ns_slack_daily_digest_for_date.
+        const date =
+          body?.params && typeof body.params.date === 'string'
+            ? (body.params.date as string)
+            : undefined;
+        const dryRun =
+          body?.params && typeof body.params.dryRun === 'boolean'
+            ? (body.params.dryRun as boolean)
+            : false;
+
+        const inngestBaseUrl = process.env.INNGEST_API_BASE_URL?.trim();
+        const inngestEventKey = process.env.INNGEST_EVENT_KEY?.trim();
+        if (!inngestBaseUrl || !inngestEventKey) {
+          res.status(503).json({
+            ok: false,
+            error:
+              'INNGEST_API_BASE_URL or INNGEST_EVENT_KEY not set on this Vercel env — cannot dispatch slack-daily-scan',
+          });
+          return;
+        }
+
+        const dispatchUrl = `${inngestBaseUrl}/e/${inngestEventKey}`;
+        const dispatchRes = await fetch(dispatchUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: 'slack/daily-scan.run',
+            data: { date, dryRun },
+          }),
+        });
+
+        if (!dispatchRes.ok) {
+          const errText = await dispatchRes.text();
+          void auditSkillRun(skill_slug, 'error', {
+            inngest_status: dispatchRes.status,
+            inngest_body: errText.slice(0, 500),
+          });
+          res.status(502).json({
+            ok: false,
+            error: `Inngest dispatch failed: ${dispatchRes.status}`,
+            details: errText.slice(0, 500),
+          });
+          return;
+        }
+
+        const ids = (await dispatchRes.json().catch(() => ({ ids: [] }))) as { ids?: string[] };
+        void auditSkillRun(skill_slug, 'dispatched', { date: date ?? null, dryRun });
+        res.status(202).json({
+          ok: true,
+          skill_slug,
+          status: 'dispatched',
+          message:
+            'Slack daily scan dispatched. Result will land in Atrium Now > Digest within a few minutes.',
+          inngest_event_ids: ids.ids ?? [],
+          date: date ?? null,
+          dryRun,
+        });
         return;
       }
 

@@ -27,6 +27,7 @@ import { getSupabase } from '../lib/supabase';
 import { useAuth } from '../lib/auth';
 import { QuickCapture } from './QuickCapture';
 import { AtriumIcon } from './icons';
+import { SlackDigest } from './now/SlackDigest';
 // Pass 2 (R1): AttentionScorer cut — was hand-rolled scoring across mixed
 // sources. TopOfMind now wires to ns_top_of_mind_for_dri RPC (real data).
 
@@ -936,9 +937,20 @@ function ActivityTab() {
   );
 }
 
-// ─── DigestTab — N-5: date picker + vault fetch + 2-col sections ─────────────
+// ─── DigestTab — N-5 (vault Analyst digest) + S3 (Slack daily-scan) ──────────
+// Composition: SlackDigest (S3) renders ABOVE the existing Analyst-vault
+// digest. Slack is the more action-bearing surface, so it leads.
 
 function DigestTab() {
+  return (
+    <div className="flex flex-col gap-6">
+      <SlackDigest />
+      <AnalystVaultDigest />
+    </div>
+  );
+}
+
+function AnalystVaultDigest() {
   const today = new Date().toISOString().split('T')[0];
   const [date, setDate] = useState(today);
   const [content, setContent] = useState<string | null>(null);
