@@ -2256,7 +2256,7 @@ interface Props {
 export function Now({ name }: Props) {
   const auth = useAuth();
   const time = useLocalTime();
-  const [nowTab, setNowTab] = useState<NowTab>('skills');
+  const [nowTab, setNowTab] = useState<NowTab>('today');
   const [skillPrompt, setSkillPrompt] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
   const [captureOpen, setCaptureOpen] = useState(false);
@@ -2307,8 +2307,8 @@ export function Now({ name }: Props) {
       {/* v3 sub-tab nav — Run a skill default, then Today / Activity / Digest */}
       <div className="flex gap-1 px-2 sm:px-7 pt-1 border-b border-border-default">
         {([
-          { id: 'skills',   label: 'Run a skill' },
           { id: 'today',    label: 'Today' },
+          { id: 'skills',   label: 'Run a skill' },
           { id: 'activity', label: 'Activity' },
           { id: 'digest',   label: 'Digest' },
         ] as const).map((tab) => (

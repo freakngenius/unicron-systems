@@ -334,13 +334,13 @@ export function AtriumLayout({ activeTab, onTabChange, children, onOpenSettings 
         style={{ width: 68, background: RAIL }}
         aria-label="Atrium main navigation"
       >
-        {/* Logo tile */}
-        <div
-          className="w-9 h-9 rounded-xl flex items-center justify-center font-bold text-white mb-4 flex-shrink-0"
-          style={{ background: 'linear-gradient(135deg, #E8763A, #B5532A)', fontSize: 16, fontFamily: 'var(--font-display)' }}
-        >
-          A
-        </div>
+        {/* Logo tile — Atrium gold heart */}
+        <img
+          src="/favicon.png"
+          alt="Atrium"
+          className="w-10 h-10 mb-4 flex-shrink-0 object-contain"
+          aria-hidden="true"
+        />
 
         {/* Nav items */}
         <div className="flex flex-col gap-0.5 w-full px-1.5 flex-1">
@@ -430,13 +430,13 @@ export function AtriumLayout({ activeTab, onTabChange, children, onOpenSettings 
             <span style={{ fontSize: 11, color: '#6E7A95', marginTop: 3 }}>Unicron Systems</span>
           </div>
 
-          {/* Mobile logo */}
-          <div
-            className="md:hidden w-8 h-8 rounded-lg flex items-center justify-center font-bold text-white flex-shrink-0"
-            style={{ background: 'linear-gradient(135deg, #E8763A, #B5532A)', fontSize: 15 }}
-          >
-            A
-          </div>
+          {/* Mobile logo — Atrium gold heart */}
+          <img
+            src="/favicon.png"
+            alt="Atrium"
+            className="md:hidden w-8 h-8 flex-shrink-0 object-contain"
+            aria-hidden="true"
+          />
 
           {/* Intelligent search bar (center) */}
           <div className="flex-1 max-w-md mx-auto md:mx-4">
