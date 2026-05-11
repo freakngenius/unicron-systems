@@ -10,7 +10,8 @@
 // Sprint 7 Stream D: lazy-load all non-Now tabs to reduce initial bundle size.
 
 import { useState, lazy, Suspense } from 'react';
-import './styles/atrium-tokens.css';
+// Tokens are now loaded globally from src/main.tsx so Metacron + Atrium share
+// the same :root custom properties. (Pass 1 rebrand — see SPEC.)
 import { useAuth } from '../lib/auth';
 import { AtriumLogin } from './AtriumLogin';
 import { AtriumLayout, AtriumPlaceholder, type AtriumTab } from './AtriumLayout';
