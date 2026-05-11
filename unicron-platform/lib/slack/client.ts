@@ -11,13 +11,25 @@ export class SlackApiError extends Error {
   method: string;
   slackError: string;
   response?: unknown;
+  /** HTTP status, if available (e.g. 429 for rate-limited requests). */
+  httpStatus?: number;
+  /** Retry-After value in seconds for rate-limited requests, if Slack returned one. */
+  retryAfterSec?: number;
 
-  constructor(method: string, slackError: string, response?: unknown) {
+  constructor(
+    method: string,
+    slackError: string,
+    response?: unknown,
+    httpStatus?: number,
+    retryAfterSec?: number,
+  ) {
     super(`[slack] ${method} failed: ${slackError}`);
     this.name = 'SlackApiError';
     this.method = method;
     this.slackError = slackError;
     this.response = response;
+    this.httpStatus = httpStatus;
+    this.retryAfterSec = retryAfterSec;
   }
 }
 
@@ -34,6 +46,45 @@ function getToken(): string {
     throw new Error('SLACK_ORCHESTRATOR_BOT_TOKEN not set');
   }
   return token;
+}
+
+function parseRetryAfter(value: string | null): number | undefined {
+  if (!value) return undefined;
+  const n = Number.parseInt(value, 10);
+  return Number.isFinite(n) && n >= 0 ? n : undefined;
+}
+
+async function parseSlackResponse(
+  res: Response,
+  method: string,
+): Promise<SlackResponse> {
+  // Slack rate limiting → HTTP 429 + Retry-After header. Surface as a
+  // structured SlackApiError so callers (notably the S2 fan-out scan)
+  // can back off without having to inspect raw HTTP.
+  if (res.status === 429) {
+    const retryAfter = parseRetryAfter(res.headers.get('retry-after'));
+    throw new SlackApiError(method, 'ratelimited', undefined, 429, retryAfter);
+  }
+  let body: SlackResponse;
+  try {
+    body = (await res.json()) as SlackResponse;
+  } catch {
+    throw new SlackApiError(
+      method,
+      `http_${res.status}_non_json`,
+      undefined,
+      res.status,
+    );
+  }
+  if (!body.ok) {
+    throw new SlackApiError(
+      method,
+      body.error ?? 'unknown_error',
+      body,
+      res.status,
+    );
+  }
+  return body;
 }
 
 /**
@@ -54,11 +105,7 @@ export async function slackGet<T = SlackResponse>(
   const res = await fetch(url, {
     headers: { Authorization: `Bearer ${token}` },
   });
-  const body = (await res.json()) as SlackResponse;
-  if (!body.ok) {
-    throw new SlackApiError(method, body.error ?? 'unknown_error', body);
-  }
-  return body as T;
+  return (await parseSlackResponse(res, method)) as T;
 }
 
 /**
@@ -77,11 +124,7 @@ export async function slackPost<T = SlackResponse>(
     },
     body: JSON.stringify(payload),
   });
-  const body = (await res.json()) as SlackResponse;
-  if (!body.ok) {
-    throw new SlackApiError(method, body.error ?? 'unknown_error', body);
-  }
-  return body as T;
+  return (await parseSlackResponse(res, method)) as T;
 }
 
 /**

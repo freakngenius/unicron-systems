@@ -17,9 +17,13 @@
 // a TS runtime in devDeps and don't want to add one for one script.
 //
 // Required Slack OAuth scopes:
-//   channels:read   — public channel list
-//   groups:read     — private channel list
-//   mpim:read       — multi-party DM list
+//   channels:read   — every public channel (member or not)
+//   groups:read     — private channels the bot has been added to
+//   mpim:read       — MPIMs the bot has been added to
+//
+// Coverage limit: bot tokens cannot enumerate private channels the bot was
+// never invited to. The audit is workspace-wide for public_channel and
+// bot-visible-only for private_channel + mpim.
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -86,11 +90,30 @@ async function slackGet(method, params = {}) {
     url.searchParams.set(k, String(v));
   }
   const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
-  const body = await res.json();
+  if (res.status === 429) {
+    const retryAfter = res.headers.get('retry-after');
+    const err = new Error(`[slack] ${method} failed: ratelimited`);
+    err.method = method;
+    err.slackError = 'ratelimited';
+    err.httpStatus = 429;
+    err.retryAfterSec = retryAfter ? Number.parseInt(retryAfter, 10) : undefined;
+    throw err;
+  }
+  let body;
+  try {
+    body = await res.json();
+  } catch {
+    const err = new Error(`[slack] ${method} failed: http_${res.status}_non_json`);
+    err.method = method;
+    err.slackError = `http_${res.status}_non_json`;
+    err.httpStatus = res.status;
+    throw err;
+  }
   if (!body.ok) {
     const err = new Error(`[slack] ${method} failed: ${body.error}`);
     err.method = method;
     err.slackError = body.error;
+    err.httpStatus = res.status;
     throw err;
   }
   return body;
@@ -134,9 +157,10 @@ async function runAudit() {
     cursor = page.response_metadata?.next_cursor || undefined;
   } while (cursor);
 
+  const TYPE_ORDER = { public_channel: 0, private_channel: 1, mpim: 2 };
   out.sort((a, b) => {
     if (a.is_bot_member !== b.is_bot_member) return a.is_bot_member ? -1 : 1;
-    if (a.type !== b.type) return a.type.localeCompare(b.type);
+    if (a.type !== b.type) return TYPE_ORDER[a.type] - TYPE_ORDER[b.type];
     return a.channel_name.localeCompare(b.channel_name);
   });
   return out;
@@ -144,9 +168,9 @@ async function runAudit() {
 
 function summarize(channels) {
   const by_type = {
-    public_channel: { total: 0, bot_member: 0 },
-    private_channel: { total: 0, bot_member: 0 },
-    mpim: { total: 0, bot_member: 0 },
+    public_channel: { total: 0, bot_member: 0, coverage: 'workspace' },
+    private_channel: { total: 0, bot_member: 0, coverage: 'bot_visible_only' },
+    mpim: { total: 0, bot_member: 0, coverage: 'bot_visible_only' },
   };
   let bot_member_total = 0;
   for (const c of channels) {
@@ -158,7 +182,8 @@ function summarize(channels) {
   }
   return {
     generated_at: new Date().toISOString(),
-    workspace_total: channels.length,
+    exclude_archived: true,
+    visible_total: channels.length,
     bot_member_total,
     bot_missing_total: channels.length - bot_member_total,
     by_type,
@@ -172,14 +197,18 @@ function renderMarkdown(s) {
   L.push('');
   L.push(`Generated: ${s.generated_at}`);
   L.push('');
-  L.push(`- Workspace channels: **${s.workspace_total}**`);
+  L.push(`- Visible channels (active${s.exclude_archived ? '' : ', incl. archived'}): **${s.visible_total}**`);
   L.push(`- Bot is member of: **${s.bot_member_total}**`);
-  L.push(`- Bot missing from: **${s.bot_missing_total}**`);
+  L.push(`- Bot missing from (visible only): **${s.bot_missing_total}**`);
   L.push('');
-  L.push('| type | total | bot member |');
-  L.push('|---|---:|---:|');
+  L.push('> **Coverage note:** `channels:read` returns every public channel in the workspace (member or not).');
+  L.push('> `groups:read` and `mpim:read` only return private/MPIM conversations the bot has already been');
+  L.push('> added to — so missing-membership for private channels is not enumerable from this report.');
+  L.push('');
+  L.push('| type | total | bot member | coverage |');
+  L.push('|---|---:|---:|---|');
   for (const t of ['public_channel', 'private_channel', 'mpim']) {
-    L.push(`| ${t} | ${s.by_type[t].total} | ${s.by_type[t].bot_member} |`);
+    L.push(`| ${t} | ${s.by_type[t].total} | ${s.by_type[t].bot_member} | ${s.by_type[t].coverage} |`);
   }
   L.push('');
   L.push('## Channels');
@@ -217,13 +246,13 @@ async function main() {
   fs.writeFileSync(outPath, markdown, 'utf-8');
 
   console.log('');
-  console.log(`workspace channels : ${summary.workspace_total}`);
-  console.log(`bot is member of   : ${summary.bot_member_total}`);
-  console.log(`bot missing from   : ${summary.bot_missing_total}`);
+  console.log(`visible channels (active) : ${summary.visible_total}`);
+  console.log(`bot is member of          : ${summary.bot_member_total}`);
+  console.log(`bot missing from          : ${summary.bot_missing_total}  (visible only)`);
   console.log('');
   console.log('by type:');
   for (const [t, row] of Object.entries(summary.by_type)) {
-    console.log(`  ${t.padEnd(18)} total=${row.total}  bot=${row.bot_member}`);
+    console.log(`  ${t.padEnd(18)} total=${row.total}  bot=${row.bot_member}  coverage=${row.coverage}`);
   }
   console.log('');
   console.log(`report written → ${outPath}`);

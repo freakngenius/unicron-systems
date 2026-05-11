@@ -28,7 +28,6 @@
         "groups:read",
         "groups:history",
         "mpim:read",
-        "mpim:history",
         "users:read",
         "commands"
       ]
