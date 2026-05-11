@@ -1,8 +1,16 @@
-// Products.tsx — v3 redesign Pass 1 (R6 of Atrium Total Tab Rewrite)
-// v3-products.jsx IA: Geist display title, 4 always-visible metric cards
-// (Active tenants / Leads ranked·wk / Reply rate / Verifier accuracy),
-// v3 blue underline sub-tabs Pathfinder | Metacron. Sub-tab content
-// preserved verbatim; tenant table styling is Pass 2.
+// Products.tsx — Pass 2 (R6): cut fiction, wire real verifier accuracy.
+//
+// SLOT MATRIX (Pass 2 R6):
+//  - Active tenants · status: CUT · pathfinder.tenants table does not exist;
+//    pathfinder.customers tracks customers not multi-tenant orgs.
+//  - Leads ranked (wk) · status: CUT · pathfinder.leads table does not exist
+//    in this Supabase project; the lead-ingest pipeline writes to Pathfinder's
+//    own Vercel project DB, not this nervous_system one.
+//  - Reply rate · status: CUT · no outbound reply tracker schema.
+//  - Verifier accuracy · status: real · ns_pathfinder_verifier_accuracy_30d
+//    over pathfinder.agent_runs (agent_name='verifier').
+//  - Sub-tabs Pathfinder / Metacron · status: KEPT (real, vault + DB backed
+//    via PathfinderProduct + MetacronProduct subcomponents).
 
 import { useState, useEffect } from 'react';
 import { getSupabase } from '../lib/supabase';
@@ -16,70 +24,34 @@ const PRODUCTS_TABS = [
 
 type ProductsTab = (typeof PRODUCTS_TABS)[number]['id'];
 
-interface ProductsMetrics {
-  activeTenants: number | null;
-  leadsRankedWk: number | null;
-  replyRatePct: number | null;
-  verifierAccuracyPct: number | null;
-}
-
-function useProductsMetrics(): ProductsMetrics {
-  const [m, setM] = useState<ProductsMetrics>({
-    activeTenants: null, leadsRankedWk: null, replyRatePct: null, verifierAccuracyPct: null,
-  });
+function useVerifierAccuracy(): { total: number | null; accuracyPct: number | null } {
+  const [s, setS] = useState<{ total: number | null; accuracyPct: number | null }>({ total: null, accuracyPct: null });
   useEffect(() => {
     let cancelled = false;
     getSupabase()
-      .rpc('ns_products_metrics')
+      .rpc('ns_pathfinder_verifier_accuracy_30d')
       .then(({ data }) => {
         if (cancelled) return;
-        const row = (data as Array<{ active_tenants: number; leads_ranked_wk: number; reply_rate_pct: number; verifier_accuracy_pct: number }> | null)?.[0];
-        if (row) {
-          setM({
-            activeTenants: row.active_tenants,
-            leadsRankedWk: row.leads_ranked_wk,
-            replyRatePct: row.reply_rate_pct,
-            verifierAccuracyPct: row.verifier_accuracy_pct,
-          });
-        }
+        const row = (data as Array<{ total: number; successful: number; accuracy_pct: number }> | null)?.[0];
+        if (row) setS({ total: Number(row.total), accuracyPct: Number(row.accuracy_pct) });
       })
-      .catch(() => {/* RPC may not exist yet */});
+      .catch(() => {/* leave nulls */});
     return () => { cancelled = true; };
   }, []);
-  return m;
+  return s;
 }
 
-function MetricCard({ label, value, sublabel, change, sparkline, accent, demo }: {
-  label: string; value: string; sublabel?: string;
-  change?: { value: string; tone: 'up' | 'down' | 'flat' };
-  sparkline?: number[]; accent?: string; demo?: boolean;
+function MetricCard({ label, value, sublabel, accent }: {
+  label: string; value: string; sublabel?: string; accent?: string;
 }) {
-  const max = sparkline ? Math.max(...sparkline, 1) : 1;
-  const toneColor = change?.tone === 'up' ? '#2E8E66' : change?.tone === 'down' ? '#E14B4B' : '#7E8AA3';
   return (
-    <div className="bg-white border border-border-default rounded-xl px-4 py-3.5 shadow-sm relative">
-      {demo && (
-        <span className="absolute top-2 right-2 text-[9px] uppercase tracking-[0.12em] font-bold px-1.5 py-0.5 rounded" style={{ background: 'rgba(96,129,190,0.10)', color: '#6081BE' }}>
-          DEMO
-        </span>
-      )}
+    <div className="bg-white border border-border-default rounded-xl px-4 py-3.5 shadow-sm">
       <div className="text-[11px] uppercase tracking-[0.14em] text-text-muted font-semibold">{label}</div>
-      <div className="flex items-baseline justify-between gap-3 mt-2">
-        <div className="text-[26px] font-semibold text-text-primary" style={{ fontFamily: 'var(--font-display)', letterSpacing: -0.5, lineHeight: 1, color: accent ?? undefined }}>{value}</div>
-        {change && <span className="text-[11.5px] font-semibold" style={{ color: toneColor }}>{change.tone === 'up' ? '↑' : change.tone === 'down' ? '↓' : '·'} {change.value}</span>}
+      <div className="text-[26px] font-semibold text-text-primary mt-2" style={{ fontFamily: 'var(--font-display)', letterSpacing: -0.5, lineHeight: 1, color: accent ?? undefined }}>
+        {value}
       </div>
-      {(sublabel || sparkline) && (
-        <div className="flex items-end justify-between gap-3 mt-2.5 min-h-[20px]">
-          {sublabel && <div className="text-[12px] text-text-muted truncate">{sublabel}</div>}
-          {sparkline && (
-            <svg width="80" height="20" viewBox="0 0 80 20" className="shrink-0">
-              <polyline
-                points={sparkline.map((v, i) => `${(i / (sparkline.length - 1)) * 80},${20 - (v / max) * 18}`).join(' ')}
-                fill="none" stroke={accent ?? '#6081BE'} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"
-              />
-            </svg>
-          )}
-        </div>
+      {sublabel && (
+        <div className="text-[12px] text-text-muted mt-2.5 truncate">{sublabel}</div>
       )}
     </div>
   );
@@ -87,46 +59,23 @@ function MetricCard({ label, value, sublabel, change, sparkline, accent, demo }:
 
 export function Products() {
   const [active, setActive] = useState<ProductsTab>('pathfinder');
-  const m = useProductsMetrics();
+  const verifier = useVerifierAccuracy();
 
   return (
     <div className="w-full">
       <div className="px-7 pt-6 pb-3">
-        <div className="text-[11.5px] text-text-muted mb-1.5">Tenants, leads, accuracy</div>
+        <div className="text-[11.5px] text-text-muted mb-1.5">Pathfinder & Metacron</div>
         <h1 className="text-[36px] font-semibold text-text-primary leading-none tracking-tight" style={{ fontFamily: 'var(--font-display)', letterSpacing: -0.7 }}>
           Products
         </h1>
       </div>
 
-      <div className="px-7 pb-4 grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
+      <div className="px-7 pb-4 grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
         <MetricCard
-          label="Active tenants"
-          value={m.activeTenants === null ? '—' : String(m.activeTenants)}
-          sublabel={m.activeTenants === null ? 'DEMO · wire ns_products_metrics' : undefined}
-          demo={m.activeTenants === null}
-          change={{ value: 'flat', tone: 'flat' }}
-        />
-        <MetricCard
-          label="Leads ranked (wk)"
-          value={m.leadsRankedWk === null ? '—' : String(m.leadsRankedWk)}
-          sublabel={m.leadsRankedWk === null ? 'DEMO' : undefined}
-          demo={m.leadsRankedWk === null}
-          change={{ value: 'flat', tone: 'flat' }}
-        />
-        <MetricCard
-          label="Reply rate"
-          value={m.replyRatePct === null ? '—' : `${m.replyRatePct}%`}
-          sublabel={m.replyRatePct === null ? 'DEMO' : undefined}
-          demo={m.replyRatePct === null}
-          change={{ value: 'flat', tone: 'flat' }}
+          label="Verifier accuracy (30d)"
+          value={verifier.accuracyPct === null ? '—' : `${verifier.accuracyPct}%`}
+          sublabel={verifier.total === null ? '—' : verifier.total === 0 ? 'No verifier runs in last 30d' : `${verifier.total} verifier runs (30d)`}
           accent="#2E8E66"
-        />
-        <MetricCard
-          label="Verifier accuracy"
-          value={m.verifierAccuracyPct === null ? '—' : `${m.verifierAccuracyPct}%`}
-          sublabel={m.verifierAccuracyPct === null ? 'DEMO' : undefined}
-          demo={m.verifierAccuracyPct === null}
-          change={{ value: 'flat', tone: 'flat' }}
         />
       </div>
 
