@@ -3,6 +3,7 @@ import type { AgentDefinition } from '../../lib/agentRegistry';
 import { listAgents } from '../../lib/agentRegistry';
 import { AgentModalShell } from './AgentModalShell';
 import { AgentHistoryGrid } from './AgentHistoryGrid';
+import { FleetSummary } from './FleetSummary';
 import { requeueDispatch } from '../../lib/agentConsoleClient';
 import type { AgentDispatch } from '../../lib/contracts/agentConsole';
 // Side-effect import — Phase 1 streams register their AgentDefinitions here.
@@ -44,6 +45,13 @@ export function AgentsView() {
           {agents.length} REGISTERED
         </span>
       </header>
+
+      {/* Fleet Summary — Pass 3 of the rebrand. Folds the Nervous-System
+          fleet overview (previously rendered at the top of the Atrium
+          Products → Metacron preview) into the Agents tab. Sits above the
+          per-agent registry grid so operators see the high-level fleet
+          state before drilling into a specific agent. */}
+      <FleetSummary />
 
       {agents.length === 0 ? (
         <EmptyState />
