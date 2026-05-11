@@ -32,6 +32,12 @@ import path from 'node:path';
 import { closeAgentRun, openAgentRun } from '@/lib/agent-runs';
 import { supabaseAdmin } from '@/lib/supabase';
 import { scoreProject } from '@/lib/scoring';
+// Phase 2C slice 2 — org-aware dispatch. Zedcor projects continue down
+// the existing kernel below; non-Zedcor projects route to scoreGenericProject
+// using their architecture's scoring.weights. See
+// docs/PLAN-phase2c-slice2-org-aware-ranker.md.
+import { scoreGenericProject } from '@/lib/agents/ranker/genericScorer';
+import { loadOrgArchitecture } from '@/lib/agents/loadOrgArchitecture';
 import { inngest } from '@/lib/inngest/client';
 import type { Branch, Customer, Project } from '@/lib/types';
 import {
@@ -710,6 +716,35 @@ export async function GET(req: Request) {
   // Demo Polish P1 — load distance threshold once per cycle.
   const maxSupportedDistanceMiles = await loadMaxSupportedDistance(admin);
 
+  // Phase 2C slice 2 — resolve Zedcor's org_id once per cycle so the
+  // per-project dispatcher below can route correctly. Slug lookup (vs
+  // hardcoded UUID) keeps the customer-zero identifier in one place;
+  // codex review of the plan confirmed `organizations.slug` is unique
+  // and the PATCH endpoint disallows slug edits.
+  const zedcorIdRes = await (
+    admin.from('organizations') as unknown as {
+      select: (cols: string) => {
+        eq: (col: string, val: string) => {
+          maybeSingle: () => Promise<{ data: { id: string } | null; error: { message: string } | null }>;
+        };
+      };
+    }
+  )
+    .select('id')
+    .eq('slug', 'zedcor')
+    .maybeSingle();
+  // Defensive: if the lookup fails or returns no row, fall back to a
+  // sentinel that will never match a real project's organization_id.
+  // In that case, every project routes through the existing Zedcor
+  // kernel — the safe default per plan §"Risks + mitigations".
+  const zedcorOrgId: string | null = zedcorIdRes.data?.id ?? null;
+  if (!zedcorOrgId) {
+    await writeLog(admin, 'error', {
+      message: 'zedcor org row not found by slug · slice 2 dispatch will route everything to Zedcor kernel as safe default',
+      reason: 'zedcor_org_lookup_failed',
+    });
+  }
+
   // 6. Per-project loop
   const cycleStart = Date.now();
   let processed = 0;
@@ -718,6 +753,9 @@ export async function GET(req: Request) {
   // Demo Polish P1 — number of rows the distance gate kicked into
   // rejection_reason='no_branch_coverage' this cycle.
   let noBranchCoverage = 0;
+  // Phase 2C slice 2 — count of projects routed to the generic scorer
+  // (i.e., non-Zedcor orgs); surfaces in the cycle close log.
+  let genericScored = 0;
 
   for (const project of queue) {
     if (Date.now() - cycleStart > CYCLE_BUDGET_MS) {
@@ -726,6 +764,87 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: 'cycle_timeout', processed }, { status: 500 });
     }
     processed++;
+
+    // Phase 2C slice 2 — org-aware dispatch. Non-Zedcor projects go
+    // through scoreGenericProject using their architecture.scoring.weights.
+    // Zedcor projects (and any project missing organization_id — pre-PR-#314
+    // backfill or future ingest edge cases) fall through to the existing
+    // Zedcor kernel below.
+    const projectOrgId =
+      (project as Project & { organization_id?: string | null }).organization_id ?? null;
+    if (projectOrgId && zedcorOrgId && projectOrgId !== zedcorOrgId) {
+      let architecture;
+      let orgName: string;
+      try {
+        const loaded = await loadOrgArchitecture(projectOrgId);
+        architecture = loaded.architecture;
+        orgName = loaded.org.name;
+      } catch (err) {
+        await writeLog(admin, 'error', {
+          message: `loadOrgArchitecture failed · ${project.id} · ${(err as Error).message}`,
+          reason: 'org_load_failed',
+          project_id: project.id,
+        });
+        // Leave score NULL so a future cycle picks it up after the org row settles.
+        continue;
+      }
+
+      const scoreResult = scoreGenericProject(
+        project as Project & { state?: string | null },
+        architecture,
+      );
+
+      // Slice 2 ships scoring dispatch only. Sonnet-driven org-flavored
+      // rationale + outreach hook is a follow-up slice; for now the
+      // rationale documents the scorer + the per-feature components so
+      // operators can see how the score was derived in the UI. Realberry
+      // (the only non-Zedcor org with a persisted row) has 0 projects
+      // in production today, so prompt quality is not the blocker for
+      // this slice — scoring dispatch is.
+      const componentLines = Object.entries(scoreResult.components)
+        .map(([k, v]) => `${k}=${v.toFixed(2)}`)
+        .join(' · ');
+      const rationale = `Scored by ${architecture.branding.display_name} weights (Phase 2C slice 2 generic scorer). ${componentLines || 'no extractable features'}.`;
+
+      const writeFields: RankerWriteFields = {
+        score: scoreResult.score,
+        rationale,
+        outreach_hook: null,
+        nearest_branch_id: null,
+        distance_miles: null,
+        warm_for_customer_id: null,
+        ranked_at: new Date().toISOString(),
+        nearest_zedcor_branch_id: null,
+        zedcor_distance_miles: null,
+        rejection_reason: null,
+        rejected_at: null,
+        geo_unknown: project.lat == null || project.lon == null,
+      };
+      const w = await persistProject(admin, project.id, writeFields);
+      if (!w.ok) {
+        await writeLog(admin, 'error', {
+          message: `supabase write failed (generic) · ${project.id}`,
+          reason: 'supabase_write_failed',
+          project_id: project.id,
+        });
+        await markRunFailed(admin, runId, `supabase_write_failed: ${w.error}`);
+        return NextResponse.json({ error: 'supabase_write_failed' }, { status: 500 });
+      }
+      await writeLog(admin, 'score_assign', {
+        message: `${project.id} · score ${scoreResult.score} · ${orgName} (generic)`,
+        project_id: project.id,
+        organization_id: projectOrgId,
+        org_name: orgName,
+        score: scoreResult.score,
+        components: scoreResult.components,
+        kernel: 'generic',
+      });
+      genericScored++;
+      ranked++;
+      continue;
+    }
+    // Zedcor projects (or projects without organization_id) fall through
+    // to the existing kernel below.
 
     // Stage 1 — cheap classifier (Haiku)
     let classify: ClassifyResult;
@@ -1064,10 +1183,11 @@ export async function GET(req: Request) {
 
   // 7. Cycle close
   await writeLog(admin, 'write_success', {
-    message: `write · ${ranked} ranked · ${filtered} demoted · ${noBranchCoverage} out-of-coverage`,
+    message: `write · ${ranked} ranked · ${filtered} demoted · ${noBranchCoverage} out-of-coverage · ${genericScored} via generic scorer`,
     ranked,
     demoted: filtered,
     no_branch_coverage: noBranchCoverage,
+    generic_scored: genericScored,
   });
 
   const completed_at = new Date().toISOString();

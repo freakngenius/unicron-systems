@@ -72,6 +72,11 @@ export interface Project {
   warm_for_customer_id: string | null;
   ingested_at: string;
   ranked_at: string | null;
+  // Phase 2A completion (migration 20260511_phase2a_completion_org_id_rls)
+  // — multi-tenant scope on customer-data tables. The ranker dispatcher
+  // in Phase 2C slice 2 reads this to route Zedcor vs non-Zedcor orgs
+  // through different scorers.
+  organization_id?: string | null;
   // Verifier output (added 0005_agent_expansion_layer1).
   // null = pending verification; true = passed all 4 checks; false = at least one check failed.
   verified?: boolean | null;
