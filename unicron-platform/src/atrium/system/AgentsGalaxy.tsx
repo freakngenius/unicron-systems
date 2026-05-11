@@ -29,7 +29,25 @@ interface Agent {
   budget: Budget | null;
   config: Config | null;
   created_at: string;
+  // R7 Option 2: demo-flagged agents render at 60% opacity + DEMO pill;
+  // real agents render at 100% with live load percentage.
+  demo?: boolean;
 }
+
+// 8 design-fiction archetypes per R7 Option 2 — render alongside the 4 real
+// agents (Analyst, Elder, Orchestrator, Taboo Keeper) returned by ns_list_agents.
+// Demo agents land in upcoming sprints; until then they communicate the target
+// fleet shape so the constellation reads as v3 design intent.
+const DEMO_AGENTS: Agent[] = [
+  { id: 'demo-pathfinder',  name: 'Pathfinder',  archetype: 'operator',  specialty: 'Customer-facing lead intelligence — Sprint 6',  active: false, budget: null, config: null, created_at: '', demo: true },
+  { id: 'demo-curator',     name: 'Curator',     archetype: 'curator',   specialty: 'Vault hygiene + decay sweeps — Sprint 6',        active: false, budget: null, config: null, created_at: '', demo: true },
+  { id: 'demo-researcher',  name: 'Researcher',  archetype: 'research',  specialty: 'Deep dives + source verification — Sprint 7',    active: false, budget: null, config: null, created_at: '', demo: true },
+  { id: 'demo-trend-scout', name: 'Trend Scout', archetype: 'research',  specialty: 'Competitor + market trend monitor — Sprint 7',   active: false, budget: null, config: null, created_at: '', demo: true },
+  { id: 'demo-pipe-hunter', name: 'Pipe Hunter', archetype: 'sales',     specialty: 'Cross-pollination + lead surface — Sprint 6',    active: false, budget: null, config: null, created_at: '', demo: true },
+  { id: 'demo-architect',   name: 'Architect',   archetype: 'builder',   specialty: 'Proposes + tunes system config — Sprint 5+',     active: false, budget: null, config: null, created_at: '', demo: true },
+  { id: 'demo-boundary',    name: 'Boundary',    archetype: 'guardian',  specialty: 'Tier-2 source + adjacency guardrails — Sprint 7',active: false, budget: null, config: null, created_at: '', demo: true },
+  { id: 'demo-janitor',     name: 'Janitor',     archetype: 'operator',  specialty: 'Sweeps stale state + rotates secrets — Sprint 7',active: false, budget: null, config: null, created_at: '', demo: true },
+];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -59,6 +77,13 @@ const ARCHETYPE_COLORS: Record<string, { dot: string; label: string; border: str
     label: '#2E8E66',
     border: 'rgba(79,178,134,0.25)',
   },
+  // R7 Option 2 — design-fiction archetypes for the 8 demo agents
+  operator: { dot: '#6081BE', label: '#6081BE', border: 'rgba(96,129,190,0.25)' },
+  curator:  { dot: '#7355E5', label: '#7355E5', border: 'rgba(115,85,229,0.25)' },
+  research: { dot: '#5BB5BC', label: '#5BB5BC', border: 'rgba(91,181,188,0.25)' },
+  sales:    { dot: '#E8763A', label: '#E8763A', border: 'rgba(232,118,58,0.25)' },
+  builder:  { dot: '#C28A1F', label: '#C28A1F', border: 'rgba(194,138,31,0.25)' },
+  guardian: { dot: '#E14B4B', label: '#E14B4B', border: 'rgba(225,75,75,0.25)' },
 };
 
 const DEFAULT_COLOR = {
@@ -71,11 +96,12 @@ function archetypeColor(arch: string) {
   return ARCHETYPE_COLORS[arch] ?? DEFAULT_COLOR;
 }
 
-// Archetype → ring index mapping for galaxy layout
+// Archetype → ring index mapping for galaxy layout.
+// Real agents inner; demo-fiction outer per R7 Option 2.
 const RING_ARCHETYPES = [
-  ['taboo_keeper', 'orchestrator'],   // inner ring — core/guardian
-  ['analyst', 'elder'],              // mid ring — insight/memory
-  ['specialist'],                     // outer ring — everything else
+  ['taboo_keeper', 'orchestrator'],            // inner — core/guardian (real)
+  ['analyst', 'elder', 'guardian'],            // mid — insight/memory + fictional guardian
+  ['specialist', 'operator', 'curator', 'research', 'sales', 'builder'], // outer — fiction
 ];
 
 const RING_RADII = [72, 130, 182];
@@ -159,29 +185,33 @@ function AgentGalaxySVG({
           CORE
         </text>
 
-        {/* Agent nodes */}
+        {/* Agent nodes — demo-flagged render at 60% opacity with DEMO pill */}
         {nodes.map(({ agent, x, y, r }) => {
           const color = archetypeColor(agent.archetype).dot;
           const isSelected = selectedId === agent.id;
           const label = agent.name.length > 13 ? agent.name.slice(0, 12) + '…' : agent.name;
+          const nodeOpacity = agent.demo ? 0.6 : (agent.active ? 0.88 : 0.35);
           return (
             <g
               key={agent.id}
               onClick={() => onSelect(isSelected ? null : agent)}
               style={{ cursor: 'pointer' }}
             >
-              <line x1={cx} y1={cy} x2={x} y2={y} stroke={color} strokeWidth="1" opacity="0.14" />
+              <line x1={cx} y1={cy} x2={x} y2={y} stroke={color} strokeWidth="1" opacity={agent.demo ? 0.08 : 0.14} />
               <circle
                 cx={x}
                 cy={y}
                 r={r}
                 fill={color}
-                opacity={agent.active ? 0.88 : 0.35}
+                opacity={nodeOpacity}
               />
+              {agent.demo && (
+                <circle cx={x} cy={y} r={r + 2} fill="none" stroke={color} strokeWidth="1" strokeDasharray="2 2" opacity="0.5" />
+              )}
               {isSelected && (
                 <circle cx={x} cy={y} r={r + 4} fill="none" stroke={color} strokeWidth="1.5" opacity="0.65" />
               )}
-              {!agent.active && (
+              {!agent.demo && !agent.active && (
                 <circle cx={x} cy={y} r={r + 3} fill="none" stroke="rgba(255,255,255,0.10)" strokeWidth="1" strokeDasharray="2 3" />
               )}
               <text
@@ -189,11 +219,19 @@ function AgentGalaxySVG({
                 y={y + r + 13}
                 textAnchor="middle"
                 fontSize="10"
-                fill="rgba(255,255,255,0.40)"
+                fill={agent.demo ? 'rgba(126,138,163,0.85)' : 'rgba(70,80,106,0.85)'}
                 fontFamily="monospace"
               >
                 {label}
               </text>
+              {agent.demo && (
+                <g transform={`translate(${x + r - 1}, ${y - r - 8})`}>
+                  <rect x={-13} y={-7} width={26} height={11} rx={2} fill="rgba(96,129,190,0.15)" stroke="rgba(96,129,190,0.45)" strokeWidth="0.5" />
+                  <text x={0} y={1.5} textAnchor="middle" fontSize="7" fontWeight="700" fill="#6081BE" fontFamily="monospace">
+                    DEMO
+                  </text>
+                </g>
+              )}
             </g>
           );
         })}
@@ -233,8 +271,11 @@ export default function AgentsGalaxy() {
   const [selected, setSelected] = useState<Agent | null>(null);
 
   useEffect(() => {
-    fetchAgents().then((a) => {
-      setAgents(a);
+    fetchAgents().then((real) => {
+      // R7 Option 2: render all 12 archetypes. Real agents from ns_list_agents
+      // come first (no demo flag); 8 design-fiction agents follow with demo=true.
+      const realFlagged = real.map((a) => ({ ...a, demo: false }));
+      setAgents([...realFlagged, ...DEMO_AGENTS]);
       setLoading(false);
     });
   }, []);
@@ -249,29 +290,16 @@ export default function AgentsGalaxy() {
     );
   }
 
-  if (agents.length === 0) {
-    return (
-      <div className="bg-bg-card border border-border-default rounded-xl px-5 py-8 text-center">
-        <div className="mono text-[11px] text-text-secondary">
-          No agents registered yet.
-        </div>
-        <div className="mono text-[9px] uppercase tracking-[0.14em] text-text-muted mt-1">
-          Sprint 3 Analyst + Elder seed on first Inngest run
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div>
       {/* SVG galaxy visualization */}
       <AgentGalaxySVG agents={agents} selectedId={selected?.id ?? null} onSelect={setSelected} />
 
-      {/* Roster + detail panel */}
+      {/* Roster + detail panel — real agents sort first per R7 Option 2 */}
       <div className="flex gap-4">
       {/* Agent grid */}
       <div className={`flex-1 grid grid-cols-2 sm:grid-cols-3 gap-3 ${selected ? 'min-w-0' : ''}`}>
-        {agents.map((agent) => {
+        {[...agents].sort((a, b) => Number(!!a.demo) - Number(!!b.demo)).map((agent) => {
           const color = archetypeColor(agent.archetype);
           const budgetPct =
             agent.budget && agent.budget.limit_usd_per_period > 0
@@ -285,18 +313,24 @@ export default function AgentsGalaxy() {
             <button
               key={agent.id}
               onClick={() => setSelected(isSelected ? null : agent)}
-              className="bg-bg-card hover:bg-bg-raised rounded-xl p-4 text-left border transition-all"
+              className="bg-bg-card hover:bg-bg-raised rounded-xl p-4 text-left border transition-all relative"
               style={{
                 borderColor: isSelected ? color.border : 'var(--border-default)',
                 boxShadow: isSelected ? `0 0 0 1px ${color.dot}40` : 'none',
+                opacity: agent.demo ? 0.6 : 1,
               }}
             >
+              {agent.demo && (
+                <span className="absolute top-2 right-2 text-[9px] uppercase tracking-[0.12em] font-bold px-1.5 py-0.5 rounded" style={{ background: 'rgba(96,129,190,0.12)', color: '#6081BE' }}>
+                  DEMO
+                </span>
+              )}
               <div className="flex items-center gap-2 mb-2">
                 <span
                   className="w-2 h-2 rounded-full shrink-0"
                   style={{
-                    backgroundColor: agent.active ? '#2E8E66' : '#6B7280',
-                    boxShadow: agent.active ? '0 0 4px #2E8E6660' : 'none',
+                    backgroundColor: agent.demo ? '#BAC2D2' : (agent.active ? '#2E8E66' : '#6B7280'),
+                    boxShadow: agent.active && !agent.demo ? '0 0 4px #2E8E6660' : 'none',
                   }}
                 />
                 <span className="mono text-[12px] text-text-primary font-medium truncate">
@@ -304,7 +338,7 @@ export default function AgentsGalaxy() {
                 </span>
               </div>
               <div className="mono text-[10px] uppercase tracking-[0.12em] mb-2" style={{ color: color.label }}>
-                {agent.archetype}
+                {agent.archetype.replace(/_/g, ' ')}
               </div>
               {agent.budget && (
                 <div className="mt-2">
@@ -324,6 +358,11 @@ export default function AgentsGalaxy() {
                       }}
                     />
                   </div>
+                </div>
+              )}
+              {agent.demo && (
+                <div className="mt-2 text-[10px] text-text-muted leading-snug">
+                  Demo data — production agents land in upcoming sprints
                 </div>
               )}
             </button>
