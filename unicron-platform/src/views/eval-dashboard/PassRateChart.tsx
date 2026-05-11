@@ -14,16 +14,17 @@ const PAD_RIGHT = 16;
 const PAD_TOP = 16;
 const PAD_BOTTOM = 28;
 
-// Picked from the existing palette in tailwind.config.js — accent-gold,
-// emerald-400, rose-400, and a few neutrals — to stay on-brand.
+// Atrium category-tag palette (Pass 2 of the rebrand). The seven categories
+// are ordered to maximize hue separation when many agents are charted.
+// SVG fill/stroke accept var() directly, so no runtime resolution needed.
 const SERIES_COLORS = [
-  '#F4C66B', // accent-gold
-  '#34D399', // emerald-400
-  '#FB7185', // rose-400
-  '#60A5FA', // blue-400
-  '#A78BFA', // violet-400
-  '#F472B6', // pink-400
-  '#FBBF24', // amber-400
+  'var(--cat-sales)',        // orange — accent
+  'var(--cat-productivity)', // green
+  'var(--cat-research)',     // blue
+  'var(--cat-discovery)',    // gold
+  'var(--cat-marketing)',    // pink
+  'var(--cat-memory)',       // purple
+  'var(--cat-operations)',   // teal
 ];
 
 export function PassRateChart({ series }: { series: AgentSeries[] }) {

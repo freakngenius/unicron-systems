@@ -30,11 +30,19 @@ import {
 } from './shapes';
 
 /**
- * Single source of truth for the canvas background. Mirrors the `bg-base`
- * Tailwind token (#0A0A0B). Kept as a literal because Canvas 2D fillStyle
- * doesn't see CSS custom properties; if you change `bg-base`, change this too.
+ * Canvas-side mirrors of Atrium tokens. Canvas 2D fillStyle does not see CSS
+ * custom properties, so we resolve once at module load via getComputedStyle
+ * and fall back to the canonical baked-in hex values for SSR / tests.
+ * If you change tokens.css, the resolved value updates automatically — the
+ * fallbacks just need to track the canonical values.
  */
-const CANVAS_BG = '#0A0A0B';
+function resolveTokenValue(token: string, fallback: string): string {
+  if (typeof window === 'undefined' || typeof document === 'undefined') return fallback;
+  const v = getComputedStyle(document.documentElement).getPropertyValue(token).trim();
+  return v || fallback;
+}
+
+const CANVAS_BG = resolveTokenValue('--bg-ground', '#0A0C10');
 
 const CONFIG = {
   realSecondsPerDay: 180,
@@ -60,13 +68,20 @@ const CONFIG = {
   replicationCooldownMs: 4000,
 };
 
-const COLOR_DASH_IDLE = hexToRgb('#6B7280');
-const COLOR_DASH_HOT = hexToRgb('#FFFFFF');
-const COLOR_NODE_IDLE = hexToRgb('#374151');
+// Idle/highlight RGB constants for the dash + node passes. The baked-in
+// fallbacks track the canonical Atrium token values:
+//   --text-lo   #6B7280  (idle dash)
+//   --text-hi   #F2F4F7  (hot dash, white-ish high-contrast)
+//   --text-faint#4A5160  (idle node) — was #374151; aligned to faint-text.
+const COLOR_DASH_IDLE = hexToRgb(resolveTokenValue('--text-lo', '#6B7280'));
+const COLOR_DASH_HOT = hexToRgb(resolveTokenValue('--text-hi', '#F2F4F7'));
+const COLOR_NODE_IDLE = hexToRgb(resolveTokenValue('--text-faint', '#4A5160'));
 
-const _AMBER_RGB = hexToRgb('#F59E0B');
-const _RED_RGB = hexToRgb('#EF4444');
-const _WHITE_RGB = hexToRgb('#FFFFFF');
+// Trail colors per-layer use the semantic palette: warn for layer 3,
+// err for layer 4, text-hi for the special inner-ring case.
+const _AMBER_RGB = hexToRgb(resolveTokenValue('--warn', '#D9A23A'));
+const _RED_RGB = hexToRgb(resolveTokenValue('--err', '#DD6262'));
+const _WHITE_RGB = hexToRgb(resolveTokenValue('--text-hi', '#F2F4F7'));
 
 function trailColorForLayer(layer: 2 | 3 | 4 | 5, color: string) {
   if (layer === 2) return hexToRgb(color);
@@ -965,7 +980,8 @@ export class SimEngine {
     const a = 0.4 + 0.4 * Math.sin(t * 1.4);
     ctx.beginPath();
     ctx.arc(this.cx, this.cy, 4, 0, PI2);
-    ctx.fillStyle = `rgba(251, 191, 36, ${a.toFixed(3)})`;
+    // Pulsing center dot: Atrium warn color (was #FBBF24/rgb(251,191,36)).
+    ctx.fillStyle = `rgba(${_AMBER_RGB.r | 0}, ${_AMBER_RGB.g | 0}, ${_AMBER_RGB.b | 0}, ${a.toFixed(3)})`;
     ctx.fill();
   }
 
@@ -983,6 +999,8 @@ export class SimEngine {
   private drawDotGrid() {
     const ctx = this.ctx;
     const step = 24;
+    // Even softer than --border-faint (0.04). Sub-token by design — the dot
+    // grid is meant to barely register against --bg-ground.
     ctx.fillStyle = 'rgba(255,255,255,0.025)';
     for (let x = step; x < this.width; x += step) {
       for (let y = step; y < this.height; y += step) {

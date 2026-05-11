@@ -209,11 +209,42 @@ export function makeNoise2D() {
   };
 }
 
-/** Color palette per layer / index — used to assign distinct colors for new agents. */
+/**
+ * Color palette per layer / index — used to assign distinct colors for new agents.
+ *
+ * Atrium token mapping (Pass 2 of the rebrand):
+ *   layer 2 (sources)    → research / operations / info family (cool blues + teal)
+ *   layer 3 (watchers)   → discovery / warn family (warm gold)
+ *   layer 4 (drafters)   → err / sales family (warm red/orange)
+ *
+ * Canvas 2D requires resolved color strings (var() not supported as fillStyle),
+ * so we resolve at module load time via getComputedStyle and fall back to
+ * baked-in hex equivalents of the canonical tokens for SSR / tests.
+ */
+function resolveToken(token: string, fallback: string): string {
+  if (typeof window === 'undefined' || typeof document === 'undefined') return fallback;
+  const v = getComputedStyle(document.documentElement).getPropertyValue(token).trim();
+  return v || fallback;
+}
+
+const LAYER2_TOKENS: ReadonlyArray<[string, string]> = [
+  ['--cat-research', '#6F95D6'],
+  ['--info', '#6F95D6'],
+  ['--cat-operations', '#5BB5BC'],
+];
+const LAYER3_TOKENS: ReadonlyArray<[string, string]> = [
+  ['--cat-discovery', '#D9A23A'],
+  ['--warn', '#D9A23A'],
+];
+const LAYER4_TOKENS: ReadonlyArray<[string, string]> = [
+  ['--err', '#DD6262'],
+  ['--cat-sales', '#E8763A'],
+];
+
 export const LAYER_PALETTE: Record<2 | 3 | 4, string[]> = {
-  2: ['#22D3EE', '#0EA5E9', '#3B82F6', '#6366F1', '#06B6D4', '#0284C7'],
-  3: ['#FACC15', '#F59E0B', '#EAB308', '#FDE047', '#CA8A04'],
-  4: ['#EF4444', '#DC2626', '#F87171', '#B91C1C', '#FB7185'],
+  2: LAYER2_TOKENS.map(([t, f]) => resolveToken(t, f)),
+  3: LAYER3_TOKENS.map(([t, f]) => resolveToken(t, f)),
+  4: LAYER4_TOKENS.map(([t, f]) => resolveToken(t, f)),
 };
 
 export const LAYER_SHAPE: Record<2 | 3 | 4, Shape> = {
