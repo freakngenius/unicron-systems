@@ -135,7 +135,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     // notes: null means clear it; undefined means leave alone
     // primary_contact: null means clear it; undefined means leave alone
     const rpcParams: Record<string, unknown> = { p_id: id };
-    if (status !== undefined) rpcParams.p_status = status;
+    // Status canon is lowercase (matches customers_status_check). UI sends
+    // title-cased labels for display; normalize at the boundary.
+    if (status !== undefined) rpcParams.p_status = status.toLowerCase();
     if (notes !== undefined) {
       if (notes === null) {
         rpcParams.p_clear_notes = true;
