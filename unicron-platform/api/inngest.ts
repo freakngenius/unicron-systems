@@ -20,6 +20,10 @@ import {
   tabooKeeperRun,
   pathfinderSyncRun,
   pathfinderSyncCron,
+  vaultStatsCron,
+  vaultStatsRun,
+  continuityIngestCron,
+  continuityIngestRun,
   vaultEmbeddingsRebuildCron,
   vaultEmbeddingsRebuildRun,
 } from '../lib/agents/inngest-fns.js';
@@ -44,6 +48,11 @@ export default serve({
     // Pathfinder cross-project sync (S4a)
     pathfinderSyncRun,
     pathfinderSyncCron,
+    // Vault stats + continuity ingestion (S4b + S4c)
+    vaultStatsCron,
+    vaultStatsRun,
+    continuityIngestCron,
+    continuityIngestRun,
     // Vault semantic search index (S5c)
     vaultEmbeddingsRebuildCron,
     vaultEmbeddingsRebuildRun,

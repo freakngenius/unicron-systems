@@ -1,22 +1,13 @@
-// Library.tsx — Pass 2 (R8): cut header stat strip (no vault-stats backend).
-//
-// SLOT MATRIX (Pass 2 R8):
-//  - Docs count · status: CUT · no vault-counting job writes a queryable
-//    table; ns_library_stats RPC does not exist.
-//  - Fresh % (≤30d modified) · status: CUT · same.
-//  - Templates count · status: CUT · same.
-//  - Embeddings coverage % · status: CUT · no embedding-pipeline tracker.
-//  - Sub-tabs Wiki / Repo / Templates · status: KEPT (real) · LibraryWiki
-//    + LibraryRepo + LibraryTemplates all query vault files via existing
-//    wiki API endpoints (Sprint 6 Stream C).
-//
-// Header strip replaced with the page title only. When a vault-stats job
-// + ns_library_stats RPC ship, the 4 tiles return.
+// Library.tsx — S4b restores vault-stats header tiles backed by
+// nervous_system.vault_stats + ns_vault_stats_latest RPC. The hourly cron
+// `vault-stats-cron` populates the table; the tiles degrade to "—" until
+// the first row lands.
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { LibraryWiki } from './LibraryWiki';
 import { LibraryRepo } from './LibraryRepo';
 import { LibraryTemplates } from './LibraryTemplates';
+import { getSupabase } from '../lib/supabase';
 
 const LIBRARY_TABS = [
   { id: 'wiki',      label: 'Wiki' },
@@ -25,6 +16,76 @@ const LIBRARY_TABS = [
 ] as const;
 
 type LibraryTab = (typeof LIBRARY_TABS)[number]['id'];
+
+interface VaultStats {
+  observed_at: string;
+  raw_docs: number;
+  wiki_docs: number;
+  outputs_docs: number;
+  total_bytes: number;
+  last_commit_sha: string | null;
+  last_commit_at: string | null;
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return '0';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.min(Math.floor(Math.log(bytes) / Math.log(k)), sizes.length - 1);
+  return `${(bytes / Math.pow(k, i)).toFixed(1)}${sizes[i]}`;
+}
+
+function timeAgo(iso: string | null): string {
+  if (!iso) return '—';
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60_000);
+  if (mins < 60) return `${mins}m`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h`;
+  const days = Math.floor(hours / 24);
+  return `${days}d`;
+}
+
+function VaultStatsStrip() {
+  const [stats, setStats] = useState<VaultStats | null | undefined>(undefined);
+
+  useEffect(() => {
+    let cancelled = false;
+    const sb = getSupabase();
+    sb.rpc('ns_vault_stats_latest').then(({ data }) => {
+      if (cancelled) return;
+      const row = Array.isArray(data) && data.length > 0 ? (data[0] as VaultStats) : null;
+      setStats(row);
+    });
+    return () => { cancelled = true; };
+  }, []);
+
+  const tiles = [
+    { label: 'raw/', value: stats?.raw_docs ?? null },
+    { label: 'wiki/', value: stats?.wiki_docs ?? null },
+    { label: 'outputs/', value: stats?.outputs_docs ?? null },
+    { label: 'size', value: stats ? formatBytes(stats.total_bytes) : null },
+    { label: 'last commit', value: stats ? timeAgo(stats.last_commit_at) : null },
+  ];
+
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 mt-3">
+      {tiles.map((t) => (
+        <div
+          key={t.label}
+          className="bg-bg-card border border-border-default rounded-lg px-3 py-2.5"
+        >
+          <div className="mono text-[9px] uppercase tracking-[0.14em] text-text-muted mb-0.5">
+            {t.label}
+          </div>
+          <div className="mono text-[16px] text-text-primary font-medium leading-none">
+            {t.value ?? '—'}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export function Library() {
   const [active, setActive] = useState<LibraryTab>('wiki');
@@ -47,6 +108,7 @@ export function Library() {
         <h1 className="text-[36px] font-semibold text-text-primary leading-none tracking-tight" style={{ fontFamily: 'var(--font-display)', letterSpacing: -0.7 }}>
           Library
         </h1>
+        <VaultStatsStrip />
       </div>
 
       <div className="flex gap-1 px-7 border-b border-border-default overflow-x-auto">

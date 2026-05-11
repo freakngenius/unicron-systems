@@ -279,3 +279,53 @@ export const pathfinderSyncCron = inngest.createFunction(
     return step.run('pathfinder-sync', () => pathfinderSync());
   }
 );
+
+// ---------------------------------------------------------------------------
+// Vault stats + continuity ingestion — S4b + S4c
+// ---------------------------------------------------------------------------
+
+/**
+ * Polls the unicron-knowledge vault, counts docs per Karpathy folder
+ * (raw/, wiki/, outputs/), and tracks last-commit recency.
+ * Cron: every hour at :05.
+ */
+export const vaultStatsCron = inngest.createFunction(
+  { id: 'vault-stats-cron', name: 'Vault Stats Cron', retries: 1 },
+  { cron: '5 * * * *' },
+  async ({ step }) => {
+    const { vaultStatsSync } = await import('./vault-ingest.js');
+    return step.run('vault-stats-sync', () => vaultStatsSync());
+  }
+);
+
+export const vaultStatsRun = inngest.createFunction(
+  { id: 'vault-stats-run', name: 'Vault Stats Run', retries: 1 },
+  { event: 'vault/stats.sync' },
+  async ({ step }) => {
+    const { vaultStatsSync } = await import('./vault-ingest.js');
+    return step.run('vault-stats-sync', () => vaultStatsSync());
+  }
+);
+
+/**
+ * Pulls wiki/memory/elder/continuity.md, parses entries, upserts new ones
+ * into nervous_system.continuity_log. Idempotent via entry_hash.
+ * Cron: every hour at :15.
+ */
+export const continuityIngestCron = inngest.createFunction(
+  { id: 'continuity-ingest-cron', name: 'Continuity Ingest Cron', retries: 1 },
+  { cron: '15 * * * *' },
+  async ({ step }) => {
+    const { continuityIngest } = await import('./vault-ingest.js');
+    return step.run('continuity-ingest', () => continuityIngest());
+  }
+);
+
+export const continuityIngestRun = inngest.createFunction(
+  { id: 'continuity-ingest-run', name: 'Continuity Ingest Run', retries: 1 },
+  { event: 'continuity/ingest' },
+  async ({ step }) => {
+    const { continuityIngest } = await import('./vault-ingest.js');
+    return step.run('continuity-ingest', () => continuityIngest());
+  }
+);
