@@ -145,17 +145,35 @@ function extractToc(raw: string): { id: string; text: string; level: number }[] 
   return toc;
 }
 
-// ── Group pages by top-level directory ────────────────────────────────────────
+// ── Curated handbook structure ────────────────────────────────────────────────
+// Library tab is the employee handbook surface. Only root-level handbook pages
+// appear in the sidebar; everything else (wiki/architecture, wiki/specs,
+// wiki/prds, wiki/prompts, wiki/plans, wiki/memory, wiki/retros, wiki/_archive,
+// _-prefixed system files) is filtered out of the listing. Pages outside the
+// handbook are still reachable via direct slug or wikilink — they just don't
+// surface in the new-teammate handbook navigation.
 
-function groupPages(pages: WikiPage[]): Record<string, WikiPage[]> {
-  const grouped: Record<string, WikiPage[]> = {};
-  for (const page of pages) {
-    const parts = page.slug.split('/');
-    const section = parts.length > 1 ? parts[0] : '_root';
-    if (!grouped[section]) grouped[section] = [];
-    grouped[section].push(page);
-  }
-  return grouped;
+interface HandbookSection {
+  label: string;
+  slugs: string[];
+}
+
+const HANDBOOK_SECTIONS: HandbookSection[] = [
+  { label: 'Welcome',      slugs: ['welcome', 'what-this-is'] },
+  { label: 'How it works', slugs: ['how-it-works', 'how-you-participate', 'whats-connected'] },
+  { label: 'Onboarding',   slugs: ['quick-start', 'adding-a-team-member'] },
+  { label: 'Day-to-day',   slugs: ['best-practices', 'editing-the-system'] },
+  { label: 'Reference',    slugs: ['glossary', 'faq'] },
+];
+
+function buildHandbookNav(pages: WikiPage[]): { section: string; pages: WikiPage[] }[] {
+  const bySlug = new Map(pages.map((p) => [p.slug, p]));
+  return HANDBOOK_SECTIONS.map((section) => ({
+    section: section.label,
+    pages: section.slugs
+      .map((slug) => bySlug.get(slug))
+      .filter((p): p is WikiPage => p !== undefined),
+  })).filter((s) => s.pages.length > 0);
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -216,6 +234,7 @@ export function LibraryWiki({ initialSlug }: { initialSlug?: string } = {}) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const handbookNav = buildHandbookNav(pages);
   const currentPage = pages.find((p) => p.slug === selectedSlug);
   const editability = currentPage?.frontmatter?.editable ?? 'auto';
   const toc = pageContent ? extractToc(pageContent.content) : [];
@@ -246,8 +265,6 @@ export function LibraryWiki({ initialSlug }: { initialSlug?: string } = {}) {
       if (slug) loadPage(slug);
     }
   };
-
-  const grouped = groupPages(pages);
 
   return (
     <div className="flex gap-4 min-h-[600px]" style={{ maxWidth: '100%' }}>
@@ -284,30 +301,24 @@ export function LibraryWiki({ initialSlug }: { initialSlug?: string } = {}) {
               Index
             </button>
 
-            {Object.keys(grouped)
-              .sort((a, b) => (a === '_root' ? -1 : b === '_root' ? 1 : a.localeCompare(b)))
-              .map((section) => (
-                <div key={section} className="library-sidebar-section">
-                  <div className="library-sidebar-section-label">
-                    {section === '_root' ? 'Root' : section}
-                  </div>
-                  {grouped[section]
-                    .filter((p) => p.slug !== '_master-index')
-                    .map((page) => (
-                      <button
-                        key={page.slug}
-                        onClick={() => loadPage(page.slug)}
-                        className={[
-                          'library-sidebar-link',
-                          selectedSlug === page.slug ? 'is-active' : '',
-                        ].join(' ').trim()}
-                        title={page.slug}
-                      >
-                        {page.title}
-                      </button>
-                    ))}
-                </div>
-              ))}
+            {handbookNav.map(({ section, pages: sectionPages }) => (
+              <div key={section} className="library-sidebar-section">
+                <div className="library-sidebar-section-label">{section}</div>
+                {sectionPages.map((page) => (
+                  <button
+                    key={page.slug}
+                    onClick={() => loadPage(page.slug)}
+                    className={[
+                      'library-sidebar-link',
+                      selectedSlug === page.slug ? 'is-active' : '',
+                    ].join(' ').trim()}
+                    title={page.slug}
+                  >
+                    {page.title}
+                  </button>
+                ))}
+              </div>
+            ))}
           </>
         )}
       </aside>
