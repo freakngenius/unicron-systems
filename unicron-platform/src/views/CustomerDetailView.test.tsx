@@ -48,7 +48,7 @@ describe('CustomerDetailView', () => {
   it('Open Pathfinder link points at the org-scoped Pathfinder URL', async () => {
     render(<CustomerDetailView org={ZEDCOR} onBack={() => {}} />);
     const link = screen.getByTestId('customer-detail-open-pathfinder') as HTMLAnchorElement;
-    expect(link.href).toContain('unicron.systems/pathfinder/?org=zedcor');
+    expect(link.href).toContain('unicron.systems/pathfinder/zedcor');
     expect(link.target).toBe('_blank');
   });
 });
