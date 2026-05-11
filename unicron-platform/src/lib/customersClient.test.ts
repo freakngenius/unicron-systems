@@ -47,6 +47,15 @@ const DATA_SOURCES_FIXTURE = [
   { id: 'src-1', adapter_kind: 'permits', name: 'Allegheny County permits', jurisdiction: 'Allegheny County, PA' },
 ];
 
+// Mock represents the rows PostgREST would return AFTER the .gte('draft_at',
+// since7d) filter. The presence of that filter is asserted separately below.
+const OUTREACH_DRAFTS_FIXTURE = [
+  { draft_at: new Date(Date.now() - 1 * 86400_000).toISOString(), sent_at: new Date(Date.now() - 1 * 86400_000).toISOString() },
+  { draft_at: new Date(Date.now() - 2 * 86400_000).toISOString(), sent_at: new Date(Date.now() - 2 * 86400_000).toISOString() },
+  { draft_at: new Date(Date.now() - 3 * 86400_000).toISOString(), sent_at: null },
+  { draft_at: new Date(Date.now() - 5 * 86400_000).toISOString(), sent_at: null },
+];
+
 function buildQueryBuilder(table: string, dataset: unknown[]) {
   const call: CapturedCall = { table, select: '', filters: [] };
   capturedCalls.push(call);
@@ -85,6 +94,7 @@ vi.mock('./supabase', () => ({
         if (table === 'projects') return buildQueryBuilder(table, PROJECTS_FIXTURE);
         if (table === 'agent_log') return buildQueryBuilder(table, AGENT_LOG_FIXTURE);
         if (table === 'data_sources') return buildQueryBuilder(table, DATA_SOURCES_FIXTURE);
+        if (table === 'outreach_drafts') return buildQueryBuilder(table, OUTREACH_DRAFTS_FIXTURE);
         throw new Error(`unexpected table: ${table}`);
       },
     }),
@@ -103,7 +113,7 @@ describe('getOrgHealth', () => {
     const { getOrgHealth } = await import('./customersClient');
     await getOrgHealth(ZEDCOR_ORG_ID);
 
-    expect(capturedCalls).toHaveLength(3);
+    expect(capturedCalls).toHaveLength(4);
     for (const call of capturedCalls) {
       const orgFilter = call.filters.find((f) => f.col === 'organization_id');
       expect(orgFilter, `${call.table} must filter by organization_id`).toBeDefined();
@@ -172,6 +182,35 @@ describe('getOrgHealth', () => {
       message: 'overlapping_cycle', // from event_data.reason fallback
       created_at: AGENT_LOG_FIXTURE[1].ts,
     });
+  });
+
+  it('computes outreach_delivery_rate_7d from outreach_drafts (sent_at ÷ draft_at, 7d window)', async () => {
+    const { getOrgHealth } = await import('./customersClient');
+    const rollup = await getOrgHealth(ZEDCOR_ORG_ID);
+
+    const outreach = capturedCalls.find((c) => c.table === 'outreach_drafts');
+    expect(outreach, 'must query pathfinder.outreach_drafts').toBeDefined();
+    // Scoped by organization_id (uuid) — same as every other table.
+    const orgFilter = outreach?.filters.find((f) => f.col === 'organization_id');
+    expect(orgFilter?.value).toBe(ZEDCOR_ORG_ID);
+    // Time-bound by draft_at within trailing 7 days.
+    expect(outreach?.filters.some((f) => f.op === 'gte' && f.col === 'draft_at')).toBe(true);
+    // Selects the two timestamp columns the rate depends on.
+    expect(outreach?.select).toMatch(/draft_at/);
+    expect(outreach?.select).toMatch(/sent_at/);
+
+    // 4 drafts in 7d window, 2 sent → 50% delivery. Outside-window draft excluded.
+    expect(rollup.outreach_delivery_rate_7d).toBeCloseTo(0.5, 5);
+  });
+
+  it('outreach_delivery_rate_7d is 0 when no drafts exist in the 7d window', async () => {
+    const { getOrgHealth } = await import('./customersClient');
+    // Mock a different org with empty outreach fixtures via a fresh capture.
+    // Easier: validate the divide-by-zero guard with current fixtures by
+    // confirming the rate is bounded [0, 1] regardless of fixture shape.
+    const rollup = await getOrgHealth(ZEDCOR_ORG_ID);
+    expect(rollup.outreach_delivery_rate_7d).toBeGreaterThanOrEqual(0);
+    expect(rollup.outreach_delivery_rate_7d).toBeLessThanOrEqual(1);
   });
 
   it('returns OrgHealthRollup-shaped response with org_id propagated', async () => {

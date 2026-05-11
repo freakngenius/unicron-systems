@@ -138,7 +138,7 @@ export async function getOrgHealth(orgId: string): Promise<OrgHealthRollup> {
   const since30d = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
   const since7d = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
-  const [leadsRes, errorsRes, sourcesRes] = await Promise.all([
+  const [leadsRes, errorsRes, sourcesRes, outreachRes] = await Promise.all([
     supabase
       .schema('pathfinder')
       .from('projects')
@@ -159,11 +159,21 @@ export async function getOrgHealth(orgId: string): Promise<OrgHealthRollup> {
       .select('id, adapter_kind, name, jurisdiction')
       .eq('organization_id', orgId)
       .eq('enabled', true),
+    // Outreach delivery: sent_at NOT NULL ÷ total drafted within 7d. Use
+    // timestamps (not sent_status enum) so the rate stays correct even if
+    // new sent_status values land later.
+    supabase
+      .schema('pathfinder')
+      .from('outreach_drafts')
+      .select('draft_at, sent_at')
+      .eq('organization_id', orgId)
+      .gte('draft_at', since7d),
   ]);
 
   if (leadsRes.error) throw leadsRes.error;
   if (errorsRes.error) throw errorsRes.error;
   if (sourcesRes.error) throw sourcesRes.error;
+  if (outreachRes.error) throw outreachRes.error;
 
   const leads = (leadsRes.data ?? []) as { created_at: string; score: number | null }[];
   const errorsRaw = (errorsRes.data ?? []) as {
@@ -177,6 +187,10 @@ export async function getOrgHealth(orgId: string): Promise<OrgHealthRollup> {
     adapter_kind: string;
     name: string;
     jurisdiction: string | null;
+  }[];
+  const outreachRaw = (outreachRes.data ?? []) as {
+    draft_at: string;
+    sent_at: string | null;
   }[];
 
   // agent_log → recent_errors: lift message from event_data jsonb, fall
@@ -209,15 +223,20 @@ export async function getOrgHealth(orgId: string): Promise<OrgHealthRollup> {
   const high_score_rate_7d =
     lead_volume_7d_total > 0 ? high_score_7d / lead_volume_7d_total : 0;
 
+  // Outreach delivery rate over the trailing 7 days: count drafts whose
+  // sent_at is non-null ÷ total drafts in the window. Returns 0 on an empty
+  // window so the dashboard never divides by zero.
+  const drafted_7d = outreachRaw.length;
+  const sent_7d = outreachRaw.filter((o) => o.sent_at !== null).length;
+  const outreach_delivery_rate_7d = drafted_7d > 0 ? sent_7d / drafted_7d : 0;
+
   return {
     org_id: orgId,
     lead_volume_30d,
     lead_volume_7d_total,
     lead_volume_30d_total: leads.length,
     high_score_rate_7d,
-    // Outreach delivery requires a separate query against outreach_drafts;
-    // dashboard guards against null/zero. Wired up in a follow-up slice.
-    outreach_delivery_rate_7d: 0,
+    outreach_delivery_rate_7d,
     error_volume_30d,
     error_total_7d,
     error_rate_7d: lead_volume_7d_total > 0 ? error_total_7d / lead_volume_7d_total : 0,
