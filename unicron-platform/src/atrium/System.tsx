@@ -11,6 +11,7 @@ import AuditLogComponent from './system/AuditLog';
 import DecayHeatmapComponent from './system/DecayHeatmap';
 import ScheduledJobsComponent from './system/ScheduledJobs';
 import VoiceTabComponent from './system/VoiceTab';
+import MemorySearch from './system/MemorySearch';
 import { AtriumIcon, type AtriumIconName } from './icons';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -96,18 +97,7 @@ export function System() {
         {active === 'Services'       && <ServicesHealth />}
         {active === 'Voice'          && <VoiceTabComponent />}
         {active === 'Decay'          && <DecayHeatmapComponent />}
-        {/* Pass 2 R7: MemorySearch (MEMORY_RESULTS hardcoded array) CUT. */}
-        {active === 'Memory'         && (
-          <div className="bg-bg-card border border-border-default rounded-xl px-6 py-12 text-center">
-            <div className="text-[14px] text-text-primary font-semibold mb-1.5" style={{ fontFamily: 'var(--font-display)' }}>
-              Memory search needs a real semantic backend
-            </div>
-            <div className="text-[12px] text-text-muted max-w-md mx-auto leading-relaxed">
-              Pass 2 cut the hard-coded result list. Wire a semantic search RPC over the vault
-              embeddings + ledger to return here.
-            </div>
-          </div>
-        )}
+        {active === 'Memory'         && <MemorySearch />}
         {active === 'Scheduled Jobs' && <ScheduledJobsComponent />}
         {active === 'Audit Log'      && <AuditLogComponent />}
         {/* Pass 2 R7: ContinuityTimeline (CONTINUITY_EVENTS hardcoded array) CUT. */}
