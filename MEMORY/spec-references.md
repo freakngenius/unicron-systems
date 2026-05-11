@@ -883,3 +883,23 @@ Operator setup: `MEMORY/operator-todos/2026-05-03-teams-user-setup.md` — Micro
 **Implements:** SPEC - Phase 2C Dynamic Agent Dispatch.md §"Ranker" — org-aware dispatch added at cycle start (Zedcor slug lookup) + per-project loop top (route by project.organization_id). Zedcor projects continue through the existing kernel verbatim; non-Zedcor route to `scoreGenericProject`. Generic path writes a deterministic rationale documenting per-feature components.
 **Last verified against spec:** 2026-05-11.
 **Drift:** Sonnet-driven org-flavored rationale + outreach_hook (per `architecture.outreach` / `architecture.branding`) deferred to a follow-up slice. Slice 2's deterministic rationale is acceptable because production has 0 non-Zedcor projects today (Realberry persisted but no ingestion yet).
+
+#### Pathfinder/lib/inngest/functions/org-created.ts
+**Implements:** SPEC - Phase 2E Onboarding Completion Loop.md §"Flow" — handles `pathfinder/org.created` (emitted by POST /api/organizations after Architect Approve & Deploy) and flips `pathfinder.organizations.status` from `setting_up` to `first_run`. Idempotency guard skips the flip if status has already advanced.
+**Last verified against spec:** 2026-05-11.
+**Drift:** **scope deviation, documented.** The SPEC §"On-demand first run (Inngest)" envisioned this handler also iterating `architecture.sources` and invoking per-source adapter functions. That depends on Phase 2C slice 6 (source adapter registry) which hasn't shipped. Until then, the cron-based ranker/ingest pipeline (org-aware since Phase 2C slice 2) picks up the new org on its next cycle.
+
+#### Pathfinder/lib/inngest/functions/check-ready-to-view-cron.ts
+**Implements:** SPEC - Phase 2E Onboarding Completion Loop.md §"Threshold check". Periodic cron (every 5 min UTC) walks orgs in `first_run`/`ranking` state, counts verified leads, and transitions to `ready_to_view` (≥3 verified) or `awaiting_threshold` (<3 verified). Emits `pathfinder/org.ranking_complete` per transition for observability sinks.
+**Last verified against spec:** 2026-05-11.
+**Drift:** **minor, justified.** SPEC sketches `checkReadyToViewFunction` as event-triggered by `org.ranking-complete`. Slice 2 uses cron-driven polling instead because the ranker is a Vercel cron that doesn't emit per-org completion hooks; cron-driven polling keeps the state machine ticking without an additional event hook. Status semantics + threshold values match the spec exactly.
+
+#### Pathfinder/lib/inngest/events.ts (slice 2 additions)
+**Implements:** SPEC - Phase 2E Onboarding Completion Loop.md §"Flow" event contracts — adds `pathfinder/org.created` (POST → orgCreated handler) and `pathfinder/org.ranking_complete` (threshold cron → observability sinks).
+**Last verified against spec:** 2026-05-11.
+**Drift:** none — append-only additions.
+
+#### Pathfinder/app/api/organizations/route.ts (slice 2 emit)
+**Implements:** SPEC - Phase 2E Onboarding Completion Loop.md §"Flow" first step — POST /api/organizations now emits `pathfinder/org.created` after successful insert. Best-effort: a transient Inngest failure does not roll back the persisted row; the threshold cron reconciles state within 5 min.
+**Last verified against spec:** 2026-05-11.
+**Drift:** none.
