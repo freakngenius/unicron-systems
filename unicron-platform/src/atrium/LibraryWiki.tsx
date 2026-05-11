@@ -325,7 +325,7 @@ export function LibraryWiki({ initialSlug }: { initialSlug?: string } = {}) {
                   <button
                     onClick={handleSave}
                     disabled={saving}
-                    className="mono text-[10px] uppercase tracking-[0.12em] px-3 py-1.5 rounded border border-[rgba(255,107,43,0.4)] text-[#FF6B2B] hover:border-[#FF6B2B] transition-colors disabled:opacity-40"
+                    className="mono text-[10px] uppercase tracking-[0.12em] px-3 py-1.5 rounded border border-[rgba(232,118,58,0.4)] text-[#E8763A] hover:border-[#E8763A] transition-colors disabled:opacity-40"
                   >
                     {saving ? 'Saving…' : 'Save'}
                   </button>
@@ -403,7 +403,7 @@ export function LibraryWiki({ initialSlug }: { initialSlug?: string } = {}) {
       {/* Inline styles for markdown rendering */}
       <style>{`
         .wiki-content wikilink {
-          color: #FF6B2B;
+          color: #E8763A;
           cursor: pointer;
           text-decoration: underline;
           text-underline-offset: 2px;
@@ -418,7 +418,7 @@ export function LibraryWiki({ initialSlug }: { initialSlug?: string } = {}) {
         .wiki-content .md-ul li { font-size: 0.75rem; color: rgba(229,229,231,0.75); margin: 0.15rem 0; font-family: 'JetBrains Mono', monospace; }
         .wiki-content .code-block { background: #0D0D0F; border: 1px solid #1F1F23; border-radius: 4px; padding: 0.75rem; margin: 0.5rem 0; overflow-x: auto; }
         .wiki-content .code-block code { font-size: 0.7rem; color: rgba(229,229,231,0.8); font-family: 'JetBrains Mono', monospace; white-space: pre; }
-        .wiki-content .inline-code { background: #1F1F23; border-radius: 3px; padding: 0 0.25rem; font-size: 0.7rem; color: #FF6B2B; font-family: 'JetBrains Mono', monospace; }
+        .wiki-content .inline-code { background: #1F1F23; border-radius: 3px; padding: 0 0.25rem; font-size: 0.7rem; color: #E8763A; font-family: 'JetBrains Mono', monospace; }
         .wiki-content .md-link { color: rgba(229,229,231,0.6); text-decoration: underline; text-underline-offset: 2px; font-size: 0.75rem; }
         .wiki-content .md-link:hover { color: #E5E5E7; }
         .wiki-content .hr-rule { border: none; border-top: 1px solid #1F1F23; margin: 0.75rem 0; }

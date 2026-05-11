@@ -87,7 +87,7 @@ export function LibraryRepo({ onNavigateToWiki }: { onNavigateToWiki?: (slug: st
             className={[
               'mono text-[9px] uppercase tracking-[0.14em] px-2 py-1 rounded-full border transition-colors',
               activeTags.includes(tag)
-                ? 'border-[#FF6B2B] text-[#FF6B2B] bg-[rgba(255,107,43,0.08)]'
+                ? 'border-[#E8763A] text-[#E8763A] bg-[rgba(232,118,58,0.08)]'
                 : 'border-[#1F1F23] text-text-secondary hover:border-[rgba(229,229,231,0.2)] hover:text-text-primary',
             ].join(' ')}
           >

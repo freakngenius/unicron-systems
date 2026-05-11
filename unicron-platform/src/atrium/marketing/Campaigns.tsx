@@ -223,7 +223,7 @@ function CreateCampaignForm({ onSuccess, onCancel }: { onSuccess: () => void; on
           <button
             type="submit"
             disabled={saving || !form.name.trim()}
-            className="w-full mono text-[11px] uppercase tracking-[0.12em] py-2.5 bg-accent-orange text-white rounded-lg hover:bg-[#e55a1a] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            className="w-full mono text-[11px] uppercase tracking-[0.12em] py-2.5 bg-accent-orange text-white rounded-lg hover:bg-[#D4652E] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {saving ? '…' : 'Create Campaign'}
           </button>
@@ -299,7 +299,7 @@ export function Campaigns() {
         </span>
         <button
           onClick={() => setShowForm(true)}
-          className="mono text-[10px] uppercase tracking-[0.12em] px-3 py-1.5 bg-accent-orange text-white rounded-lg hover:bg-[#e55a1a] transition-colors"
+          className="mono text-[10px] uppercase tracking-[0.12em] px-3 py-1.5 bg-accent-orange text-white rounded-lg hover:bg-[#D4652E] transition-colors"
         >
           + New Campaign
         </button>
@@ -316,7 +316,7 @@ export function Campaigns() {
           </div>
           <button
             onClick={() => setShowForm(true)}
-            className="mono text-[10px] uppercase tracking-[0.12em] px-4 py-2 bg-accent-orange text-white rounded-lg hover:bg-[#e55a1a] transition-colors"
+            className="mono text-[10px] uppercase tracking-[0.12em] px-4 py-2 bg-accent-orange text-white rounded-lg hover:bg-[#D4652E] transition-colors"
           >
             Create Campaign
           </button>
