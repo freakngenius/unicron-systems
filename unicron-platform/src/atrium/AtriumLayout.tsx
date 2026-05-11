@@ -349,7 +349,7 @@ export function AtriumLayout({ activeTab, onTabChange, children, onOpenSettings 
               <button
                 key={tab.id}
                 onClick={() => onTabChange(tab.id)}
-                className="relative group flex flex-col items-center gap-1 w-full py-2 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-white/20"
+                className="relative group flex flex-col items-center gap-1 w-full py-2 rounded-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-white/20"
                 style={{ color: active ? RAIL_TEXT_ACTIVE : RAIL_TEXT }}
                 onMouseEnter={e => { if (!active) (e.currentTarget as HTMLButtonElement).style.background = RAIL_HOVER; }}
                 onMouseLeave={e => { if (!active) (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; }}
