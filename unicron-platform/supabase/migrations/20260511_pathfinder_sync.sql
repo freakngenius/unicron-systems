@@ -68,4 +68,8 @@ AS $$
   LIMIT p_limit;
 $$;
 
-GRANT EXECUTE ON FUNCTION public.ns_pathfinder_sync_latest(int) TO authenticated, anon, service_role;
+-- Pathfinder rollup contains lead/customer counts; restrict to authenticated
+-- callers (Atrium operators) + service_role. Anon must NOT see this.
+-- Postgres grants EXECUTE to PUBLIC on function create; revoke that first.
+REVOKE EXECUTE ON FUNCTION public.ns_pathfinder_sync_latest(int) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.ns_pathfinder_sync_latest(int) TO authenticated, service_role;

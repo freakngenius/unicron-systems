@@ -77,33 +77,40 @@ export async function pathfinderSync(): Promise<SyncSummary> {
   const metrics: Array<{ metric_key: string; metric_value: Record<string, unknown> }> = [];
 
   try {
-    const { count: leadsTotal } = await pathfinder
+    // supabase-js returns { error } instead of throwing — explicitly check
+    // each query so a partial failure does not get reported as ok.
+    const leadsRes = await pathfinder
       .from('projects')
       .select('*', { head: true, count: 'exact' });
-    metrics.push({ metric_key: 'leads_total', metric_value: { count: leadsTotal ?? 0 } });
+    if (leadsRes.error) throw new Error(`projects.count: ${leadsRes.error.message}`);
+    metrics.push({ metric_key: 'leads_total', metric_value: { count: leadsRes.count ?? 0 } });
 
-    const { count: customersTotal } = await pathfinder
+    const customersRes = await pathfinder
       .from('customers')
       .select('*', { head: true, count: 'exact' });
-    metrics.push({ metric_key: 'customers_total', metric_value: { count: customersTotal ?? 0 } });
+    if (customersRes.error) throw new Error(`customers.count: ${customersRes.error.message}`);
+    metrics.push({ metric_key: 'customers_total', metric_value: { count: customersRes.count ?? 0 } });
 
-    const { count: agentRuns24h } = await pathfinder
+    const agentRunsRes = await pathfinder
       .from('agent_runs')
       .select('*', { head: true, count: 'exact' })
       .gte('started_at', since24h);
+    if (agentRunsRes.error) throw new Error(`agent_runs.count: ${agentRunsRes.error.message}`);
     metrics.push({
       metric_key: 'agent_runs_24h',
-      metric_value: { count: agentRuns24h ?? 0, window: '24h' },
+      metric_value: { count: agentRunsRes.count ?? 0, window: '24h' },
     });
 
-    const { data: topScored } = await pathfinder
+    const topScoredRes = await pathfinder
       .from('projects')
       .select('id, score')
       .order('score', { ascending: false, nullsFirst: false })
       .limit(1);
+    if (topScoredRes.error) throw new Error(`projects.top: ${topScoredRes.error.message}`);
+    const top = topScoredRes.data?.[0] as { id: string; score: number | null } | undefined;
     metrics.push({
       metric_key: 'leads_top_score',
-      metric_value: { score: topScored?.[0]?.score ?? null, project_id: topScored?.[0]?.id ?? null },
+      metric_value: { score: top?.score ?? null, project_id: top?.id ?? null },
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
