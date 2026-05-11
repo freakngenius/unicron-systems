@@ -12,15 +12,16 @@ import { Network } from './people/Network';
 import { Hiring } from './people/Hiring';
 import { useFilterSidebarCollapsed } from './useFilterSidebarCollapsed';
 import { FilterSidebarToggle, FilterSidebarExpandStrip } from './components/FilterSidebarToggle';
+import { AtriumIcon, type AtriumIconName } from './icons';
 
-const PEOPLE_TABS = [
-  { id: 'customers', label: 'Customers' },
-  { id: 'team',      label: 'Team' },
-  { id: 'network',   label: 'Network' },
-  { id: 'hiring',    label: 'Hiring' },
-] as const;
+type PeopleTab = 'customers' | 'team' | 'network' | 'hiring';
 
-type PeopleTab = (typeof PEOPLE_TABS)[number]['id'];
+const PEOPLE_TABS: { id: PeopleTab; label: string; icon: AtriumIconName }[] = [
+  { id: 'customers', label: 'Customers', icon: 'Heart'  },
+  { id: 'team',      label: 'Team',      icon: 'People' },
+  { id: 'network',   label: 'Network',   icon: 'Globe'  },
+  { id: 'hiring',    label: 'Hiring',    icon: 'Tag'    },
+];
 
 interface BoardCounts {
   customers: number | null;
@@ -222,16 +223,18 @@ export function People() {
       <div className="flex gap-1 px-7 border-b border-border-default">
         {PEOPLE_TABS.map((tab) => {
           const isActive = active === tab.id;
+          const Icon = AtriumIcon[tab.icon];
           return (
             <button
               key={tab.id}
               onClick={() => setActive(tab.id)}
-              className={`px-3.5 py-3 -mb-px text-[13px] font-medium border-b-2 transition-colors ${
+              className={`px-3.5 py-3 -mb-px text-[13px] font-medium border-b-2 transition-colors inline-flex items-center gap-1.5 ${
                 isActive ? 'border-[#6081BE] text-[#6081BE]' : 'border-transparent text-text-secondary hover:text-text-primary'
               }`}
               role="tab"
               aria-selected={isActive}
             >
+              <Icon size={14} />
               {tab.label}
             </button>
           );

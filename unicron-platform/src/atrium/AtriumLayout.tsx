@@ -327,6 +327,16 @@ export function AtriumLayout({ activeTab, onTabChange, children, onOpenSettings 
       </a>
 
       {/* Left rail — dark navy, 68px, hidden on mobile */}
+      <style>{`
+        /* Pure CSS hover/active for the rail. State exclusion via [data-active].
+           Avoids React-state-based hover residue: clicking a tab flips its
+           data-active to "true", the hover rule excludes data-active="true",
+           and any prior hover background drops on next paint. */
+        .atrium-rail-tab { background: transparent; transition: background 120ms ease; }
+        .atrium-rail-tab:hover:not([data-active="true"]) { background: ${RAIL_HOVER}; }
+        .atrium-rail-tab:focus { outline: none; }
+        .atrium-rail-tab:focus-visible { box-shadow: 0 0 0 2px rgba(255,255,255,0.20); }
+      `}</style>
       <nav
         className="hidden md:flex flex-col items-center flex-shrink-0 py-3"
         style={{ width: 68, background: RAIL }}
@@ -348,10 +358,9 @@ export function AtriumLayout({ activeTab, onTabChange, children, onOpenSettings 
               <button
                 key={tab.id}
                 onClick={() => onTabChange(tab.id)}
-                className="relative group flex flex-col items-center gap-1 w-full py-2 rounded-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-white/20"
+                className="atrium-rail-tab relative group flex flex-col items-center gap-1 w-full py-2 rounded-lg"
                 style={{ color: active ? RAIL_TEXT_ACTIVE : RAIL_TEXT }}
-                onMouseEnter={e => { if (!active) (e.currentTarget as HTMLButtonElement).style.background = RAIL_HOVER; }}
-                onMouseLeave={e => { if (!active) (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; }}
+                data-active={active ? 'true' : 'false'}
                 aria-label={tab.label}
                 aria-current={active ? 'page' : undefined}
               >

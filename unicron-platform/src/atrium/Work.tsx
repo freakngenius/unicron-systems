@@ -15,17 +15,20 @@ import { KanbanEmbeds } from './work/KanbanEmbeds';
 import { SprintsView } from './work/SprintsView';
 import { useFilterSidebarCollapsed } from './useFilterSidebarCollapsed';
 import { FilterSidebarToggle, FilterSidebarExpandStrip } from './components/FilterSidebarToggle';
+import { AtriumIcon, type AtriumIconName } from './icons';
 
-const WORK_TABS = [
-  { id: 'items',     label: 'Items' },
-  { id: 'kanban',    label: 'Kanban' },
-  { id: 'calls',     label: 'Calls' },
-  { id: 'decisions', label: 'Decisions' },
-  { id: 'sprints',   label: 'Sprints' },
-  { id: 'refusals',  label: 'Refusals' },
-] as const;
+type WorkTab = 'items' | 'kanban' | 'calls' | 'decisions' | 'sprints' | 'refusals';
 
-type WorkTab = (typeof WORK_TABS)[number]['id'];
+// v3.jsx:994-998 — Items→Inbox, Kanban→Layers, Calls→Phone, Decisions→Flag,
+// Refusals→Shield. Sprints not in v3; use Bolt as cycle/momentum analog.
+const WORK_TABS: { id: WorkTab; label: string; icon: AtriumIconName }[] = [
+  { id: 'items',     label: 'Items',     icon: 'Inbox'  },
+  { id: 'kanban',    label: 'Kanban',    icon: 'Layers' },
+  { id: 'calls',     label: 'Calls',     icon: 'Phone'  },
+  { id: 'decisions', label: 'Decisions', icon: 'Flag'   },
+  { id: 'sprints',   label: 'Sprints',   icon: 'Bolt'   },
+  { id: 'refusals',  label: 'Refusals',  icon: 'Shield' },
+];
 
 // ─── Action-item counts (drives metric cards) ─────────────────────────────────
 
@@ -359,16 +362,18 @@ export function Work() {
       <div className="flex gap-1 px-7 border-b border-border-default overflow-x-auto">
         {WORK_TABS.map((tab) => {
           const isActive = active === tab.id;
+          const Icon = AtriumIcon[tab.icon];
           return (
             <button
               key={tab.id}
               onClick={() => setActive(tab.id)}
-              className={`px-3.5 py-3 -mb-px text-[13px] font-medium border-b-2 transition-colors whitespace-nowrap ${
+              className={`px-3.5 py-3 -mb-px text-[13px] font-medium border-b-2 transition-colors whitespace-nowrap inline-flex items-center gap-1.5 ${
                 isActive ? 'border-[#6081BE] text-[#6081BE]' : 'border-transparent text-text-secondary hover:text-text-primary'
               }`}
               role="tab"
               aria-selected={isActive}
             >
+              <Icon size={14} />
               {tab.label}
             </button>
           );

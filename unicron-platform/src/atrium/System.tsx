@@ -11,14 +11,28 @@ import AuditLogComponent from './system/AuditLog';
 import DecayHeatmapComponent from './system/DecayHeatmap';
 import ScheduledJobsComponent from './system/ScheduledJobs';
 import VoiceTabComponent from './system/VoiceTab';
+import { AtriumIcon, type AtriumIconName } from './icons';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const SYSTEM_TABS = [
-  'Agents', 'Taboos', 'Refusal Log', 'Services',
-  'Voice', 'Decay', 'Memory', 'Scheduled Jobs', 'Audit Log', 'Continuity',
-] as const;
-type SystemTab = (typeof SYSTEM_TABS)[number];
+type SystemTab =
+  | 'Agents' | 'Taboos' | 'Refusal Log' | 'Services'
+  | 'Voice'  | 'Decay'  | 'Memory'      | 'Scheduled Jobs'
+  | 'Audit Log' | 'Continuity';
+
+// v3-system.jsx:159-168 — sub-tab icons per design source.
+const SYSTEM_TABS: { id: SystemTab; icon: AtriumIconName }[] = [
+  { id: 'Agents',         icon: 'Brain'   },
+  { id: 'Taboos',         icon: 'Lock'    },
+  { id: 'Refusal Log',    icon: 'Lock'    },
+  { id: 'Services',       icon: 'Compass' },
+  { id: 'Voice',          icon: 'Phone'   },
+  { id: 'Decay',          icon: 'Pulse'   },
+  { id: 'Memory',         icon: 'Search'  },
+  { id: 'Scheduled Jobs', icon: 'Now'     },
+  { id: 'Audit Log',      icon: 'Doc'     },
+  { id: 'Continuity',     icon: 'Book'    },
+];
 
 // Pass 2 R7: MEMORY_RESULTS + CONTINUITY_EVENTS hard-coded arrays CUT.
 // MemorySearch + ContinuityTimeline rendered as empty states with explicit
@@ -48,8 +62,9 @@ export function System() {
         aria-label="System sub-tabs"
         role="tablist"
       >
-        {SYSTEM_TABS.map((tab) => {
+        {SYSTEM_TABS.map(({ id: tab, icon }) => {
           const isActive = active === tab;
+          const Icon = AtriumIcon[icon];
           return (
             <button
               key={tab}
@@ -57,10 +72,11 @@ export function System() {
               aria-selected={isActive}
               aria-controls={`system-panel-${tab.replace(/\s+/g, '-').toLowerCase()}`}
               onClick={() => setActive(tab)}
-              className={`px-3.5 py-3 -mb-px text-[13px] font-medium border-b-2 transition-colors whitespace-nowrap ${
+              className={`px-3.5 py-3 -mb-px text-[13px] font-medium border-b-2 transition-colors whitespace-nowrap inline-flex items-center gap-1.5 ${
                 isActive ? 'border-[#6081BE] text-[#6081BE]' : 'border-transparent text-text-secondary hover:text-text-primary'
               }`}
             >
+              <Icon size={14} />
               {tab}
             </button>
           );
