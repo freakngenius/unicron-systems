@@ -375,7 +375,14 @@ export function Skills() {
     : null;
 
   return (
-    <div className="skills-root grid gap-5" style={{ gridTemplateColumns: 'minmax(0,1fr) 300px', alignItems: 'start' }}>
+    <div className="w-full">
+      <div className="px-7 pt-6 pb-3">
+        <div className="text-[11.5px] text-text-muted mb-1.5">Operator commands routed through agents</div>
+        <h1 className="text-[36px] font-semibold text-text-primary leading-none tracking-tight" style={{ fontFamily: 'var(--font-display)', letterSpacing: -0.7 }}>
+          Skills
+        </h1>
+      </div>
+    <div className="skills-root grid gap-5 px-7 pb-5" style={{ gridTemplateColumns: 'minmax(0,1fr) 300px', alignItems: 'start' }}>
       <style>{`
         @media (max-width: 960px) {
           .skills-root { grid-template-columns: 1fr !important; }
@@ -450,8 +457,8 @@ export function Skills() {
               aria-keyshortcuts="Meta+Enter"
               className="mono text-[12px] font-semibold px-4 py-1.5 rounded-lg text-white transition-all flex items-center gap-1.5 focus:outline-none focus:ring-2 focus:ring-accent-gold"
               style={{
-                background: prompt.trim() && !running ? '#E8763A' : 'var(--color-border-default, #2a2f3d)',
-                boxShadow: prompt.trim() && !running ? '0 2px 8px rgba(232,118,58,0.35)' : 'none',
+                background: prompt.trim() && !running ? '#6081BE' : 'var(--color-border-default, #D8DCE5)',
+                boxShadow: prompt.trim() && !running ? '0 2px 8px rgba(96,129,190,0.30)' : 'none',
                 cursor: prompt.trim() && !running ? 'pointer' : 'not-allowed',
               }}
             >
@@ -512,6 +519,7 @@ export function Skills() {
         <BudgetForecast />
         <RecentRuns />
       </aside>
+    </div>
     </div>
   );
 }
