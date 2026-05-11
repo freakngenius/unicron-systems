@@ -138,7 +138,7 @@ export async function getOrgHealth(orgId: string): Promise<OrgHealthRollup> {
   const since30d = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
   const since7d = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
-  const [leadsRes, errorsRes, sourcesRes, outreachRes] = await Promise.all([
+  const [leadsRes, errorsRes, sourcesRes, draftedRes, sentRes] = await Promise.all([
     supabase
       .schema('pathfinder')
       .from('projects')
@@ -159,21 +159,37 @@ export async function getOrgHealth(orgId: string): Promise<OrgHealthRollup> {
       .select('id, adapter_kind, name, jurisdiction')
       .eq('organization_id', orgId)
       .eq('enabled', true),
-    // Outreach delivery: sent_at NOT NULL ÷ total drafted within 7d. Use
-    // timestamps (not sent_status enum) so the rate stays correct even if
-    // new sent_status values land later.
+    // Outreach delivery denominator — drafts created in the 7d window
+    // scoped by organization_id (uuid). Reads pathfinder.outreach_drafts.
     supabase
       .schema('pathfinder')
       .from('outreach_drafts')
-      .select('draft_at, sent_at')
+      .select('id')
       .eq('organization_id', orgId)
       .gte('draft_at', since7d),
+    // Outreach delivery numerator — sends in the 7d window scoped to this
+    // org. pathfinder.outreach_edits is the canonical send log (written by
+    // the sendOutreach orchestrator in Pathfinder/app/api/leads/.../send).
+    // outreach_edits has no organization_id column, so we scope via the
+    // FK outreach_edits.outreach_draft_id → outreach_drafts.id and the
+    // !inner relationship hint, filtering on the parent's organization_id.
+    // NOTE: outreach_drafts.sent_at exists in the schema but is never
+    // populated by any code path today; outreach_edits.sent_at is the
+    // real timestamp for delivery accounting.
+    supabase
+      .schema('pathfinder')
+      .from('outreach_edits')
+      .select('sent_at, outreach_drafts!inner(organization_id)')
+      .eq('outreach_drafts.organization_id', orgId)
+      .not('sent_at', 'is', null)
+      .gte('sent_at', since7d),
   ]);
 
   if (leadsRes.error) throw leadsRes.error;
   if (errorsRes.error) throw errorsRes.error;
   if (sourcesRes.error) throw sourcesRes.error;
-  if (outreachRes.error) throw outreachRes.error;
+  if (draftedRes.error) throw draftedRes.error;
+  if (sentRes.error) throw sentRes.error;
 
   const leads = (leadsRes.data ?? []) as { created_at: string; score: number | null }[];
   const errorsRaw = (errorsRes.data ?? []) as {
@@ -188,10 +204,8 @@ export async function getOrgHealth(orgId: string): Promise<OrgHealthRollup> {
     name: string;
     jurisdiction: string | null;
   }[];
-  const outreachRaw = (outreachRes.data ?? []) as {
-    draft_at: string;
-    sent_at: string | null;
-  }[];
+  const draftedRaw = (draftedRes.data ?? []) as { id: number | string }[];
+  const sentRaw = (sentRes.data ?? []) as { sent_at: string }[];
 
   // agent_log → recent_errors: lift message from event_data jsonb, fall
   // back to event_type when the row is missing event_data (older error
@@ -223,12 +237,15 @@ export async function getOrgHealth(orgId: string): Promise<OrgHealthRollup> {
   const high_score_rate_7d =
     lead_volume_7d_total > 0 ? high_score_7d / lead_volume_7d_total : 0;
 
-  // Outreach delivery rate over the trailing 7 days: count drafts whose
-  // sent_at is non-null ÷ total drafts in the window. Returns 0 on an empty
-  // window so the dashboard never divides by zero.
-  const drafted_7d = outreachRaw.length;
-  const sent_7d = outreachRaw.filter((o) => o.sent_at !== null).length;
-  const outreach_delivery_rate_7d = drafted_7d > 0 ? sent_7d / drafted_7d : 0;
+  // Outreach delivery rate over the trailing 7 days: sends in window
+  // ÷ drafts in window, capped at 1.0. The numerator and denominator are
+  // independent counts (a send today can correspond to a draft from before
+  // the window), so the ratio can briefly exceed 1 without the cap.
+  // Returns 0 on an empty denominator to avoid divide-by-zero.
+  const drafted_7d = draftedRaw.length;
+  const sent_7d = sentRaw.length;
+  const outreach_delivery_rate_7d =
+    drafted_7d > 0 ? Math.min(1, sent_7d / drafted_7d) : 0;
 
   return {
     org_id: orgId,
