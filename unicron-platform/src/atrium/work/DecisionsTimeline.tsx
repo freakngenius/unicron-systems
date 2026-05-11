@@ -158,8 +158,8 @@ export function DecisionsTimeline() {
 
   if (error) {
     return (
-      <div className="bg-[#EF4444]/10 border border-[#EF4444]/30 rounded-xl px-5 py-4">
-        <div className="mono text-[12px] text-[#EF4444]">{error}</div>
+      <div className="bg-[#DD6262]/10 border border-[#DD6262]/30 rounded-xl px-5 py-4">
+        <div className="mono text-[12px] text-[#DD6262]">{error}</div>
       </div>
     );
   }

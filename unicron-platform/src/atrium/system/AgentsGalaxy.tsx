@@ -45,9 +45,9 @@ const ARCHETYPE_COLORS: Record<string, { dot: string; label: string; border: str
     border: 'rgba(111,149,214,0.25)',
   },
   elder: {
-    dot: '#A855F7',
-    label: '#A855F7',
-    border: '#A855F740',
+    dot: '#8B7CD8',
+    label: '#8B7CD8',
+    border: '#8B7CD840',
   },
   taboo_keeper: {
     dot: '#DD6262',
