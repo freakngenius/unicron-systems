@@ -10,6 +10,8 @@ import { CustomersPipeline } from './people/CustomersPipeline';
 import { TeamMyDay } from './people/TeamMyDay';
 import { Network } from './people/Network';
 import { Hiring } from './people/Hiring';
+import { useFilterSidebarCollapsed } from './useFilterSidebarCollapsed';
+import { FilterSidebarToggle, FilterSidebarExpandStrip } from './components/FilterSidebarToggle';
 
 const PEOPLE_TABS = [
   { id: 'customers', label: 'Customers' },
@@ -195,6 +197,7 @@ export function People() {
   const [active, setActive] = useState<PeopleTab>('customers');
   const counts = useBoardCounts();
   const m = useCustomerMetrics();
+  const [collapsed, setCollapsed] = useFilterSidebarCollapsed();
 
   return (
     <div className="w-full">
@@ -236,16 +239,22 @@ export function People() {
       </div>
 
       {/* Body grid: filter sidebar + main column */}
-      <div className="px-7 py-5 grid gap-5" style={{ gridTemplateColumns: '240px minmax(0, 1fr)' }}>
+      <div className="px-7 py-5 grid gap-5" style={{ gridTemplateColumns: collapsed ? '32px minmax(0, 1fr)' : '240px minmax(0, 1fr)' }}>
         <style>{`
           @media (max-width: 1023px) { .people-filters { display: none !important; } .people-body { grid-template-columns: 1fr !important; } }
         `}</style>
 
-        {/* Filter sidebar */}
+        {collapsed ? (
+          <FilterSidebarExpandStrip onExpand={() => setCollapsed(false)} />
+        ) : (
+        /* Filter sidebar */
         <aside className="people-filters flex flex-col">
           <div className="flex items-center justify-between mb-2">
             <span className="text-[11.5px] uppercase tracking-[0.14em] text-text-muted font-semibold">Filters</span>
-            <button className="text-[11px] text-[#6081BE] font-medium">Reset</button>
+            <div className="flex items-center gap-3">
+              <button className="text-[11px] text-[#6081BE] font-medium">Reset</button>
+              <FilterSidebarToggle collapsed={collapsed} onToggle={() => setCollapsed(!collapsed)} />
+            </div>
           </div>
           <FilterGroup label="Board" count={4} defaultOpen>
             <FilterRow label="Customers" count={counts.customers} dot="#E8763A" />
@@ -273,6 +282,7 @@ export function People() {
           <FilterGroup label="Tags"><div className="text-[12px] text-text-muted py-1">No tags yet</div></FilterGroup>
           <FilterGroup label="Location"><div className="text-[12px] text-text-muted py-1">No locations yet</div></FilterGroup>
         </aside>
+        )}
 
         {/* Main column */}
         <div className="people-body flex flex-col gap-4 min-w-0">

@@ -13,6 +13,8 @@ import { CallsLog } from './work/CallsLog';
 import { DecisionsTimeline } from './work/DecisionsTimeline';
 import { KanbanEmbeds } from './work/KanbanEmbeds';
 import { SprintsView } from './work/SprintsView';
+import { useFilterSidebarCollapsed } from './useFilterSidebarCollapsed';
+import { FilterSidebarToggle, FilterSidebarExpandStrip } from './components/FilterSidebarToggle';
 
 const WORK_TABS = [
   { id: 'items',     label: 'Items' },
@@ -335,6 +337,7 @@ function AnalyticsPanels() {
 export function Work() {
   const [active, setActive] = useState<WorkTab>('items');
   const m = useItemMetrics();
+  const [collapsed, setCollapsed] = useFilterSidebarCollapsed();
 
   return (
     <div className="w-full">
@@ -372,13 +375,19 @@ export function Work() {
         })}
       </div>
 
-      <div className="px-7 py-5 grid gap-5" style={{ gridTemplateColumns: '240px minmax(0, 1fr)' }}>
+      <div className="px-7 py-5 grid gap-5" style={{ gridTemplateColumns: collapsed ? '32px minmax(0, 1fr)' : '240px minmax(0, 1fr)' }}>
         <style>{`@media (max-width: 1023px) { .work-filters { display: none !important; } .work-body { grid-template-columns: 1fr !important; } }`}</style>
 
+        {collapsed ? (
+          <FilterSidebarExpandStrip onExpand={() => setCollapsed(false)} />
+        ) : (
         <aside className="work-filters flex flex-col">
           <div className="flex items-center justify-between mb-2">
             <span className="text-[11.5px] uppercase tracking-[0.14em] text-text-muted font-semibold">Filters</span>
-            <button className="text-[11px] text-[#6081BE] font-medium">Reset</button>
+            <div className="flex items-center gap-3">
+              <button className="text-[11px] text-[#6081BE] font-medium">Reset</button>
+              <FilterSidebarToggle collapsed={collapsed} onToggle={() => setCollapsed(!collapsed)} />
+            </div>
           </div>
           <FilterGroup label="Timeframe" defaultOpen>
             <FilterRow label="Last 24h" />
@@ -408,6 +417,7 @@ export function Work() {
           </FilterGroup>
           <FilterGroup label="Tags"><div className="text-[12px] text-text-muted py-1">No tags yet</div></FilterGroup>
         </aside>
+        )}
 
         <div className="work-body flex flex-col gap-4 min-w-0">
           {active === 'items' && (
