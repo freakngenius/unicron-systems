@@ -125,7 +125,7 @@ function CategorySection({
           ))}
 
           {/* Category total */}
-          <div className="flex items-center justify-between px-4 py-2.5 border-t border-border-default bg-[#0D0D0F]">
+          <div className="flex items-center justify-between px-4 py-2.5 border-t border-border-default bg-bg-raised">
             <span className="mono text-[10px] uppercase tracking-[0.14em] text-text-muted">
               {cat.label} total
             </span>
