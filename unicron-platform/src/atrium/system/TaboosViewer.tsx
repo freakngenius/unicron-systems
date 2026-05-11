@@ -35,8 +35,8 @@ export default function TaboosViewer() {
 
   if (error) {
     return (
-      <div className="bg-[#DD6262]/10 border border-[#DD6262]/30 rounded-xl px-5 py-4">
-        <div className="mono text-[12px] text-[#DD6262]">{error}</div>
+      <div className="bg-[#E14B4B]/10 border border-[#E14B4B]/30 rounded-xl px-5 py-4">
+        <div className="mono text-[12px] text-[#E14B4B]">{error}</div>
         <div className="mono text-[10px] text-text-muted mt-1">
           Ensure GITHUB_VAULT_TOKEN is set in Vercel environment variables.
         </div>
@@ -51,8 +51,8 @@ export default function TaboosViewer() {
           {content}
         </pre>
       </div>
-      <div className="mt-4 px-4 py-3 bg-[#D9A23A]/10 border border-[#D9A23A]/20 rounded-xl">
-        <p className="mono text-[11px] text-[#D9A23A]">
+      <div className="mt-4 px-4 py-3 bg-[#C28A1F]/10 border border-[#C28A1F]/20 rounded-xl">
+        <p className="mono text-[11px] text-[#C28A1F]">
           Taboos are human-edited only. To propose an edit, open a PR against{' '}
           <span className="text-text-secondary">
             unicron-knowledge/wiki/memory/taboos.md

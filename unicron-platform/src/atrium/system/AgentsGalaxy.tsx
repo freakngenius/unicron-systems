@@ -40,8 +40,8 @@ const ARCHETYPE_COLORS: Record<string, { dot: string; label: string; border: str
     border: 'rgba(232,118,58,0.25)',
   },
   analyst: {
-    dot: '#6F95D6',
-    label: '#6F95D6',
+    dot: '#6081BE',
+    label: '#6081BE',
     border: 'rgba(111,149,214,0.25)',
   },
   elder: {
@@ -50,13 +50,13 @@ const ARCHETYPE_COLORS: Record<string, { dot: string; label: string; border: str
     border: '#8B7CD840',
   },
   taboo_keeper: {
-    dot: '#DD6262',
-    label: '#DD6262',
+    dot: '#E14B4B',
+    label: '#E14B4B',
     border: 'rgba(221,98,98,0.25)',
   },
   specialist: {
-    dot: '#4FB286',
-    label: '#4FB286',
+    dot: '#2E8E66',
+    label: '#2E8E66',
     border: 'rgba(79,178,134,0.25)',
   },
 };
@@ -295,8 +295,8 @@ export default function AgentsGalaxy() {
                 <span
                   className="w-2 h-2 rounded-full shrink-0"
                   style={{
-                    backgroundColor: agent.active ? '#4FB286' : '#6B7280',
-                    boxShadow: agent.active ? '0 0 4px #4FB28660' : 'none',
+                    backgroundColor: agent.active ? '#2E8E66' : '#6B7280',
+                    boxShadow: agent.active ? '0 0 4px #2E8E6660' : 'none',
                   }}
                 />
                 <span className="mono text-[12px] text-text-primary font-medium truncate">
@@ -320,7 +320,7 @@ export default function AgentsGalaxy() {
                       className="h-1 rounded-full transition-all"
                       style={{
                         width: `${Math.min(budgetPct, 100)}%`,
-                        backgroundColor: budgetPct > 80 ? '#DD6262' : 'var(--accent)',
+                        backgroundColor: budgetPct > 80 ? '#E14B4B' : 'var(--accent)',
                       }}
                     />
                   </div>
@@ -337,7 +337,7 @@ export default function AgentsGalaxy() {
           <div className="flex items-center gap-2 mb-1">
             <span
               className="w-2 h-2 rounded-full shrink-0"
-              style={{ backgroundColor: selected.active ? '#4FB286' : '#6B7280' }}
+              style={{ backgroundColor: selected.active ? '#2E8E66' : '#6B7280' }}
             />
             <h3 className="mono text-[14px] text-text-primary font-medium truncate">{selected.name}</h3>
           </div>

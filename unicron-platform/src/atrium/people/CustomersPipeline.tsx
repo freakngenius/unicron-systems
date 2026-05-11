@@ -41,8 +41,8 @@ const STAGE_COLORS: Record<Stage, string> = {
   Proposal:   'rgba(217,162,58,0.8)',
   Contract:   'rgba(79,178,134,0.8)',
   Onboarding: 'rgba(232,118,58,0.8)',
-  Active:     '#4FB286',
-  Churned:    '#DD6262',
+  Active:     '#2E8E66',
+  Churned:    '#E14B4B',
 };
 
 const STAGE_TONE: Record<Stage, string> = {

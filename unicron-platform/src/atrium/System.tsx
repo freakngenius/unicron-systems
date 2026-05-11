@@ -110,7 +110,7 @@ function MemorySearch() {
           ].map((n, i) => (
             <g key={i}>
               <line x1="160" y1="130" x2={n.x} y2={n.y} stroke="rgba(255,255,255,0.07)" strokeWidth="1"/>
-              <circle cx={n.x} cy={n.y} r="12" fill="#0A0C10" stroke="rgba(255,255,255,0.07)" strokeWidth="1"/>
+              <circle cx={n.x} cy={n.y} r="12" fill="#F6F7F9" stroke="rgba(255,255,255,0.07)" strokeWidth="1"/>
               <text x={n.x} y={n.y + (n.y < 130 ? -20 : 24)} textAnchor="middle" fontSize="9.5" fill="rgba(255,255,255,0.32)">{n.label}</text>
             </g>
           ))}

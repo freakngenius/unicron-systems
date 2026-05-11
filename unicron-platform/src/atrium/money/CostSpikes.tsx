@@ -54,7 +54,7 @@ function SpikeRow({
       {/* Indicator dot */}
       <span
         className="w-2.5 h-2.5 rounded-full shrink-0"
-        style={{ backgroundColor: spike.acknowledged ? 'rgba(255,255,255,0.07)' : isHigh ? '#DD6262' : '#D9A23A' }}
+        style={{ backgroundColor: spike.acknowledged ? 'rgba(255,255,255,0.07)' : isHigh ? '#E14B4B' : '#C28A1F' }}
       />
 
       {/* Body */}
@@ -65,7 +65,7 @@ function SpikeRow({
           </span>
           <span
             className="mono text-[11px] font-semibold"
-            style={{ color: spike.acknowledged ? 'var(--text-lo)' : isHigh ? '#DD6262' : '#D9A23A' }}
+            style={{ color: spike.acknowledged ? 'var(--text-lo)' : isHigh ? '#E14B4B' : '#C28A1F' }}
           >
             {spike.spike_ratio.toFixed(1)}x baseline
           </span>
@@ -86,7 +86,7 @@ function SpikeRow({
           </span>
           {' → '}
           <span
-            style={{ color: spike.acknowledged ? 'var(--text-md)' : isHigh ? '#DD6262' : '#D9A23A' }}
+            style={{ color: spike.acknowledged ? 'var(--text-md)' : isHigh ? '#E14B4B' : '#C28A1F' }}
           >
             ${spike.spike_amount.toLocaleString()}
           </span>
@@ -99,7 +99,7 @@ function SpikeRow({
         </div>
 
         {err && (
-          <div className="mono text-[10px] text-[#DD6262] mt-1">{err}</div>
+          <div className="mono text-[10px] text-[#E14B4B] mt-1">{err}</div>
         )}
       </div>
 
@@ -173,8 +173,8 @@ export function CostSpikes() {
 
   if (error) {
     return (
-      <div className="bg-[#DD6262]/10 border border-[#DD6262]/30 rounded-xl px-5 py-4">
-        <div className="mono text-[12px] text-[#DD6262]">{error}</div>
+      <div className="bg-[#E14B4B]/10 border border-[#E14B4B]/30 rounded-xl px-5 py-4">
+        <div className="mono text-[12px] text-[#E14B4B]">{error}</div>
         <button
           onClick={() => void load()}
           className="mono text-[10px] uppercase tracking-[0.12em] mt-2 text-text-secondary hover:text-text-primary transition-colors"
@@ -208,7 +208,7 @@ export function CostSpikes() {
           Cost spike alerts
         </span>
         {active > 0 && (
-          <span className="mono text-[10px] px-2 py-0.5 rounded-full bg-[#DD6262]/15 text-[#DD6262] font-semibold">
+          <span className="mono text-[10px] px-2 py-0.5 rounded-full bg-[#E14B4B]/15 text-[#E14B4B] font-semibold">
             {active} active
           </span>
         )}

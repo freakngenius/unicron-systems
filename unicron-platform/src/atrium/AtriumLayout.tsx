@@ -58,7 +58,7 @@ function dotColor(tone: StatusTone) {
   if (tone === 'ok')    return '#2E8E66';
   if (tone === 'warn')  return '#C28A1F';
   if (tone === 'error') return '#E14B4B';
-  return '#E8763A';
+  return '#6081BE';  // v3 blue for info tone
 }
 
 function StatusPulse({ items }: { items: StatusItem[] }) {

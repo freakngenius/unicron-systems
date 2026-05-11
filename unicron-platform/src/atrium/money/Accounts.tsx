@@ -26,9 +26,9 @@ interface ConnectedService {
 // ── Design helpers ────────────────────────────────────────────────────────────
 
 const STATUS_DOT: Record<ConnectedService['status'], string> = {
-  healthy:  '#4FB286',
-  degraded: '#D9A23A',
-  broken:   '#DD6262',
+  healthy:  '#2E8E66',
+  degraded: '#C28A1F',
+  broken:   '#E14B4B',
   unknown:  'var(--text-lo)',
 };
 
@@ -40,10 +40,10 @@ const STATUS_LABEL: Record<ConnectedService['status'], string> = {
 };
 
 const CAT_COLORS: Record<string, string> = {
-  infrastructure: '#6F95D6',
+  infrastructure: '#6081BE',
   ai:             '#7C3AED',
   communication:  'var(--accent)',
-  payroll:        '#D9A23A',
+  payroll:        '#C28A1F',
   contractors:    '#EC4899',
   marketing:      '#C026D3',
   other:          '#6B7280',
@@ -213,8 +213,8 @@ function RegisterForm({
           </div>
 
           {err && (
-            <div className="bg-[#DD6262]/10 border border-[#DD6262]/30 rounded-lg px-3 py-2">
-              <div className="mono text-[11px] text-[#DD6262]">{err}</div>
+            <div className="bg-[#E14B4B]/10 border border-[#E14B4B]/30 rounded-lg px-3 py-2">
+              <div className="mono text-[11px] text-[#E14B4B]">{err}</div>
             </div>
           )}
         </div>
@@ -277,8 +277,8 @@ export function Accounts() {
 
   if (error) {
     return (
-      <div className="bg-[#DD6262]/10 border border-[#DD6262]/30 rounded-xl px-5 py-4">
-        <div className="mono text-[12px] text-[#DD6262]">{error}</div>
+      <div className="bg-[#E14B4B]/10 border border-[#E14B4B]/30 rounded-xl px-5 py-4">
+        <div className="mono text-[12px] text-[#E14B4B]">{error}</div>
         <button
           onClick={() => void load()}
           className="mono text-[10px] uppercase tracking-[0.12em] mt-2 text-text-secondary hover:text-text-primary transition-colors"

@@ -36,8 +36,8 @@ const STAGE_COLORS: Record<PipelineStage, string> = {
   Screening:  'rgba(111,149,214,0.8)',
   Interview:  'rgba(217,162,58,0.8)',
   Offer:      'rgba(232,118,58,0.8)',
-  Accepted:   '#4FB286',
-  Declined:   '#DD6262',
+  Accepted:   '#2E8E66',
+  Declined:   '#E14B4B',
 };
 
 // ─── Pill badge ───────────────────────────────────────────────────────────────

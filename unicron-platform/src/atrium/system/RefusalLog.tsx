@@ -104,7 +104,7 @@ export default function RefusalLog() {
                 <td className="py-3 pr-4 mono text-[11px] text-text-secondary">
                   {e.payload?.action_type ?? 'unknown'}
                 </td>
-                <td className="py-3 pr-4 mono text-[11px] text-[#DD6262]">
+                <td className="py-3 pr-4 mono text-[11px] text-[#E14B4B]">
                   {e.payload?.matched_taboo ?? '—'}
                 </td>
                 <td className="py-3">
@@ -112,8 +112,8 @@ export default function RefusalLog() {
                     className="mono text-[9px] uppercase tracking-[0.12em] px-2 py-0.5 rounded"
                     style={
                       isOverridden
-                        ? { background: 'rgba(245,158,11,0.15)', color: '#D9A23A' }
-                        : { background: 'rgba(239,68,68,0.15)', color: '#DD6262' }
+                        ? { background: 'rgba(245,158,11,0.15)', color: '#C28A1F' }
+                        : { background: 'rgba(239,68,68,0.15)', color: '#E14B4B' }
                     }
                   >
                     {e.payload?.override_status ?? 'bounced'}

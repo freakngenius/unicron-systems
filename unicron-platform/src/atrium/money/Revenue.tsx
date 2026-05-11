@@ -195,8 +195,8 @@ export function Revenue() {
             ))}
           </div>
         ) : error ? (
-          <div className="bg-[#DD6262]/10 border border-[#DD6262]/30 rounded-xl px-4 py-3">
-            <div className="mono text-[11px] text-[#DD6262]">{error}</div>
+          <div className="bg-[#E14B4B]/10 border border-[#E14B4B]/30 rounded-xl px-4 py-3">
+            <div className="mono text-[11px] text-[#E14B4B]">{error}</div>
           </div>
         ) : (
           <PipelineTable customers={customers} />

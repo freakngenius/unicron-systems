@@ -1,74 +1,88 @@
 /** @type {import('tailwindcss').Config} */
+//
+// Atrium v3 — Stellate-inspired editorial design.
+// Source: Brand/Atrium Design System/v3.jsx (v3Tokens template).
+//
+// This config re-points every legacy alias (bg-base, text-primary, border-default,
+// accent-*, status-*, rose/red/emerald/amber) to the v3 palette so existing
+// Tailwind class strings flip from dark-mode to the canonical light-mode Stellate
+// design without rewriting every consumer.
+//
+// New code should prefer var(--v3-*) directly. See src/atrium/styles/atrium-tokens.css.
 export default {
   content: ['./index.html', './src/**/*.{ts,tsx}'],
   theme: {
     extend: {
       colors: {
         bg: {
-          base:     '#F6F7F9',  // v3 cool gray page
-          panel:    '#F6F7F9',  // same as base
-          card:     '#FFFFFF',  // v3 white cards
-          elevated: '#FFFFFF',  // alias for bg-card
-          raised:   '#EEF0F4',  // hover rows, popovers
-          input:    '#EEF0F4',  // input backgrounds
+          base:     '#F6F7F9',   // --v3-bg     (was dark #0A0C10)
+          panel:    '#FFFFFF',   // --v3-surface
+          card:     '#FFFFFF',   // --v3-surface
+          elevated: '#FFFFFF',   // --v3-surface
+          raised:   '#ECEEF2',   // --v3-bg-soft
+          input:    '#FFFFFF',   // white inputs on cool-gray page
+          rail:     '#1D2D4F',   // --v3-rail (navy)
         },
         border: {
-          faint:   '#EEF0F4',
-          subtle:  '#EEF0F4',
-          default: '#E5E8EE',
-          strong:  '#D8DCE5',
-          hover:   '#D8DCE5',
+          faint:   '#EEF0F4',    // --v3-line-soft
+          subtle:  '#EEF0F4',    // --v3-line-soft
+          default: '#E5E8EE',    // --v3-line
+          strong:  '#D8DCE5',    // --v3-line-strong
+          hover:   '#D8DCE5',    // --v3-line-strong
           accent:  'rgba(232,118,58,0.40)',
         },
         text: {
-          primary:   '#0B1530',  // v3 ink — near-black navy
-          secondary: '#46506A',  // v3 ink-md
-          muted:     '#7E8AA3',  // v3 ink-lo
-          faint:     '#BAC2D2',  // v3 ink-faint
+          primary:   '#0B1530',  // --v3-ink
+          secondary: '#46506A',  // --v3-ink-md
+          muted:     '#7E8AA3',  // --v3-ink-lo
+          faint:     '#BAC2D2',  // --v3-ink-faint
         },
         accent: {
-          primary: '#6081BE',  // v3 blue — primary actions
-          cyan:    '#5BB5BC',
-          gold:    '#E8763A',  // orange — brand + live state
-          violet:  '#7355E5',  // v3 purple
-          magenta: '#E14B4B',  // v3 red
-          orange:  '#E8763A',
+          // Legacy accent-* aliases re-pointed to v3 equivalents.
+          primary: '#6081BE',    // --v3-blue (primary actions, from main)
+          cyan:    '#6081BE',    // --v3-blue (was teal #5BB5BC)
+          gold:    '#E8763A',    // --v3-orange
+          violet:  '#7355E5',    // --v3-purple
+          magenta: '#E14B4B',    // --v3-red (used as fail indicator)
+          orange:  '#E8763A',    // --v3-orange
         },
         status: {
-          green:  '#2E8E66',   // v3 --ok
-          yellow: '#C28A1F',   // v3 --warn
-          red:    '#E14B4B',   // v3 --err
-          blue:   '#6081BE',   // v3 --info / primary
+          green:  '#2E8E66',     // --v3-green
+          yellow: '#C28A1F',     // --v3-amber
+          red:    '#E14B4B',     // --v3-red
+          blue:   '#6081BE',     // --v3-blue
         },
         // ----------------------------------------------------------------
-        // Remap named Tailwind palettes to v3 light equivalents so that
-        // existing class strings resolve without a full component rewrite.
+        // Atrium semantic aliases for Tailwind's native named palettes.
+        // Existing components use `text-rose-400`, `border-emerald-400/40`,
+        // `bg-rose-400/10` etc; re-mapping to v3 semantics keeps the visual
+        // language consistent on the light surface.
         // ----------------------------------------------------------------
         rose: {
-          300: '#E87777',
-          400: '#E14B4B',   // → v3 err
+          300: '#E97070',
+          400: '#E14B4B',        // --v3-red
           500: '#E14B4B',
         },
         red: {
-          300: '#E87777',
-          400: '#E14B4B',   // → v3 err
+          300: '#E97070',
+          400: '#E14B4B',        // --v3-red
           500: '#E14B4B',
         },
         emerald: {
-          300: '#5EB594',
-          400: '#2E8E66',   // → v3 ok
+          300: '#5BA98C',
+          400: '#2E8E66',        // --v3-green
           500: '#2E8E66',
         },
         amber: {
-          300: '#D9B45A',
-          400: '#C28A1F',   // → v3 warn
+          300: '#D5A14A',
+          400: '#C28A1F',        // --v3-amber
           500: '#C28A1F',
         },
       },
       fontFamily: {
-        sans:    ['Geist', 'Inter', 'sans-serif'],
+        sans:    ['Geist', '"Inter Tight"', 'Inter', 'sans-serif'],
         mono:    ['"Geist Mono"', '"JetBrains Mono"', 'monospace'],
-        display: ['"Inter Tight"', 'Geist', 'sans-serif'],
+        display: ['Geist', '"Inter Tight"', 'sans-serif'],
       },
       keyframes: {
         pulseDot: {

@@ -25,9 +25,9 @@ interface Campaign {
 
 const STATUS_COLOR: Record<Campaign['status'], string> = {
   draft:    '#6B7280',
-  active:   '#4FB286',
-  paused:   '#D9A23A',
-  complete: '#6F95D6',
+  active:   '#2E8E66',
+  paused:   '#C28A1F',
+  complete: '#6081BE',
 };
 
 function StatusBadge({ status }: { status: Campaign['status'] }) {
@@ -213,8 +213,8 @@ function CreateCampaignForm({ onSuccess, onCancel }: { onSuccess: () => void; on
           </div>
 
           {err && (
-            <div className="bg-[#DD6262]/10 border border-[#DD6262]/30 rounded-lg px-3 py-2">
-              <div className="mono text-[11px] text-[#DD6262]">{err}</div>
+            <div className="bg-[#E14B4B]/10 border border-[#E14B4B]/30 rounded-lg px-3 py-2">
+              <div className="mono text-[11px] text-[#E14B4B]">{err}</div>
             </div>
           )}
         </div>
@@ -278,8 +278,8 @@ export function Campaigns() {
 
   if (error) {
     return (
-      <div className="bg-[#DD6262]/10 border border-[#DD6262]/30 rounded-xl px-5 py-4">
-        <div className="mono text-[12px] text-[#DD6262]">{error}</div>
+      <div className="bg-[#E14B4B]/10 border border-[#E14B4B]/30 rounded-xl px-5 py-4">
+        <div className="mono text-[12px] text-[#E14B4B]">{error}</div>
         <button
           onClick={() => void load()}
           className="mono text-[10px] uppercase tracking-[0.12em] mt-2 text-text-secondary hover:text-text-primary transition-colors"

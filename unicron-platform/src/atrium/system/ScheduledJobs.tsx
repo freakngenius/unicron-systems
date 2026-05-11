@@ -99,7 +99,7 @@ function StatusBadge({ status }: { status: string | null }) {
     );
   }
   const ok  = status === 'ok' || status === 'success';
-  const col = ok ? '#4FB286' : '#DD6262';
+  const col = ok ? '#2E8E66' : '#E14B4B';
   return (
     <span className="flex items-center gap-1.5 mono text-[11.5px]" style={{ color: col }}>
       <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: col }} />
@@ -116,7 +116,7 @@ function Toggle({ on, disabled, onToggle }: { on: boolean; disabled: boolean; on
       onClick={onToggle}
       disabled={disabled}
       className="relative inline-block rounded-full transition-colors flex-shrink-0"
-      style={{ width: 30, height: 17, background: on ? '#4FB286' : 'rgba(255,255,255,0.07)', opacity: disabled ? 0.6 : 1 }}
+      style={{ width: 30, height: 17, background: on ? '#2E8E66' : 'rgba(255,255,255,0.07)', opacity: disabled ? 0.6 : 1 }}
     >
       <span
         className="absolute top-0.5 rounded-full bg-white transition-all"
@@ -177,11 +177,11 @@ function TriggerButton({ jobId, jobName, onTriggered }: { jobId: string; jobName
 
   const colors: Record<TriggerState, { border: string; color: string; bg: string }> = {
     idle:       { border: 'rgba(255,255,255,0.07)', color: 'var(--text-md)',  bg: 'transparent' },
-    confirming: { border: '#D9A23A',                color: '#D9A23A',                bg: 'rgba(245,158,11,0.08)' },
+    confirming: { border: '#C28A1F',                color: '#C28A1F',                bg: 'rgba(245,158,11,0.08)' },
     running:    { border: 'rgba(255,255,255,0.07)', color: 'var(--text-md)',  bg: 'transparent' },
-    done:       { border: '#4FB286',                color: '#4FB286',                bg: 'rgba(34,197,94,0.08)' },
-    blocked:    { border: '#DD6262',                color: '#DD6262',                bg: 'rgba(239,68,68,0.08)' },
-    error:      { border: '#DD6262',                color: '#DD6262',                bg: 'rgba(239,68,68,0.08)' },
+    done:       { border: '#2E8E66',                color: '#2E8E66',                bg: 'rgba(34,197,94,0.08)' },
+    blocked:    { border: '#E14B4B',                color: '#E14B4B',                bg: 'rgba(239,68,68,0.08)' },
+    error:      { border: '#E14B4B',                color: '#E14B4B',                bg: 'rgba(239,68,68,0.08)' },
   };
 
   const c = colors[state];
