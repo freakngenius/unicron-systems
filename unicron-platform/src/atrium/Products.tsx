@@ -16,13 +16,15 @@ import { useState, useEffect } from 'react';
 import { getSupabase } from '../lib/supabase';
 import { PathfinderProduct } from './products/PathfinderProduct';
 import { MetacronProduct } from './products/MetacronProduct';
+import { AtriumIcon, type AtriumIconName } from './icons';
 
-const PRODUCTS_TABS = [
-  { id: 'pathfinder', label: 'Pathfinder' },
-  { id: 'metacron',   label: 'Metacron' },
-] as const;
+type ProductsTab = 'pathfinder' | 'metacron';
 
-type ProductsTab = (typeof PRODUCTS_TABS)[number]['id'];
+// v3-products.jsx:294-295 — Pathfinder→Compass, Metacron→Layers.
+const PRODUCTS_TABS: { id: ProductsTab; label: string; icon: AtriumIconName }[] = [
+  { id: 'pathfinder', label: 'Pathfinder', icon: 'Compass' },
+  { id: 'metacron',   label: 'Metacron',   icon: 'Layers'  },
+];
 
 function useVerifierAccuracy(): { total: number | null; accuracyPct: number | null } {
   const [s, setS] = useState<{ total: number | null; accuracyPct: number | null }>({ total: null, accuracyPct: null });
@@ -82,16 +84,18 @@ export function Products() {
       <div className="flex gap-1 px-7 border-b border-border-default overflow-x-auto">
         {PRODUCTS_TABS.map((tab) => {
           const isActive = active === tab.id;
+          const Icon = AtriumIcon[tab.icon];
           return (
             <button
               key={tab.id}
               onClick={() => setActive(tab.id)}
-              className={`px-3.5 py-3 -mb-px text-[13px] font-medium border-b-2 transition-colors whitespace-nowrap ${
+              className={`px-3.5 py-3 -mb-px text-[13px] font-medium border-b-2 transition-colors whitespace-nowrap inline-flex items-center gap-1.5 ${
                 isActive ? 'border-[#6081BE] text-[#6081BE]' : 'border-transparent text-text-secondary hover:text-text-primary'
               }`}
               role="tab"
               aria-selected={isActive}
             >
+              <Icon size={14} />
               {tab.label}
             </button>
           );

@@ -26,6 +26,7 @@ import {
 import { getSupabase } from '../lib/supabase';
 import { useAuth } from '../lib/auth';
 import { QuickCapture } from './QuickCapture';
+import { AtriumIcon } from './icons';
 // Pass 2 (R1): AttentionScorer cut — was hand-rolled scoring across mixed
 // sources. TopOfMind now wires to ns_top_of_mind_for_dri RPC (real data).
 
@@ -2366,20 +2367,21 @@ export function Now({ name }: Props) {
       {/* v3 sub-tab nav — Run a skill default, then Today / Activity / Digest */}
       <div className="flex gap-1 px-2 sm:px-7 pt-1 border-b border-border-default">
         {([
-          { id: 'today',    label: 'Today' },
-          { id: 'skills',   label: 'Run a skill' },
-          { id: 'activity', label: 'Activity' },
-          { id: 'digest',   label: 'Digest' },
+          { id: 'today',    label: 'Today',       Icon: AtriumIcon.Now },
+          { id: 'skills',   label: 'Run a skill', Icon: AtriumIcon.Bolt },
+          { id: 'activity', label: 'Activity',    Icon: AtriumIcon.Pulse },
+          { id: 'digest',   label: 'Digest',      Icon: AtriumIcon.Inbox },
         ] as const).map((tab) => (
           <button
             key={tab.id}
             onClick={() => setNowTab(tab.id)}
-            className={`px-3.5 py-3 -mb-px text-[13px] font-medium border-b-2 transition-colors ${
+            className={`px-3.5 py-3 -mb-px text-[13px] font-medium border-b-2 transition-colors inline-flex items-center gap-1.5 ${
               nowTab === tab.id
                 ? 'border-[#6081BE] text-[#6081BE]'
                 : 'border-transparent text-text-secondary hover:text-text-primary'
             }`}
           >
+            <tab.Icon size={14} />
             {tab.label}
           </button>
         ))}
