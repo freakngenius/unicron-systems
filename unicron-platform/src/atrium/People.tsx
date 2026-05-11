@@ -35,6 +35,8 @@ function useBoardCounts(): BoardCounts {
   useEffect(() => {
     let cancelled = false;
     const sb = getSupabase();
+    // SLOT: Board counts · STATUS: real (customers, team) / null (network, hiring
+    // until ns_count_network_contacts + ns_count_hiring_candidates ship).
     Promise.all([
       sb.rpc('ns_count_customers'),
       sb.rpc('ns_count_team_members'),
@@ -48,11 +50,52 @@ function useBoardCounts(): BoardCounts {
         network:   typeof n.data === 'number' ? n.data : null,
         hiring:    typeof h.data === 'number' ? h.data : null,
       });
-    }).catch(() => {/* leave nulls — RPCs may not exist yet */});
+    }).catch(() => {/* leave nulls */});
     return () => { cancelled = true; };
   }, []);
 
   return counts;
+}
+
+// SLOT: Customer metrics (ARR / At-risk / Renewal exposure) · STATUS: real
+// SOURCE: ns_customers_arr_total / ns_count_at_risk_customers /
+//         ns_renewal_exposure_30d RPCs over nervous_system.customers
+//         (schema extended in migration customers_extend_for_atrium_pass2).
+interface CustomerMetrics {
+  arrTotal: number | null;
+  atRiskCount: number | null;
+  renewalExposure30d: number | null;
+}
+
+function useCustomerMetrics(): CustomerMetrics {
+  const [m, setM] = useState<CustomerMetrics>({
+    arrTotal: null, atRiskCount: null, renewalExposure30d: null,
+  });
+  useEffect(() => {
+    let cancelled = false;
+    const sb = getSupabase();
+    Promise.all([
+      sb.rpc('ns_customers_arr_total'),
+      sb.rpc('ns_count_at_risk_customers'),
+      sb.rpc('ns_renewal_exposure_30d'),
+    ]).then(([arr, atRisk, ren]) => {
+      if (cancelled) return;
+      setM({
+        arrTotal:           typeof arr.data === 'number' ? arr.data : null,
+        atRiskCount:        typeof atRisk.data === 'number' ? atRisk.data : null,
+        renewalExposure30d: typeof ren.data === 'number' ? ren.data : null,
+      });
+    }).catch(() => {/* leave nulls */});
+    return () => { cancelled = true; };
+  }, []);
+  return m;
+}
+
+function fmtUsdCompact(n: number | null): string {
+  if (n === null) return '—';
+  if (Math.abs(n) >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
+  if (Math.abs(n) >= 1_000) return `$${Math.round(n / 1_000)}k`;
+  return `$${Math.round(n)}`;
 }
 
 // ─── Metric card ──────────────────────────────────────────────────────────────
@@ -151,6 +194,7 @@ function FilterRow({ label, count, dot }: { label: string; count?: number | null
 export function People() {
   const [active, setActive] = useState<PeopleTab>('customers');
   const counts = useBoardCounts();
+  const m = useCustomerMetrics();
 
   return (
     <div className="w-full">
@@ -238,26 +282,21 @@ export function People() {
               <MetricCard
                 label="Active customers"
                 value={counts.customers === null ? '—' : String(counts.customers)}
-                change={{ value: 'flat', tone: 'flat' }}
-                sparkline={[1, 1, 1, 1, 1, 1, counts.customers ?? 1]}
               />
               <MetricCard
                 label="ARR"
-                value="$0"
-                sublabel="DEMO · wire Stripe"
-                change={{ value: '—', tone: 'flat' }}
+                value={fmtUsdCompact(m.arrTotal)}
+                sublabel={m.arrTotal === 0 ? 'Pre-revenue · enter ARR per customer' : undefined}
               />
               <MetricCard
                 label="At-risk"
-                value="0"
-                sublabel="None flagged"
-                change={{ value: 'flat', tone: 'flat' }}
+                value={m.atRiskCount === null ? '—' : String(m.atRiskCount)}
+                sublabel={m.atRiskCount === 0 ? 'None flagged' : undefined}
               />
               <MetricCard
                 label="Renewal exposure (30d)"
-                value="$0"
-                sublabel="DEMO · wire pipeline"
-                change={{ value: '—', tone: 'flat' }}
+                value={fmtUsdCompact(m.renewalExposure30d)}
+                sublabel={m.renewalExposure30d === 0 ? 'No renewals in next 30d' : undefined}
               />
             </div>
           )}
