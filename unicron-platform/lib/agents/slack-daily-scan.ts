@@ -50,7 +50,9 @@ const PER_CHANNEL_HISTORY_LIMIT = 500; // hard cap on messages we'll summarize p
 const TRANSCRIPT_CHAR_CAP = 30_000;     // hard cap on characters fed to the LLM
 const SUMMARY_MAX_TOKENS = 2_000;
 const THEME_MAX_TOKENS = 200;
-const ACTION_ITEM_TTL_DAYS = 30;
+// ACTION_ITEM_TTL_DAYS lives inside the ns_slack_daily_scan_insert_action_item RPC
+// (hardcoded to 30 there) — the JS-side constant became dead code after the
+// RPC refactor and was removed.
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -415,36 +417,37 @@ Return only the sentence. No quotes, no preamble.`;
 }
 
 // ─── Persistence ────────────────────────────────────────────────────────────
+//
+// IMPORTANT: PostgREST only exposes the `public` schema in this project, so
+// `.schema('nervous_system')` calls return PGRST106 silently. All writes go
+// through SECURITY DEFINER RPCs in the public schema (migration
+// 20260511_slack_daily_scan_rpcs.sql). The RPCs do the actual cross-schema
+// INSERT with service-role bypassing RLS.
 
 async function insertChannelScanLedgerRow(
   ch: AuditedChannel,
   summary: PerChannelSummary,
 ): Promise<string | null> {
-  const { data, error } = await supabase
-    .schema('nervous_system')
-    .from('ledger')
-    .insert({
-      source_type: 'slack_channel_scan',
-      source_id: ch.channel_id,
-      source_url: `slack://channel?id=${ch.channel_id}`,
-      content_summary: `[#${ch.channel_name}] ${summary.channel_theme}`.slice(0, 500),
-      content_full: JSON.stringify({
-        channel_id: ch.channel_id,
-        channel_name: ch.channel_name,
-        ...summary,
-      }),
-      action_items: summary.action_items as unknown as object[],
-      decisions: summary.decisions as unknown as object[],
-      insights: [{ sentiment: summary.sentiment, key_topics: summary.key_topics }],
-    })
-    .select('id')
-    .single();
-
+  const { data, error } = await supabase.rpc('ns_slack_daily_scan_insert_channel_ledger', {
+    p_channel_id: ch.channel_id,
+    p_channel_name: ch.channel_name,
+    p_content_summary: `[#${ch.channel_name}] ${summary.channel_theme}`.slice(0, 500),
+    p_content_full: JSON.stringify({
+      channel_id: ch.channel_id,
+      channel_name: ch.channel_name,
+      ...summary,
+    }),
+    p_action_items: summary.action_items as unknown as object[],
+    p_decisions: summary.decisions as unknown as object[],
+    p_insights: [{ sentiment: summary.sentiment, key_topics: summary.key_topics }],
+  });
   if (error) {
-    console.error(`[slack-daily-scan] ledger insert failed channel=${ch.channel_name}: ${error.message}`);
+    console.error(
+      `[slack-daily-scan] ledger insert failed channel=${ch.channel_name}: ${error.message}`,
+    );
     return null;
   }
-  return data?.id ?? null;
+  return (data as string | null) ?? null;
 }
 
 async function insertActionItem(
@@ -452,28 +455,15 @@ async function insertActionItem(
   ledgerId: string | null,
   ai: ExtractedActionItem,
 ): Promise<boolean> {
-  const { error } = await supabase
-    .schema('nervous_system')
-    .from('action_items')
-    .insert({
-      title: ai.title,
-      description: ai.owner_hint
-        ? `Hint: assigned to ${ai.owner_hint}${ai.due_hint ? ` · due ${ai.due_hint}` : ''}`
-        : ai.due_hint
-          ? `Hint: due ${ai.due_hint}`
-          : null,
-      requested_by: {
-        agent: 'slack-daily-scan',
-        channel_id: ch.channel_id,
-        channel_name: ch.channel_name,
-        source_message_ts: ai.source_message_ts ?? null,
-      },
-      requested_of: { hint: ai.owner_hint || 'unassigned' },
-      ledger_id: ledgerId,
-      status: 'open',
-      priority: 'medium',
-      ttl_days: ACTION_ITEM_TTL_DAYS,
-    });
+  const { error } = await supabase.rpc('ns_slack_daily_scan_insert_action_item', {
+    p_channel_id: ch.channel_id,
+    p_channel_name: ch.channel_name,
+    p_ledger_id: ledgerId,
+    p_title: ai.title,
+    p_owner_hint: ai.owner_hint ?? null,
+    p_due_hint: ai.due_hint ?? null,
+    p_source_message_ts: ai.source_message_ts ?? null,
+  });
   if (error) {
     console.error(`[slack-daily-scan] action_item insert failed: ${error.message}`);
     return false;
@@ -485,26 +475,14 @@ async function insertDecisionLedgerRow(
   ch: AuditedChannel,
   d: ExtractedDecision,
 ): Promise<boolean> {
-  const sourceId = `${ch.channel_id}:${d.source_message_ts ?? 'unknown'}`;
-  const { error } = await supabase
-    .schema('nervous_system')
-    .from('ledger')
-    .insert({
-      source_type: 'decision',
-      source_id: sourceId,
-      source_url: d.source_message_ts
-        ? `slack://channel?id=${ch.channel_id}&message=${d.source_message_ts}`
-        : `slack://channel?id=${ch.channel_id}`,
-      content_summary: d.decision,
-      content_full: JSON.stringify({
-        channel_id: ch.channel_id,
-        channel_name: ch.channel_name,
-        decision: d.decision,
-        decided_by_hint: d.decided_by_hint,
-        rationale: d.rationale,
-        source_message_ts: d.source_message_ts,
-      }),
-    });
+  const { error } = await supabase.rpc('ns_slack_daily_scan_insert_decision', {
+    p_channel_id: ch.channel_id,
+    p_channel_name: ch.channel_name,
+    p_decision: d.decision,
+    p_decided_by_hint: d.decided_by_hint ?? null,
+    p_rationale: d.rationale ?? null,
+    p_source_message_ts: d.source_message_ts ?? null,
+  });
   if (error) {
     console.error(`[slack-daily-scan] decision ledger insert failed: ${error.message}`);
     return false;
@@ -520,24 +498,25 @@ async function upsertDailyDigest(row: {
   action_items_extracted: number;
   decisions_extracted: number;
 }): Promise<void> {
-  const { error } = await supabase
-    .schema('nervous_system')
-    .from('slack_daily_digest')
-    .upsert(row, { onConflict: 'digest_date' });
+  const { error } = await supabase.rpc('ns_slack_daily_scan_upsert_digest', {
+    p_digest_date: row.digest_date,
+    p_top_theme: row.top_theme,
+    p_channel_count: row.channel_count,
+    p_message_count: row.message_count,
+    p_action_items_extracted: row.action_items_extracted,
+    p_decisions_extracted: row.decisions_extracted,
+  });
   if (error) {
     console.error(`[slack-daily-scan] digest upsert failed: ${error.message}`);
   }
 }
 
 async function appendAuditLog(payload: Record<string, unknown>): Promise<void> {
-  const { error } = await supabase
-    .schema('nervous_system')
-    .from('audit_log')
-    .insert({
-      table_name: 'slack_daily_digest',
-      action: 'slack_daily_scan_complete',
-      payload,
-    });
+  const { error } = await supabase.rpc('ns_audit_log_append', {
+    p_table_name: 'slack_daily_digest',
+    p_action: 'slack_daily_scan_complete',
+    p_payload: payload,
+  });
   if (error) {
     console.error(`[slack-daily-scan] audit_log append failed: ${error.message}`);
   }
