@@ -12,6 +12,7 @@ import { ActionItems } from './work/ActionItems';
 import { CallsLog } from './work/CallsLog';
 import { DecisionsTimeline } from './work/DecisionsTimeline';
 import { KanbanEmbeds } from './work/KanbanEmbeds';
+import { NewActionItemModal } from './work/NewActionItemModal';
 import { SprintsView } from './work/SprintsView';
 import { useFilterSidebarCollapsed } from './useFilterSidebarCollapsed';
 import { FilterSidebarToggle, FilterSidebarExpandStrip } from './components/FilterSidebarToggle';
@@ -341,6 +342,8 @@ export function Work() {
   const [active, setActive] = useState<WorkTab>('items');
   const m = useItemMetrics();
   const [collapsed, setCollapsed] = useFilterSidebarCollapsed();
+  const [newItemOpen, setNewItemOpen] = useState(false);
+  const [itemsRefreshKey, setItemsRefreshKey] = useState(0);
 
   return (
     <div className="w-full">
@@ -352,6 +355,7 @@ export function Work() {
           </h1>
         </div>
         <button
+          onClick={() => { setActive('items'); setNewItemOpen(true); }}
           className="text-[13px] font-semibold px-3.5 py-2 rounded-md text-white"
           style={{ background: '#6081BE' }}
         >
@@ -439,7 +443,7 @@ export function Work() {
           )}
 
           <section role="tabpanel" aria-label={WORK_TABS.find((t) => t.id === active)?.label}>
-            {active === 'items' && <ActionItems />}
+            {active === 'items' && <ActionItems refreshSignal={itemsRefreshKey} />}
             {active === 'kanban' && <KanbanEmbeds />}
             {active === 'calls' && <CallsLog />}
             {active === 'decisions' && <DecisionsTimeline />}
@@ -448,6 +452,12 @@ export function Work() {
           </section>
         </div>
       </div>
+
+      <NewActionItemModal
+        open={newItemOpen}
+        onClose={() => setNewItemOpen(false)}
+        onCreated={() => setItemsRefreshKey((k) => k + 1)}
+      />
     </div>
   );
 }
