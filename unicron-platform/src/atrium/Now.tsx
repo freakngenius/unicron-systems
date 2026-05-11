@@ -48,13 +48,10 @@ export interface SkillRow {
   domain: string;
   active: boolean;
   refusal_gate: boolean;
-  // Sprint 5: status distinguishes live vs. scaffolded skills
   status?: 'active' | 'scaffolded' | 'deprecated' | null;
-  // Sprint 5: explicit routing metadata
   run_endpoint?: string | null;
-  // config is an opaque JSON column — we only read ui_trigger here
+  execution?: 'api' | 'agentic' | 'ui_trigger' | 'scheduled' | null;
   config?: { ui_trigger?: boolean } | null;
-  // N-6: last run timestamp and cumulative run count
   last_run_at?: string | null;
   total_runs?: number | null;
 }
@@ -1209,6 +1206,14 @@ const MODAL_SKILL_SLUGS = new Set([
   'update-manifesto-page',
 ]);
 
+async function authHeaders(): Promise<Record<string, string>> {
+  const { data } = await getSupabase().auth.getSession();
+  const accessToken = data.session?.access_token;
+  const h: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (accessToken) h.Authorization = `Bearer ${accessToken}`;
+  return h;
+}
+
 // Future-sprint placeholder skills not yet in the DB.
 // Shown as disabled stubs until seeded.
 // Sprint 4: Productivity domain is now live — removed from stubs.
@@ -1311,7 +1316,7 @@ function SkillsSurface({ onOpenQuickCapture }: { onOpenQuickCapture?: () => void
 
       const res = await fetch('/api/atrium/skills/run', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: await authHeaders(),
         body: JSON.stringify(bodyPayload),
       });
       const json = await res.json().catch(() => ({})) as Record<string, unknown>;
@@ -1371,13 +1376,35 @@ function SkillsSurface({ onOpenQuickCapture }: { onOpenQuickCapture?: () => void
   async function handleSkillClick(skill: SkillRow) {
     if (state.running) return;
 
-    // quick-capture: UI trigger — open the modal directly, no API call
-    if (skill.name === 'quick-capture' || skill.config?.ui_trigger === true) {
+    // UI trigger — open the modal directly, no API call
+    if (skill.execution === 'ui_trigger' || skill.name === 'quick-capture' || skill.config?.ui_trigger === true) {
       onOpenQuickCapture?.();
       return;
     }
 
-    // Sprint 5: scaffolded skills — do nothing (button is disabled in the UI)
+    // Agentic skills are invoked through Claude Code, not the Atrium UI.
+    if (skill.execution === 'agentic') {
+      setState((s) => ({
+        ...s,
+        running: false,
+        runningSlug: null,
+        result: `${skill.name} is an agentic skill — run it from Claude Code (Skill tool / slash command). The UI does not dispatch agentic skills.`,
+      }));
+      return;
+    }
+
+    // Scheduled-only skills are cron-driven, not click-driven.
+    if (skill.execution === 'scheduled') {
+      setState((s) => ({
+        ...s,
+        running: false,
+        runningSlug: null,
+        result: `${skill.name} runs on schedule. Click is a no-op.`,
+      }));
+      return;
+    }
+
+    // Scaffolded skills — do nothing (button is disabled in the UI)
     if (skill.status === 'scaffolded') {
       return;
     }
@@ -1421,7 +1448,7 @@ function SkillsSurface({ onOpenQuickCapture }: { onOpenQuickCapture?: () => void
       try {
         const res = await fetch('/api/atrium/skills/run', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: await authHeaders(),
           body: JSON.stringify({ skill_slug: skill.name }),
         });
         const json = await res.json().catch(() => ({})) as Record<string, unknown>;
@@ -1468,75 +1495,38 @@ function SkillsSurface({ onOpenQuickCapture }: { onOpenQuickCapture?: () => void
       return;
     }
 
-    // Default: route to legacy /api/skills/dispatch
-    const prompt = skill.name;
+    // No API route registered for this skill. Surface the gap instead of
+    // POSTing to the deprecated /api/skills/dispatch stub.
     setState((s) => ({
       ...s,
-      prompt,
-      running: true,
-      runningSlug: skill.name,
+      prompt: skill.name,
+      running: false,
+      runningSlug: null,
       result: null,
-      error: null,
-      triageItems: null,
-      triageMessage: null,
+      error: `No dispatcher for "${skill.name}". Classify it in nervous_system.skills.execution (api/agentic/ui_trigger/scheduled) or add a handler in api/atrium/skills/run.ts.`,
     }));
-    try {
-      const res = await fetch('/api/skills/dispatch', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ skill_name: skill.name, prompt }),
-      });
-      const json: { status?: string; sprint?: number } = await res.json().catch(() => ({}));
-      setState((s) => ({
-        ...s,
-        running: false,
-        runningSlug: null,
-        result: json.status ?? 'dispatched',
-      }));
-    } catch (e) {
-      setState((s) => ({
-        ...s,
-        running: false,
-        runningSlug: null,
-        error: e instanceof Error ? e.message : 'Unknown error',
-      }));
-    }
   }
 
   async function handleRun(skillName?: string) {
     const prompt = skillName ?? state.prompt;
     if (!prompt.trim() || state.running) return;
     if (skillName) setState((s) => ({ ...s, prompt: skillName }));
+
+    // Free-form prompts have no registered dispatcher — the legacy
+    // /api/skills/dispatch endpoint was a Sprint-2 stub. Route by skill name
+    // via handleSkillClick if we recognise the slug; otherwise surface the gap.
+    const skill = skillName
+      ? skills.find((s) => s.name === skillName)
+      : null;
+    if (skill) {
+      await handleSkillClick(skill);
+      return;
+    }
     setState((s) => ({
       ...s,
-      running: true,
-      runningSlug: skillName ?? null,
       result: null,
-      error: null,
-      triageItems: null,
-      triageMessage: null,
+      error: `Free-form prompts are not dispatched. Pick a registered skill from the catalog.`,
     }));
-    try {
-      const res = await fetch('/api/skills/dispatch', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ skill_name: skillName ?? null, prompt }),
-      });
-      const json: { status?: string; sprint?: number } = await res.json().catch(() => ({}));
-      setState((s) => ({
-        ...s,
-        running: false,
-        runningSlug: null,
-        result: json.status ?? 'dispatched',
-      }));
-    } catch (e) {
-      setState((s) => ({
-        ...s,
-        running: false,
-        runningSlug: null,
-        error: e instanceof Error ? e.message : 'Unknown error',
-      }));
-    }
   }
 
   function clearState() {

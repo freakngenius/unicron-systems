@@ -18,13 +18,18 @@ interface SkillRow {
   description: string;
   domain: string;
   type: string;
-  inputs: unknown[];
-  outputs: unknown[];
+  inputs_schema: unknown[];
+  outputs_schema: unknown[];
   schedule_cron: string | null;
   refusal_gate: boolean;
   budget_usd_per_run: number | null;
   active: boolean;
-  skill_path: string;
+  skill_md_path: string | null;
+  status: string | null;
+  run_endpoint: string | null;
+  last_run_at: string | null;
+  total_runs: number | null;
+  execution: 'api' | 'agentic' | 'ui_trigger' | 'scheduled' | null;
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
