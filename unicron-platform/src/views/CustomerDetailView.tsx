@@ -107,8 +107,8 @@ export function CustomerDetailView({ org, onBack }: Props) {
               label="ERROR VOLUME · 30d"
               data={health.error_volume_30d}
               testid="customer-detail-error-sparkline"
-              stroke="#fb7185"
-              fill="rgba(251, 113, 133, 0.10)"
+              stroke="var(--err)"
+              fill="var(--err-soft)"
             />
           </div>
 

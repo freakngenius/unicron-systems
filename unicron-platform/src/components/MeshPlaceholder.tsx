@@ -5,13 +5,16 @@ type Props = {
   className?: string;
 };
 
-const ringStroke = '#1F1F23';
-const ringStrokeFaint = '#16161A';
+// Atrium token-aligned. Ring strokes use the surface scale; sprite colors map
+// to category tokens (operations/discovery/marketing) so the placeholder reads
+// on-brand against any Atrium surface.
+const ringStroke = 'var(--bg-raised)';
+const ringStrokeFaint = 'var(--bg-elevated)';
 
 const colors = {
-  cyan: '#22D3EE',
-  gold: '#FBBF24',
-  magenta: '#EC4899',
+  cyan: 'var(--cat-operations)',
+  gold: 'var(--cat-discovery)',
+  magenta: 'var(--cat-marketing)',
 };
 
 type Sprite = { kind: 'hex' | 'diamond' | 'octagon'; r: number; theta: number; color: keyof typeof colors };
@@ -38,8 +41,8 @@ export function MeshPlaceholder({ populated, thinking, size = 360, className }: 
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="block">
         <defs>
           <radialGradient id="meshGlow" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor="rgba(139,92,246,0.06)" />
-            <stop offset="100%" stopColor="rgba(139,92,246,0)" />
+            <stop offset="0%" stopColor="var(--accent-soft)" />
+            <stop offset="100%" stopColor="rgba(232,118,58,0)" />
           </radialGradient>
         </defs>
 
@@ -101,7 +104,7 @@ function Sprite({
       <polygon
         points={`${cx},${cy - s} ${cx + s},${cy} ${cx},${cy + s} ${cx - s},${cy}`}
         fill={fill}
-        stroke="#0A0A0B"
+        stroke="var(--bg-ground)"
         strokeWidth={1}
       />
     );
@@ -113,7 +116,7 @@ function Sprite({
       const a = (Math.PI / 3) * i + Math.PI / 6;
       pts.push(`${cx + s * Math.cos(a)},${cy + s * Math.sin(a)}`);
     }
-    return <polygon points={pts.join(' ')} fill={fill} stroke="#0A0A0B" strokeWidth={1} />;
+    return <polygon points={pts.join(' ')} fill={fill} stroke="var(--bg-ground)" strokeWidth={1} />;
   }
   // octagon
   const s = 5.5;
@@ -122,5 +125,5 @@ function Sprite({
     const a = (Math.PI / 4) * i + Math.PI / 8;
     pts.push(`${cx + s * Math.cos(a)},${cy + s * Math.sin(a)}`);
   }
-  return <polygon points={pts.join(' ')} fill={fill} stroke="#0A0A0B" strokeWidth={1} />;
+  return <polygon points={pts.join(' ')} fill={fill} stroke="var(--bg-ground)" strokeWidth={1} />;
 }

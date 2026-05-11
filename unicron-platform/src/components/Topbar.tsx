@@ -51,11 +51,12 @@ export function Topbar({ active, onTab, onOpenSettings }: Props) {
                 key={t.id}
                 onClick={() => onTab(t.id)}
                 className={[
-                  'mono text-[12px] uppercase tracking-[0.18em] py-4 border-b transition-colors',
+                  'mono text-[12px] uppercase tracking-[0.18em] py-4 border-b-2 transition-colors',
                   isActive
-                    ? 'text-text-primary border-text-primary'
-                    : 'text-text-primary/40 border-transparent hover:text-text-primary/70',
+                    ? 'text-text-primary'
+                    : 'border-transparent text-text-secondary hover:text-text-primary',
                 ].join(' ')}
+                style={isActive ? { borderBottomColor: 'var(--accent)' } : undefined}
               >
                 {t.label}
               </button>
@@ -81,9 +82,9 @@ function DiamondGlyph() {
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
       <path
         d="M8 1 L15 8 L8 15 L1 8 Z"
-        stroke="#8B5CF6"
+        stroke="var(--accent)"
         strokeWidth="1.4"
-        fill="rgba(139,92,246,0.12)"
+        fill="var(--accent-soft)"
       />
     </svg>
   );

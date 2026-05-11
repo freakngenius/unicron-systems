@@ -33,17 +33,20 @@ const WINDOW_OPTIONS: { id: CostWindow; label: string }[] = [
   { id: 'all', label: 'ALL TIME' },
 ];
 
+// Atrium category-token mapping (Pass 2 of the rebrand). One per provider.
+// SVG/recharts accept `var()` directly for fill/stroke, so we keep the token
+// references inline and the colors stay consistent with the rest of Atrium.
 const PROVIDER_COLORS: Record<string, string> = {
-  anthropic: '#d4a574',
-  openai: '#4fd1c5',
-  perplexity: '#8b5cf6',
-  google: '#f472b6',
-  xai: '#facc15',
-  unknown: '#6b7280',
+  anthropic: 'var(--cat-discovery)',    // gold
+  openai: 'var(--cat-operations)',      // teal
+  perplexity: 'var(--cat-memory)',      // purple
+  google: 'var(--cat-marketing)',       // pink
+  xai: 'var(--warn)',                   // warm yellow
+  unknown: 'var(--text-lo)',            // neutral grey
 };
 
-const BAR_COLOR = '#d4a574';
-const LINE_COLOR = '#8b5cf6';
+const BAR_COLOR = 'var(--accent)';
+const LINE_COLOR = 'var(--cat-memory)';
 
 function fmtUsd(n: number): string {
   if (!Number.isFinite(n)) return '$0.00';
@@ -236,18 +239,18 @@ function TrendChart({ summary }: { summary: CostSummary }) {
     <div className="h-56 w-full" data-testid="cost-trend-chart">
       <ResponsiveContainer>
         <LineChart data={data} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
-          <CartesianGrid stroke="#1f2937" strokeDasharray="2 4" />
-          <XAxis dataKey="bucket" stroke="#6b7280" tick={{ fontSize: 10 }} />
+          <CartesianGrid stroke="var(--border-default)" strokeDasharray="2 4" />
+          <XAxis dataKey="bucket" stroke="var(--text-lo)" tick={{ fontSize: 10 }} />
           <YAxis
-            stroke="#6b7280"
+            stroke="var(--text-lo)"
             tick={{ fontSize: 10 }}
             tickFormatter={(v) => fmtUsd(Number(v))}
             width={60}
           />
           <Tooltip
             contentStyle={{
-              background: '#0b0b0b',
-              border: '1px solid #2a2a2a',
+              background: 'var(--bg-elevated)',
+              border: '1px solid var(--border-default)',
               fontFamily: 'monospace',
               fontSize: 11,
             }}
@@ -292,24 +295,24 @@ function BreakdownContent({
       <div className="h-44 w-full">
         <ResponsiveContainer>
           <BarChart data={chartData} layout="vertical" margin={{ left: 8, right: 12 }}>
-            <CartesianGrid stroke="#1f2937" strokeDasharray="2 4" horizontal={false} />
+            <CartesianGrid stroke="var(--border-default)" strokeDasharray="2 4" horizontal={false} />
             <XAxis
               type="number"
-              stroke="#6b7280"
+              stroke="var(--text-lo)"
               tick={{ fontSize: 10 }}
               tickFormatter={(v) => fmtUsd(Number(v))}
             />
             <YAxis
               type="category"
               dataKey="key"
-              stroke="#6b7280"
+              stroke="var(--text-lo)"
               tick={{ fontSize: 10 }}
               width={120}
             />
             <Tooltip
               contentStyle={{
-                background: '#0b0b0b',
-                border: '1px solid #2a2a2a',
+                background: 'var(--bg-elevated)',
+                border: '1px solid var(--border-default)',
                 fontFamily: 'monospace',
                 fontSize: 11,
               }}
@@ -379,8 +382,8 @@ function ProviderPie({ rows }: { rows: CostBreakdown[] }) {
             </Pie>
             <Tooltip
               contentStyle={{
-                background: '#0b0b0b',
-                border: '1px solid #2a2a2a',
+                background: 'var(--bg-elevated)',
+                border: '1px solid var(--border-default)',
                 fontFamily: 'monospace',
                 fontSize: 11,
               }}
