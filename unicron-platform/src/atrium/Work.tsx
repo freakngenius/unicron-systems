@@ -201,6 +201,135 @@ function FilterRow({ label, count, dot }: { label: string; count?: number | null
   );
 }
 
+// ─── Analytics panels (Pass 2 R3) ─────────────────────────────────────────────
+// SLOT: Most used by DRI · STATUS: real · SOURCE: ns_action_items_by_dri
+// SLOT: Highest priority by age · STATUS: real · SOURCE: ns_action_items_priority_by_age
+// SLOT: By board distribution · STATUS: real · SOURCE: ns_action_items_by_board
+// (kanban_workspace serves as the Board grouping field per action_items schema)
+
+interface DriRow { dri: string | null; dri_name: string | null; dri_email: string | null; open_count: number; }
+interface PriorityAgeRow { id: string; title: string; priority: string; age_days: number; dri_name: string | null; }
+interface BoardRow { kanban_workspace: string; count: number; pct: number; }
+
+const PRIORITY_DOT: Record<string, string> = {
+  irreversible: '#E14B4B',
+  high:         '#C28A1F',
+  medium:       '#6081BE',
+  low:          '#7E8AA3',
+};
+
+function useWorkAnalytics() {
+  const [byDri, setByDri] = useState<DriRow[] | null>(null);
+  const [priAge, setPriAge] = useState<PriorityAgeRow[] | null>(null);
+  const [byBoard, setByBoard] = useState<BoardRow[] | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const sb = getSupabase();
+    Promise.all([
+      sb.rpc('ns_action_items_by_dri'),
+      sb.rpc('ns_action_items_priority_by_age'),
+      sb.rpc('ns_action_items_by_board'),
+    ]).then(([d, p, b]) => {
+      if (cancelled) return;
+      setByDri((d.data as DriRow[] | null) ?? []);
+      setPriAge((p.data as PriorityAgeRow[] | null) ?? []);
+      setByBoard((b.data as BoardRow[] | null) ?? []);
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+
+  return { byDri, priAge, byBoard };
+}
+
+function AnalyticsPanels() {
+  const { byDri, priAge, byBoard } = useWorkAnalytics();
+  const maxDriCount = Math.max(1, ...((byDri ?? []).map((r) => Number(r.open_count))));
+
+  return (
+    <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))' }}>
+      {/* Most used by DRI */}
+      <div className="bg-white border border-border-default rounded-xl p-4 shadow-sm">
+        <div className="text-[11px] uppercase tracking-[0.14em] text-text-muted font-semibold mb-3">
+          Most used (by DRI)
+        </div>
+        {!byDri || byDri.length === 0 ? (
+          <div className="text-[12px] text-text-muted">No open items.</div>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {byDri.map((r, i) => {
+              const w = (Number(r.open_count) / maxDriCount) * 100;
+              return (
+                <div key={r.dri ?? `unassigned-${i}`} className="flex items-center gap-2.5">
+                  <span className="text-[12px] text-text-primary truncate" style={{ minWidth: 90 }}>
+                    {r.dri_name ?? (r.dri_email?.split('@')[0]) ?? 'Unassigned'}
+                  </span>
+                  <div className="flex-1 h-1.5 rounded-full bg-border-subtle overflow-hidden">
+                    <div className="h-full rounded-full" style={{ width: `${w}%`, background: '#6081BE' }} />
+                  </div>
+                  <span className="text-[11px] font-mono text-text-primary font-semibold min-w-[24px] text-right">
+                    {r.open_count}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Highest priority by age */}
+      <div className="bg-white border border-border-default rounded-xl p-4 shadow-sm">
+        <div className="text-[11px] uppercase tracking-[0.14em] text-text-muted font-semibold mb-3">
+          Highest priority by age
+        </div>
+        {!priAge || priAge.length === 0 ? (
+          <div className="text-[12px] text-text-muted">No irreversible/high open items.</div>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {priAge.map((r) => (
+              <div key={r.id} className="flex items-start gap-2.5">
+                <span className="w-1.5 h-1.5 rounded-full mt-1.5 shrink-0" style={{ background: PRIORITY_DOT[r.priority] ?? '#7E8AA3' }} />
+                <div className="flex-1 min-w-0">
+                  <div className="text-[12.5px] text-text-primary truncate">{r.title}</div>
+                  <div className="text-[10.5px] text-text-muted">
+                    {r.priority} · {Math.round(Number(r.age_days))}d old{r.dri_name ? ` · ${r.dri_name}` : ''}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* By board distribution */}
+      <div className="bg-white border border-border-default rounded-xl p-4 shadow-sm">
+        <div className="text-[11px] uppercase tracking-[0.14em] text-text-muted font-semibold mb-3">
+          By board
+        </div>
+        {!byBoard || byBoard.length === 0 ? (
+          <div className="text-[12px] text-text-muted">No open items.</div>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {byBoard.map((b) => (
+              <div key={b.kanban_workspace} className="flex items-center gap-2.5">
+                <span className="text-[12px] text-text-primary truncate" style={{ minWidth: 90 }}>
+                  {b.kanban_workspace}
+                </span>
+                <div className="flex-1 h-1.5 rounded-full bg-border-subtle overflow-hidden">
+                  <div className="h-full rounded-full" style={{ width: `${Number(b.pct)}%`, background: '#2E8E66' }} />
+                </div>
+                <span className="text-[11px] font-mono text-text-primary font-semibold min-w-[40px] text-right">
+                  {b.count} · {Number(b.pct).toFixed(0)}%
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function Work() {
@@ -282,12 +411,16 @@ export function Work() {
 
         <div className="work-body flex flex-col gap-4 min-w-0">
           {active === 'items' && (
-            <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))' }}>
-              <MetricCard label="Open items"  value={m.open === null ? '—' : String(m.open)}  change={{ value: 'flat', tone: 'flat' }} />
-              <MetricCard label="Overdue"     value={m.overdue === null ? '—' : String(m.overdue)} change={{ value: m.overdue && m.overdue > 0 ? 'attention' : 'flat', tone: m.overdue && m.overdue > 0 ? 'down' : 'flat' }} />
-              <MetricCard label="Due today"   value={m.dueToday === null ? '—' : String(m.dueToday)} change={{ value: 'flat', tone: 'flat' }} />
-              <MetricCard label="Avg age"     value={m.avgAgeDays === null ? '—' : `${m.avgAgeDays}d`} sublabel={m.avgAgeDays === null ? 'DEMO · wire ns_action_items_metrics' : undefined} />
-            </div>
+            <>
+              {/* SLOT: 4 metric cards · STATUS: real · SOURCE: ns_action_items_metrics */}
+              <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))' }}>
+                <MetricCard label="Open items"  value={m.open === null ? '—' : String(m.open)} />
+                <MetricCard label="Overdue"     value={m.overdue === null ? '—' : String(m.overdue)} change={m.overdue && m.overdue > 0 ? { value: 'attention', tone: 'down' } : undefined} />
+                <MetricCard label="Due today"   value={m.dueToday === null ? '—' : String(m.dueToday)} />
+                <MetricCard label="Avg age"     value={m.avgAgeDays === null ? '—' : `${m.avgAgeDays}d`} />
+              </div>
+              <AnalyticsPanels />
+            </>
           )}
 
           <section role="tabpanel" aria-label={WORK_TABS.find((t) => t.id === active)?.label}>
