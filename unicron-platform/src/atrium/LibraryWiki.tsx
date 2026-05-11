@@ -11,6 +11,26 @@ import { useState, useEffect, useCallback } from 'react';
 import type { WikiPage, WikiPageContent } from './library/useWikiApi';
 import { fetchWikiIndex, fetchWikiPage, editWikiPage } from './library/useWikiApi';
 
+// ── Inline SVG icons ──────────────────────────────────────────────────────────
+
+function PencilIcon({ size = 12 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+    </svg>
+  );
+}
+
+function PlusIcon({ size = 12 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <line x1="12" y1="5" x2="12" y2="19" />
+      <line x1="5" y1="12" x2="19" y2="12" />
+    </svg>
+  );
+}
+
 // ── Text-size selector ───────────────────────────────────────────────────────
 // Three-way toggle that scales body text + headings inside the wiki document
 // viewer only. Persists across page reloads and tab navigation.
@@ -166,14 +186,247 @@ const HANDBOOK_SECTIONS: HandbookSection[] = [
   { label: 'Reference',    slugs: ['glossary', 'faq'] },
 ];
 
-function buildHandbookNav(pages: WikiPage[]): { section: string; pages: WikiPage[] }[] {
-  const bySlug = new Map(pages.map((p) => [p.slug, p]));
-  return HANDBOOK_SECTIONS.map((section) => ({
-    section: section.label,
-    pages: section.slugs
+interface NavNode {
+  page: WikiPage;
+  children: NavNode[];
+}
+
+interface NavSection {
+  label: string;
+  nodes: NavNode[];
+}
+
+// Build a 3-level handbook nav:
+//  1. Curated sections (HANDBOOK_SECTIONS) with their root pages
+//  2. Each root page may have nested children (slug starts with `<parent>/`).
+//     Children recurse — sub-pages can have sub-sub-pages.
+//  3. An "Other" section at the bottom collects root-level pages that are NOT
+//     in HANDBOOK_SECTIONS and are NOT system files (_-prefixed, architecture,
+//     specs, prds, etc.). This is where pages added via the "+ New page"
+//     affordance land by default.
+function buildHandbookNav(pages: WikiPage[]): NavSection[] {
+  const EXCLUDED_TOP_DIRS = new Set([
+    'architecture', 'specs', 'prds', 'prompts', 'plans', 'retros', 'memory',
+    '_archive', 'research', 'decisions', 'people', 'customers', 'outputs', 'raw',
+  ]);
+
+  const isHandbookCandidate = (slug: string): boolean => {
+    if (slug.startsWith('_')) return false;
+    const top = slug.split('/')[0];
+    if (EXCLUDED_TOP_DIRS.has(top)) return false;
+    return true;
+  };
+
+  const handbookPages = pages.filter((p) => isHandbookCandidate(p.slug));
+  const bySlug = new Map(handbookPages.map((p) => [p.slug, p]));
+
+  // Build child lookup: parent slug -> direct children (depth = 1 below parent)
+  const childrenOf = new Map<string, WikiPage[]>();
+  for (const page of handbookPages) {
+    const lastSlash = page.slug.lastIndexOf('/');
+    if (lastSlash < 0) continue;
+    const parent = page.slug.slice(0, lastSlash);
+    if (!childrenOf.has(parent)) childrenOf.set(parent, []);
+    childrenOf.get(parent)!.push(page);
+  }
+
+  const buildNode = (page: WikiPage): NavNode => ({
+    page,
+    children: (childrenOf.get(page.slug) ?? [])
+      .sort((a, b) => a.title.localeCompare(b.title))
+      .map(buildNode),
+  });
+
+  const claimedSlugs = new Set<string>();
+  const markClaimed = (node: NavNode): void => {
+    claimedSlugs.add(node.page.slug);
+    node.children.forEach(markClaimed);
+  };
+
+  const curated: NavSection[] = HANDBOOK_SECTIONS.map((section) => {
+    const nodes = section.slugs
       .map((slug) => bySlug.get(slug))
-      .filter((p): p is WikiPage => p !== undefined),
-  })).filter((s) => s.pages.length > 0);
+      .filter((p): p is WikiPage => p !== undefined)
+      .map(buildNode);
+    nodes.forEach(markClaimed);
+    return { label: section.label, nodes };
+  }).filter((s) => s.nodes.length > 0);
+
+  // "Other" — root-level handbook pages not in any curated section
+  const otherRootPages = handbookPages
+    .filter((p) => !p.slug.includes('/') && !claimedSlugs.has(p.slug))
+    .sort((a, b) => a.title.localeCompare(b.title))
+    .map(buildNode);
+
+  if (otherRootPages.length > 0) {
+    curated.push({ label: 'Other', nodes: otherRootPages });
+  }
+
+  return curated;
+}
+
+// Slug derivation: kebab-case, ASCII-only, strip non-alphanum
+function slugifyTitle(title: string): string {
+  return title
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+function newPageSeed(title: string): string {
+  const today = new Date().toISOString().slice(0, 10);
+  return `---
+title: "${title.replace(/"/g, '\\"')}"
+type: wiki
+editable: open
+date: ${today}
+status: draft
+---
+
+# ${title}
+
+`;
+}
+
+// ── NavRow — sidebar entry with edit/add-child affordances ────────────────────
+
+function NavRow({
+  node,
+  depth,
+  selectedSlug,
+  onSelect,
+  onAddChild,
+}: {
+  node: NavNode;
+  depth: number;
+  selectedSlug: string;
+  onSelect: (slug: string) => void;
+  onAddChild: (parentSlug: string) => void;
+}) {
+  const isActive = selectedSlug === node.page.slug;
+  return (
+    <>
+      <div
+        className={['library-sidebar-row', isActive ? 'is-active' : ''].join(' ').trim()}
+        style={{ paddingLeft: 6 + depth * 12 }}
+      >
+        <button
+          type="button"
+          onClick={() => onSelect(node.page.slug)}
+          className="library-sidebar-row-link"
+          title={node.page.slug}
+        >
+          {node.page.title}
+        </button>
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onAddChild(node.page.slug); }}
+          className="library-sidebar-row-icon"
+          aria-label={`Add sub-page under ${node.page.title}`}
+          title="Add sub-page"
+        >
+          <PlusIcon size={11} />
+        </button>
+      </div>
+      {node.children.map((child) => (
+        <NavRow
+          key={child.page.slug}
+          node={child}
+          depth={depth + 1}
+          selectedSlug={selectedSlug}
+          onSelect={onSelect}
+          onAddChild={onAddChild}
+        />
+      ))}
+    </>
+  );
+}
+
+// ── New page modal ────────────────────────────────────────────────────────────
+
+function NewPageModal({
+  parentSlug,
+  onCancel,
+  onSubmit,
+}: {
+  parentSlug: string;
+  onCancel: () => void;
+  onSubmit: (title: string, slug: string, parent: string) => Promise<void>;
+}) {
+  const [title, setTitle] = useState('');
+  const [slug, setSlug] = useState('');
+  const [slugTouched, setSlugTouched] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const effectiveSlug = slugTouched ? slug : slugifyTitle(title);
+  const fullSlug = parentSlug ? `${parentSlug}/${effectiveSlug}` : effectiveSlug;
+  const canSubmit = title.trim().length > 0 && effectiveSlug.length > 0 && !submitting;
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!canSubmit) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      await onSubmit(title.trim(), effectiveSlug, parentSlug);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : String(err));
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="library-modal-backdrop" onClick={onCancel}>
+      <form
+        className="library-modal"
+        onClick={(e) => e.stopPropagation()}
+        onSubmit={handleSubmit}
+      >
+        <div className="library-modal-header">
+          {parentSlug ? `New sub-page under ${parentSlug}` : 'New page'}
+        </div>
+
+        <label className="library-modal-field">
+          <span className="library-modal-label">Title</span>
+          <input
+            type="text"
+            autoFocus
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="e.g. Working with the Orchestrator"
+            className="library-modal-input"
+            spellCheck
+          />
+        </label>
+
+        <label className="library-modal-field">
+          <span className="library-modal-label">Slug</span>
+          <input
+            type="text"
+            value={effectiveSlug}
+            onChange={(e) => { setSlug(e.target.value); setSlugTouched(true); }}
+            placeholder="working-with-the-orchestrator"
+            className="library-modal-input library-modal-input-mono"
+            spellCheck={false}
+          />
+          <span className="library-modal-hint">Path: <code>{fullSlug || '(empty)'}</code></span>
+        </label>
+
+        {error && <div className="library-modal-error">{error}</div>}
+
+        <div className="library-modal-actions">
+          <button type="button" onClick={onCancel} className="library-modal-btn">
+            Cancel
+          </button>
+          <button type="submit" disabled={!canSubmit} className="library-modal-btn library-modal-btn-primary">
+            {submitting ? 'Creating…' : 'Create page'}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -192,23 +445,29 @@ export function LibraryWiki({ initialSlug }: { initialSlug?: string } = {}) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [textSize, setTextSizeState] = useState<LibraryTextSize>(() => readPersistedTextSize());
 
+  // New-page modal — null when closed, parent="" for top-level, otherwise sub-page parent slug
+  const [newPageParent, setNewPageParent] = useState<string | null>(null);
+
   const setTextSize = (size: LibraryTextSize) => {
     setTextSizeState(size);
     writePersistedTextSize(size);
   };
 
+  const refreshIndex = useCallback(async (): Promise<WikiPage[]> => {
+    const ps = await fetchWikiIndex();
+    setPages(ps);
+    return ps;
+  }, []);
+
   // Load index
   useEffect(() => {
-    fetchWikiIndex()
-      .then((ps) => {
-        setPages(ps);
-        setLoading(false);
-      })
+    refreshIndex()
+      .then(() => setLoading(false))
       .catch((e: Error) => {
         setError(e.message);
         setLoading(false);
       });
-  }, []);
+  }, [refreshIndex]);
 
   // Load page content
   const loadPage = useCallback((slug: string) => {
@@ -254,6 +513,24 @@ export function LibraryWiki({ initialSlug }: { initialSlug?: string } = {}) {
       setSaving(false);
     }
   };
+
+  const handleCreatePage = useCallback(async (title: string, slugInput: string, parentSlug: string): Promise<void> => {
+    const childSlug = slugInput.trim() || slugifyTitle(title);
+    if (!childSlug) throw new Error('Slug cannot be empty');
+    const fullSlug = parentSlug ? `${parentSlug}/${childSlug}` : childSlug;
+    if (pages.some((p) => p.slug === fullSlug)) {
+      throw new Error(`A page with slug "${fullSlug}" already exists`);
+    }
+    const seed = newPageSeed(title);
+    await editWikiPage(fullSlug, seed);
+    await refreshIndex();
+    setSelectedSlug(fullSlug);
+    setPageContent({ slug: fullSlug, content: seed, mtime: null });
+    setEditDraft(seed);
+    setEditing(true);
+    setNewPageParent(null);
+    setSaveMsg(null);
+  }, [pages, refreshIndex]);
 
   // Handle [[wikilink]] clicks via event delegation
   const handleContentClick = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -301,24 +578,31 @@ export function LibraryWiki({ initialSlug }: { initialSlug?: string } = {}) {
               Index
             </button>
 
-            {handbookNav.map(({ section, pages: sectionPages }) => (
-              <div key={section} className="library-sidebar-section">
-                <div className="library-sidebar-section-label">{section}</div>
-                {sectionPages.map((page) => (
-                  <button
-                    key={page.slug}
-                    onClick={() => loadPage(page.slug)}
-                    className={[
-                      'library-sidebar-link',
-                      selectedSlug === page.slug ? 'is-active' : '',
-                    ].join(' ').trim()}
-                    title={page.slug}
-                  >
-                    {page.title}
-                  </button>
+            {handbookNav.map(({ label, nodes }) => (
+              <div key={label} className="library-sidebar-section">
+                <div className="library-sidebar-section-label">{label}</div>
+                {nodes.map((node) => (
+                  <NavRow
+                    key={node.page.slug}
+                    node={node}
+                    depth={0}
+                    selectedSlug={selectedSlug}
+                    onSelect={loadPage}
+                    onAddChild={(parent) => setNewPageParent(parent)}
+                  />
                 ))}
               </div>
             ))}
+
+            <button
+              type="button"
+              onClick={() => setNewPageParent('')}
+              className="library-new-page-btn"
+              title="Create a new top-level page"
+            >
+              <PlusIcon size={11} />
+              <span>New page</span>
+            </button>
           </>
         )}
       </aside>
@@ -357,28 +641,19 @@ export function LibraryWiki({ initialSlug }: { initialSlug?: string } = {}) {
                   );
                 })}
               </div>
-              {editability === 'open' && !editing && (
+              {!editing && pageContent && selectedSlug !== '_master-index' && (
                 <button
+                  type="button"
                   onClick={() => {
-                    setEditDraft(pageContent?.content ?? '');
+                    setEditDraft(pageContent.content);
                     setEditing(true);
                     setSaveMsg(null);
                   }}
-                  className="mono text-[10px] uppercase tracking-[0.12em] px-3 py-1.5 rounded border border-border-default text-text-secondary hover:text-text-primary hover:border-border-strong transition-colors"
+                  className="library-page-icon-btn"
+                  aria-label={editability === 'pr' ? 'Propose edit to this page' : 'Edit this page'}
+                  title={editability === 'pr' ? 'Propose edit' : 'Edit'}
                 >
-                  Edit
-                </button>
-              )}
-              {editability === 'pr' && !editing && (
-                <button
-                  onClick={() => {
-                    setEditDraft(pageContent?.content ?? '');
-                    setEditing(true);
-                    setSaveMsg(null);
-                  }}
-                  className="mono text-[10px] uppercase tracking-[0.12em] px-3 py-1.5 rounded border border-border-default text-text-secondary hover:text-text-primary hover:border-border-strong transition-colors"
-                >
-                  Propose edit
+                  <PencilIcon size={14} />
                 </button>
               )}
               {editing && (
@@ -437,6 +712,14 @@ export function LibraryWiki({ initialSlug }: { initialSlug?: string } = {}) {
             />
           ) : null}
         </div>
+
+        {newPageParent !== null && (
+          <NewPageModal
+            parentSlug={newPageParent}
+            onCancel={() => setNewPageParent(null)}
+            onSubmit={handleCreatePage}
+          />
+        )}
 
         {/* Table of contents */}
         {!editing && toc.length > 0 && (
@@ -519,6 +802,217 @@ export function LibraryWiki({ initialSlug }: { initialSlug?: string } = {}) {
           background: var(--v3-blue-soft);
           color: var(--v3-blue);
           font-weight: 600;
+        }
+
+        /* ── Sidebar nav rows with inline edit/add icons ── */
+        .library-sidebar-row {
+          display: flex;
+          align-items: center;
+          gap: 2px;
+          padding: 0 8px 0 6px;
+          border-radius: 4px;
+          margin-bottom: 1px;
+          transition: background-color 100ms ease, color 100ms ease;
+        }
+        .library-sidebar-row:hover {
+          background: var(--v3-line-soft);
+        }
+        .library-sidebar-row.is-active {
+          background: var(--v3-blue-soft);
+        }
+        .library-sidebar-row.is-active .library-sidebar-row-link {
+          color: var(--v3-blue);
+          font-weight: 600;
+        }
+        .library-sidebar-row-link {
+          flex: 1 1 auto;
+          min-width: 0;
+          text-align: left;
+          padding: 6px 0;
+          font-family: var(--font-ui);
+          font-size: 13px;
+          line-height: 1.4;
+          color: var(--v3-ink-md);
+          background: transparent;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          transition: color 100ms ease;
+        }
+        .library-sidebar-row:hover .library-sidebar-row-link {
+          color: var(--v3-ink);
+        }
+        .library-sidebar-row-icon {
+          flex: 0 0 auto;
+          width: 18px;
+          height: 18px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 3px;
+          color: var(--v3-ink-lo);
+          background: transparent;
+          opacity: 0;
+          transition: opacity 100ms ease, color 100ms ease, background-color 100ms ease;
+        }
+        .library-sidebar-row:hover .library-sidebar-row-icon,
+        .library-sidebar-row.is-active .library-sidebar-row-icon {
+          opacity: 1;
+        }
+        .library-sidebar-row-icon:hover {
+          color: var(--v3-ink);
+          background: var(--v3-bg-soft);
+        }
+
+        /* "+ New page" button at sidebar bottom */
+        .library-new-page-btn {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          margin-top: 8px;
+          padding: 6px 10px;
+          border-radius: 4px;
+          font-family: var(--font-ui);
+          font-size: 12px;
+          color: var(--v3-ink-lo);
+          background: transparent;
+          border: 1px dashed var(--v3-line);
+          cursor: pointer;
+          transition: color 120ms ease, border-color 120ms ease, background-color 120ms ease;
+        }
+        .library-new-page-btn:hover {
+          color: var(--v3-ink);
+          border-color: var(--v3-line-strong);
+          background: var(--v3-bg-soft);
+        }
+
+        /* Page header pencil/edit icon button */
+        .library-page-icon-btn {
+          width: 28px;
+          height: 28px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 4px;
+          color: var(--v3-ink-lo);
+          background: transparent;
+          border: 1px solid var(--v3-line-soft);
+          cursor: pointer;
+          transition: color 120ms ease, border-color 120ms ease, background-color 120ms ease;
+        }
+        .library-page-icon-btn:hover {
+          color: var(--v3-ink);
+          border-color: var(--v3-line);
+          background: var(--v3-bg-soft);
+        }
+
+        /* ── New page modal ── */
+        .library-modal-backdrop {
+          position: fixed;
+          inset: 0;
+          background: rgba(0, 0, 0, 0.45);
+          backdrop-filter: blur(2px);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 50;
+        }
+        .library-modal {
+          background: var(--v3-bg);
+          border: 1px solid var(--v3-line);
+          border-radius: 8px;
+          padding: 20px 22px 16px;
+          width: min(440px, 92vw);
+          display: flex;
+          flex-direction: column;
+          gap: 14px;
+          box-shadow: 0 24px 64px rgba(0, 0, 0, 0.45);
+        }
+        .library-modal-header {
+          font-family: var(--font-display);
+          font-size: 16px;
+          font-weight: 600;
+          color: var(--v3-ink);
+          letter-spacing: -0.01em;
+        }
+        .library-modal-field {
+          display: flex;
+          flex-direction: column;
+          gap: 5px;
+        }
+        .library-modal-label {
+          font-family: var(--font-ui);
+          font-size: 11px;
+          font-weight: 600;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+          color: var(--v3-ink-lo);
+        }
+        .library-modal-input {
+          font-family: var(--font-ui);
+          font-size: 13px;
+          color: var(--v3-ink);
+          background: var(--v3-bg-soft);
+          border: 1px solid var(--v3-line);
+          border-radius: 4px;
+          padding: 8px 10px;
+          outline: none;
+          transition: border-color 120ms ease;
+        }
+        .library-modal-input:focus { border-color: var(--v3-blue); }
+        .library-modal-input-mono { font-family: var(--font-mono); font-size: 12px; }
+        .library-modal-hint {
+          font-family: var(--font-ui);
+          font-size: 11px;
+          color: var(--v3-ink-lo);
+        }
+        .library-modal-hint code {
+          font-family: var(--font-mono);
+          color: var(--v3-ink-md);
+        }
+        .library-modal-error {
+          font-family: var(--font-ui);
+          font-size: 12px;
+          color: var(--v3-red);
+          background: rgba(220, 70, 70, 0.08);
+          border: 1px solid rgba(220, 70, 70, 0.25);
+          border-radius: 4px;
+          padding: 6px 10px;
+        }
+        .library-modal-actions {
+          display: flex;
+          justify-content: flex-end;
+          gap: 8px;
+          margin-top: 4px;
+        }
+        .library-modal-btn {
+          font-family: var(--font-ui);
+          font-size: 12px;
+          padding: 7px 14px;
+          border-radius: 4px;
+          background: transparent;
+          border: 1px solid var(--v3-line);
+          color: var(--v3-ink-md);
+          cursor: pointer;
+          transition: color 120ms ease, border-color 120ms ease, background-color 120ms ease;
+        }
+        .library-modal-btn:hover {
+          color: var(--v3-ink);
+          border-color: var(--v3-line-strong);
+        }
+        .library-modal-btn-primary {
+          background: var(--v3-blue);
+          border-color: var(--v3-blue);
+          color: #fff;
+        }
+        .library-modal-btn-primary:hover {
+          background: var(--v3-blue-ink, var(--v3-blue));
+          border-color: var(--v3-blue-ink, var(--v3-blue));
+          color: #fff;
+        }
+        .library-modal-btn-primary:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
         }
 
         /* ── Document viewer header chrome ── */
