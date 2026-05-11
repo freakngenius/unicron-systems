@@ -25,3 +25,8 @@ export { ingestRouter } from './ingest-router';
 export { emailDailyCron } from './email-cron';
 // Phase 2C slice 1 — per-org ingest dispatch cron.
 export { ingestAllOrgsCron } from './ingest-all-orgs-cron';
+// Phase 2E slice 2 — Onboarding-to-Live state machine: status flip on
+// org.created + periodic threshold check transitioning first_run/ranking
+// → ready_to_view or awaiting_threshold.
+export { orgCreated } from './org-created';
+export { checkReadyToViewCron } from './check-ready-to-view-cron';

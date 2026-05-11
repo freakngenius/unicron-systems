@@ -183,4 +183,43 @@ export type PathfinderEvents = {
       requested_at: string;
     };
   };
+
+  /**
+   * Architect Approve & Deploy persisted a new org row (Phase 2E slice 2).
+   * Subscribed by `orgCreated` (lib/inngest/functions/org-created.ts) which
+   * flips `pathfinder.organizations.status` from `setting_up` → `first_run`
+   * so the Metacron Customer Detail badge reflects on-demand activity.
+   *
+   * Slice 2 ships the event + the status flip only. The on-demand adapter
+   * dispatch envisioned in Phase 2E SPEC §"On-demand first run" depends on
+   * Phase 2C slice 6 (source adapter registry) which hasn't shipped yet;
+   * until then, the existing cron-based pipeline (ranker every 30 min,
+   * ingest-all-orgs every 4h) picks up the new org on its next cycle.
+   */
+  'pathfinder/org.created': {
+    name: 'pathfinder/org.created';
+    data: {
+      organization_id: string;
+      slug: string;
+      created_at: string;
+    };
+  };
+
+  /**
+   * Per-org ranking cycle completed (Phase 2E slice 2). Emitted by the
+   * periodic `check-ready-to-view-cron` after it evaluates an org's
+   * verified-lead count and transitions status to `ready_to_view` or
+   * `awaiting_threshold`. Subscribers are observability sinks.
+   */
+  'pathfinder/org.ranking_complete': {
+    name: 'pathfinder/org.ranking_complete';
+    data: {
+      organization_id: string;
+      slug: string;
+      verified_count: number;
+      total_count: number;
+      next_status: 'ready_to_view' | 'awaiting_threshold';
+      completed_at: string;
+    };
+  };
 };

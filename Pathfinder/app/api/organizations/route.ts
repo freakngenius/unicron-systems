@@ -12,6 +12,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { supabaseAdmin } from '@/lib/supabase';
 import type { Organization } from '@/lib/types';
+import { inngest } from '@/lib/inngest/client';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -104,6 +105,31 @@ export async function POST(req: NextRequest) {
   if (error) {
     const status = error.code === '23505' ? 409 : 500;
     return NextResponse.json({ error: error.message }, { status, headers: corsHeaders(origin) });
+  }
+
+  // Phase 2E slice 2 — emit `pathfinder/org.created` so the orgCreated
+  // Inngest function flips status setting_up → first_run. Best-effort:
+  // a transient Inngest failure must not roll back the org row insert
+  // (the check-ready-to-view cron will still pick up the org via its
+  // status-based query within 5 minutes).
+  if (data) {
+    try {
+      await inngest.send({
+        name: 'pathfinder/org.created',
+        data: {
+          organization_id: data.id,
+          slug: data.slug,
+          created_at: new Date().toISOString(),
+        },
+      });
+    } catch (emitErr) {
+      // Swallow — the row is persisted, the cron-based threshold check
+      // will reconcile state. Log to stderr for ops visibility.
+      console.error(
+        '[organizations.POST] inngest emit failed (non-fatal):',
+        emitErr instanceof Error ? emitErr.message : String(emitErr),
+      );
+    }
   }
 
   return NextResponse.json(data as Organization, { status: 201, headers: corsHeaders(origin) });
