@@ -829,3 +829,47 @@ Operator setup: `MEMORY/operator-todos/2026-05-03-teams-user-setup.md` — Micro
 **Implements:** SPEC - Phase 2A Multi-tenant Routing & Auth.md §3 (per-org React context for slug-routed pages). Provides `<OrgProvider>` + `useOrg()` so any descendant component reads the current `Organization` row resolved from `[slug]/layout.tsx`. Magic-link callback writes a session cookie; layout reads `pathfinder.organizations` by slug; provider exposes `org` + `loading`.
 **Last verified against spec:** 2026-05-10.
 **Drift:** none. Provider mirrors the patterns already used in Atrium contexts on the unicron-platform side.
+
+
+---
+
+## Phase 2C — Per-Org Agent Dispatch (slice 1)
+
+**State:** PR open. Foundation slice: typed architecture, base template, resolver, server-side loader, and per-org Inngest dispatch cron. No agent behavior changes yet — Zedcor's existing kernel keeps running unchanged.
+
+#### Pathfinder/lib/types/architecture.ts
+**Implements:** SPEC - Phase 2B Tenant Config Layer.md §"Architecture JSON types". Defines `OrgArchitecture` and supporting interfaces (`LeadUnitConfig`, `PipelineConfig`, `ScoringConfig`, `GeographyConfig`, `SourceRef`, `OutreachConfig`, `BrandingConfig`, `BusinessSummary`).
+**Last verified against spec:** 2026-05-10.
+**Drift:** none.
+
+#### Pathfinder/lib/config/baseTemplate.ts
+**Implements:** SPEC - Phase 2B Tenant Config Layer.md §"BASE_ARCHITECTURE". Safe-default Pathfinder shape; orgs with `architecture: {}` resolve to this template.
+**Last verified against spec:** 2026-05-10.
+**Drift:** none.
+
+#### Pathfinder/lib/config/resolveArchitecture.ts
+**Implements:** SPEC - Phase 2B Tenant Config Layer.md §"Merge resolver". Shallow-per-key merge with deep-clone of base to prevent mutation; arrays (sources, compliance, integrations) replaced wholesale; nested objects (lead_unit.schema, pipeline.stage_labels, scoring.weights/thresholds, vocabulary, branding) merged field-by-field.
+**Last verified against spec:** 2026-05-10.
+**Drift:** none.
+**Tests:** `Pathfinder/__tests__/config/resolveArchitecture.test.ts` — 14 cases covering null/undefined/empty input, partial merges per top-level key, no-mutation invariant.
+
+#### Pathfinder/lib/agents/loadOrgArchitecture.ts
+**Implements:** SPEC - Phase 2C Dynamic Agent Dispatch.md §"Per-org dispatch" (server-side architecture loader). Reads `pathfinder.organizations.{id,name,slug,architecture}` via `supabaseAdmin()`, returns the resolved `OrgArchitecture`. Throws on missing org or supabase error. Test seam `__setSupabaseClientForTests` mirrors `lib/supabase.ts` pattern.
+**Last verified against spec:** 2026-05-10.
+**Drift:** none.
+**Tests:** `Pathfinder/__tests__/agents/loadOrgArchitecture.test.ts` — 4 cases covering merged-architecture happy path, empty-architecture base fallback, OrgNotFoundError, supabase error surfacing.
+
+#### Pathfinder/lib/inngest/events.ts
+**Implements:** SPEC - Phase 2C Dynamic Agent Dispatch.md §"Per-org dispatch" (event contract). Adds `pathfinder/org.ingest_requested` event carrying `{organization_id, slug, trigger, requested_at}`. Slice 1 emits; subscribers wire in slice 2.
+**Last verified against spec:** 2026-05-10.
+**Drift:** none — contract-only addition; existing event entries untouched.
+
+#### Pathfinder/lib/inngest/functions/ingest-all-orgs-cron.ts
+**Implements:** SPEC - Phase 2C Dynamic Agent Dispatch.md §"Per-org dispatch" (Inngest cron). Lists orgs from `pathfinder.organizations` and emits one `pathfinder/org.ingest_requested` event per org. Runs every 4 hours UTC. Slice 1 has no consumers — events are no-ops in production until slice 2 lands the ranker dispatcher.
+**Last verified against spec:** 2026-05-10.
+**Drift:** **minor, justified.** Spec sketches `WHERE status='active'` filter; the `status` column doesn't exist on `pathfinder.organizations` yet (Phase 2E adds the state machine). Slice 1 lists all orgs; downstream `loadOrgArchitecture` fails closed if an org is somehow malformed. Switch to `status='active'` ships with Phase 2E.
+
+#### Pathfinder/lib/inngest/functions/index.ts
+**Implements:** SPEC - Backend Architecture.md §4 (Inngest function registry). Appends `ingestAllOrgsCron` to the barrel export.
+**Last verified against spec:** 2026-05-10.
+**Drift:** none — pure append.

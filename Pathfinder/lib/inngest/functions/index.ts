@@ -23,3 +23,5 @@ export { verifierRetry } from './verifier-retry';
 export { ingestRouter } from './ingest-router';
 // Sprint 5 Stream A — daily email ingest cron (08:00 PT = 16:00 UTC).
 export { emailDailyCron } from './email-cron';
+// Phase 2C slice 1 — per-org ingest dispatch cron.
+export { ingestAllOrgsCron } from './ingest-all-orgs-cron';

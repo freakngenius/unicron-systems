@@ -18,6 +18,7 @@ import {
   coverageExpansionEstimate,
   coverageExpansionRun,
   ingestRouter,
+  ingestAllOrgsCron,
 } from '@/lib/inngest/functions';
 
 export const { GET, POST, PUT } = serve({
@@ -34,6 +35,7 @@ export const { GET, POST, PUT } = serve({
     coverageExpansionEstimate,
     coverageExpansionRun,
     ingestRouter,
+    ingestAllOrgsCron,
   ],
 });
 
