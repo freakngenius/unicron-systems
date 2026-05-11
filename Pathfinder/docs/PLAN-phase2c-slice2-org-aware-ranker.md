@@ -134,9 +134,20 @@ For SEC-compliance orgs (per slice 7 SPEC), a compliance clause prefix is inject
 ## Risks + mitigations
 
 - **Regressing Zedcor pipeline:** mitigation is the explicit `if (org_id === ZEDCOR_ID || !architecture)` fallthrough. Test 10 above locks this in. Production Zedcor projects continue down the unchanged code path.
-- **Architect-emitted weights drift:** the resolver merges with `BASE_ARCHITECTURE.scoring.weights` so missing keys don't break math. Anomalies (e.g. weights summing to 5.0) are bounded by the [0, 100] clamp.
+- **Architect-emitted weights drift (CORRECTED 2026-05-11 post-codex review):** the plan originally claimed `resolveArchitecture` merges weights key-by-key with `BASE_ARCHITECTURE.scoring.weights`. **That was wrong.** Reading `lib/config/resolveArchitecture.ts:45`: `weights: p.scoring.weights ?? out.scoring.weights` — the resolver REPLACES `scoring.weights` wholesale when the partial provides them. A partial `{ scoring: { weights: { geography_match: 0.4 } } }` yields `{ geography_match: 0.4 }` only, NOT merged with the `{ default: 1.0 }` base. **Mitigation:** `scoreGenericProject` treats missing weight keys as 0 (defensive defaults inside the scorer, not in the resolver). The [0, 100] clamp + Math.max(0, ...) bounds still hold. Score for a sparse weights map will be smaller in absolute magnitude but well-defined.
+- **Pre-existing multi-tenant gap surfaced by codex (NOT introduced by this slice):** the ranker route loads `pathfinder.branches` and `pathfinder.customers` globally — no org filter (line 655 in route.ts). `lib/scoring.ts:scoreProject` assumes that set is the current tenant context. The Zedcor kernel's reliance on this is fine because Zedcor IS the dominant tenant today; new orgs will inherit the same global set. This becomes a real cross-tenant contamination risk if/when other orgs populate `branches` + `customers` with their own data. **Out of scope for slice 2** — the slice routes other orgs to `scoreGenericProject` which doesn't use branches/customers at all. **Followup card to file:** "Phase 2C slice 2.5: org-scope pathfinder.branches and pathfinder.customers for Zedcor-tier kernel."
 - **Sonnet template injection:** all `{{...}}` interpolations are JSON-stringified, not raw, so a malicious `architecture.outreach.persona` can't break out of the prompt envelope.
 - **Cross-app boundary:** none. All changes in `Pathfinder/`. unicron-platform untouched.
+
+## Codex review of this plan (run 2026-05-11)
+
+Codex review of the plan against the current ranker code + slice-1 foundation surfaced three findings, addressed inline above:
+
+1. **Slug lookup acceptable** — `organizations.slug` is unique, PATCH endpoint doesn't allow slug edits ([20260509_organizations.sql:6](../supabase/migrations/20260509_organizations.sql)), so slug → id resolution is stable. Plan recommendation stands.
+2. **Hidden coupling on branches/customers** — incorporated into Risks above as "Pre-existing multi-tenant gap." Filing followup card 2.5.
+3. **`resolveArchitecture` does NOT merge weights** — incorporated into Risks above. `scoreGenericProject` will defensively default missing keys to 0 inside its own implementation.
+
+Plan locked at version 2026-05-11-v2 (post-codex). The 4 open questions for operator remain unchanged; the codex findings strengthen the recommendation for Option A.
 
 ## Rollback
 
