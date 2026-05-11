@@ -6,6 +6,10 @@
 import Link from 'next/link';
 import { supabaseAdmin } from '@/lib/supabase';
 import type { Organization } from '@/lib/types';
+// Phase 2E slice 4 — operator-viewed transition fired on first render of
+// this route. Best-effort side-effect; the helper swallows failures so a
+// transient Supabase error doesn't block the page.
+import { flipToOperatorViewed } from '@/lib/agents/operator-viewed';
 
 type Props = { params: Promise<{ slug: string }> };
 
@@ -21,10 +25,18 @@ export default async function OrgPage({ params }: Props) {
     .from('organizations')
     .select('*')
     .eq('slug', slug)
-    .maybeSingle()) as { data: Organization | null; error: unknown };
+    .maybeSingle()) as { data: (Organization & { status?: string | null }) | null; error: unknown };
 
   const architecture = org?.architecture ?? {};
   const hasArchitecture = Object.keys(architecture).length > 0;
+
+  // Phase 2E slice 4 — first-render operator_viewed transition. Only
+  // flips when current status is `ready_to_view`; other states preserve
+  // their semantics. Best-effort: helper swallows update failures and
+  // returns a reason; rendering is unaffected.
+  if (org?.id) {
+    await flipToOperatorViewed(org.id, org.status ?? null);
+  }
 
   return (
     <div
