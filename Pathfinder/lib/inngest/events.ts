@@ -162,4 +162,25 @@ export type PathfinderEvents = {
       requested_at: string;
     };
   };
+
+  /**
+   * Per-org ingest dispatch (Phase 2C slice 1). The ingest-all-orgs cron
+   * lists active organizations and emits one event per org carrying the
+   * resolved architecture so downstream agent slices (ranker, outreach,
+   * verifier) can pick up org-scoped work without re-fetching per agent.
+   *
+   * Slice 1 emits this event but no subscriber consumes it yet — that
+   * lands in slice 2 when the ranker dispatcher comes online. The event
+   * shape is stable so downstream slices subscribe without contract
+   * churn.
+   */
+  'pathfinder/org.ingest_requested': {
+    name: 'pathfinder/org.ingest_requested';
+    data: {
+      organization_id: string;
+      slug: string;
+      trigger: 'cron' | 'on-demand' | 'first-run';
+      requested_at: string;
+    };
+  };
 };
