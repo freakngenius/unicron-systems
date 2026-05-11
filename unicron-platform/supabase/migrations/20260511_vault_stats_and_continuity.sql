@@ -71,7 +71,9 @@ AS $$
   LIMIT 1;
 $$;
 
-GRANT EXECUTE ON FUNCTION public.ns_vault_stats_latest() TO authenticated, anon, service_role;
+-- Vault structure metadata is operator-only; restrict from anon.
+REVOKE EXECUTE ON FUNCTION public.ns_vault_stats_latest() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.ns_vault_stats_latest() TO authenticated, service_role;
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- S4c: continuity_log
@@ -137,4 +139,6 @@ AS $$
   LIMIT p_limit;
 $$;
 
-GRANT EXECUTE ON FUNCTION public.ns_continuity_log_latest(int) TO authenticated, anon, service_role;
+-- Continuity ledger is operator-only; restrict from anon.
+REVOKE EXECUTE ON FUNCTION public.ns_continuity_log_latest(int) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.ns_continuity_log_latest(int) TO authenticated, service_role;
