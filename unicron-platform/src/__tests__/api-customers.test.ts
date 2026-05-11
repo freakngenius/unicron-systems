@@ -234,9 +234,12 @@ describe('PATCH /api/atrium/customers/[id]', () => {
 
     expect(res._status).toBe(200);
     expect((res._body as typeof updated).status).toBe('Active');
+    // The API boundary lowercases p_status (api/atrium/customers/[id].ts:140)
+    // to match the customers_status_check constraint added in PR #330 — the
+    // body status "Active" is normalized to "active" before the RPC fires.
     expect(mockRpc).toHaveBeenCalledWith('ns_update_customer', expect.objectContaining({
       p_id: 'cust-1',
-      p_status: 'Active',
+      p_status: 'active',
     }));
   });
 

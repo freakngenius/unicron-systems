@@ -96,10 +96,13 @@ describe('agent edit flow: PATCH → RPC update → audit log', () => {
     // Verify ns_get_customer was called first
     expect(mockRpc).toHaveBeenNthCalledWith(1, 'ns_get_customer', { p_id: customerId });
 
-    // Verify ns_update_customer was called with correct params
+    // Verify ns_update_customer was called with correct params. The API
+    // boundary lowercases p_status (api/atrium/customers/[id].ts:140) to
+    // match the customers_status_check constraint added in PR #330 — the
+    // value the user POSTs ("Qualified") is normalized before the RPC.
     expect(mockRpc).toHaveBeenNthCalledWith(2, 'ns_update_customer', {
       p_id: customerId,
-      p_status: 'Qualified',
+      p_status: 'qualified',
     });
   });
 
