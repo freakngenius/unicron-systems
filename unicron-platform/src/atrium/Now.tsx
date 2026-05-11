@@ -338,21 +338,6 @@ function TopOfMind({ teamMemberId }: { teamMemberId: string | null }) {
         <div className="mono text-[11px] text-text-secondary">
           Nothing demanding attention right now.
         </div>
-        {calendarConnected === false && (
-          <div className="mono text-[10px] text-text-muted mt-1.5">
-            Calendar not connected — Sprint 5
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  if (items.length === 0) {
-    return (
-      <div className="bg-bg-card border border-border-default rounded-xl px-5 py-4">
-        <div className="mono text-[11px] text-text-secondary">
-          Nothing demanding attention right now.
-        </div>
         <div className="mono text-[10px] text-text-muted mt-1.5">
           Top of mind — open items where you are DRI, irreversible or high priority
         </div>
