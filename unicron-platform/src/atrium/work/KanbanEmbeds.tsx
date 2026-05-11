@@ -91,9 +91,14 @@ function useNotionKanban(workspace: string) {
     try {
       // Force a fresh pull from Notion; the server returns counts and the
       // mirror is updated before we re-query.
-      await fetch(`/api/internal/kanban-update?op=pull&workspace=${encodeURIComponent(workspace)}`, {
-        method: 'GET',
-      }).catch(() => null);
+      const { data } = await getSupabase().auth.getSession();
+      const accessToken = data.session?.access_token;
+      if (accessToken) {
+        await fetch(`/api/internal/kanban-update?op=pull&workspace=${encodeURIComponent(workspace)}`, {
+          method: 'GET',
+          headers: { Authorization: `Bearer ${accessToken}` },
+        }).catch(() => null);
+      }
       await load();
     } finally {
       setRefreshing(false);
@@ -378,9 +383,17 @@ export function KanbanEmbeds() {
   }, [effectiveRows]);
 
   async function postUpdate(notionPageId: string, status: StatusKey, allowVerified: boolean) {
+    const { data: session } = await getSupabase().auth.getSession();
+    const accessToken = session.session?.access_token;
+    if (!accessToken) {
+      throw new Error('Sign in to update kanban — no active Atrium session');
+    }
     const res = await fetch('/api/internal/kanban-update', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+      },
       body: JSON.stringify({
         notion_page_id: notionPageId,
         status,
