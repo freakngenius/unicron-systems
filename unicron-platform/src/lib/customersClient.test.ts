@@ -1,138 +1,192 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-  __resetLocalCustomerOrgsForTests,
-  createCustomerOrg,
-  getCustomerOrgBySlug,
-  getOrgHealth,
-  listCustomerOrgs,
-  slugify,
-  validateSlug,
-} from './customersClient';
-import { SlugConflictError } from './contracts/customers';
+// src/lib/customersClient.test.ts
+//
+// Asserts the real getOrgHealth() query shape after PR #280 redo: every
+// query scopes by organization_id (uuid), agent_log uses ts not created_at,
+// data_sources uses adapter_kind/name (mapped to type/label in the response),
+// and the OrgHealthRollup wire contract is honored.
+//
+// Replaces the archived mock-mode test suite. Mocks the Supabase client at
+// the module boundary instead of via env-flag toggle.
 
-describe('customersClient (mock-mode)', () => {
+import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
+
+interface CapturedCall {
+  table: string;
+  select: string;
+  filters: Array<{ op: string; col: string; value: unknown }>;
+  order?: { col: string; ascending: boolean };
+}
+
+let capturedCalls: CapturedCall[] = [];
+
+// In-memory mock data — Zedcor org_id matches the production UUID
+const ZEDCOR_ORG_ID = '6cd87740-7c72-4337-ac79-316a54242eef';
+
+const PROJECTS_FIXTURE = [
+  { created_at: new Date(Date.now() - 1 * 86400_000).toISOString(), score: 92 }, // d-1, high
+  { created_at: new Date(Date.now() - 2 * 86400_000).toISOString(), score: 71 }, // d-2
+  { created_at: new Date(Date.now() - 8 * 86400_000).toISOString(), score: 85 }, // d-8 outside 7d
+];
+
+const AGENT_LOG_FIXTURE = [
+  {
+    agent_name: 'Enricher',
+    event_type: 'error',
+    event_data: { message: 'Sonar Pro rate limit', reason: 'rate_limited' },
+    ts: new Date(Date.now() - 1 * 86400_000).toISOString(),
+  },
+  {
+    agent_name: 'Verifier',
+    event_type: 'verify_fail',
+    event_data: { reason: 'overlapping_cycle' },
+    ts: new Date(Date.now() - 3 * 86400_000).toISOString(),
+  },
+];
+
+const DATA_SOURCES_FIXTURE = [
+  { id: 'src-1', adapter_kind: 'permits', name: 'Allegheny County permits', jurisdiction: 'Allegheny County, PA' },
+];
+
+function buildQueryBuilder(table: string, dataset: unknown[]) {
+  const call: CapturedCall = { table, select: '', filters: [] };
+  capturedCalls.push(call);
+  const builder = {
+    select(cols: string) {
+      call.select = cols;
+      return builder;
+    },
+    eq(col: string, value: unknown) {
+      call.filters.push({ op: 'eq', col, value });
+      return builder;
+    },
+    in(col: string, values: unknown[]) {
+      call.filters.push({ op: 'in', col, value: values });
+      return builder;
+    },
+    gte(col: string, value: unknown) {
+      call.filters.push({ op: 'gte', col, value });
+      return builder;
+    },
+    order(col: string, opts: { ascending: boolean }) {
+      call.order = { col, ascending: opts.ascending };
+      return builder;
+    },
+    then(resolve: (v: { data: unknown[]; error: null }) => void) {
+      resolve({ data: dataset, error: null });
+    },
+  };
+  return builder;
+}
+
+vi.mock('./supabase', () => ({
+  getSupabase: () => ({
+    schema: () => ({
+      from(table: string) {
+        if (table === 'projects') return buildQueryBuilder(table, PROJECTS_FIXTURE);
+        if (table === 'agent_log') return buildQueryBuilder(table, AGENT_LOG_FIXTURE);
+        if (table === 'data_sources') return buildQueryBuilder(table, DATA_SOURCES_FIXTURE);
+        throw new Error(`unexpected table: ${table}`);
+      },
+    }),
+  }),
+}));
+
+describe('getOrgHealth', () => {
   beforeEach(() => {
-    vi.stubEnv('VITE_PATHFINDER_DB_ENABLED', 'false');
-    vi.stubEnv('VITE_CUSTOMER_PERSISTENCE_ENABLED', 'false');
-    __resetLocalCustomerOrgsForTests();
+    capturedCalls = [];
   });
   afterEach(() => {
-    vi.unstubAllEnvs();
-    __resetLocalCustomerOrgsForTests();
+    vi.restoreAllMocks();
   });
 
-  it('listCustomerOrgs returns the Zedcor fixture in single-tenant mode', async () => {
-    const orgs = await listCustomerOrgs();
-    expect(orgs).toHaveLength(1);
-    expect(orgs[0].id).toBe('zedcor');
-    expect(orgs[0].slug).toBe('zedcor');
-    expect(orgs[0].status).toBe('active');
+  it('scopes every query by organization_id (uuid), not customer_org_id', async () => {
+    const { getOrgHealth } = await import('./customersClient');
+    await getOrgHealth(ZEDCOR_ORG_ID);
+
+    expect(capturedCalls).toHaveLength(3);
+    for (const call of capturedCalls) {
+      const orgFilter = call.filters.find((f) => f.col === 'organization_id');
+      expect(orgFilter, `${call.table} must filter by organization_id`).toBeDefined();
+      expect(orgFilter?.value).toBe(ZEDCOR_ORG_ID);
+      // Negative assertion — the bug PR #280 had:
+      const customerOrgFilter = call.filters.find((f) => f.col === 'customer_org_id');
+      expect(customerOrgFilter, `${call.table} must NOT filter by customer_org_id`).toBeUndefined();
+    }
   });
 
-  it('getOrgHealth returns the rollup fixture with 30-day arrays', async () => {
-    const h = await getOrgHealth('zedcor');
-    expect(h.org_id).toBe('zedcor');
-    expect(h.lead_volume_30d).toHaveLength(30);
-    expect(h.error_volume_30d).toHaveLength(30);
-    expect(h.lead_volume_7d_total).toBe(
-      h.lead_volume_30d.slice(-7).reduce((a, b) => a + b, 0),
+  it('queries agent_log by ts (not created_at) for time bounds + ordering', async () => {
+    const { getOrgHealth } = await import('./customersClient');
+    await getOrgHealth(ZEDCOR_ORG_ID);
+
+    const agentLog = capturedCalls.find((c) => c.table === 'agent_log');
+    expect(agentLog).toBeDefined();
+    expect(agentLog?.filters.some((f) => f.op === 'gte' && f.col === 'ts')).toBe(true);
+    expect(agentLog?.order).toEqual({ col: 'ts', ascending: false });
+    // Errors are filtered by event_type IN [...], not level='error'
+    const eventTypeFilter = agentLog?.filters.find((f) => f.op === 'in' && f.col === 'event_type');
+    expect(eventTypeFilter).toBeDefined();
+    expect(eventTypeFilter?.value).toEqual(
+      expect.arrayContaining(['error', 'verify_fail', 'deal_push_failed', 'signature_failed', 'draft_fail']),
     );
-    expect(h.recent_errors.length).toBeLessThanOrEqual(10);
-    expect(h.active_sources.length).toBeGreaterThan(0);
   });
 
-  it('getOrgHealth carries the orgId parameter through into the rollup', async () => {
-    const h = await getOrgHealth('some-other-org');
-    expect(h.org_id).toBe('some-other-org');
-  });
-});
+  it('queries data_sources with the enabled column added in the Phase 2A completion migration', async () => {
+    const { getOrgHealth } = await import('./customersClient');
+    await getOrgHealth(ZEDCOR_ORG_ID);
 
-describe('slugify + validateSlug', () => {
-  it('slugify lowercases, trims, replaces spaces with hyphens, drops punctuation', () => {
-    expect(slugify('Public Adjuster Co.')).toBe('public-adjuster-co');
-    expect(slugify('  Storm Damage --- Recovery  ')).toBe('storm-damage-recovery');
-    expect(slugify("McGill's & Sons, LLC")).toBe('mcgills-sons-llc');
+    const sources = capturedCalls.find((c) => c.table === 'data_sources');
+    expect(sources).toBeDefined();
+    const enabledFilter = sources?.filters.find((f) => f.col === 'enabled');
+    expect(enabledFilter).toEqual({ op: 'eq', col: 'enabled', value: true });
   });
 
-  it('slugify caps at 40 characters', () => {
-    const long = 'a'.repeat(60);
-    expect(slugify(long).length).toBeLessThanOrEqual(40);
-  });
+  it('selects adapter_kind + name from data_sources (mapped to type + label in response)', async () => {
+    const { getOrgHealth } = await import('./customersClient');
+    const rollup = await getOrgHealth(ZEDCOR_ORG_ID);
 
-  it('validateSlug rejects empty, invalid pattern, or duplicate', () => {
-    expect(validateSlug('', [])).toMatch(/required/i);
-    expect(validateSlug('Has Spaces', [])).toMatch(/lowercase/i);
-    expect(validateSlug('-leading', [])).toMatch(/lowercase/i);
-    expect(validateSlug('zedcor', ['zedcor'])).toMatch(/already taken/i);
-    expect(validateSlug('valid-slug', [])).toBeNull();
-  });
-});
+    const sources = capturedCalls.find((c) => c.table === 'data_sources');
+    expect(sources?.select).toMatch(/adapter_kind/);
+    expect(sources?.select).toMatch(/name/);
 
-describe('createCustomerOrg (mock-mode persistence to localStorage)', () => {
-  beforeEach(() => {
-    vi.stubEnv('VITE_PATHFINDER_DB_ENABLED', 'false');
-    vi.stubEnv('VITE_CUSTOMER_PERSISTENCE_ENABLED', 'false');
-    __resetLocalCustomerOrgsForTests();
-  });
-  afterEach(() => {
-    vi.unstubAllEnvs();
-    __resetLocalCustomerOrgsForTests();
-  });
-
-  it('persists a new org and surfaces it in subsequent listCustomerOrgs calls', async () => {
-    const created = await createCustomerOrg({
-      name: 'Acme Roofing',
-      slug: 'acme-roofing',
-      architecture: null,
+    expect(rollup.active_sources).toHaveLength(1);
+    expect(rollup.active_sources[0]).toEqual({
+      id: 'src-1',
+      type: 'permits', // adapter_kind → type
+      label: 'Allegheny County permits', // name → label
+      jurisdiction: 'Allegheny County, PA',
     });
-    expect(created.slug).toBe('acme-roofing');
-    expect(created.display_name).toBe('Acme Roofing');
-    expect(created.status).toBe('onboarding');
-
-    const orgs = await listCustomerOrgs();
-    const slugs = orgs.map((o) => o.slug);
-    expect(slugs).toContain('zedcor');
-    expect(slugs).toContain('acme-roofing');
   });
 
-  it('throws SlugConflictError when slug collides with the seed Zedcor row', async () => {
-    await expect(
-      createCustomerOrg({
-        name: 'Zedcor 2',
-        slug: 'zedcor',
-        architecture: null,
-      }),
-    ).rejects.toBeInstanceOf(SlugConflictError);
-  });
+  it('lifts agent_log error message from event_data jsonb', async () => {
+    const { getOrgHealth } = await import('./customersClient');
+    const rollup = await getOrgHealth(ZEDCOR_ORG_ID);
 
-  it('throws SlugConflictError when slug collides with a previously persisted org', async () => {
-    await createCustomerOrg({
-      name: 'Acme Roofing',
-      slug: 'acme-roofing',
-      architecture: null,
+    expect(rollup.recent_errors).toHaveLength(2);
+    expect(rollup.recent_errors[0]).toEqual({
+      agent_name: 'Enricher',
+      message: 'Sonar Pro rate limit', // from event_data.message
+      created_at: AGENT_LOG_FIXTURE[0].ts,
     });
-    await expect(
-      createCustomerOrg({
-        name: 'Acme Roofing v2',
-        slug: 'acme-roofing',
-        architecture: null,
-      }),
-    ).rejects.toBeInstanceOf(SlugConflictError);
-  });
-
-  it('getCustomerOrgBySlug returns the persisted row by slug', async () => {
-    await createCustomerOrg({
-      name: 'Beta Builders',
-      slug: 'beta-builders',
-      architecture: null,
+    expect(rollup.recent_errors[1]).toEqual({
+      agent_name: 'Verifier',
+      message: 'overlapping_cycle', // from event_data.reason fallback
+      created_at: AGENT_LOG_FIXTURE[1].ts,
     });
-    const org = await getCustomerOrgBySlug('beta-builders');
-    expect(org?.slug).toBe('beta-builders');
-    expect(org?.display_name).toBe('Beta Builders');
   });
 
-  it('getCustomerOrgBySlug returns null for an unknown slug', async () => {
-    const org = await getCustomerOrgBySlug('does-not-exist');
-    expect(org).toBeNull();
+  it('returns OrgHealthRollup-shaped response with org_id propagated', async () => {
+    const { getOrgHealth } = await import('./customersClient');
+    const rollup = await getOrgHealth(ZEDCOR_ORG_ID);
+
+    expect(rollup.org_id).toBe(ZEDCOR_ORG_ID);
+    expect(rollup.lead_volume_30d).toHaveLength(30);
+    expect(rollup.error_volume_30d).toHaveLength(30);
+    expect(rollup.lead_volume_30d_total).toBe(3);
+    // d-1 score 92 ≥ 80 → 1 high-score lead in 7d window of 2 leads → 50%
+    expect(rollup.lead_volume_7d_total).toBe(2);
+    expect(rollup.high_score_rate_7d).toBeCloseTo(0.5, 5);
+    // 2 errors total in 30d, both inside 7d window
+    expect(rollup.error_total_7d).toBe(2);
+    expect(rollup.error_rate_7d).toBeCloseTo(2 / 2, 5);
   });
 });
