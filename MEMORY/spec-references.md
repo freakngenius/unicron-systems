@@ -873,3 +873,13 @@ Operator setup: `MEMORY/operator-todos/2026-05-03-teams-user-setup.md` — Micro
 **Implements:** SPEC - Backend Architecture.md §4 (Inngest function registry). Appends `ingestAllOrgsCron` to the barrel export.
 **Last verified against spec:** 2026-05-10.
 **Drift:** none — pure append.
+
+#### Pathfinder/lib/agents/ranker/genericScorer.ts
+**Implements:** SPEC - Phase 2C Dynamic Agent Dispatch.md §"Ranker". Computes 0–100 composite from `architecture.scoring.weights` via 5 feature extractors (`geography_match`, `asset_class_match`, `trigger_strength`, plus `basis_fit`/`unit_count_fit` stubs). Defensively skips unknown weight keys since `resolveArchitecture` replaces `scoring.weights` wholesale (codex review finding). Used by the org-aware dispatcher in `app/api/cron/ranker/route.ts` for non-Zedcor projects.
+**Last verified against spec:** 2026-05-11.
+**Drift:** **minor, justified.** Plan §"Generic scoring approach" lists 5 feature extractors; slice 2 ships 3 real (`geography_match`, `asset_class_match`, `trigger_strength`) + 2 stubs at 0 (`basis_fit`, `unit_count_fit`) because Realberry has 0 projects to validate per-vertical extractors against. Real implementations land in a follow-up when production data is available.
+
+#### Pathfinder/app/api/cron/ranker/route.ts (slice 2 dispatch)
+**Implements:** SPEC - Phase 2C Dynamic Agent Dispatch.md §"Ranker" — org-aware dispatch added at cycle start (Zedcor slug lookup) + per-project loop top (route by project.organization_id). Zedcor projects continue through the existing kernel verbatim; non-Zedcor route to `scoreGenericProject`. Generic path writes a deterministic rationale documenting per-feature components.
+**Last verified against spec:** 2026-05-11.
+**Drift:** Sonnet-driven org-flavored rationale + outreach_hook (per `architecture.outreach` / `architecture.branding`) deferred to a follow-up slice. Slice 2's deterministic rationale is acceptable because production has 0 non-Zedcor projects today (Realberry persisted but no ingestion yet).
