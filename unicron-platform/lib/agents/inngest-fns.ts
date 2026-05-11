@@ -221,3 +221,34 @@ export const tabooKeeperRun = inngest.createFunction(
     }
   }
 );
+
+// ---------------------------------------------------------------------------
+// Pathfinder cross-project sync — S4a
+// ---------------------------------------------------------------------------
+
+/**
+ * Polls the Pathfinder Supabase project (separate ref) via service-role
+ * client and upserts summary metrics into nervous_system.pathfinder_sync.
+ * Degrades to an audit_log row when PATHFINDER_SUPABASE_URL or
+ * PATHFINDER_SUPABASE_SERVICE_ROLE_KEY is absent.
+ *
+ * Event-triggered: pathfinder/sync
+ * Cron: every 30 minutes
+ */
+export const pathfinderSyncRun = inngest.createFunction(
+  { id: 'pathfinder-sync-run', name: 'Pathfinder Sync Run', retries: 1 },
+  { event: 'pathfinder/sync' },
+  async ({ step }) => {
+    const { pathfinderSync } = await import('./pathfinder-sync.js');
+    return step.run('pathfinder-sync', () => pathfinderSync());
+  }
+);
+
+export const pathfinderSyncCron = inngest.createFunction(
+  { id: 'pathfinder-sync-cron', name: 'Pathfinder Sync Cron', retries: 1 },
+  { cron: '*/30 * * * *' },
+  async ({ step }) => {
+    const { pathfinderSync } = await import('./pathfinder-sync.js');
+    return step.run('pathfinder-sync', () => pathfinderSync());
+  }
+);

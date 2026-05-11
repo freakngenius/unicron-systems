@@ -18,6 +18,8 @@ import {
   analystQuarterlyCron,
   elderRun,
   tabooKeeperRun,
+  pathfinderSyncRun,
+  pathfinderSyncCron,
 } from '../lib/agents/inngest-fns.js';
 
 // Disable Vercel's automatic JSON body parsing — inngest/node reads the raw stream.
@@ -37,5 +39,8 @@ export default serve({
     // Elder + Taboo Keeper (Sprint 3 Stream B — placeholder shells)
     elderRun,
     tabooKeeperRun,
+    // Pathfinder cross-project sync (S4a)
+    pathfinderSyncRun,
+    pathfinderSyncCron,
   ],
 });
