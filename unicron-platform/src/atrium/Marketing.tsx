@@ -19,6 +19,7 @@ import { useState } from 'react';
 import { Campaigns } from './marketing/Campaigns';
 import { Content } from './marketing/Content';
 import { BrandAssets } from './marketing/BrandAssets';
+import PlausibleStats from './marketing/PlausibleStats';
 
 const MARKETING_TABS = [
   { id: 'campaigns',    label: 'Campaigns' },
@@ -45,24 +46,9 @@ export function Marketing() {
         </button>
       </div>
 
-      {/* Connector callout — replaces the 4 cut analytics stat cards */}
+      {/* S5a — Plausible stats (live when configured, Connect CTA otherwise) */}
       <div className="px-7 pb-4">
-        <div className="bg-white border border-border-default rounded-xl px-4 py-3.5 shadow-sm flex items-start gap-3">
-          <span className="w-2 h-2 rounded-full mt-1.5 shrink-0" style={{ background: '#7E8AA3' }} />
-          <div className="flex-1 min-w-0">
-            <div className="text-[13px] text-text-primary font-medium">
-              Analytics not connected
-            </div>
-            <div className="text-[11.5px] text-text-muted mt-0.5">
-              Site visits, waitlist, manifesto reads, and reply rate require a traffic provider
-              (e.g. Plausible) + signup + email tracking. Pass 2 cut the placeholder cards until
-              a connector ships.
-            </div>
-          </div>
-          <button className="text-[12px] font-semibold px-3 py-1.5 rounded-md border border-border-default text-text-secondary hover:bg-bg-raised whitespace-nowrap shrink-0">
-            Connect Plausible
-          </button>
-        </div>
+        <PlausibleStats />
       </div>
 
       <div className="flex gap-1 px-7 border-b border-border-default overflow-x-auto">
