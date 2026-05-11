@@ -65,7 +65,7 @@ interface FeedEvent {
   table: 'ledger' | 'audit_log';
 }
 
-type NowTab = 'overview' | 'activity' | 'digest';
+type NowTab = 'skills' | 'today' | 'activity' | 'digest';
 type Timeframe = '1h' | '24h' | '7d' | 'custom';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -2256,7 +2256,8 @@ interface Props {
 export function Now({ name }: Props) {
   const auth = useAuth();
   const time = useLocalTime();
-  const [nowTab, setNowTab] = useState<NowTab>('overview');
+  const [nowTab, setNowTab] = useState<NowTab>('skills');
+  const [skillPrompt, setSkillPrompt] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
   const [captureOpen, setCaptureOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
@@ -2303,100 +2304,122 @@ export function Now({ name }: Props) {
 
   return (
     <div className="relative w-full">
-      {/* N-4: sub-tab nav */}
-      <div className="flex gap-0.5 mb-5 border-b border-border-default -mt-1">
-        {(['overview', 'activity', 'digest'] as const).map((tab) => (
+      {/* v3 sub-tab nav — Run a skill default, then Today / Activity / Digest */}
+      <div className="flex gap-1 px-2 sm:px-7 pt-1 border-b border-border-default">
+        {([
+          { id: 'skills',   label: 'Run a skill' },
+          { id: 'today',    label: 'Today' },
+          { id: 'activity', label: 'Activity' },
+          { id: 'digest',   label: 'Digest' },
+        ] as const).map((tab) => (
           <button
-            key={tab}
-            onClick={() => setNowTab(tab)}
-            className={`mono text-[11px] uppercase tracking-[0.16em] px-4 py-2 border-b-2 transition-colors ${
-              nowTab === tab
-                ? 'border-[var(--accent)] text-text-primary'
-                : 'border-transparent text-text-muted hover:text-text-secondary'
+            key={tab.id}
+            onClick={() => setNowTab(tab.id)}
+            className={`px-3.5 py-3 -mb-px text-[13px] font-medium border-b-2 transition-colors ${
+              nowTab === tab.id
+                ? 'border-[#6081BE] text-[#6081BE]'
+                : 'border-transparent text-text-secondary hover:text-text-primary'
             }`}
           >
-            {tab}
+            {tab.label}
           </button>
         ))}
       </div>
 
-      {/* N-4: Activity sub-tab — full width, no rail */}
-      {nowTab === 'activity' && (
-        <div className="px-2 sm:px-0">
-          <ActivityTab />
+      <div className="px-2 sm:px-7 py-5">
+      {/* Run a skill — default sub-tab */}
+      {nowTab === 'skills' && (
+        <div className="now-layout grid gap-5" style={{ gridTemplateColumns: 'minmax(0, 1fr) 340px', alignItems: 'start' }}>
+          <style>{`
+            @media (max-width: 1023px) { .now-layout { grid-template-columns: 1fr !important; } .now-rail { display: none !important; } }
+          `}</style>
+
+          <div className="flex flex-col gap-5 min-w-0">
+            {/* Hero: free-form skill prompt */}
+            <div className="bg-white border border-border-default rounded-xl p-5 sm:p-6 shadow-sm">
+              <div className="flex items-center gap-2 mb-3">
+                <span className="inline-flex w-7 h-7 rounded-md items-center justify-center" style={{ background: 'rgba(232,118,58,0.12)', color: '#E8763A' }}>
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M8 1L2 8h4l-1.5 5L11 6H7l1-5z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round"/></svg>
+                </span>
+                <h2 className="text-[18px] font-semibold text-text-primary tracking-tight">Run a skill</h2>
+              </div>
+              <textarea
+                value={skillPrompt}
+                onChange={(e) => setSkillPrompt(e.target.value)}
+                placeholder="Describe what you want, or pick a skill below…"
+                rows={3}
+                className="w-full bg-[#F6F7F9] border border-border-subtle rounded-lg px-3 py-2.5 text-[13.5px] text-text-primary placeholder:text-text-muted outline-none focus:border-[#6081BE] resize-none"
+              />
+              <div className="flex items-center justify-end gap-2 mt-3">
+                <button
+                  onClick={() => setSkillPrompt('')}
+                  className="px-3 py-2 text-[13px] font-medium rounded-md border border-border-default text-text-secondary hover:bg-bg-raised transition-colors"
+                >
+                  Clear
+                </button>
+                <button
+                  onClick={() => {
+                    if (!skillPrompt.trim()) return;
+                    setCaptureOpen(true);
+                    showToast('Routed to Quick Capture — skill router in Sprint 6');
+                  }}
+                  disabled={!skillPrompt.trim()}
+                  className="px-3.5 py-2 text-[13px] font-semibold rounded-md text-white disabled:opacity-40 transition-opacity"
+                  style={{ background: '#6081BE' }}
+                >
+                  Run
+                </button>
+              </div>
+            </div>
+
+            {/* Skills library (existing SkillsSurface) */}
+            <SkillsSurface onOpenQuickCapture={() => setCaptureOpen(true)} />
+          </div>
+
+          {/* Right rail: Forecast + Recent runs */}
+          <div className="now-rail flex flex-col gap-4 sticky top-0">
+            <ForecastPanel />
+            <RecentRunsPanel />
+          </div>
         </div>
       )}
 
-      {/* N-5: Digest sub-tab — full width, date picker + 2-col sections */}
-      {nowTab === 'digest' && (
-        <div className="px-2 sm:px-0">
-          <DigestTab />
-        </div>
-      )}
-
-      {/* N-1: two-column grid at ≥1024px (Overview tab) */}
-      {nowTab === 'overview' && (
+      {/* Today — hero strip + TopOfMind + Calendar + Yesterday's Digest + right rail */}
+      {nowTab === 'today' && (
       <div className="now-layout grid gap-5" style={{ gridTemplateColumns: 'minmax(0, 1fr) 320px', alignItems: 'start' }}>
         <style>{`
           @media (max-width: 1023px) { .now-layout { grid-template-columns: 1fr !important; } .now-rail { display: none !important; } }
         `}</style>
 
         {/* LEFT column */}
-        <div className="flex flex-col gap-6 min-w-0 px-2 sm:px-0">
-          {/* ─── Top bar row ─── */}
+        <div className="flex flex-col gap-6 min-w-0">
+          {/* Greeting */}
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
-              <div className="mono text-[10px] uppercase tracking-[0.18em] text-text-secondary mb-1">
+              <div className="text-[11px] uppercase tracking-[0.18em] text-text-muted mb-1.5">
                 {formatDate()} · {time}
               </div>
-              <h1 className="text-[20px] sm:text-[26px] font-semibold text-text-primary tracking-tight leading-tight">
+              <h1 className="text-[26px] sm:text-[32px] font-semibold text-text-primary tracking-tight leading-tight" style={{ fontFamily: 'var(--font-display)', letterSpacing: -0.5 }}>
                 {greeting(name)}
               </h1>
             </div>
-
-            <div className="flex items-center gap-2 shrink-0 pt-1">
-              <button
-                onClick={() => setSearchOpen(true)}
-                title="Search (/ or ⌘K)"
-                className="hidden sm:flex items-center gap-1.5 px-3 py-2 bg-bg-card border border-border-default rounded-lg hover:border-border-hover transition-colors group"
-              >
-                <span className="mono text-[12px] text-text-secondary group-hover:text-text-primary">
-                  ⌘K
-                </span>
-              </button>
-              <button
-                onClick={() => setCaptureOpen(true)}
-                title="Quick Capture"
-                className="hidden sm:flex items-center gap-1.5 px-3 py-2 bg-[var(--accent)] rounded-lg hover:opacity-90 transition-colors"
-              >
-                <span className="mono text-[11px] uppercase tracking-[0.12em] text-white">+ Capture</span>
-              </button>
-            </div>
           </div>
 
-          {/* ─── N-2: Hero strip ─── */}
+          {/* Hero sentiment strip */}
           <HeroStrip />
 
-          {/* ─── Status Pulse ─── */}
-          <StatusPulse />
-
-          {/* ─── Top of Mind ─── */}
+          {/* Top of Mind */}
           <TopOfMind />
 
-          {/* ─── Calendar + Digest ─── */}
+          {/* Calendar + Digest */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <CalendarStub />
             <YesterdayDigest />
           </div>
-
-          {/* ─── Skills Surface ─── */}
-          <section className="mb-24 sm:mb-8">
-            <SkillsSurface onOpenQuickCapture={() => setCaptureOpen(true)} />
-          </section>
         </div>
 
-        {/* RIGHT rail (320px, hidden < 1024px) */}
-        <div className="now-rail flex flex-col gap-4 sticky top-0 pt-2">
+        {/* RIGHT rail */}
+        <div className="now-rail flex flex-col gap-4 sticky top-0">
           <ForecastPanel />
           <RecentRunsPanel />
           <VaultPulse />
@@ -2404,6 +2427,13 @@ export function Now({ name }: Props) {
         </div>
       </div>
       )}
+
+      {/* Activity sub-tab — full width, no rail */}
+      {nowTab === 'activity' && <ActivityTab />}
+
+      {/* Digest sub-tab — full width, date picker + 2-col sections */}
+      {nowTab === 'digest' && <DigestTab />}
+      </div>
 
       {/* ─── Modals ─── */}
       <GlobalSearch open={searchOpen} onClose={() => setSearchOpen(false)} />

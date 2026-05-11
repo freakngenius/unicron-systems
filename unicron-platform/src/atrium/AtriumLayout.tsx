@@ -165,11 +165,17 @@ type Props = {
 };
 
 const DEFAULT_STATUS: StatusItem[] = [
-  { label: 'Vault',     tone: 'ok',   detail: 'Loading…' },
-  { label: 'Agents',    tone: 'ok',   detail: 'Loading…' },
-  { label: 'Refusals',  tone: 'ok',   detail: 'Loading…' },
-  { label: 'Decay',     tone: 'info', detail: 'Loading…' },
+  { label: 'Agents',      tone: 'ok',   detail: '— healthy' },
+  { label: 'Escalations', tone: 'ok',   detail: '— open' },
+  { label: 'Budget',      tone: 'ok',   detail: '—%' },
+  { label: 'Decay',       tone: 'ok',   detail: '— stale' },
+  { label: 'Voice',       tone: 'ok',   detail: '— in flight' },
 ];
+
+interface AgentRow {
+  status: string | null;
+  budget: { limit_usd_per_period: number; current_spent_usd: number } | null;
+}
 
 export function AtriumLayout({ activeTab, onTabChange, children, onOpenSettings }: Props) {
   const auth = useAuth();
@@ -200,26 +206,61 @@ export function AtriumLayout({ activeTab, onTabChange, children, onOpenSettings 
     return () => document.removeEventListener('keydown', handler);
   }, []);
 
-  // StatusPulse live data — poll every 30s
+  // StatusPulse live data — v3 indicators (Agents/Escalations/Budget/Decay/Voice)
+  // Polls every 30s. PGRST106 fix: use public.ns_* SECURITY DEFINER RPCs.
   const fetchStatus = useCallback(async () => {
     try {
       const sb = getSupabase();
-      const [agentsRes, refusalsRes, decayRes] = await Promise.all([
-        sb.from('agents').select('id', { count: 'exact', head: true }).eq('is_active', true),
-        sb.from('audit_log').select('id', { count: 'exact', head: true })
-          .like('action', 'refusal%')
-          .gte('created_at', new Date(Date.now() - 86_400_000).toISOString()),
-        sb.from('signals').select('id', { count: 'exact', head: true })
-          .lt('decay_score', 0.4),
+      const since24h = new Date(Date.now() - 86_400_000).toISOString();
+      const [agentsRes, escalationsRes, decayRes] = await Promise.all([
+        sb.rpc('ns_list_agents_active'),
+        sb.rpc('ns_count_audit_log_escalations', { p_since: since24h }),
+        sb.rpc('ns_count_ledger_decay'),
       ]);
-      const agentCount = agentsRes.count ?? 0;
-      const refusalCount = refusalsRes.count ?? 0;
-      const decayCount = decayRes.count ?? 0;
+
+      const agents = (agentsRes.data as AgentRow[] | null) ?? [];
+      const agentCount = agents.length;
+      const hasAgentError = agents.some((a) => a.status === 'error');
+      const escalationCount = Number(escalationsRes.data ?? 0);
+      const decayCount = Number(decayRes.data ?? 0);
+
+      // Budget burn — aggregate across active agents with budget jsonb
+      let totalSpent = 0;
+      let totalLimit = 0;
+      agents.forEach((a) => {
+        if (a.budget) {
+          totalSpent += a.budget.current_spent_usd ?? 0;
+          totalLimit += a.budget.limit_usd_per_period ?? 0;
+        }
+      });
+      const budgetPct = totalLimit > 0 ? Math.round((totalSpent / totalLimit) * 100) : null;
+
       setStatusItems([
-        { label: 'Vault',    tone: 'ok',                              detail: 'Connected' },
-        { label: 'Agents',   tone: agentCount > 0 ? 'ok' : 'warn',  detail: `${agentCount} active` },
-        { label: 'Refusals', tone: refusalCount > 0 ? 'warn' : 'ok', detail: `${refusalCount} 24h` },
-        { label: 'Decay',    tone: decayCount > 0 ? 'info' : 'ok',   detail: `${decayCount} aging` },
+        {
+          label: 'Agents',
+          tone: hasAgentError ? 'error' : agentCount > 0 ? 'ok' : 'warn',
+          detail: agentCount > 0 ? `${agentCount} healthy` : 'No agents',
+        },
+        {
+          label: 'Escalations',
+          tone: escalationCount > 0 ? 'warn' : 'ok',
+          detail: `${escalationCount} open`,
+        },
+        {
+          label: 'Budget',
+          tone: budgetPct === null ? 'ok' : budgetPct >= 80 ? 'error' : budgetPct >= 60 ? 'warn' : 'ok',
+          detail: budgetPct === null ? '—%' : `${budgetPct}%`,
+        },
+        {
+          label: 'Decay',
+          tone: decayCount > 2 ? 'error' : decayCount > 0 ? 'warn' : 'ok',
+          detail: `${decayCount} stale`,
+        },
+        {
+          label: 'Voice',
+          tone: 'ok',
+          detail: '0 in flight',
+        },
       ]);
     } catch {
       // Keep defaults on error
