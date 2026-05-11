@@ -103,11 +103,53 @@ function makeSupabase() {
   return createClient(url, key);
 }
 
-function checkAuth(req: VercelRequest): boolean {
+type AuthOutcome =
+  | { ok: true; mode: 'internal' | 'session'; email?: string }
+  | { ok: false; status: number; error: string };
+
+async function checkAuth(req: VercelRequest): Promise<AuthOutcome> {
   const internalKey = process.env.UNICRON_INTERNAL_API_KEY;
-  if (!internalKey) return process.env.VERCEL_ENV !== 'production';
   const provided = req.headers['x-unicron-api-key'];
-  return provided === internalKey;
+  if (internalKey && provided === internalKey) {
+    return { ok: true, mode: 'internal' };
+  }
+
+  const authHeader = req.headers['authorization'];
+  if (typeof authHeader === 'string' && authHeader.toLowerCase().startsWith('bearer ')) {
+    const token = authHeader.slice(7).trim();
+    if (!token) return { ok: false, status: 401, error: 'empty bearer token' };
+
+    const allowlist = (process.env.ATRIUM_EMAIL_ALLOWLIST ?? '')
+      .split(',')
+      .map((e) => e.trim().toLowerCase())
+      .filter(Boolean);
+    if (allowlist.length === 0) {
+      return { ok: false, status: 500, error: 'ATRIUM_EMAIL_ALLOWLIST not configured' };
+    }
+
+    const url = process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL;
+    const anonKey = process.env.SUPABASE_ANON_KEY ?? process.env.VITE_SUPABASE_ANON_KEY;
+    if (!url || !anonKey) {
+      return { ok: false, status: 500, error: 'supabase url/anon key not configured for session auth' };
+    }
+
+    const sb = createClient(url, anonKey);
+    const { data, error } = await sb.auth.getUser(token);
+    if (error || !data?.user?.email) {
+      return { ok: false, status: 401, error: 'invalid bearer token' };
+    }
+    const email = data.user.email.toLowerCase();
+    if (!allowlist.includes(email)) {
+      return { ok: false, status: 403, error: 'caller not on Atrium operator allowlist' };
+    }
+    return { ok: true, mode: 'session', email };
+  }
+
+  if (!internalKey && process.env.VERCEL_ENV !== 'production') {
+    return { ok: true, mode: 'internal' };
+  }
+
+  return { ok: false, status: 401, error: 'unauthorized' };
 }
 
 function errMsg(err: unknown): string {
@@ -662,8 +704,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     return;
   }
 
-  if (!checkAuth(req)) {
-    res.status(401).json({ ok: false, error: 'unauthorized' });
+  const auth = await checkAuth(req);
+  if (!auth.ok) {
+    res.status(auth.status).json({ ok: false, error: auth.error });
     return;
   }
 
