@@ -28,6 +28,8 @@ import {
   vaultEmbeddingsRebuildRun,
   notionKanbanSyncCron,
   notionKanbanSyncRun,
+  slackDailyScanCron,
+  slackDailyScanRun,
 } from '../lib/agents/inngest-fns.js';
 
 // Disable Vercel's automatic JSON body parsing — inngest/node reads the raw stream.
@@ -61,5 +63,8 @@ export default serve({
     // Notion Internal Org Kanban bidirectional sync
     notionKanbanSyncCron,
     notionKanbanSyncRun,
+    // Slack daily scan (Stream S2)
+    slackDailyScanCron,
+    slackDailyScanRun,
   ],
 });

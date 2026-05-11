@@ -358,3 +358,55 @@ export const continuityIngestRun = inngest.createFunction(
     return step.run('continuity-ingest', () => continuityIngest());
   }
 );
+
+// ---------------------------------------------------------------------------
+// Slack daily scan — Stream S2
+// ---------------------------------------------------------------------------
+
+/**
+ * Daily 06:00 PT scan of every bot-member Slack channel: per-channel summary,
+ * action-item + decision extraction, top-theme synthesis, digest upsert.
+ * Idempotent at the day level (slack_daily_digest.digest_date unique).
+ */
+export const slackDailyScanCron = inngest.createFunction(
+  { id: 'slack-daily-scan', name: 'Slack Daily Scan Cron', retries: 1 },
+  { cron: 'TZ=America/Los_Angeles 0 6 * * *' },
+  async ({ step }) => {
+    const { runSlackDailyScan } = await import('./slack-daily-scan.js');
+    const result = await step.run('slack-daily-scan', () => runSlackDailyScan());
+
+    // Fire S4 post-back trigger. The slack-daily-digest-post listener handles
+    // the SLACK_DAILY_DIGEST_CHANNEL_ID feature-flag gate; if the env var is
+    // unset the listener silently skips. No-op if S4 is not yet shipped.
+    await step.sendEvent('emit-digest-posted', {
+      name: 'slack/daily-digest.posted',
+      data: result,
+    });
+
+    return result;
+  }
+);
+
+/**
+ * Manual trigger via Inngest event: slack/daily-scan.run
+ * Useful from the Atrium Skills tray ("Run Slack Daily Scan") or from the
+ * Inngest dashboard "Invoke" button. Accepts optional { date, dryRun } in
+ * event.data.
+ */
+export const slackDailyScanRun = inngest.createFunction(
+  { id: 'slack-daily-scan-run', name: 'Slack Daily Scan Run', retries: 1 },
+  { event: 'slack/daily-scan.run' },
+  async ({ event, step }) => {
+    const { runSlackDailyScan } = await import('./slack-daily-scan.js');
+    const data = (event.data ?? {}) as { date?: string; dryRun?: boolean };
+    const result = await step.run('slack-daily-scan', () => runSlackDailyScan(data));
+
+    if (!data.dryRun) {
+      await step.sendEvent('emit-digest-posted', {
+        name: 'slack/daily-digest.posted',
+        data: result,
+      });
+    }
+    return result;
+  }
+);
