@@ -6,6 +6,7 @@ import type { ReactNode } from 'react';
 import { getSupabase } from '../lib/supabase';
 import { useAuth } from '../lib/auth';
 import { QuickCapture } from './QuickCapture';
+import { AtriumIcon } from './icons';
 
 export type AtriumTab =
   | 'now'
@@ -34,17 +35,18 @@ const MOBILE_TABS: AtriumTab[] = ['now', 'people', 'work', 'money'];
 // ─── Tab icons ────────────────────────────────────────────────────────────────
 
 function TabIcon({ id, color = 'currentColor' }: { id: AtriumTab; color?: string }) {
-  const w = 18;
+  const size = 18;
+  const style = { color };
   switch (id) {
-    case 'now':       return <svg width={w} height={w} viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="5.5" stroke={color} strokeWidth="1.4"/><path d="M8 5v3.2l2 1.5" stroke={color} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>;
-    case 'people':    return <svg width={w} height={w} viewBox="0 0 16 16" fill="none"><circle cx="8" cy="6" r="2.5" stroke={color} strokeWidth="1.4"/><path d="M3.5 14c0-2.5 2-4.5 4.5-4.5s4.5 2 4.5 4.5" stroke={color} strokeWidth="1.4" strokeLinecap="round"/></svg>;
-    case 'work':      return <svg width={w} height={w} viewBox="0 0 16 16" fill="none"><rect x="2" y="6.5" width="12" height="7.5" rx="1.5" stroke={color} strokeWidth="1.4"/><path d="M5.5 6.5V5C5.5 4 6.2 3 7.5 3h1c1.3 0 2 1 2 2v1.5" stroke={color} strokeWidth="1.4" strokeLinecap="round"/></svg>;
-    case 'money':     return <svg width={w} height={w} viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="5.5" stroke={color} strokeWidth="1.4"/><path d="M8 5v1m0 4v1" stroke={color} strokeWidth="1.4" strokeLinecap="round"/><path d="M6.5 9.5a1.5 1.5 0 003 0c0-1-1.5-1.5-1.5-1.5S6.5 7.5 6.5 6.5a1.5 1.5 0 013 0" stroke={color} strokeWidth="1.2" strokeLinecap="round"/></svg>;
-    case 'marketing': return <svg width={w} height={w} viewBox="0 0 16 16" fill="none"><path d="M12.5 3L4 6.5V9.5L12.5 13V3z" stroke={color} strokeWidth="1.4" strokeLinejoin="round"/><path d="M4 8H2.5" stroke={color} strokeWidth="1.4" strokeLinecap="round"/><path d="M5 9.5L3.5 13.5" stroke={color} strokeWidth="1.4" strokeLinecap="round"/></svg>;
-    case 'products':  return <svg width={w} height={w} viewBox="0 0 16 16" fill="none"><path d="M8 2L14 5.5v5L8 14l-6-3.5v-5L8 2z" stroke={color} strokeWidth="1.4" strokeLinejoin="round"/><path d="M8 2v12M2.5 5.5l5.5 3 5.5-3" stroke={color} strokeWidth="1.3"/></svg>;
-    case 'system':    return <svg width={w} height={w} viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="2" stroke={color} strokeWidth="1.4"/><path d="M8 2v1.5m0 9V14m4.2-1.8-1-1M4.8 4.8l-1-1M14 8h-1.5m-9 0H2m9.2 2.2-1 1M4.8 11.2l-1 1" stroke={color} strokeWidth="1.3" strokeLinecap="round"/></svg>;
-    case 'library':   return <svg width={w} height={w} viewBox="0 0 16 16" fill="none"><rect x="2" y="3" width="4" height="10" rx="1" stroke={color} strokeWidth="1.4"/><rect x="7" y="3" width="4" height="10" rx="1" stroke={color} strokeWidth="1.4"/><path d="M12.5 3.5l2 9" stroke={color} strokeWidth="1.4" strokeLinecap="round"/></svg>;
-    case 'skills':    return <svg width={w} height={w} viewBox="0 0 16 16" fill="none"><path d="M9.5 2L4 9h5l-2 5 7-7H9l2.5-5z" stroke={color} strokeWidth="1.4" strokeLinejoin="round"/></svg>;
+    case 'now':       return <AtriumIcon.Now size={size} style={style} />;
+    case 'people':    return <AtriumIcon.People size={size} style={style} />;
+    case 'work':      return <AtriumIcon.Work size={size} style={style} />;
+    case 'money':     return <AtriumIcon.Money size={size} style={style} />;
+    case 'marketing': return <AtriumIcon.Megaphone size={size} style={style} />;
+    case 'products':  return <AtriumIcon.Layers size={size} style={style} />;
+    case 'system':    return <AtriumIcon.System size={size} style={style} />;
+    case 'library':   return <AtriumIcon.Book size={size} style={style} />;
+    case 'skills':    return <AtriumIcon.Zap size={size} style={style} />;
   }
 }
 
@@ -116,10 +118,7 @@ function CmdKPalette({ open, onClose }: { open: boolean; onClose: () => void }) 
       <div className="absolute inset-0 bg-[rgba(11,21,48,0.55)] backdrop-blur-sm" onClick={onClose} />
       <div className="relative w-full max-w-[640px] bg-white border border-border-default rounded-xl shadow-2xl overflow-hidden">
         <div className="flex items-center gap-3 px-4 py-3 border-b border-border-subtle">
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" className="text-text-muted flex-shrink-0">
-            <circle cx="6" cy="6" r="4.5" stroke="currentColor" strokeWidth="1.5"/>
-            <path d="M9.5 9.5l3 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-          </svg>
+          <AtriumIcon.Search size={14} strokeWidth={1.7} className="text-text-muted" />
           <input
             ref={inputRef}
             value={q}
@@ -450,10 +449,7 @@ export function AtriumLayout({ activeTab, onTabChange, children, onOpenSettings 
               aria-label="Open search"
               aria-keyshortcuts="Meta+k"
             >
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{ flexShrink: 0 }}>
-                <circle cx="6" cy="6" r="4.5" stroke="currentColor" strokeWidth="1.3"/>
-                <path d="M9.5 9.5l3 3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
-              </svg>
+              <AtriumIcon.Search size={14} strokeWidth={1.5} />
               {searchQ ? (
                 <span style={{ fontSize: 13, color: '#fff', flex: 1 }}>{searchQ}</span>
               ) : (
@@ -480,16 +476,8 @@ export function AtriumLayout({ activeTab, onTabChange, children, onOpenSettings 
               }}
               aria-label="Quick capture"
             >
-              {/* Mic icon */}
-              <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
-                <rect x="4" y="1" width="5" height="8" rx="2.5" stroke="currentColor" strokeWidth="1.3"/>
-                <path d="M2 7.5a4.5 4.5 0 009 0" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
-                <path d="M6.5 12v-1" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
-              </svg>
-              {/* Plus icon */}
-              <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
-                <path d="M5.5 2v7M2 5.5h7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-              </svg>
+              <AtriumIcon.Mic size={13} strokeWidth={1.5} />
+              <AtriumIcon.Plus size={11} strokeWidth={1.8} />
             </button>
 
             {/* Greeting (mobile) */}
@@ -544,9 +532,7 @@ export function AtriumLayout({ activeTab, onTabChange, children, onOpenSettings 
             style={{ background: '#E8763A' }}
             aria-label="Quick capture"
           >
-            <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-              <path d="M9 3.5v11M3.5 9h11" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-            </svg>
+            <AtriumIcon.Plus size={18} strokeWidth={2} />
           </button>
         </div>
 
