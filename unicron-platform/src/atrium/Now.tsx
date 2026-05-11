@@ -2175,21 +2175,21 @@ function ForecastPanel() {
             <span className="mono text-[11px] text-text-secondary">Calls scheduled</span>
             <span className="mono text-[11px] text-text-primary">11</span>
           </div>
-          <BarChart data={[2,1,3,2,1,1,1]} color="#60a5fa" labels={['W','T','F','S','S','M','T']} />
+          <BarChart data={[2,1,3,2,1,1,1]} color="var(--info)" labels={['W','T','F','S','S','M','T']} />
         </div>
         <div>
           <div className="flex items-baseline justify-between mb-1.5">
             <span className="mono text-[11px] text-text-secondary">Renewal exposure</span>
             <span className="mono text-[11px] text-text-primary">$48k</span>
           </div>
-          <BarChart data={[0,12,0,0,18,0,18]} color="#f59e0b" />
+          <BarChart data={[0,12,0,0,18,0,18]} color="var(--accent)" />
         </div>
         <div>
           <div className="flex items-baseline justify-between mb-1.5">
             <span className="mono text-[11px] text-text-secondary">Action items due</span>
             <span className="mono text-[11px] text-text-primary">9</span>
           </div>
-          <BarChart data={[1,3,2,0,0,2,1]} color="#e8763a" />
+          <BarChart data={[1,3,2,0,0,2,1]} color="var(--warn)" />
         </div>
       </div>
     </div>
@@ -2235,13 +2235,13 @@ function VaultPulse() {
         <span className="mono text-[11px] text-text-primary">1,247</span>
       </div>
       <div className="flex flex-col gap-2.5">
-        <DistBar label="Fresh (≤30d)"   percent={62} color="#22c55e" />
-        <DistBar label="Aging (30–90d)" percent={26} color="#f59e0b" />
-        <DistBar label="Decaying (90+)" percent={12} color="#ef4444" />
+        <DistBar label="Fresh (≤30d)"   percent={62} color="#4FB286" />
+        <DistBar label="Aging (30–90d)" percent={26} color="#D9A23A" />
+        <DistBar label="Decaying (90+)" percent={12} color="#DD6262" />
       </div>
       <div className="flex justify-between items-baseline mt-3 pt-2.5 border-t border-border-subtle">
         <span className="mono text-[10.5px] text-text-secondary">Embed coverage</span>
-        <span className="mono text-[10.5px] text-[#22c55e]">98.3%</span>
+        <span className="mono text-[10.5px] text-[#4FB286]">98.3%</span>
       </div>
     </div>
   );
@@ -2378,38 +2378,19 @@ export function Now({ name }: Props) {
           <HeroStrip />
 
           {/* ─── Status Pulse ─── */}
-          <section>
-            <SectionLabel>System Status</SectionLabel>
-            <StatusPulse />
-          </section>
+          <StatusPulse />
 
           {/* ─── Top of Mind ─── */}
-          <section>
-            <SectionLabel>Top of Mind</SectionLabel>
-            <TopOfMind />
-          </section>
+          <TopOfMind />
 
           {/* ─── Calendar + Digest ─── */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <section>
-              <SectionLabel>Today</SectionLabel>
-              <CalendarStub />
-            </section>
-            <section>
-              <SectionLabel>Yesterday</SectionLabel>
-              <YesterdayDigest />
-            </section>
+            <CalendarStub />
+            <YesterdayDigest />
           </div>
-
-          {/* ─── Activity Feed ─── */}
-          <section>
-            <SectionLabel>Live Activity</SectionLabel>
-            <ActivityFeed />
-          </section>
 
           {/* ─── Skills Surface ─── */}
           <section className="mb-24 sm:mb-8">
-            <SectionLabel>Skills</SectionLabel>
             <SkillsSurface onOpenQuickCapture={() => setCaptureOpen(true)} />
           </section>
         </div>
@@ -2419,6 +2400,7 @@ export function Now({ name }: Props) {
           <ForecastPanel />
           <RecentRunsPanel />
           <VaultPulse />
+          <ActivityFeed />
         </div>
       </div>
       )}
