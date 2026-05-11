@@ -60,7 +60,7 @@ export async function pathfinderSync(): Promise<SyncSummary> {
 
   const pathfinder = pathfinderClientOrNull();
   if (!pathfinder) {
-    await nervous.schema('nervous_system').from('audit_log').insert({
+    await nervous.schema('nervous_system').from('audit_log').insert({ table_name: 'nervous_system.pathfinder_sync',
       action: 'pathfinder_sync_awaiting_credentials',
       payload: {
         sync_run_id: syncRunId,
@@ -107,7 +107,7 @@ export async function pathfinderSync(): Promise<SyncSummary> {
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    await nervous.schema('nervous_system').from('audit_log').insert({
+    await nervous.schema('nervous_system').from('audit_log').insert({ table_name: 'nervous_system.pathfinder_sync',
       action: 'pathfinder_sync_error',
       payload: { sync_run_id: syncRunId, error: message },
     });
@@ -126,14 +126,14 @@ export async function pathfinderSync(): Promise<SyncSummary> {
     .insert(rows);
 
   if (writeErr) {
-    await nervous.schema('nervous_system').from('audit_log').insert({
+    await nervous.schema('nervous_system').from('audit_log').insert({ table_name: 'nervous_system.pathfinder_sync',
       action: 'pathfinder_sync_error',
       payload: { sync_run_id: syncRunId, error: writeErr.message, stage: 'write' },
     });
     return { status: 'error', metrics_written: 0, sync_run_id: syncRunId, error: writeErr.message };
   }
 
-  await nervous.schema('nervous_system').from('audit_log').insert({
+  await nervous.schema('nervous_system').from('audit_log').insert({ table_name: 'nervous_system.pathfinder_sync',
     action: 'pathfinder_sync_ok',
     payload: { sync_run_id: syncRunId, metrics_written: rows.length },
   });
