@@ -11,6 +11,34 @@ import { useState, useEffect, useCallback } from 'react';
 import type { WikiPage, WikiPageContent } from './library/useWikiApi';
 import { fetchWikiIndex, fetchWikiPage, editWikiPage } from './library/useWikiApi';
 
+// ── Text-size selector ───────────────────────────────────────────────────────
+// Three-way toggle that scales body text + headings inside the wiki document
+// viewer only. Persists across page reloads and tab navigation.
+
+const TEXT_SIZE_STORAGE_KEY = 'atrium:library:textSize';
+type LibraryTextSize = 'small' | 'medium' | 'large';
+const TEXT_SIZE_OPTIONS: LibraryTextSize[] = ['small', 'medium', 'large'];
+
+function readPersistedTextSize(): LibraryTextSize {
+  if (typeof window === 'undefined') return 'medium';
+  try {
+    const v = window.localStorage.getItem(TEXT_SIZE_STORAGE_KEY);
+    if (v === 'small' || v === 'medium' || v === 'large') return v;
+  } catch {
+    // localStorage may be unavailable (private mode / SSR)
+  }
+  return 'medium';
+}
+
+function writePersistedTextSize(size: LibraryTextSize): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(TEXT_SIZE_STORAGE_KEY, size);
+  } catch {
+    // best effort
+  }
+}
+
 // ── Simple markdown renderer ─────────────────────────────────────────────────
 // No external dep (react-markdown not in package.json).
 // Converts headings, bold, inline code, code blocks, links, [[wikilinks]], lists.
@@ -144,6 +172,12 @@ export function LibraryWiki({ initialSlug }: { initialSlug?: string } = {}) {
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [textSize, setTextSizeState] = useState<LibraryTextSize>(() => readPersistedTextSize());
+
+  const setTextSize = (size: LibraryTextSize) => {
+    setTextSizeState(size);
+    writePersistedTextSize(size);
+  };
 
   // Load index
   useEffect(() => {
@@ -224,17 +258,17 @@ export function LibraryWiki({ initialSlug }: { initialSlug?: string } = {}) {
       >
         <button
           onClick={() => setSidebarOpen((v) => !v)}
-          className="mono text-[10px] uppercase tracking-[0.14em] text-text-secondary hover:text-text-primary mb-3 block"
+          className="library-sidebar-toggle"
           title={sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
         >
           {sidebarOpen ? '← Hide' : '→'}
         </button>
 
         {sidebarOpen && loading && (
-          <div className="mono text-[10px] text-text-secondary animate-pulse">Loading…</div>
+          <div className="library-sidebar-meta animate-pulse">Loading…</div>
         )}
         {sidebarOpen && error && (
-          <div className="mono text-[10px] text-red-400">{error}</div>
+          <div className="library-sidebar-meta" style={{ color: 'var(--v3-red)' }}>{error}</div>
         )}
 
         {sidebarOpen && !loading && (
@@ -243,11 +277,9 @@ export function LibraryWiki({ initialSlug }: { initialSlug?: string } = {}) {
             <button
               onClick={() => loadPage('_master-index')}
               className={[
-                'w-full text-left mono text-[10px] px-2 py-1 rounded mb-1 truncate',
-                selectedSlug === '_master-index'
-                  ? 'text-text-primary bg-bg-raised'
-                  : 'text-text-secondary hover:text-text-primary hover:bg-bg-raised',
-              ].join(' ')}
+                'library-sidebar-link',
+                selectedSlug === '_master-index' ? 'is-active' : '',
+              ].join(' ').trim()}
             >
               Index
             </button>
@@ -255,8 +287,8 @@ export function LibraryWiki({ initialSlug }: { initialSlug?: string } = {}) {
             {Object.keys(grouped)
               .sort((a, b) => (a === '_root' ? -1 : b === '_root' ? 1 : a.localeCompare(b)))
               .map((section) => (
-                <div key={section} className="mb-3">
-                  <div className="mono text-[9px] uppercase tracking-[0.16em] text-[rgba(229,229,231,0.3)] px-2 mb-1">
+                <div key={section} className="library-sidebar-section">
+                  <div className="library-sidebar-section-label">
                     {section === '_root' ? 'Root' : section}
                   </div>
                   {grouped[section]
@@ -266,11 +298,9 @@ export function LibraryWiki({ initialSlug }: { initialSlug?: string } = {}) {
                         key={page.slug}
                         onClick={() => loadPage(page.slug)}
                         className={[
-                          'w-full text-left mono text-[10px] px-2 py-1 rounded mb-0.5 truncate',
-                          selectedSlug === page.slug
-                            ? 'text-text-primary bg-bg-raised'
-                            : 'text-text-secondary hover:text-text-primary hover:bg-bg-raised',
-                        ].join(' ')}
+                          'library-sidebar-link',
+                          selectedSlug === page.slug ? 'is-active' : '',
+                        ].join(' ').trim()}
                         title={page.slug}
                       >
                         {page.title}
@@ -288,14 +318,34 @@ export function LibraryWiki({ initialSlug }: { initialSlug?: string } = {}) {
           {/* Page header */}
           <div className="flex items-center justify-between mb-4 gap-2">
             <div>
-              <div className="mono text-[11px] text-text-secondary truncate">{selectedSlug}</div>
+              <div className="library-page-path truncate">{selectedSlug}</div>
               {pageContent?.mtime && (
-                <div className="mono text-[9px] text-[rgba(229,229,231,0.3)]">
+                <div className="library-page-mtime">
                   Modified {pageContent.mtime.slice(0, 10)}
                 </div>
               )}
             </div>
-            <div className="flex gap-2 shrink-0">
+            <div className="flex gap-2 shrink-0 items-center">
+              {/* Text-size selector: small / medium / large */}
+              <div className="library-textsize-group" role="group" aria-label="Document text size">
+                {TEXT_SIZE_OPTIONS.map((size) => {
+                  const fontPx = size === 'small' ? 11 : size === 'medium' ? 13 : 16;
+                  const selected = textSize === size;
+                  return (
+                    <button
+                      key={size}
+                      type="button"
+                      onClick={() => setTextSize(size)}
+                      aria-label={`Text size ${size}`}
+                      aria-pressed={selected}
+                      title={`Text size: ${size}`}
+                      className={['library-textsize-btn', selected ? 'is-selected' : ''].join(' ').trim()}
+                    >
+                      <span style={{ fontSize: fontPx, lineHeight: 1, fontWeight: 600 }}>A</span>
+                    </button>
+                  );
+                })}
+              </div>
               {editability === 'open' && !editing && (
                 <button
                   onClick={() => {
@@ -368,6 +418,7 @@ export function LibraryWiki({ initialSlug }: { initialSlug?: string } = {}) {
             // eslint-disable-next-line react/no-danger
             <div
               className="wiki-content"
+              data-text-size={textSize}
               onClick={handleContentClick}
               dangerouslySetInnerHTML={{
                 __html: convertWikilinks(renderMarkdown(pageContent.content)),
@@ -400,33 +451,249 @@ export function LibraryWiki({ initialSlug }: { initialSlug?: string } = {}) {
         )}
       </div>
 
-      {/* Inline styles for markdown rendering */}
+      {/* Inline styles for markdown rendering + library chrome */}
       <style>{`
+        /* ── Sidebar (file tree) — Geist sans, v3 active state ── */
+        .library-sidebar-toggle {
+          font-family: var(--font-ui);
+          font-size: 11px;
+          letter-spacing: 0.02em;
+          color: var(--v3-ink-lo);
+          margin-bottom: 12px;
+          display: block;
+          transition: color 120ms ease;
+        }
+        .library-sidebar-toggle:hover { color: var(--v3-ink); }
+
+        .library-sidebar-meta {
+          font-family: var(--font-ui);
+          font-size: 12px;
+          color: var(--v3-ink-lo);
+        }
+
+        .library-sidebar-section { margin-bottom: 14px; }
+        .library-sidebar-section-label {
+          font-family: var(--font-ui);
+          font-size: 10px;
+          font-weight: 600;
+          text-transform: uppercase;
+          letter-spacing: 0.12em;
+          color: var(--v3-ink-lo);
+          padding: 0 8px;
+          margin-bottom: 4px;
+        }
+
+        .library-sidebar-link {
+          display: block;
+          width: 100%;
+          text-align: left;
+          padding: 6px 8px;
+          border-radius: 4px;
+          margin-bottom: 1px;
+          font-family: var(--font-ui);
+          font-size: 13px;
+          line-height: 1.4;
+          color: var(--v3-ink-md);
+          background: transparent;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          transition: background-color 100ms ease, color 100ms ease;
+        }
+        .library-sidebar-link:hover {
+          background: var(--v3-line-soft);
+          color: var(--v3-ink);
+        }
+        .library-sidebar-link.is-active {
+          background: var(--v3-blue-soft);
+          color: var(--v3-blue);
+          font-weight: 600;
+        }
+
+        /* ── Document viewer header chrome ── */
+        .library-page-path {
+          font-family: var(--font-mono);
+          font-size: 11px;
+          color: var(--v3-ink-md);
+        }
+        .library-page-mtime {
+          font-family: var(--font-ui);
+          font-size: 10px;
+          color: var(--v3-ink-lo);
+          margin-top: 2px;
+        }
+
+        /* ── Text-size selector ── */
+        .library-textsize-group {
+          display: inline-flex;
+          align-items: center;
+          gap: 2px;
+          padding: 2px;
+          border-radius: 6px;
+          background: transparent;
+          margin-right: 4px;
+        }
+        .library-textsize-btn {
+          width: 28px;
+          height: 28px;
+          border-radius: 4px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          font-family: var(--font-display);
+          color: var(--v3-ink-lo);
+          background: transparent;
+          border: none;
+          cursor: pointer;
+          transition: background-color 100ms ease, color 100ms ease;
+        }
+        .library-textsize-btn:hover { color: var(--v3-ink); }
+        .library-textsize-btn.is-selected {
+          background: var(--v3-bg-soft);
+          color: var(--v3-ink);
+        }
+
+        /* ── Wiki document content ── */
+        .wiki-content {
+          --lib-scale: 1;
+          font-family: var(--font-ui);
+          color: var(--v3-ink);
+          max-width: 78ch;
+        }
+        .wiki-content[data-text-size="small"]  { --lib-scale: 0.875; }
+        .wiki-content[data-text-size="medium"] { --lib-scale: 1; }
+        .wiki-content[data-text-size="large"]  { --lib-scale: 1.125; }
+
         .wiki-content wikilink {
-          color: #E8763A;
+          color: var(--v3-blue);
           cursor: pointer;
           text-decoration: underline;
           text-underline-offset: 2px;
+          font-family: var(--font-ui);
         }
         .wiki-content wikilink:hover { opacity: 0.8; }
-        .wiki-content .md-h1 { font-size: 1.25rem; font-weight: 600; margin: 1.25rem 0 0.5rem; color: #E5E5E7; font-family: 'JetBrains Mono', monospace; }
-        .wiki-content .md-h2 { font-size: 1rem; font-weight: 600; margin: 1rem 0 0.4rem; color: #E5E5E7; font-family: 'JetBrains Mono', monospace; border-bottom: 1px solid #1F1F23; padding-bottom: 0.25rem; }
-        .wiki-content .md-h3 { font-size: 0.875rem; font-weight: 600; margin: 0.75rem 0 0.3rem; color: rgba(229,229,231,0.8); font-family: 'JetBrains Mono', monospace; }
-        .wiki-content .md-h4, .wiki-content .md-h5, .wiki-content .md-h6 { font-size: 0.8rem; font-weight: 600; margin: 0.5rem 0 0.2rem; color: rgba(229,229,231,0.7); font-family: 'JetBrains Mono', monospace; }
-        .wiki-content .md-p { font-size: 0.75rem; color: rgba(229,229,231,0.75); margin: 0.3rem 0; line-height: 1.7; font-family: 'JetBrains Mono', monospace; }
-        .wiki-content .md-ul { list-style: disc; padding-left: 1.25rem; margin: 0.4rem 0; }
-        .wiki-content .md-ul li { font-size: 0.75rem; color: rgba(229,229,231,0.75); margin: 0.15rem 0; font-family: 'JetBrains Mono', monospace; }
-        .wiki-content .code-block { background: #0D0D0F; border: 1px solid #1F1F23; border-radius: 4px; padding: 0.75rem; margin: 0.5rem 0; overflow-x: auto; }
-        .wiki-content .code-block code { font-size: 0.7rem; color: rgba(229,229,231,0.8); font-family: 'JetBrains Mono', monospace; white-space: pre; }
-        .wiki-content .inline-code { background: #1F1F23; border-radius: 3px; padding: 0 0.25rem; font-size: 0.7rem; color: #E8763A; font-family: 'JetBrains Mono', monospace; }
-        .wiki-content .md-link { color: rgba(229,229,231,0.6); text-decoration: underline; text-underline-offset: 2px; font-size: 0.75rem; }
-        .wiki-content .md-link:hover { color: #E5E5E7; }
-        .wiki-content .hr-rule { border: none; border-top: 1px solid #1F1F23; margin: 0.75rem 0; }
-        .wiki-content .check.done { color: #4ade80; }
-        .wiki-content .check.todo { color: rgba(229,229,231,0.3); }
-        .wiki-content .md-table { width: 100%; border-collapse: collapse; margin: 0.5rem 0; font-size: 0.7rem; font-family: 'JetBrains Mono', monospace; }
-        .wiki-content .md-table th { border: 1px solid #1F1F23; padding: 0.3rem 0.5rem; color: rgba(229,229,231,0.5); text-align: left; font-weight: 600; background: #0D0D0F; }
-        .wiki-content .md-table td { border: 1px solid #1F1F23; padding: 0.3rem 0.5rem; color: rgba(229,229,231,0.75); }
+
+        .wiki-content .md-h1 {
+          font-family: var(--font-display);
+          font-size: calc(30px * var(--lib-scale));
+          font-weight: 700;
+          letter-spacing: -0.02em;
+          line-height: 1.15;
+          margin: 1.4em 0 0.5em;
+          color: var(--v3-ink);
+        }
+        .wiki-content .md-h2 {
+          font-family: var(--font-display);
+          font-size: calc(22px * var(--lib-scale));
+          font-weight: 600;
+          letter-spacing: -0.02em;
+          line-height: 1.2;
+          margin: 1.2em 0 0.4em;
+          color: var(--v3-ink);
+          padding-bottom: 0.25em;
+          border-bottom: 1px solid var(--v3-line-soft);
+        }
+        .wiki-content .md-h3 {
+          font-family: var(--font-display);
+          font-size: calc(19px * var(--lib-scale));
+          font-weight: 600;
+          line-height: 1.25;
+          margin: 1em 0 0.3em;
+          color: var(--v3-ink);
+        }
+        .wiki-content .md-h4,
+        .wiki-content .md-h5,
+        .wiki-content .md-h6 {
+          font-family: var(--font-display);
+          font-size: calc(16px * var(--lib-scale));
+          font-weight: 600;
+          line-height: 1.3;
+          margin: 0.8em 0 0.2em;
+          color: var(--v3-ink-md);
+        }
+        .wiki-content .md-p {
+          font-family: var(--font-ui);
+          font-size: calc(16px * var(--lib-scale));
+          line-height: 1.55;
+          color: var(--v3-ink);
+          margin: 0.55em 0;
+        }
+        .wiki-content .md-ul {
+          list-style: disc;
+          padding-left: 1.4em;
+          margin: 0.55em 0;
+        }
+        .wiki-content .md-ul li {
+          font-family: var(--font-ui);
+          font-size: calc(16px * var(--lib-scale));
+          line-height: 1.55;
+          color: var(--v3-ink);
+          margin: 0.2em 0;
+        }
+        .wiki-content strong { font-weight: 600; color: var(--v3-ink); }
+        .wiki-content em { font-style: italic; }
+
+        .wiki-content .inline-code {
+          background: var(--v3-line-soft);
+          color: var(--v3-ink-md);
+          padding: 1px 6px;
+          border-radius: 4px;
+          font-family: var(--font-mono);
+          font-size: 0.9em;
+        }
+        .wiki-content .code-block {
+          background: var(--v3-bg-soft);
+          border: 1px solid var(--v3-line);
+          border-radius: 6px;
+          padding: 0.85em 1em;
+          margin: 0.85em 0;
+          overflow-x: auto;
+        }
+        .wiki-content .code-block code {
+          font-family: var(--font-mono);
+          font-size: calc(13px * var(--lib-scale));
+          line-height: 1.55;
+          color: var(--v3-ink);
+          white-space: pre;
+        }
+
+        .wiki-content .md-link {
+          color: var(--v3-blue);
+          text-decoration: underline;
+          text-underline-offset: 2px;
+          font-size: inherit;
+          font-family: inherit;
+        }
+        .wiki-content .md-link:hover { color: var(--v3-blue-ink); opacity: 0.8; }
+
+        .wiki-content .hr-rule {
+          border: none;
+          border-top: 1px solid var(--v3-line-soft);
+          margin: 1em 0;
+        }
+        .wiki-content .check.done { color: var(--v3-green); }
+        .wiki-content .check.todo { color: var(--v3-ink-lo); }
+
+        .wiki-content .md-table {
+          width: 100%;
+          border-collapse: collapse;
+          margin: 0.8em 0;
+          font-family: var(--font-ui);
+          font-size: calc(14px * var(--lib-scale));
+        }
+        .wiki-content .md-table th {
+          border: 1px solid var(--v3-line);
+          padding: 0.5em 0.7em;
+          color: var(--v3-ink-md);
+          text-align: left;
+          font-weight: 600;
+          background: var(--v3-bg-soft);
+        }
+        .wiki-content .md-table td {
+          border: 1px solid var(--v3-line);
+          padding: 0.5em 0.7em;
+          color: var(--v3-ink);
+        }
       `}</style>
     </div>
   );
