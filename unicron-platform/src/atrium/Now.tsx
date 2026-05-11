@@ -683,7 +683,7 @@ function ActivityFeed() {
           Live Activity
         </div>
         <div className="flex items-center gap-1.5">
-          <div className="w-1.5 h-1.5 rounded-full bg-[#22C55E] animate-pulse" />
+          <div className="w-1.5 h-1.5 rounded-full bg-[#4FB286] animate-pulse" />
           <div className="mono text-[9px] uppercase tracking-[0.14em] text-text-muted">
             Live
           </div>
@@ -884,7 +884,7 @@ function ActivityTab() {
               {filtered.length} event{filtered.length !== 1 ? 's' : ''}
             </span>
             <div className="flex items-center gap-1.5">
-              <div className="w-1.5 h-1.5 rounded-full bg-[#22C55E] animate-pulse" />
+              <div className="w-1.5 h-1.5 rounded-full bg-[#4FB286] animate-pulse" />
               <span className="mono text-[9px] uppercase tracking-[0.14em] text-text-muted">Live</span>
             </div>
           </div>
@@ -1665,8 +1665,8 @@ function SkillsSurface({ onOpenQuickCapture }: { onOpenQuickCapture?: () => void
         )}
 
         {state.error && (
-          <div className="mt-3 bg-[#EF4444]/10 border border-[#EF4444]/30 rounded-lg px-3 py-2">
-            <div className="mono text-[11px] text-[#EF4444]">{state.error}</div>
+          <div className="mt-3 bg-[#DD6262]/10 border border-[#DD6262]/30 rounded-lg px-3 py-2">
+            <div className="mono text-[11px] text-[#DD6262]">{state.error}</div>
           </div>
         )}
       </div>

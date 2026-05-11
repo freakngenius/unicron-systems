@@ -44,9 +44,9 @@ const PRIORITY_ORDER: Record<string, number> = {
 };
 
 const PRIORITY_COLORS: Record<string, string> = {
-  irreversible: '#EF4444',
-  high: '#F59E0B',
-  medium: '#3B82F6',
+  irreversible: '#DD6262',
+  high: '#D9A23A',
+  medium: '#6F95D6',
   low: 'var(--text-lo)',
 };
 
@@ -254,8 +254,8 @@ function DetailPanel({
 
           {/* Error */}
           {err && (
-            <div className="bg-[#EF4444]/10 border border-[#EF4444]/30 rounded-lg px-3 py-2">
-              <div className="mono text-[11px] text-[#EF4444]">{err}</div>
+            <div className="bg-[#DD6262]/10 border border-[#DD6262]/30 rounded-lg px-3 py-2">
+              <div className="mono text-[11px] text-[#DD6262]">{err}</div>
             </div>
           )}
         </div>
@@ -491,13 +491,13 @@ function BulkActions({
       <button
         disabled={busy}
         onClick={() => void applyToAll({ closed: true, status: 'done' })}
-        className="mono text-[10px] uppercase tracking-[0.12em] px-3 py-1 bg-[#EF4444]/20 border border-[#EF4444]/40 text-[#EF4444] rounded-lg hover:bg-[#EF4444]/30 transition-colors disabled:opacity-50"
+        className="mono text-[10px] uppercase tracking-[0.12em] px-3 py-1 bg-[#DD6262]/20 border border-[#DD6262]/40 text-[#DD6262] rounded-lg hover:bg-[#DD6262]/30 transition-colors disabled:opacity-50"
       >
         {busy ? '…' : 'Close All'}
       </button>
 
       {err && (
-        <div className="mono text-[10px] text-[#EF4444]">{err}</div>
+        <div className="mono text-[10px] text-[#DD6262]">{err}</div>
       )}
     </div>
   );
@@ -626,8 +626,8 @@ export function ActionItems() {
 
   if (error) {
     return (
-      <div className="bg-[#EF4444]/10 border border-[#EF4444]/30 rounded-xl px-5 py-4">
-        <div className="mono text-[12px] text-[#EF4444]">{error}</div>
+      <div className="bg-[#DD6262]/10 border border-[#DD6262]/30 rounded-xl px-5 py-4">
+        <div className="mono text-[12px] text-[#DD6262]">{error}</div>
         <button
           onClick={() => void reload()}
           className="mono text-[10px] uppercase tracking-[0.12em] mt-2 text-text-secondary hover:text-text-primary transition-colors"

@@ -186,7 +186,7 @@ function SprintCard({
       >
         <div className="flex items-center gap-3">
           {isActive && (
-            <div className="w-2 h-2 rounded-full bg-[#22C55E] animate-pulse shrink-0" />
+            <div className="w-2 h-2 rounded-full bg-[#4FB286] animate-pulse shrink-0" />
           )}
           <div>
             <div className="mono text-[13px] text-text-primary font-medium">
@@ -249,8 +249,8 @@ export function SprintsView() {
 
   if (error) {
     return (
-      <div className="bg-[#EF4444]/10 border border-[#EF4444]/30 rounded-xl px-5 py-4">
-        <div className="mono text-[12px] text-[#EF4444]">{error}</div>
+      <div className="bg-[#DD6262]/10 border border-[#DD6262]/30 rounded-xl px-5 py-4">
+        <div className="mono text-[12px] text-[#DD6262]">{error}</div>
       </div>
     );
   }
