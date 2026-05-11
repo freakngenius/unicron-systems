@@ -20,6 +20,8 @@ import {
   tabooKeeperRun,
   pathfinderSyncRun,
   pathfinderSyncCron,
+  vaultEmbeddingsRebuildCron,
+  vaultEmbeddingsRebuildRun,
 } from '../lib/agents/inngest-fns.js';
 
 // Disable Vercel's automatic JSON body parsing — inngest/node reads the raw stream.
@@ -42,5 +44,8 @@ export default serve({
     // Pathfinder cross-project sync (S4a)
     pathfinderSyncRun,
     pathfinderSyncCron,
+    // Vault semantic search index (S5c)
+    vaultEmbeddingsRebuildCron,
+    vaultEmbeddingsRebuildRun,
   ],
 });

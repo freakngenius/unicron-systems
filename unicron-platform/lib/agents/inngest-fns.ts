@@ -223,6 +223,33 @@ export const tabooKeeperRun = inngest.createFunction(
 );
 
 // ---------------------------------------------------------------------------
+// Vault embeddings rebuild — S5c
+// ---------------------------------------------------------------------------
+
+/**
+ * Walk the vault tree, compute embeddings for .md files in raw/, wiki/, outputs/
+ * via OpenAI text-embedding-3-small, upsert into nervous_system.vault_embeddings.
+ * Idempotent via content_hash. Cron: daily at 03:30 PT.
+ */
+export const vaultEmbeddingsRebuildCron = inngest.createFunction(
+  { id: 'vault-embeddings-rebuild-cron', name: 'Vault Embeddings Rebuild Cron', retries: 1 },
+  { cron: 'TZ=America/Los_Angeles 30 3 * * *' },
+  async ({ step }) => {
+    const { vaultEmbeddingsRebuild } = await import('./vault-embeddings.js');
+    return step.run('vault-embeddings-rebuild', () => vaultEmbeddingsRebuild());
+  }
+);
+
+export const vaultEmbeddingsRebuildRun = inngest.createFunction(
+  { id: 'vault-embeddings-rebuild-run', name: 'Vault Embeddings Rebuild Run', retries: 1 },
+  { event: 'vault/embeddings.rebuild' },
+  async ({ step }) => {
+    const { vaultEmbeddingsRebuild } = await import('./vault-embeddings.js');
+    return step.run('vault-embeddings-rebuild', () => vaultEmbeddingsRebuild());
+  }
+);
+
+// ---------------------------------------------------------------------------
 // Pathfinder cross-project sync — S4a
 // ---------------------------------------------------------------------------
 
