@@ -1,59 +1,55 @@
-// Money.tsx — v3 redesign Pass 1 (R4 of Atrium Total Tab Rewrite)
-// v3-money.jsx IA: Geist display title, 4 metric cards (Cash / Runway / Net MRR / Burn 30d),
-// v3 blue underline sub-tabs. Sub-tab content (Accounts/Runway/Revenue/Expenses/CostSpikes)
-// preserved verbatim — internal visual fidelity is follow-up Pass 2.
+// Money.tsx — Pass 2 (R4): cut fiction, wire what's real.
+//
+// SLOT MATRIX (Pass 2 R4):
+//  - Cash on hand · status: CUT · no bank integration / cash table.
+//  - Runway months · status: CUT · depends on cash on hand (cut).
+//  - 12-month runway projection chart · status: CUT (lived inside Runway
+//    subcomponent, not the shell — Bug Fix card stands until cash lands).
+//  - Net MRR · status: real · literal $0 with "Pre-revenue · Zedcor pilot
+//    in flight" label until Stripe Connect wires revenue.
+//  - Burn (30d) · status: real · ns_money_burn_from_services — sum of
+//    connected_services.monthly_cost_usd. The accurate operational burn
+//    proxy until expense_tracking ships.
+//  - Sub-tabs: Runway / Revenue / Expenses / Cost spikes / Accounts — kept
+//    as-is. Runway sub-tab content cut to a "Requires bank integration"
+//    empty state (the 12-month chart card belongs there).
 
 import { useState, useEffect } from 'react';
 import { getSupabase } from '../lib/supabase';
 import { Accounts } from './money/Accounts';
-import { Runway } from './money/Runway';
 import { Revenue } from './money/Revenue';
 import { Expenses } from './money/Expenses';
 import { CostSpikes } from './money/CostSpikes';
 
 const MONEY_TABS = [
-  { id: 'runway',   label: 'Runway' },
   { id: 'revenue',  label: 'Revenue' },
   { id: 'expenses', label: 'Expenses' },
   { id: 'spikes',   label: 'Cost spikes' },
   { id: 'accounts', label: 'Accounts' },
+  { id: 'runway',   label: 'Runway' },
 ] as const;
 
 type MoneyTab = (typeof MONEY_TABS)[number]['id'];
 
-// ─── Money metrics (drives 4 cards) ──────────────────────────────────────────
+// ─── Burn metric (real) ──────────────────────────────────────────────────────
 
-interface MoneyMetrics {
-  cashOnHandUsd: number | null;
-  runwayMonths: number | null;
-  netMrrUsd: number | null;
-  burn30dUsd: number | null;
-}
-
-function useMoneyMetrics(): MoneyMetrics {
-  const [m, setM] = useState<MoneyMetrics>({
-    cashOnHandUsd: null, runwayMonths: null, netMrrUsd: null, burn30dUsd: null,
+function useBurnFromServices(): { monthly: number | null; services: number | null } {
+  const [s, setS] = useState<{ monthly: number | null; services: number | null }>({
+    monthly: null, services: null,
   });
   useEffect(() => {
     let cancelled = false;
     getSupabase()
-      .rpc('ns_money_metrics')
+      .rpc('ns_money_burn_from_services')
       .then(({ data }) => {
         if (cancelled) return;
-        const row = (data as Array<{ cash_on_hand_usd: number; runway_months: number; net_mrr_usd: number; burn_30d_usd: number }> | null)?.[0];
-        if (row) {
-          setM({
-            cashOnHandUsd: row.cash_on_hand_usd,
-            runwayMonths: row.runway_months,
-            netMrrUsd: row.net_mrr_usd,
-            burn30dUsd: row.burn_30d_usd,
-          });
-        }
+        const row = (data as Array<{ monthly_burn_usd: number; services_count: number }> | null)?.[0];
+        if (row) setS({ monthly: Number(row.monthly_burn_usd), services: Number(row.services_count) });
       })
-      .catch(() => {/* RPC may not exist yet */});
+      .catch(() => {/* leave nulls */});
     return () => { cancelled = true; };
   }, []);
-  return m;
+  return s;
 }
 
 function fmtUsd(n: number | null, compact = true): string {
@@ -64,78 +60,46 @@ function fmtUsd(n: number | null, compact = true): string {
   return `$${Math.round(n)}`;
 }
 
-function MetricCard({ label, value, sublabel, change, sparkline, accent }: {
-  label: string; value: string; sublabel?: string;
-  change?: { value: string; tone: 'up' | 'down' | 'flat' };
-  sparkline?: number[]; accent?: string;
+function MetricCard({ label, value, sublabel, accent }: {
+  label: string; value: string; sublabel?: string; accent?: string;
 }) {
-  const max = sparkline ? Math.max(...sparkline, 1) : 1;
-  const toneColor = change?.tone === 'up' ? '#2E8E66' : change?.tone === 'down' ? '#E14B4B' : '#7E8AA3';
   return (
     <div className="bg-white border border-border-default rounded-xl px-4 py-3.5 shadow-sm">
       <div className="text-[11px] uppercase tracking-[0.14em] text-text-muted font-semibold">{label}</div>
-      <div className="flex items-baseline justify-between gap-3 mt-2">
-        <div className="text-[26px] font-semibold text-text-primary" style={{ fontFamily: 'var(--font-display)', letterSpacing: -0.5, lineHeight: 1, color: accent ?? undefined }}>{value}</div>
-        {change && <span className="text-[11.5px] font-semibold" style={{ color: toneColor }}>{change.tone === 'up' ? '↑' : change.tone === 'down' ? '↓' : '·'} {change.value}</span>}
+      <div className="text-[26px] font-semibold text-text-primary mt-2" style={{ fontFamily: 'var(--font-display)', letterSpacing: -0.5, lineHeight: 1, color: accent ?? undefined }}>
+        {value}
       </div>
-      {(sublabel || sparkline) && (
-        <div className="flex items-end justify-between gap-3 mt-2.5 min-h-[20px]">
-          {sublabel && <div className="text-[12px] text-text-muted truncate">{sublabel}</div>}
-          {sparkline && (
-            <svg width="80" height="20" viewBox="0 0 80 20" className="shrink-0">
-              <polyline
-                points={sparkline.map((v, i) => `${(i / (sparkline.length - 1)) * 80},${20 - (v / max) * 18}`).join(' ')}
-                fill="none" stroke={accent ?? '#6081BE'} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"
-              />
-            </svg>
-          )}
-        </div>
+      {sublabel && (
+        <div className="text-[12px] text-text-muted mt-2.5 truncate">{sublabel}</div>
       )}
     </div>
   );
 }
 
 export function Money() {
-  const [active, setActive] = useState<MoneyTab>('runway');
-  const m = useMoneyMetrics();
+  const [active, setActive] = useState<MoneyTab>('accounts');
+  const burn = useBurnFromServices();
 
   return (
     <div className="w-full">
-      <div className="px-7 pt-6 pb-3 flex items-end justify-between gap-4 flex-wrap">
-        <div>
-          <div className="text-[11.5px] text-text-muted mb-1.5">Cash, revenue, burn</div>
-          <h1 className="text-[36px] font-semibold text-text-primary leading-none tracking-tight" style={{ fontFamily: 'var(--font-display)', letterSpacing: -0.7 }}>
-            Money
-          </h1>
-        </div>
+      <div className="px-7 pt-6 pb-3">
+        <div className="text-[11.5px] text-text-muted mb-1.5">Burn from connected services, revenue, accounts</div>
+        <h1 className="text-[36px] font-semibold text-text-primary leading-none tracking-tight" style={{ fontFamily: 'var(--font-display)', letterSpacing: -0.7 }}>
+          Money
+        </h1>
       </div>
 
-      {/* 4 metric cards — always visible above sub-tabs */}
-      <div className="px-7 pb-4 grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
-        <MetricCard
-          label="Cash on hand"
-          value={fmtUsd(m.cashOnHandUsd)}
-          sublabel={m.cashOnHandUsd === null ? 'DEMO · wire ns_money_metrics' : undefined}
-          change={{ value: 'flat', tone: 'flat' }}
-          sparkline={[1, 1, 1, 1, 1, 1, 1]}
-        />
-        <MetricCard
-          label="Runway"
-          value={m.runwayMonths === null ? '—' : `${m.runwayMonths}mo`}
-          sublabel={m.runwayMonths === null ? 'DEMO' : undefined}
-          change={{ value: 'flat', tone: 'flat' }}
-        />
+      {/* 2 real metric cards — Cash on hand + Runway months CUT, will return when bank integration lands */}
+      <div className="px-7 pb-4 grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
         <MetricCard
           label="Net MRR"
-          value={fmtUsd(m.netMrrUsd)}
-          sublabel={m.netMrrUsd === null || m.netMrrUsd === 0 ? 'Pre-revenue' : undefined}
-          change={{ value: 'flat', tone: 'flat' }}
+          value="$0"
+          sublabel="Pre-revenue · Zedcor pilot in flight"
         />
         <MetricCard
-          label="Burn (30d)"
-          value={fmtUsd(m.burn30dUsd)}
-          sublabel={m.burn30dUsd === null ? 'DEMO' : undefined}
-          change={{ value: 'flat', tone: 'flat' }}
+          label="Burn (30d, services)"
+          value={fmtUsd(burn.monthly)}
+          sublabel={burn.services === null ? '—' : `${burn.services} connected services`}
           accent="#E14B4B"
         />
       </div>
@@ -161,11 +125,22 @@ export function Money() {
 
       <div className="px-7 py-5">
         <section role="tabpanel" aria-label={MONEY_TABS.find((t) => t.id === active)?.label}>
-          {active === 'runway' && <Runway />}
           {active === 'revenue' && <Revenue />}
           {active === 'expenses' && <Expenses />}
           {active === 'spikes' && <CostSpikes />}
           {active === 'accounts' && <Accounts />}
+          {active === 'runway' && (
+            <div className="bg-white border border-border-default rounded-xl px-6 py-12 text-center">
+              <div className="text-[14px] text-text-primary font-semibold mb-1.5" style={{ fontFamily: 'var(--font-display)' }}>
+                Runway needs bank integration
+              </div>
+              <div className="text-[12px] text-text-muted max-w-md mx-auto leading-relaxed">
+                Cash on hand and runway months require a connected bank or cash-balance source.
+                Pass 2 cut the static placeholder — the 12-month projection chart will return
+                when the integration ships.
+              </div>
+            </div>
+          )}
         </section>
       </div>
     </div>
