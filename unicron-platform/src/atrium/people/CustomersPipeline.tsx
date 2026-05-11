@@ -35,6 +35,15 @@ const STAGES = [
 
 type Stage = (typeof STAGES)[number];
 
+// DB canon for status is lowercase ('discovery', 'active'…). UI labels are
+// title-cased. Normalize at the boundary so case never breaks bucketing.
+function toStage(dbStatus: string | null | undefined): Stage {
+  if (!dbStatus) return 'Cold';
+  const lc = dbStatus.toLowerCase();
+  const cap = lc.charAt(0).toUpperCase() + lc.slice(1);
+  return (STAGES as readonly string[]).includes(cap) ? (cap as Stage) : 'Cold';
+}
+
 const STAGE_COLORS: Record<Stage, string> = {
   Cold:       'rgba(107,114,128,0.8)',
   Discovery:  'rgba(111,149,214,0.8)',
@@ -328,7 +337,7 @@ function MobileList({
               </div>
             )}
           </div>
-          <StageBadge stage={c.status} />
+          <StageBadge stage={toStage(c.status)} />
         </button>
       ))}
     </div>
@@ -375,7 +384,7 @@ export function CustomersPipeline() {
     async (targetStage: Stage) => {
       if (!draggingId) return;
       const customer = customers.find((c) => c.id === draggingId);
-      if (!customer || customer.status === targetStage) {
+      if (!customer || toStage(customer.status) === targetStage) {
         setDraggingId(null);
         return;
       }
@@ -435,12 +444,11 @@ export function CustomersPipeline() {
     );
   }
 
-  // Group by stage
+  // Group by stage — normalize case at the boundary (DB lowercase, UI title-case)
   const byStage: Record<string, Customer[]> = {};
   for (const stage of STAGES) byStage[stage] = [];
   for (const c of customers) {
-    const bucket = STAGES.includes(c.status as Stage) ? c.status : 'Cold';
-    byStage[bucket].push(c);
+    byStage[toStage(c.status)].push(c);
   }
 
   return (
