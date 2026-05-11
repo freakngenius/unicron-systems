@@ -27,7 +27,6 @@ const TABS: { id: AtriumTab; label: string; sprint: number }[] = [
   { id: 'products',  label: 'Products',  sprint: 6 },
   { id: 'system',    label: 'System',    sprint: 2 },
   { id: 'library',   label: 'Library',   sprint: 6 },
-  { id: 'skills',    label: 'Skills',    sprint: 4 },
 ];
 
 const MOBILE_TABS: AtriumTab[] = ['now', 'people', 'work', 'money'];
