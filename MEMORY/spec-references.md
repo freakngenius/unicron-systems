@@ -903,3 +903,13 @@ Operator setup: `MEMORY/operator-todos/2026-05-03-teams-user-setup.md` — Micro
 **Implements:** SPEC - Phase 2E Onboarding Completion Loop.md §"Flow" first step — POST /api/organizations now emits `pathfinder/org.created` after successful insert. Best-effort: a transient Inngest failure does not roll back the persisted row; the threshold cron reconciles state within 5 min.
 **Last verified against spec:** 2026-05-11.
 **Drift:** none.
+
+#### Pathfinder/lib/agents/operator-viewed.ts
+**Implements:** SPEC - Phase 2E Onboarding Completion Loop.md §"Flow" final step — `status=operator_viewed (set on first /[slug]/ render)`. Pure helper that flips `pathfinder.organizations.status` from `ready_to_view` to `operator_viewed`. Conditional UPDATE includes the previous-status guard in the WHERE clause so a concurrent threshold-cron transition doesn't race. Best-effort: returns reason rather than throwing.
+**Last verified against spec:** 2026-05-11.
+**Drift:** none — matches SPEC §"Flow" exactly.
+
+#### Pathfinder/app/[slug]/page.tsx (slice 4 hook)
+**Implements:** SPEC - Phase 2E Onboarding Completion Loop.md §"Flow" — adds `flipToOperatorViewed` call after org fetch, before render. Side-effect only; rendering unaffected by transition success/failure (the threshold cron + future renders reconcile any missed flip).
+**Last verified against spec:** 2026-05-11.
+**Drift:** none.
