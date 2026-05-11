@@ -26,7 +26,8 @@ import {
 import { getSupabase } from '../lib/supabase';
 import { useAuth } from '../lib/auth';
 import { QuickCapture } from './QuickCapture';
-import { scoreAttentionItems, type ScoredItem } from './now/AttentionScorer';
+// Pass 2 (R1): AttentionScorer cut — was hand-rolled scoring across mixed
+// sources. TopOfMind now wires to ns_top_of_mind_for_dri RPC (real data).
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -273,56 +274,53 @@ function StatusPulse() {
   );
 }
 
-// ─── TopOfMind — Sprint 4 attention scoring ───────────────────────────────────
+// ─── TopOfMind — Pass 2 (R1): wired to ns_top_of_mind_for_dri ─────────────────
+// SLOT: TopOfMind · STATUS: real · SOURCE: ns_top_of_mind_for_dri(p_dri) RPC
+// Shows the signed-in user's open irreversible+high action items, top 5.
 
-function useAttentionItems() {
-  const [items, setItems] = useState<ScoredItem[]>([]);
+interface TopOfMindItem {
+  id: string;
+  title: string;
+  description: string | null;
+  priority: string;
+  due_at: string | null;
+  created_at: string;
+}
+
+const PRIORITY_COLOR: Record<string, string> = {
+  irreversible: '#E14B4B',
+  high:         '#C28A1F',
+  medium:       '#6081BE',
+  low:          '#7E8AA3',
+};
+
+function useTopOfMind(teamMemberId: string | null) {
+  const [items, setItems] = useState<TopOfMindItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [calendarConnected, setCalendarConnected] = useState<boolean | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-
-    async function load() {
-      try {
-        const scored = await scoreAttentionItems();
-        if (!cancelled) {
-          setItems(scored);
-          // Infer calendar connectivity from returned items
-          const hasCalendar = scored.some((i) => i.category === 'calendar');
-          setCalendarConnected(hasCalendar);
-          setLoading(false);
-        }
-      } catch {
-        if (!cancelled) setLoading(false);
-      }
+    if (!teamMemberId) {
+      setItems([]);
+      setLoading(false);
+      return () => { cancelled = true; };
     }
-
-    void load();
+    getSupabase()
+      .rpc('ns_top_of_mind_for_dri', { p_dri: teamMemberId })
+      .then(({ data }) => {
+        if (cancelled) return;
+        setItems((data as TopOfMindItem[] | null) ?? []);
+        setLoading(false);
+      })
+      .catch(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, []);
+  }, [teamMemberId]);
 
-  return { items, loading, calendarConnected };
+  return { items, loading };
 }
 
-const CATEGORY_COLORS: Record<ScoredItem['category'], string> = {
-  escalation: '#E14B4B',
-  ingest: '#C28A1F',
-  sprint: '#6081BE',
-  health: '#8B7CD8',
-  calendar: '#2E8E66',
-};
-
-const CATEGORY_LABELS: Record<ScoredItem['category'], string> = {
-  escalation: 'Escalation',
-  ingest: 'Call',
-  sprint: 'Sprint',
-  health: 'Health',
-  calendar: 'Calendar',
-};
-
-function TopOfMind() {
-  const { items, loading, calendarConnected } = useAttentionItems();
+function TopOfMind({ teamMemberId }: { teamMemberId: string | null }) {
+  const { items, loading } = useTopOfMind(teamMemberId);
 
   if (loading) {
     return (
@@ -349,69 +347,50 @@ function TopOfMind() {
     );
   }
 
+  if (items.length === 0) {
+    return (
+      <div className="bg-bg-card border border-border-default rounded-xl px-5 py-4">
+        <div className="mono text-[11px] text-text-secondary">
+          Nothing demanding attention right now.
+        </div>
+        <div className="mono text-[10px] text-text-muted mt-1.5">
+          Top of mind — open items where you are DRI, irreversible or high priority
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-2">
-      {items.map((item) => (
-        <div
-          key={item.id}
-          // Sprint 4 mobile: full width, comfortable padding
-          className="w-full bg-bg-card border border-border-default rounded-xl px-4 sm:px-5 py-3 sm:py-4 hover:border-border-hover transition-colors"
-        >
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex items-start gap-3 min-w-0">
-              <div
-                className="w-2 h-2 rounded-full mt-1.5 shrink-0"
-                style={{ backgroundColor: CATEGORY_COLORS[item.category] }}
-              />
-              <div className="min-w-0">
-                <div className="mono text-[13px] text-text-primary truncate">{item.label}</div>
-                {item.detail && (
-                  <div className="mono text-[11px] text-text-secondary mt-0.5 line-clamp-1">
-                    {item.detail}
-                  </div>
+      {items.map((item) => {
+        const color = PRIORITY_COLOR[item.priority] ?? PRIORITY_COLOR.medium;
+        return (
+          <div
+            key={item.id}
+            className="w-full bg-bg-card border border-border-default rounded-xl px-4 sm:px-5 py-3 sm:py-4 hover:border-border-hover transition-colors"
+          >
+            <div className="flex items-start gap-3">
+              <div className="w-2 h-2 rounded-full mt-1.5 shrink-0" style={{ backgroundColor: color }} />
+              <div className="min-w-0 flex-1">
+                <div className="mono text-[13px] text-text-primary truncate">{item.title}</div>
+                {item.description && (
+                  <div className="mono text-[11px] text-text-secondary mt-0.5 line-clamp-1">{item.description}</div>
                 )}
                 <div className="flex items-center gap-3 mt-1.5 flex-wrap">
-                  <span
-                    className="mono text-[9px] uppercase tracking-[0.14em]"
-                    style={{ color: CATEGORY_COLORS[item.category] }}
-                  >
-                    {CATEGORY_LABELS[item.category]}
+                  <span className="mono text-[9px] uppercase tracking-[0.14em]" style={{ color }}>
+                    {item.priority}
                   </span>
-                  {item.priority && (
-                    <span className="mono text-[9px] uppercase tracking-[0.12em] text-text-muted">
-                      {item.priority}
-                    </span>
-                  )}
                   {item.due_at && (
                     <span className="mono text-[9px] text-text-muted">
                       due {new Date(item.due_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                     </span>
                   )}
-                  <span className="mono text-[9px] text-text-muted">
-                    score {item.score}
-                  </span>
                 </div>
               </div>
             </div>
-            {/* Score badge */}
-            <div
-              className="shrink-0 mono text-[10px] px-2 py-0.5 rounded-md border"
-              style={{
-                color: CATEGORY_COLORS[item.category],
-                borderColor: `${CATEGORY_COLORS[item.category]}40`,
-                backgroundColor: `${CATEGORY_COLORS[item.category]}10`,
-              }}
-            >
-              {item.score}
-            </div>
           </div>
-        </div>
-      ))}
-      {calendarConnected === false && (
-        <div className="mono text-[9px] uppercase tracking-[0.14em] text-text-muted pt-1 pl-1">
-          Calendar not connected — Sprint 5
-        </div>
-      )}
+        );
+      })}
     </div>
   );
 }
@@ -2164,63 +2143,158 @@ function DistBar({ label, percent, color }: { label: string; percent: number; co
   );
 }
 
-function ForecastPanel() {
+// Pass 2 (R1) — ForecastPanel + RecentRunsPanel + RECENT_AGENT_RUNS const CUT.
+// Static fake numbers had no backing source. Replaced with two real-data charts.
+
+// SLOT: Action items per day · 7d · STATUS: real
+// SOURCE: ns_action_items_daily_7d RPC over nervous_system.action_items
+function useActionItemsDaily7d() {
+  const [data, setData] = useState<Array<{ day: string; total: number; irreversible: number }>>([]);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    let cancelled = false;
+    getSupabase()
+      .rpc('ns_action_items_daily_7d')
+      .then(({ data: rows }) => {
+        if (cancelled) return;
+        setData((rows as Array<{ day: string; total: number; irreversible: number }> | null) ?? []);
+        setLoading(false);
+      })
+      .catch(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
+  return { data, loading };
+}
+
+function ActionItemsDailyChart() {
+  const { data, loading } = useActionItemsDaily7d();
+  if (loading) {
+    return <div className="bg-bg-card border border-border-default rounded-xl p-4 h-32 animate-pulse" />;
+  }
+  const maxTotal = Math.max(1, ...data.map((d) => Number(d.total)));
+  const sumTotal = data.reduce((acc, d) => acc + Number(d.total), 0);
+  const sumIrr = data.reduce((acc, d) => acc + Number(d.irreversible), 0);
+  const labels = data.map((d) => new Date(d.day).toLocaleDateString('en-US', { weekday: 'short' })[0]);
   return (
     <div className="bg-bg-card border border-border-default rounded-xl p-4">
-      <div className="mono text-[12px] font-semibold text-text-primary mb-0.5">Forecast</div>
-      <div className="mono text-[10px] text-text-secondary mb-3">Next 7 days</div>
-      <div className="flex flex-col gap-4">
-        <div>
-          <div className="flex items-baseline justify-between mb-1.5">
-            <span className="mono text-[11px] text-text-secondary">Calls scheduled</span>
-            <span className="mono text-[11px] text-text-primary">11</span>
-          </div>
-          <BarChart data={[2,1,3,2,1,1,1]} color="var(--info)" labels={['W','T','F','S','S','M','T']} />
-        </div>
-        <div>
-          <div className="flex items-baseline justify-between mb-1.5">
-            <span className="mono text-[11px] text-text-secondary">Renewal exposure</span>
-            <span className="mono text-[11px] text-text-primary">$48k</span>
-          </div>
-          <BarChart data={[0,12,0,0,18,0,18]} color="var(--accent)" />
-        </div>
-        <div>
-          <div className="flex items-baseline justify-between mb-1.5">
-            <span className="mono text-[11px] text-text-secondary">Action items due</span>
-            <span className="mono text-[11px] text-text-primary">9</span>
-          </div>
-          <BarChart data={[1,3,2,0,0,2,1]} color="var(--warn)" />
-        </div>
+      <div className="flex items-baseline justify-between mb-0.5">
+        <div className="mono text-[12px] font-semibold text-text-primary">Action items per day</div>
+        <div className="mono text-[11px] text-text-primary">{sumTotal}</div>
+      </div>
+      <div className="mono text-[10px] text-text-secondary mb-3">
+        Last 7d · <span style={{ color: '#E14B4B' }}>{sumIrr} irreversible</span>
+      </div>
+      <svg viewBox="0 0 200 60" preserveAspectRatio="none" className="w-full h-14">
+        {data.map((d, i) => {
+          const x = (i / Math.max(1, data.length - 1)) * 190 + 5;
+          const total = Number(d.total);
+          const h = (total / maxTotal) * 50;
+          return (
+            <rect
+              key={d.day}
+              x={x - 10}
+              y={60 - h}
+              width={20}
+              height={h}
+              fill="#6081BE"
+              opacity={0.7}
+              rx={2}
+            />
+          );
+        })}
+        <polyline
+          points={data
+            .map((d, i) => {
+              const x = (i / Math.max(1, data.length - 1)) * 190 + 5;
+              const total = Math.max(1, Number(d.total));
+              const irr = Number(d.irreversible);
+              const ratio = irr / total;
+              return `${x},${60 - ratio * 50}`;
+            })
+            .join(' ')}
+          fill="none"
+          stroke="#E14B4B"
+          strokeWidth="1.6"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+      <div className="flex justify-between mt-1.5 mono text-[9px] text-text-muted">
+        {labels.map((l, i) => <span key={i}>{l}</span>)}
       </div>
     </div>
   );
 }
 
-const RECENT_AGENT_RUNS = [
-  { name: 'Customer health sweep', status: 'ok',   t: '03:00', dur: '1m 12s' },
-  { name: 'Daily digest',          status: 'ok',   t: '07:00', dur: '8s'     },
-  { name: 'Inbox triage',          status: 'ok',   t: '07:14', dur: '22s'    },
-  { name: 'Lead surface',          status: 'warn', t: '08:30', dur: '2m 04s' },
-  { name: 'Calendar sweep',        status: 'ok',   t: '09:00', dur: '4s'     },
-];
+// SLOT: Ingest yield · 7d · STATUS: real
+// SOURCE: ns_ingest_yield_daily_7d RPC over nervous_system.ledger
+// (source_type IN voice_memo+apple_note, qualifying = insights.confidence >= 0.5)
+function useIngestYield7d() {
+  const [data, setData] = useState<Array<{ day: string; total: number; qualifying: number }>>([]);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    let cancelled = false;
+    getSupabase()
+      .rpc('ns_ingest_yield_daily_7d')
+      .then(({ data: rows }) => {
+        if (cancelled) return;
+        setData((rows as Array<{ day: string; total: number; qualifying: number }> | null) ?? []);
+        setLoading(false);
+      })
+      .catch(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
+  return { data, loading };
+}
 
-function RecentRunsPanel() {
+function IngestYieldChart() {
+  const { data, loading } = useIngestYield7d();
+  if (loading) {
+    return <div className="bg-bg-card border border-border-default rounded-xl p-4 h-32 animate-pulse" />;
+  }
+  const sumTotal = data.reduce((acc, d) => acc + Number(d.total), 0);
+  const sumQual = data.reduce((acc, d) => acc + Number(d.qualifying), 0);
+  const yieldPct = sumTotal > 0 ? Math.round((sumQual / sumTotal) * 100) : null;
+  const labels = data.map((d) => new Date(d.day).toLocaleDateString('en-US', { weekday: 'short' })[0]);
   return (
-    <div className="bg-bg-card border border-border-default rounded-xl overflow-hidden">
-      <div className="px-4 py-3 border-b border-border-subtle">
-        <div className="mono text-[12px] font-semibold text-text-primary">Recent runs</div>
-        <div className="mono text-[10px] text-text-secondary">Last 5 skill executions</div>
-      </div>
-      {RECENT_AGENT_RUNS.map((r, i) => (
-        <div key={i} className={`flex items-center gap-2.5 px-4 py-2 ${i > 0 ? 'border-t border-border-subtle' : ''}`}>
-          <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{
-            background: r.status === 'ok' ? '#2E8E66' : '#C28A1F',
-          }} />
-          <span className="mono text-[11.5px] text-text-primary flex-1 truncate">{r.name}</span>
-          <span className="mono text-[10.5px] text-text-secondary">{r.t}</span>
-          <span className="mono text-[10.5px] text-text-secondary min-w-[44px] text-right">{r.dur}</span>
+    <div className="bg-bg-card border border-border-default rounded-xl p-4">
+      <div className="flex items-baseline justify-between mb-0.5">
+        <div className="mono text-[12px] font-semibold text-text-primary">Ingest yield</div>
+        <div className="mono text-[11px] text-text-primary">
+          {yieldPct === null ? '—' : `${yieldPct}%`}
         </div>
-      ))}
+      </div>
+      <div className="mono text-[10px] text-text-secondary mb-3">
+        Voice + Notes · {sumQual}/{sumTotal} ≥ 0.5 confidence · 7d
+      </div>
+      <svg viewBox="0 0 200 60" preserveAspectRatio="none" className="w-full h-14">
+        <polyline
+          points={data
+            .map((d, i) => {
+              const x = (i / Math.max(1, data.length - 1)) * 190 + 5;
+              const total = Number(d.total);
+              const qual = Number(d.qualifying);
+              const ratio = total > 0 ? qual / total : 0;
+              return `${x},${60 - ratio * 50}`;
+            })
+            .join(' ')}
+          fill="none"
+          stroke="#2E8E66"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        {data.map((d, i) => {
+          const x = (i / Math.max(1, data.length - 1)) * 190 + 5;
+          const total = Number(d.total);
+          const qual = Number(d.qualifying);
+          const ratio = total > 0 ? qual / total : 0;
+          return <circle key={d.day} cx={x} cy={60 - ratio * 50} r="2" fill="#2E8E66" />;
+        })}
+      </svg>
+      <div className="flex justify-between mt-1.5 mono text-[9px] text-text-muted">
+        {labels.map((l, i) => <span key={i}>{l}</span>)}
+      </div>
     </div>
   );
 }
@@ -2376,10 +2450,10 @@ export function Now({ name }: Props) {
             <SkillsSurface onOpenQuickCapture={() => setCaptureOpen(true)} />
           </div>
 
-          {/* Right rail: Forecast + Recent runs */}
+          {/* Right rail: real-data charts (Pass 2 R1) */}
           <div className="now-rail flex flex-col gap-4 sticky top-0">
-            <ForecastPanel />
-            <RecentRunsPanel />
+            <ActionItemsDailyChart />
+            <IngestYieldChart />
           </div>
         </div>
       )}
@@ -2408,8 +2482,8 @@ export function Now({ name }: Props) {
           {/* Hero sentiment strip */}
           <HeroStrip />
 
-          {/* Top of Mind */}
-          <TopOfMind />
+          {/* Top of Mind — Pass 2: wired to ns_top_of_mind_for_dri */}
+          <TopOfMind teamMemberId={teamMemberId} />
 
           {/* Calendar + Digest */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -2418,11 +2492,11 @@ export function Now({ name }: Props) {
           </div>
         </div>
 
-        {/* RIGHT rail */}
+        {/* RIGHT rail — Pass 2 R1: cut Forecast/RecentRuns/VaultPulse (static fakes); */}
+        {/* keep ActivityFeed (real Supabase realtime). Add two real-data charts. */}
         <div className="now-rail flex flex-col gap-4 sticky top-0">
-          <ForecastPanel />
-          <RecentRunsPanel />
-          <VaultPulse />
+          <ActionItemsDailyChart />
+          <IngestYieldChart />
           <ActivityFeed />
         </div>
       </div>
