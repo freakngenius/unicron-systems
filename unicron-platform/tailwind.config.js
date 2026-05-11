@@ -39,6 +39,7 @@ export default {
         },
         accent: {
           // Legacy accent-* aliases re-pointed to v3 equivalents.
+          primary: '#6081BE',    // --v3-blue (primary actions, from main)
           cyan:    '#6081BE',    // --v3-blue (was teal #5BB5BC)
           gold:    '#E8763A',    // --v3-orange
           violet:  '#7355E5',    // --v3-purple

@@ -10,7 +10,7 @@ import type { ReactNode } from 'react';
 export function Skeleton({ className }: { className?: string }) {
   return (
     <div
-      className={`animate-pulse bg-zinc-800 rounded ${className ?? ''}`}
+      className={`animate-pulse bg-border-default rounded ${className ?? ''}`}
       role="status"
       aria-label="Loading…"
     />
@@ -41,7 +41,7 @@ export function SkeletonRows({
 export function SkeletonCard({ className }: { className?: string }) {
   return (
     <div
-      className={`bg-[#141416] border border-[#1F1F23] rounded-xl p-4 space-y-3 ${className ?? ''}`}
+      className={`bg-white border border-border-default rounded-xl p-4 space-y-3 ${className ?? ''}`}
       role="status"
       aria-label="Loading…"
     >
@@ -67,7 +67,7 @@ export function EmptyState({
   children?: ReactNode;
 }) {
   return (
-    <div className="flex flex-col items-center justify-center py-16 text-center bg-[#141416] border border-[#1F1F23] rounded-xl px-5">
+    <div className="flex flex-col items-center justify-center py-16 text-center bg-white border border-border-default rounded-xl px-5">
       <p className="mono text-[11px] uppercase tracking-[0.18em] text-zinc-400 mb-1">
         {title}
       </p>
@@ -77,7 +77,7 @@ export function EmptyState({
       {action && (
         <button
           onClick={action.onClick}
-          className="mt-4 mono text-[11px] text-zinc-100 underline underline-offset-2 hover:text-white transition-colors focus:outline-none focus:ring-2 focus:ring-zinc-500 rounded"
+          className="mt-4 mono text-[11px] text-text-secondary underline underline-offset-2 hover:text-text-primary transition-colors focus:outline-none focus:ring-2 focus:ring-border-strong rounded"
         >
           {action.label}
         </button>
@@ -106,7 +106,7 @@ export function ErrorState({
       {onRetry && (
         <button
           onClick={onRetry}
-          className="mt-4 mono text-[11px] text-zinc-100 underline underline-offset-2 hover:text-white transition-colors focus:outline-none focus:ring-2 focus:ring-zinc-500 rounded"
+          className="mt-4 mono text-[11px] text-text-secondary underline underline-offset-2 hover:text-text-primary transition-colors focus:outline-none focus:ring-2 focus:ring-border-strong rounded"
         >
           Retry
         </button>

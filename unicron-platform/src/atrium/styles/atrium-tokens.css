@@ -1,5 +1,6 @@
 /* Atrium v3 — Stellate-inspired editorial design tokens
-   Source: Brand/Atrium Design System/v3.jsx (v3Tokens template)
+   Source: Brand/Atrium Design System/v3.jsx (v3Tokens template) +
+           Atrium/Web UI/v3.jsx canonical.
 
    Dark navy rail, white cards on cool-gray surface, big confident numerics,
    blue underline tabs, restrained delta colors, pale-pill statuses.
@@ -9,14 +10,18 @@
    tokens.css instead of v3.jsx (the canonical Atrium design).
 
    The --v3-* namespace is the source of truth. Legacy token names
-   (--bg-*, --text-*, --accent, --border-*, --cat-*, --ok/warn/err/info)
-   are kept as backward-compat aliases that resolve to the v3 palette,
-   so the ~400 existing var(--*) call sites continue to work — but now
-   render as the light-mode Stellate design instead of dark mode.
+   (--bg-*, --text-*, --accent, --border-*, --cat-*, --ok/warn/err/info,
+   --rail-bg, --topbar-bg, --primary) are kept as backward-compat aliases
+   that resolve to the v3 palette, so the ~400 existing var(--*) call
+   sites continue to work — now rendering as the light-mode Stellate
+   design instead of dark mode.
+
+   Global resets (box-sizing, html/body, scrollbar, focus ring) live in
+   index.css. Tokens + utility classes only here.
 
    Radius (--r-*), shadow (--sh-*), spacing (--s-*), typography scale,
    motion (--ease, --d-*), and layout (--rail-w, --header-h, --filter-w,
-   --detail-w) are mode-neutral and preserved from the prior tokens.css. */
+   --detail-w) are mode-neutral and preserved. */
 
 :root {
   /* ---------- v3 source-of-truth tokens (from v3.jsx) ---------- */
@@ -55,6 +60,7 @@
   --v3-amber-soft:#FFEFD0;
   --v3-green:     #2E8E66;
   --v3-green-soft:#E1F2EA;
+  --v3-teal:      #5BB5BC;        /* operations category — preserved from main */
 
   /* ---------- Backward-compat aliases ----------
      Legacy token names re-pointed to v3 values. New code should use
@@ -63,10 +69,17 @@
 
   /* Surfaces */
   --bg-ground:    var(--v3-bg);          /* page bg */
-  --bg-surface:   var(--v3-surface);     /* cards on light */
+  --bg-surface:   var(--v3-bg-soft);     /* filter rail / soft inset (main: #ECEEF2) */
   --bg-elevated:  var(--v3-surface);     /* white card */
-  --bg-raised:    var(--v3-bg-soft);     /* hover/raised on light */
-  --bg-overlay:   rgba(11,21,48,0.32);   /* navy-tinted scrim on light */
+  --bg-raised:    var(--v3-line-soft);   /* hover rows, popovers (main: #EEF0F4) */
+  --bg-overlay:   rgba(11,21,48,0.55);   /* navy-tinted modal scrim */
+
+  /* Rail + topbar aliases (introduced by main; point at v3) */
+  --rail-bg:         var(--v3-rail);
+  --rail-bg-hover:   var(--v3-rail-2);
+  --topbar-bg:       var(--v3-topbar);
+  --topbar-text:     var(--v3-topbar-text);
+  --topbar-text-lo:  var(--v3-topbar-text-lo);
 
   /* Borders — cool, very faint (light-mode versions) */
   --border-faint:   var(--v3-line-soft);
@@ -89,8 +102,13 @@
   /* Accent (Unicron Orange — preserved) */
   --accent:        var(--v3-orange);
   --accent-soft:   var(--v3-orange-soft);
-  --accent-hover:  #F08749;
-  --accent-press:  #D26A33;
+  --accent-hover:  #D4652E;
+  --accent-press:  #C25A28;
+
+  /* Primary action (blue) — introduced by main */
+  --primary:       var(--v3-blue);
+  --primary-soft:  rgba(96,129,190,0.12);
+  --primary-hover: #5070AD;
 
   /* Semantic */
   --ok:        var(--v3-green);
@@ -109,13 +127,14 @@
   --cat-discovery:    var(--v3-amber);
   --cat-sales:        var(--v3-orange);
   --cat-marketing:    #C76FA8;            /* distinct pink — no v3 equivalent */
-  --cat-operations:   var(--v3-blue);
+  --cat-operations:   var(--v3-teal);     /* preserved from main */
 
   /* ---------- Typography (mode-neutral, preserved) ---------- */
   --font-ui:      "Geist", "Inter Tight", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-display: "Geist", "Inter Tight", -apple-system, sans-serif;
   --font-mono:    "Geist Mono", "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
 
+  /* Type scale */
   --text-2xs: 10px;
   --text-xs:  11px;
   --text-sm:  12px;
@@ -142,31 +161,30 @@
   --s-7: 48px;
   --s-8: 64px;
 
-  /* ---------- Radius (mode-neutral, preserved) ---------- */
+  /* ---------- Radius (mode-neutral) ---------- */
   --r-sm:   6px;
   --r-md:   8px;
   --r-lg:   12px;
   --r-xl:   16px;
   --r-pill: 999px;
 
-  /* ---------- Shadow (re-tuned for light surfaces) ----------
-     Original tokens.css shadows used black drop-shadows + inset white
-     highlights, which read fine on dark but appear muddy on white. The
-     v3 design favors very subtle navy-tinted shadows. */
-  --sh-1: 0 1px 2px rgba(11,21,48,0.04), 0 1px 0 rgba(11,21,48,0.02);
-  --sh-2: 0 4px 12px rgba(11,21,48,0.06), 0 1px 0 rgba(11,21,48,0.03);
-  --sh-3: 0 12px 32px rgba(11,21,48,0.10), 0 1px 0 rgba(11,21,48,0.04);
+  /* ---------- Shadow (on light surfaces) ----------
+     v3 design favors very subtle navy-tinted shadows. Inset white
+     highlights from main give a slight raise on cards. */
+  --sh-1: 0 1px 2px rgba(11,21,48,0.06), 0 1px 0 rgba(255,255,255,0.8) inset;
+  --sh-2: 0 4px 12px rgba(11,21,48,0.10), 0 1px 0 rgba(255,255,255,0.8) inset;
+  --sh-3: 0 12px 32px rgba(11,21,48,0.18);
   --sh-glow-accent: 0 0 0 1px rgba(232,118,58,0.4), 0 4px 24px rgba(232,118,58,0.18);
 
-  /* ---------- Motion (mode-neutral, preserved) ---------- */
+  /* ---------- Motion ---------- */
   --ease:    cubic-bezier(0.4, 0, 0.2, 1);
-  --d-hover: 200ms;
-  --d-panel: 400ms;
+  --d-hover: 180ms;
+  --d-panel: 380ms;
 
-  /* ---------- Layout (mode-neutral, preserved) ---------- */
-  --rail-w:           64px;
+  /* ---------- Layout ---------- */
+  --rail-w:           68px;
   --rail-w-expanded:  220px;
-  --header-h:         56px;
+  --header-h:         68px;
   --filter-w:         240px;
   --detail-w:         480px;
 }
@@ -182,9 +200,9 @@ html, body {
 
 /* Utility classes shared across Atrium components (and Metacron). */
 .atrium-mono   { font-family: var(--font-mono); font-feature-settings: "ss01", "ss02"; letter-spacing: -0.01em; }
-.atrium-muted  { color: var(--v3-ink-md); }
-.atrium-faint  { color: var(--v3-ink-lo); }
-.atrium-hairline { background: var(--v3-line); height: 1px; width: 100%; }
+.atrium-muted  { color: var(--text-md); }
+.atrium-faint  { color: var(--text-lo); }
+.atrium-hairline { background: var(--border-default); height: 1px; width: 100%; }
 
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }

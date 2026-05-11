@@ -69,7 +69,7 @@ export function LibraryRepo({ onNavigateToWiki }: { onNavigateToWiki?: (slug: st
           value={query}
           onChange={(e) => handleQueryChange(e.target.value)}
           placeholder="Search vault…"
-          className="w-full bg-[#0D0D0F] border border-[#1F1F23] rounded px-4 py-2.5 mono text-[11px] text-[#E5E5E7] placeholder-[rgba(229,229,231,0.25)] focus:outline-none focus:border-[rgba(229,229,231,0.2)]"
+          className="w-full bg-bg-raised border border-border-default rounded px-4 py-2.5 mono text-[11px] text-text-primary placeholder:text-text-muted focus:outline-none focus:border-border-strong"
         />
         {loading && (
           <div className="absolute right-3 top-1/2 -translate-y-1/2 mono text-[10px] text-text-secondary animate-pulse">
@@ -88,7 +88,7 @@ export function LibraryRepo({ onNavigateToWiki }: { onNavigateToWiki?: (slug: st
               'mono text-[9px] uppercase tracking-[0.14em] px-2 py-1 rounded-full border transition-colors',
               activeTags.includes(tag)
                 ? 'border-[#E8763A] text-[#E8763A] bg-[rgba(232,118,58,0.08)]'
-                : 'border-[#1F1F23] text-text-secondary hover:border-[rgba(229,229,231,0.2)] hover:text-text-primary',
+                : 'border-border-default text-text-secondary hover:border-border-strong hover:text-text-primary',
             ].join(' ')}
           >
             {tag}
@@ -101,8 +101,8 @@ export function LibraryRepo({ onNavigateToWiki }: { onNavigateToWiki?: (slug: st
           className={[
             'mono text-[9px] uppercase tracking-[0.14em] px-2 py-1 rounded-full border transition-colors ml-auto',
             myRecent
-              ? 'border-[rgba(229,229,231,0.3)] text-[#E5E5E7] bg-[rgba(229,229,231,0.05)]'
-              : 'border-[#1F1F23] text-text-secondary hover:border-[rgba(229,229,231,0.2)] hover:text-text-primary',
+              ? 'border-[#E8763A] text-[#E8763A] bg-[rgba(232,118,58,0.06)]'
+              : 'border-border-default text-text-secondary hover:border-border-strong hover:text-text-primary',
           ].join(' ')}
         >
           My Recent
@@ -129,7 +129,7 @@ export function LibraryRepo({ onNavigateToWiki }: { onNavigateToWiki?: (slug: st
             displayedResults.map((result) => (
               <div
                 key={result.slug}
-                className="border border-[#1F1F23] rounded-lg p-4 hover:border-[rgba(229,229,231,0.15)] transition-colors cursor-pointer"
+                className="border border-border-default rounded-lg p-4 hover:border-border-strong transition-colors cursor-pointer"
                 onClick={() => onNavigateToWiki?.(result.slug)}
                 role="button"
                 tabIndex={0}
@@ -138,7 +138,7 @@ export function LibraryRepo({ onNavigateToWiki }: { onNavigateToWiki?: (slug: st
                 }}
               >
                 <div className="flex items-start justify-between gap-2 mb-1">
-                  <div className="mono text-[12px] text-[#E5E5E7] font-medium truncate">
+                  <div className="mono text-[12px] text-text-primary font-medium truncate">
                     {result.title}
                   </div>
                   {result.created_at && (
@@ -160,7 +160,7 @@ export function LibraryRepo({ onNavigateToWiki }: { onNavigateToWiki?: (slug: st
                     {result.tags.slice(0, 5).map((tag) => (
                       <span
                         key={tag}
-                        className="mono text-[8px] uppercase tracking-[0.12em] px-1.5 py-0.5 rounded border border-[#1F1F23] text-text-secondary"
+                        className="mono text-[8px] uppercase tracking-[0.12em] px-1.5 py-0.5 rounded border border-border-default text-text-secondary"
                       >
                         {tag}
                       </span>

@@ -106,8 +106,8 @@ export function LibraryTemplates({
                 isCreating
                   ? 'border-[#E8763A]/40 opacity-70'
                   : creating !== null
-                    ? 'border-[#1F1F23] opacity-40 cursor-not-allowed'
-                    : 'border-[#1F1F23] hover:bg-[#0D0D0F]',
+                    ? 'border-border-default opacity-40 cursor-not-allowed'
+                    : 'border-border-default hover:bg-bg-raised',
               ].join(' ')}
             >
               <div className="text-xl mb-2">{card.icon}</div>

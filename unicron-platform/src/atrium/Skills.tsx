@@ -166,10 +166,10 @@ function RecentRuns() {
         <div className="px-4 py-3 space-y-2" role="status" aria-label="Loading recent runs…">
           {[0, 1, 2].map((i) => (
             <div key={i} className="flex items-center gap-2.5">
-              <div className="w-1.5 h-1.5 rounded-full bg-zinc-800 animate-pulse flex-shrink-0" />
+              <div className="w-1.5 h-1.5 rounded-full bg-border-default animate-pulse flex-shrink-0" />
               <div className="flex-1 space-y-1">
-                <div className="h-3 bg-zinc-800 animate-pulse rounded w-3/4" />
-                <div className="h-2 bg-zinc-800 animate-pulse rounded w-1/2" />
+                <div className="h-3 bg-border-default animate-pulse rounded w-3/4" />
+                <div className="h-2 bg-border-default animate-pulse rounded w-1/2" />
               </div>
             </div>
           ))}
@@ -475,7 +475,7 @@ export function Skills() {
           {categories.length === 0 ? (
             <div className="space-y-2" role="status" aria-label="Loading skills…">
               {[0, 1, 2].map((i) => (
-                <div key={i} className="h-16 bg-zinc-800 animate-pulse rounded-xl" />
+                <div key={i} className="h-16 bg-border-default animate-pulse rounded-xl" />
               ))}
             </div>
           ) : (

@@ -81,7 +81,7 @@ function AssetCard({ asset }: { asset: BrandAsset }) {
       title={asset.name}
     >
       {/* Thumbnail / icon */}
-      <div className="h-28 bg-[#0E0E10] p-2 flex items-center justify-center relative overflow-hidden">
+      <div className="h-28 bg-bg-raised p-2 flex items-center justify-center relative overflow-hidden">
         {isImage || isSvg ? (
           <img
             src={fileUrl}
