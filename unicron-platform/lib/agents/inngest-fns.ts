@@ -457,3 +457,49 @@ export const notionCallsSyncRun = inngest.createFunction(
     return step.run('notion-calls-pull', () => notionCallsPull('inngest_cron'));
   },
 );
+
+// ---------------------------------------------------------------------------
+// Call action-item extraction — Stream C6 of the Calls Ingestion sprint
+// ---------------------------------------------------------------------------
+
+/**
+ * Listens for `call/transcript.uploaded` events fired by lib/calls-ingest.ts
+ * after a successful Notion + ledger write. Runs the LLM extractor on the
+ * transcript, inserts each action item into nervous_system.action_items,
+ * creates a corresponding card on the Internal Org Notion Kanban, and
+ * back-links each item as a bullet on the call's Notion page.
+ *
+ * Idempotency: best-effort. Re-firing the event currently creates duplicate
+ * action_items (no dedupe key on (call_id, title) yet — Bug Fix follow-up).
+ */
+export const extractCallActionItemsRun = inngest.createFunction(
+  { id: 'extract-call-action-items', name: 'Extract Call Action Items', retries: 1 },
+  { event: 'call/transcript.uploaded' },
+  async ({ event, step }) => {
+    type EventData = {
+      call_id: string;
+      call_notion_page_id: string;
+      call_notion_url: string;
+      call_title?: string | null;
+      participants?: string[];
+      transcript_text?: string;
+    };
+    const data = event.data as EventData;
+
+    if (!data.transcript_text || !data.transcript_text.trim()) {
+      return { status: 'skipped', reason: 'empty transcript_text', call_id: data.call_id };
+    }
+
+    const { runActionItemExtraction } = await import('../calls-action-item-flow.js');
+    return step.run('extract-call-action-items', () =>
+      runActionItemExtraction({
+        call_id:             data.call_id,
+        call_notion_page_id: data.call_notion_page_id,
+        call_notion_url:     data.call_notion_url,
+        call_title:          data.call_title ?? null,
+        transcript_text:     data.transcript_text!,
+        participants:        data.participants ?? [],
+      }),
+    );
+  },
+);

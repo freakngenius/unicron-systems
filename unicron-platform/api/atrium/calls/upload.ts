@@ -28,10 +28,8 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
-import {
-  createCallTranscriptPage,
-  type CallTranscriptPayload,
-} from '../../../lib/notion-call-transcripts.js';
+import type { CallTranscriptPayload } from '../../../lib/notion-call-transcripts.js';
+import { ingestCallTranscript } from '../../../lib/calls-ingest.js';
 
 // ─── Auth (mirrors api/internal/kanban-update.ts) ─────────────────────────────
 
@@ -138,15 +136,6 @@ function parseUploadBody(body: Record<string, unknown>): ParsedUploadBody | { er
   };
 }
 
-// ─── Service supabase client ──────────────────────────────────────────────────
-
-function makeServiceSupabase() {
-  const url = process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) throw new Error('Supabase service-role env vars not configured');
-  return createClient(url, key);
-}
-
 // ─── Handler ──────────────────────────────────────────────────────────────────
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -168,36 +157,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return;
     }
 
-    // STEP 1 — Notion write (transcript skill STEP 1).
-    const notion = await createCallTranscriptPage({
-      title: parsed.title,
-      date: parsed.date,
-      participants: parsed.participants,
-      transcript: parsed.transcript,
-      summary_notes: parsed.summary_notes,
-      key_takeaways: parsed.key_takeaways,
-      insights: parsed.insights,
-      source: parsed.source,
-    });
+    // Run the full ingest (Notion write + ledger row + 'call/transcript.uploaded'
+    // event for C6 action-item extraction) via the shared helper. Same code
+    // path that the Fathom + Zoom connectors use.
+    const result = await ingestCallTranscript(
+      {
+        title:          parsed.title,
+        date:           parsed.date,
+        participants:   parsed.participants,
+        transcript:     parsed.transcript,
+        summary_notes:  parsed.summary_notes,
+        key_takeaways:  parsed.key_takeaways,
+        insights:       parsed.insights,
+        source:         parsed.source,
+      },
+      auth.email,
+    );
 
-    // Build a short summary to land in nervous_system.ledger.content_summary.
-    const summaryForLedger =
-      parsed.summary_notes ??
-      parsed.transcript?.slice(0, 240) ??
-      `Call uploaded ${parsed.date ?? new Date().toISOString().slice(0, 10)}`;
-
-    const sb = makeServiceSupabase();
-    const { data: ledgerId, error: ledgerErr } = await sb.rpc('ns_create_call_transcript_ledger_row', {
-      p_title:          parsed.title ?? null,
-      p_summary:        summaryForLedger,
-      p_content_full:   parsed.transcript ?? parsed.summary_notes ?? '',
-      p_participants:   parsed.participants,
-      p_notion_page_id: notion.notion_page_id,
-      p_notion_url:     notion.notion_url,
-      p_source:         parsed.source ?? 'manual_upload',
-      p_call_date:      parsed.date ?? null,
-      p_uploaded_by:    auth.email,
-    });
+    const ledgerErr: { message: string } | null = result.ledger_error
+      ? { message: result.ledger_error }
+      : null;
+    const ledgerId = result.ledger_id;
+    const notion = { notion_page_id: result.notion_page_id, notion_url: result.notion_url };
 
     if (ledgerErr) {
       // Notion succeeded; ledger failed. Surface both so the operator still has a link.
