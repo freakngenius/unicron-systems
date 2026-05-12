@@ -31,7 +31,7 @@ const Body = z.object({
   contact_name: z.string().optional(),
   related_project_id: z.string().optional(),
   related_lead_contact_id: z.string().uuid().optional(),
-  variables: z.record(z.string()).optional(),
+  variables: z.record(z.string(), z.string()).optional(),
   target_office_key: z.string().optional(),
   procurement_pull_config_id: z.string().uuid().optional(),
 });

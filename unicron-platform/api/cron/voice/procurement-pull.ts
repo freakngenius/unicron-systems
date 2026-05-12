@@ -44,7 +44,7 @@ type ProcurementPullConfig = {
   enabled?: boolean;
 };
 
-function fieldMatch(expr: string, value: number, min: number, _max: number): boolean {
+function fieldMatch(expr: string, value: number, min: number): boolean {
   if (expr === '*') return true;
   for (const part of expr.split(',')) {
     if (part.startsWith('*/')) {
@@ -67,11 +67,11 @@ function cronDueUtc(expression: string, when: Date): boolean {
   if (parts.length !== 5) return false;
   const [m, h, dom, mon, dow] = parts;
   return (
-    fieldMatch(m,   when.getUTCMinutes(),     0, 59) &&
-    fieldMatch(h,   when.getUTCHours(),       0, 23) &&
-    fieldMatch(dom, when.getUTCDate(),        1, 31) &&
-    fieldMatch(mon, when.getUTCMonth() + 1,   1, 12) &&
-    fieldMatch(dow, when.getUTCDay(),         0,  6)
+    fieldMatch(m,   when.getUTCMinutes(),     0) &&
+    fieldMatch(h,   when.getUTCHours(),       0) &&
+    fieldMatch(dom, when.getUTCDate(),        1) &&
+    fieldMatch(mon, when.getUTCMonth() + 1,   1) &&
+    fieldMatch(dow, when.getUTCDay(),         0)
   );
 }
 

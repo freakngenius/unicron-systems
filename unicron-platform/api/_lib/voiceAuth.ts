@@ -26,7 +26,7 @@ export type VoiceAuthResult = VoiceAuthOk | VoiceAuthDeny;
 
 export async function requireVoiceAccess(
   req: VercelRequest,
-  _res: VercelResponse,
+  _res?: VercelResponse,  // reserved for future use; lint exempts via leading underscore convention
 ): Promise<VoiceAuthResult> {
   const authHeader = req.headers.authorization;
   if (!authHeader?.startsWith('Bearer ')) {

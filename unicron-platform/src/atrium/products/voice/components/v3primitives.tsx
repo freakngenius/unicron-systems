@@ -11,7 +11,8 @@
  * by component-local state passed in as props (active + onChange).
  */
 
-import React, { ReactElement, ReactNode, useState } from "react";
+import React, { useState } from "react";
+import type { ReactElement, ReactNode } from "react";
 import { I } from "./icons";
 
 /* ============================================================
@@ -243,7 +244,7 @@ export function V3GatedAction({
     }, delay);
   };
 
-  const trigger = React.cloneElement(children as ReactElement<any>, { onClick: fire });
+  const trigger = React.cloneElement(children as ReactElement<{ onClick?: (e?: React.MouseEvent) => void }>, { onClick: fire });
 
   return (
     <span style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>

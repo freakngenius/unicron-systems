@@ -37,7 +37,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     parsed = Body.parse(raw);
   } catch (e) {
     const err = e as z.ZodError;
-    res.status(400).json({ ok: false, error: 'bad body', details: err.errors });
+    res.status(400).json({ ok: false, error: 'bad body', details: err.issues });
     return;
   }
 

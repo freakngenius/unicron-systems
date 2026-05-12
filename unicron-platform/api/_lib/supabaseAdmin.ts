@@ -31,5 +31,10 @@ export function getPathfinderServiceClient(): SupabaseClient {
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url) throw new Error('SUPABASE_URL not configured');
   if (!key) throw new Error('SUPABASE_SERVICE_ROLE_KEY not configured');
-  return createClient(url, key, { db: { schema: 'pathfinder' } });
+  // Cast: supabase-js's generic-defaulted SupabaseClient resolves to
+  // <any, "public", "public", ...> but we pin db.schema to "pathfinder"
+  // at runtime. The branded schema-generic mismatches the default; we
+  // accept the cast since downstream code uses .from('voice_*') strings
+  // and never relies on schema-narrowed type inference.
+  return createClient(url, key, { db: { schema: 'pathfinder' } }) as unknown as SupabaseClient;
 }

@@ -48,7 +48,7 @@ const SourceBody = z.object({
     'assistant-waits-for-user',
     'assistant-speaks-first-with-model-generated-message',
   ]).default('assistant-speaks-first'),
-  knowledge_pack: z.record(z.unknown()).default({}),
+  knowledge_pack: z.record(z.string(), z.unknown()).default({}),
   variable_schema: z.array(VarSpec).default([]),
   vapi_phone_number_id: z.string().nullable().optional(),
   vapi_assistant_id: z.string().nullable().optional(),
