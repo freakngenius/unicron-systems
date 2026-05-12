@@ -223,7 +223,11 @@ export function SlackDigest({ date: dateProp }: SlackDigestProps = {}) {
     };
   }, [date]);
 
-  const channelActivity = useMemo(() => {
+  // Item 6 of the Atrium usefulness pass — show only channels with real
+  // activity (message_count>0 OR non-empty key_topics). Sort positive sentiment
+  // first, then neutral-with-content, then by message_count desc. Skipped
+  // channels are revealed via a "Show all (N hidden)" toggle.
+  const allChannelActivity = useMemo(() => {
     return (payload?.channels ?? []).map((c) => {
       const sentiment = c.insights?.[0]?.sentiment ?? 'neutral';
       const topics = c.insights?.[0]?.key_topics ?? [];
@@ -231,6 +235,24 @@ export function SlackDigest({ date: dateProp }: SlackDigestProps = {}) {
       return { ...c, sentiment, topics, channelName };
     });
   }, [payload]);
+
+  const [showAllChannels, setShowAllChannels] = useState(false);
+
+  const channelActivity = useMemo(() => {
+    if (showAllChannels) return allChannelActivity;
+    return allChannelActivity.filter((c) => (c.message_count ?? 0) > 0 || c.topics.length > 0);
+  }, [allChannelActivity, showAllChannels]);
+
+  const sortedChannelActivity = useMemo(() => {
+    return [...channelActivity].sort((a, b) => {
+      const aS = a.sentiment === 'positive' ? 0 : (a.topics.length > 0 ? 1 : 2);
+      const bS = b.sentiment === 'positive' ? 0 : (b.topics.length > 0 ? 1 : 2);
+      if (aS !== bS) return aS - bS;
+      return (b.message_count ?? 0) - (a.message_count ?? 0);
+    });
+  }, [channelActivity]);
+
+  const hiddenChannelCount = allChannelActivity.length - channelActivity.length;
 
   const exists = !!payload?.exists;
   const digest = payload?.digest;
@@ -367,12 +389,20 @@ export function SlackDigest({ date: dateProp }: SlackDigestProps = {}) {
 
             <DigestColumn
               title="Channel activity"
-              count={channelActivity.length}
-              empty="No bot-member channels active"
+              count={sortedChannelActivity.length}
+              empty={`No channel activity for ${date}.`}
             >
-              {channelActivity.map((c) => (
+              {sortedChannelActivity.map((c) => (
                 <ChannelCard key={c.ledger_id} channel={c} />
               ))}
+              {hiddenChannelCount > 0 && (
+                <button
+                  onClick={() => setShowAllChannels((v) => !v)}
+                  className="mono text-[10px] text-text-secondary hover:text-text-primary underline-offset-2 hover:underline pt-1"
+                >
+                  {showAllChannels ? 'Hide silent channels' : `Show all (${hiddenChannelCount} hidden)`}
+                </button>
+              )}
             </DigestColumn>
           </div>
         )}
