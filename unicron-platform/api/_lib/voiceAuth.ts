@@ -52,22 +52,25 @@ export async function requireVoiceAccess(
   }
   const email = userData.user.email.toLowerCase();
 
-  // Allowlist check via service role against the metacron schema.
+  // Allowlist check via service role.
+  //
+  // The metacron schema is not in Supabase's PostgREST `db-schemas` list, so
+  // the supabase-js `.schema('metacron').from(...)` path returns "schema not
+  // found" → handler 500. Instead we go through public.check_voice_operator,
+  // a SECURITY DEFINER RPC that returns the role string (or NULL) for an
+  // email. Matches the Atrium pattern for nervous_system.* tables (every
+  // read goes through a public.ns_* RPC).
   const sb = createClient(url, serviceKey);
-  const { data: row, error: rowErr } = await sb
-    .schema('metacron')
-    .from('operator_allowlist')
-    .select('role')
-    .eq('email', email)
-    .maybeSingle();
+  const { data: roleOrNull, error: rowErr } = await sb
+    .rpc('check_voice_operator', { p_email: email });
   if (rowErr) {
     return { ok: false, status: 500, message: 'allowlist lookup failed' };
   }
-  if (!row) {
+  if (!roleOrNull) {
     return { ok: false, status: 403, message: 'not on allowlist' };
   }
 
-  const role = row.role as VoiceAuthOk['role'];
+  const role = roleOrNull as VoiceAuthOk['role'];
   return { ok: true, email, role };
 }
 
