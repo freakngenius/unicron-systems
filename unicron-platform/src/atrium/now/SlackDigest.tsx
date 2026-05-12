@@ -1,23 +1,44 @@
-// src/atrium/now/SlackDigest.tsx — Stream S3
+// src/atrium/now/SlackDigest.tsx — Stream S3 + extraction/display fix
 //
 // Renders the Slack daily-scan digest for a chosen date inside Atrium Now >
-// Digest sub-tab. Reads from public.ns_slack_daily_digest_for_date(date) RPC
-// shipped in S2's migration. Composes above the existing Analyst-vault
-// digest so operators see the most action-bearing surface first.
+// Digest sub-tab. Reads from public.ns_slack_daily_digest_for_date(date) RPC.
+//
+// Redesign (fix branch): replaces the single-line top_theme with a "Top 3
+// takeaways" panel — three editorial bullets with author + channel + Slack
+// permalink. A Read More button opens a modal showing all takeaways, every
+// extracted action item, every decision, and per-channel activity, each row
+// hyperlinked back to Slack via permalink.
+//
+// Permalink strategy: takeaway rows carry a server-built permalink (built in
+// lib/agents/slack-daily-scan.ts using SLACK_WORKSPACE_DOMAIN env). Action
+// items and decisions reconstruct permalinks client-side using the same env
+// surfaced as VITE_SLACK_WORKSPACE_DOMAIN, falling back to slack:// channel
+// deep links when the env is unset.
 //
 // Empty states:
-//   - Date < first scan or no row exists: friendly "First digest runs tomorrow"
-//   - Today before 06:00 PT and no row yet: "Today's digest runs at 06:00 PT.
-//     Yesterday's digest below." + auto-shifts the date picker back one day.
-//
-// Manual run: defers to the Skills tray entry "Run Slack Daily Scan"
-// (see api/atrium/skills/run.ts case 'slack-daily-scan'). The component
-// surfaces a "Run now →" link that scrolls / focuses the Skills tray.
+//   - Today before 06:00 PT: "Today's digest runs at 06:00 PT. Yesterday's
+//     digest is shown above." (component auto-shifts initial date back).
+//   - Today after, no row yet: prompts the Skills tray button.
+//   - Past date no row: explains the cron schedule + S1 invite gate.
+//   - exists && action_items_extracted=0 && channel_count>0: "No action items
+//     extracted from N channels today. This is honest if the day had no
+//     action-creating conversations, OR a sign extraction missed something.
+//     Check System > Audit log for slack-daily-scan run details."
 
 import { useEffect, useMemo, useState } from 'react';
 import { getSupabase } from '../../lib/supabase';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
+
+interface DigestTakeaway {
+  takeaway: string;
+  primary_author: string | null;
+  channel_name: string;
+  channel_id: string;
+  source_message_ts: string | null;
+  permalink: string | null;
+  impact: 'milestone' | 'agreement' | 'customer' | 'thread' | 'other' | null;
+}
 
 interface DigestRow {
   id: string;
@@ -28,6 +49,7 @@ interface DigestRow {
   message_count: number;
   action_items_extracted: number;
   decisions_extracted: number;
+  top_3_takeaways: DigestTakeaway[] | null;
   created_at: string;
   updated_at: string;
 }
@@ -36,20 +58,20 @@ interface ChannelScanSummary {
   ledger_id: string;
   channel_id: string;
   content_summary: string | null;
-  action_items: ExtractedActionItem[];
-  decisions: ExtractedDecision[];
+  action_items: ExtractedActionItemPayload[];
+  decisions: ExtractedDecisionPayload[];
   insights: { sentiment?: string; key_topics?: string[] }[];
   created_at: string;
 }
 
-interface ExtractedActionItem {
+interface ExtractedActionItemPayload {
   title?: string;
   owner_hint?: string | null;
   due_hint?: string | null;
   source_message_ts?: string | null;
 }
 
-interface ExtractedDecision {
+interface ExtractedDecisionPayload {
   decision?: string;
   decided_by_hint?: string | null;
   rationale?: string | null;
@@ -70,7 +92,11 @@ interface ActionItemRow {
   description: string | null;
   status: string;
   priority: string;
-  requested_by: { channel_id?: string; channel_name?: string; source_message_ts?: string } | null;
+  requested_by: {
+    channel_id?: string;
+    channel_name?: string;
+    source_message_ts?: string;
+  } | null;
   requested_of: { hint?: string } | null;
   ledger_id: string | null;
   created_at: string;
@@ -85,7 +111,7 @@ interface DigestPayload {
   action_items?: ActionItemRow[];
 }
 
-// ─── Helpers ────────────────────────────────────────────────────────────────
+// ─── Date / time helpers ────────────────────────────────────────────────────
 
 function todayInPT(): string {
   return new Intl.DateTimeFormat('en-CA', {
@@ -97,14 +123,14 @@ function todayInPT(): string {
 }
 
 function ptHour(): number {
-  const parts = new Intl.DateTimeFormat('en-US', {
+  const part = new Intl.DateTimeFormat('en-US', {
     timeZone: 'America/Los_Angeles',
     hour: '2-digit',
     hour12: false,
   })
     .formatToParts(new Date())
     .find((p) => p.type === 'hour');
-  return parts ? parseInt(parts.value, 10) : 0;
+  return part ? parseInt(part.value, 10) : 0;
 }
 
 function shiftDate(iso: string, deltaDays: number): string {
@@ -130,10 +156,22 @@ function relativeLabel(iso: string): string {
   return formatDisplayDate(iso);
 }
 
-function channelDeepLink(channelId: string, ts?: string | null): string {
-  return ts
-    ? `slack://channel?id=${channelId}&message=${ts}`
-    : `slack://channel?id=${channelId}`;
+// ─── Permalink helpers ──────────────────────────────────────────────────────
+
+const WORKSPACE_DOMAIN =
+  (import.meta.env?.VITE_SLACK_WORKSPACE_DOMAIN as string | undefined)?.trim() ?? '';
+
+function buildPermalink(channelId: string, ts?: string | null): string {
+  if (!ts) return `slack://channel?id=${channelId}`;
+  if (!WORKSPACE_DOMAIN) return `slack://channel?id=${channelId}`;
+  const tsNoDots = ts.replace('.', '');
+  return `https://${WORKSPACE_DOMAIN}.slack.com/archives/${channelId}/p${tsNoDots}`;
+}
+
+function parseChannelNameFromSummary(s: string | null): string {
+  if (!s) return '';
+  const m = s.match(/^\[#([^\]]+)\]/);
+  return m ? m[1] : '';
 }
 
 // ─── Component ──────────────────────────────────────────────────────────────
@@ -141,12 +179,12 @@ function channelDeepLink(channelId: string, ts?: string | null): string {
 export function SlackDigest() {
   const today = todayInPT();
   const beforeSixPT = ptHour() < 6;
-  // If it's before 06:00 PT, default to yesterday — today's run hasn't happened.
   const initialDate = beforeSixPT ? shiftDate(today, -1) : today;
   const [date, setDate] = useState(initialDate);
   const [payload, setPayload] = useState<DigestPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [modalOpen, setModalOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -186,105 +224,161 @@ export function SlackDigest() {
   const digest = payload?.digest;
   const decisions = payload?.decisions ?? [];
   const actionItems = payload?.action_items ?? [];
+  const takeaways = digest?.top_3_takeaways ?? [];
+
+  const showSilentDayHint =
+    exists &&
+    (digest?.action_items_extracted ?? 0) === 0 &&
+    (digest?.channel_count ?? 0) > 0;
 
   return (
-    <div className="flex flex-col gap-4">
-      {/* ─── Header card ─── */}
-      <div className="bg-bg-card border border-border-default rounded-xl px-5 py-5">
-        <div className="flex items-start justify-between flex-wrap gap-4 mb-4">
-          <div>
-            <div className="mono text-[10px] uppercase tracking-[0.18em] text-[var(--accent)] font-semibold mb-1">
-              Slack daily digest
+    <>
+      <div className="flex flex-col gap-4">
+        {/* ─── Header card ─── */}
+        <div className="bg-bg-card border border-border-default rounded-xl px-5 py-5">
+          <div className="flex items-start justify-between flex-wrap gap-4 mb-4">
+            <div>
+              <div className="mono text-[10px] uppercase tracking-[0.18em] text-[var(--accent)] font-semibold mb-1">
+                Slack daily digest
+              </div>
+              <div className="mono text-[22px] font-medium text-text-primary leading-tight">
+                {relativeLabel(date)}
+              </div>
+              <div className="mono text-[10px] text-text-muted mt-1.5">
+                {formatDisplayDate(date)} ·{' '}
+                {exists
+                  ? `${digest?.channel_count ?? 0} channels · ${digest?.message_count ?? 0} messages`
+                  : 'no scan yet'}
+              </div>
             </div>
-            <div className="mono text-[22px] font-medium text-text-primary leading-tight">
-              {relativeLabel(date)}
-            </div>
-            <div className="mono text-[10px] text-text-muted mt-1.5">
-              {formatDisplayDate(date)} ·{' '}
-              {exists
-                ? `${digest?.channel_count ?? 0} channels · ${digest?.message_count ?? 0} messages`
-                : 'no scan yet'}
+
+            <div className="flex items-center gap-1.5 shrink-0">
+              <button
+                onClick={() => setDate(shiftDate(date, -1))}
+                className="w-8 h-8 flex items-center justify-center bg-bg-raised border border-border-default rounded-lg mono text-text-secondary hover:text-text-primary hover:border-border-hover transition-colors"
+                aria-label="Previous day"
+              >
+                ←
+              </button>
+              <input
+                type="date"
+                value={date}
+                max={today}
+                onChange={(e) => setDate(e.target.value)}
+                className="bg-bg-raised border border-border-default rounded-lg px-2.5 py-1.5 mono text-[12px] text-text-primary focus:outline-none focus:border-border-hover"
+              />
+              <button
+                onClick={() => setDate(shiftDate(date, +1))}
+                disabled={date >= today}
+                className="w-8 h-8 flex items-center justify-center bg-bg-raised border border-border-default rounded-lg mono text-text-secondary hover:text-text-primary hover:border-border-hover transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                aria-label="Next day"
+              >
+                →
+              </button>
             </div>
           </div>
 
-          <div className="flex items-center gap-1.5 shrink-0">
-            <button
-              onClick={() => setDate(shiftDate(date, -1))}
-              className="w-8 h-8 flex items-center justify-center bg-bg-raised border border-border-default rounded-lg mono text-text-secondary hover:text-text-primary hover:border-border-hover transition-colors"
-              aria-label="Previous day"
-            >
-              ←
-            </button>
-            <input
-              type="date"
-              value={date}
-              max={today}
-              onChange={(e) => setDate(e.target.value)}
-              className="bg-bg-raised border border-border-default rounded-lg px-2.5 py-1.5 mono text-[12px] text-text-primary focus:outline-none focus:border-border-hover"
-            />
-            <button
-              onClick={() => setDate(shiftDate(date, +1))}
-              disabled={date >= today}
-              className="w-8 h-8 flex items-center justify-center bg-bg-raised border border-border-default rounded-lg mono text-text-secondary hover:text-text-primary hover:border-border-hover transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-              aria-label="Next day"
-            >
-              →
-            </button>
-          </div>
+          {/* Top theme — small subtitle */}
+          {loading ? (
+            <div className="space-y-2">
+              <div className="h-3 w-3/4 bg-bg-raised rounded animate-pulse" />
+              <div className="h-3 w-1/2 bg-bg-raised rounded animate-pulse" />
+            </div>
+          ) : error ? (
+            <p className="mono text-[12px] text-[var(--danger)]">Failed to load digest: {error}</p>
+          ) : exists && digest?.top_theme ? (
+            <p className="mono text-[12px] text-text-secondary leading-snug italic">
+              {digest.top_theme}
+            </p>
+          ) : (
+            <EmptyHeadline date={date} today={today} beforeSixPT={beforeSixPT} />
+          )}
         </div>
 
-        {/* Top theme — large editorial */}
-        {loading ? (
-          <div className="space-y-2">
-            <div className="h-4 w-3/4 bg-bg-raised rounded animate-pulse" />
-            <div className="h-4 w-1/2 bg-bg-raised rounded animate-pulse" />
+        {/* ─── Top 3 takeaways panel ─── */}
+        {!loading && exists && takeaways.length > 0 && (
+          <div className="bg-bg-card border border-border-default rounded-xl px-5 py-5 relative">
+            <div className="flex items-center justify-between mb-4">
+              <div className="mono text-[10px] uppercase tracking-[0.18em] text-text-secondary font-semibold">
+                Top 3 takeaways
+              </div>
+              <button
+                onClick={() => setModalOpen(true)}
+                className="mono text-[11px] text-[var(--accent)] hover:opacity-80 transition-opacity"
+              >
+                Read more →
+              </button>
+            </div>
+            <ol className="flex flex-col gap-3">
+              {takeaways.map((t, i) => (
+                <TakeawayRow key={i} takeaway={t} index={i + 1} />
+              ))}
+            </ol>
           </div>
-        ) : error ? (
-          <p className="mono text-[12px] text-[var(--danger)]">Failed to load digest: {error}</p>
-        ) : exists && digest?.top_theme ? (
-          <p className="text-[18px] text-text-primary leading-snug font-light">
-            {digest.top_theme}
-          </p>
-        ) : (
-          <EmptyHeadline date={date} today={today} beforeSixPT={beforeSixPT} />
+        )}
+
+        {/* ─── Silent-day honesty banner ─── */}
+        {!loading && exists && showSilentDayHint && (
+          <div className="bg-bg-raised border border-border-subtle rounded-lg px-4 py-3">
+            <div className="mono text-[11px] text-text-secondary leading-relaxed">
+              No action items extracted from {digest?.channel_count ?? 0} channels today. This is
+              honest if the day had no action-creating conversations, OR a sign the extraction
+              pipeline missed something.{' '}
+              <span className="text-text-muted">
+                Check System &rsaquo; Audit log for slack-daily-scan run details.
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* ─── Three columns: action items / decisions / channel activity ─── */}
+        {!loading && exists && (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <DigestColumn
+              title="Action items"
+              count={actionItems.length}
+              empty="No action items extracted"
+            >
+              {actionItems.map((ai) => (
+                <ActionItemCard key={ai.id} item={ai} />
+              ))}
+            </DigestColumn>
+
+            <DigestColumn
+              title="Decisions"
+              count={decisions.length}
+              empty="No decisions logged"
+            >
+              {decisions.map((d) => (
+                <DecisionCard key={d.ledger_id} decision={d} />
+              ))}
+            </DigestColumn>
+
+            <DigestColumn
+              title="Channel activity"
+              count={channelActivity.length}
+              empty="No bot-member channels active"
+            >
+              {channelActivity.map((c) => (
+                <ChannelCard key={c.ledger_id} channel={c} />
+              ))}
+            </DigestColumn>
+          </div>
         )}
       </div>
 
-      {/* ─── Three columns: action items / decisions / channel activity ─── */}
-      {!loading && exists && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <DigestColumn
-            title="Action items"
-            count={actionItems.length}
-            empty="No action items extracted"
-          >
-            {actionItems.map((ai) => (
-              <ActionItemCard key={ai.id} item={ai} />
-            ))}
-          </DigestColumn>
-
-          <DigestColumn
-            title="Decisions"
-            count={decisions.length}
-            empty="No decisions logged"
-          >
-            {decisions.map((d) => (
-              <DecisionCard key={d.ledger_id} decision={d} />
-            ))}
-          </DigestColumn>
-
-          <DigestColumn
-            title="Channel activity"
-            count={channelActivity.length}
-            empty="No bot-member channels active"
-          >
-            {channelActivity.map((c) => (
-              <ChannelCard key={c.ledger_id} channel={c} />
-            ))}
-          </DigestColumn>
-        </div>
+      {/* ─── Read More modal ─── */}
+      {modalOpen && payload?.digest && (
+        <ReadMoreModal
+          date={date}
+          digest={payload.digest}
+          channels={channelActivity}
+          decisions={decisions}
+          actionItems={actionItems}
+          onClose={() => setModalOpen(false)}
+        />
       )}
-    </div>
+    </>
   );
 }
 
@@ -322,6 +416,36 @@ function EmptyHeadline({
   );
 }
 
+function TakeawayRow({ takeaway, index }: { takeaway: DigestTakeaway; index: number }) {
+  const link = takeaway.permalink ?? buildPermalink(takeaway.channel_id, takeaway.source_message_ts);
+  return (
+    <li className="flex gap-3">
+      <div className="mono text-[14px] text-text-muted font-mono w-5 shrink-0 pt-0.5">{index}.</div>
+      <div className="flex-1 min-w-0">
+        <a
+          href={link}
+          target="_blank"
+          rel="noreferrer"
+          className="block text-[15px] leading-snug text-text-primary hover:text-[var(--accent)] transition-colors"
+        >
+          {takeaway.takeaway}
+        </a>
+        <div className="flex items-center gap-2 flex-wrap mt-1.5">
+          {takeaway.primary_author && (
+            <span className="mono text-[10px] text-text-secondary">{takeaway.primary_author}</span>
+          )}
+          <span className="mono text-[10px] text-text-muted">#{takeaway.channel_name}</span>
+          {takeaway.impact && takeaway.impact !== 'other' && (
+            <span className="mono text-[9px] uppercase tracking-wide text-[var(--accent)]">
+              {takeaway.impact}
+            </span>
+          )}
+        </div>
+      </div>
+    </li>
+  );
+}
+
 function DigestColumn({
   title,
   count,
@@ -350,16 +474,26 @@ function DigestColumn({
 
 function ActionItemCard({ item }: { item: ActionItemRow }) {
   const channel = item.requested_by?.channel_name;
-  const ts = item.requested_by?.source_message_ts;
   const channelId = item.requested_by?.channel_id;
-  const link = channelId ? channelDeepLink(channelId, ts ?? null) : null;
+  const ts = item.requested_by?.source_message_ts;
+  const link = channelId ? buildPermalink(channelId, ts) : null;
+
   return (
     <div className="bg-bg-raised border border-border-subtle rounded-lg px-3 py-2.5">
-      <div className="mono text-[12px] text-text-primary leading-snug">{item.title}</div>
+      {link ? (
+        <a
+          href={link}
+          target="_blank"
+          rel="noreferrer"
+          className="block mono text-[12px] text-text-primary leading-snug hover:text-[var(--accent)] transition-colors"
+        >
+          {item.title}
+        </a>
+      ) : (
+        <div className="mono text-[12px] text-text-primary leading-snug">{item.title}</div>
+      )}
       <div className="flex items-center gap-2 flex-wrap mt-1.5">
-        {channel && (
-          <span className="mono text-[10px] text-text-muted">#{channel}</span>
-        )}
+        {channel && <span className="mono text-[10px] text-text-muted">#{channel}</span>}
         {item.requested_of?.hint && item.requested_of.hint !== 'unassigned' && (
           <span className="mono text-[10px] text-text-secondary">→ {item.requested_of.hint}</span>
         )}
@@ -368,45 +502,51 @@ function ActionItemCard({ item }: { item: ActionItemRow }) {
             {item.priority}
           </span>
         )}
-        {link && (
-          <a
-            href={link}
-            className="mono text-[10px] text-text-muted hover:text-text-primary transition-colors ml-auto"
-          >
-            open in slack →
-          </a>
-        )}
       </div>
     </div>
   );
 }
 
 function DecisionCard({ decision }: { decision: DecisionLedgerRow }) {
-  // source_id is "channel_id:ts" — peel apart for the deep link.
   const [channelId, ts] = (decision.source_id ?? '').split(':');
-  const link = channelId ? channelDeepLink(channelId, ts && ts !== 'unknown' ? ts : null) : null;
+  const link = channelId
+    ? buildPermalink(channelId, ts && ts !== 'unknown' ? ts : null)
+    : null;
 
-  // content_full holds the structured payload — try to pull rationale.
   let rationale: string | null = null;
   let decidedBy: string | null = null;
+  let channelName: string | null = null;
   if (decision.content_full) {
     try {
       const parsed = JSON.parse(decision.content_full) as {
         rationale?: string | null;
         decided_by_hint?: string | null;
+        channel_name?: string | null;
       };
       rationale = parsed.rationale ?? null;
       decidedBy = parsed.decided_by_hint ?? null;
+      channelName = parsed.channel_name ?? null;
     } catch {
-      // ignore — content_full not parseable
+      /* ignore */
     }
   }
 
   return (
     <div className="bg-bg-raised border border-border-subtle rounded-lg px-3 py-2.5">
-      <div className="mono text-[12px] text-text-primary leading-snug">
-        {decision.content_summary ?? '(no summary)'}
-      </div>
+      {link ? (
+        <a
+          href={link}
+          target="_blank"
+          rel="noreferrer"
+          className="block mono text-[12px] text-text-primary leading-snug hover:text-[var(--accent)] transition-colors"
+        >
+          {decision.content_summary ?? '(no summary)'}
+        </a>
+      ) : (
+        <div className="mono text-[12px] text-text-primary leading-snug">
+          {decision.content_summary ?? '(no summary)'}
+        </div>
+      )}
       {rationale && (
         <div className="mono text-[11px] text-text-secondary leading-snug mt-1.5 italic">
           {rationale}
@@ -414,13 +554,8 @@ function DecisionCard({ decision }: { decision: DecisionLedgerRow }) {
       )}
       <div className="flex items-center gap-2 mt-1.5">
         {decidedBy && <span className="mono text-[10px] text-text-muted">— {decidedBy}</span>}
-        {link && (
-          <a
-            href={link}
-            className="mono text-[10px] text-text-muted hover:text-text-primary transition-colors ml-auto"
-          >
-            open in slack →
-          </a>
+        {channelName && (
+          <span className="mono text-[10px] text-text-muted">#{channelName}</span>
         )}
       </div>
     </div>
@@ -432,12 +567,14 @@ function ChannelCard({
 }: {
   channel: ChannelScanSummary & { sentiment: string; topics: string[]; channelName: string };
 }) {
-  const link = channelDeepLink(channel.channel_id);
+  const link = buildPermalink(channel.channel_id);
   return (
     <div className="bg-bg-raised border border-border-subtle rounded-lg px-3 py-2.5">
       <div className="flex items-center justify-between mb-1">
         <a
           href={link}
+          target="_blank"
+          rel="noreferrer"
           className="mono text-[12px] text-text-primary hover:text-[var(--accent)] transition-colors"
         >
           #{channel.channelName || 'unknown'}
@@ -465,9 +602,137 @@ function SentimentBadge({ sentiment }: { sentiment: string }) {
   );
 }
 
-// content_summary is "[#channel-name] theme sentence" — peel off the channel.
-function parseChannelNameFromSummary(s: string | null): string {
-  if (!s) return '';
-  const match = s.match(/^\[#([^\]]+)\]/);
-  return match ? match[1] : '';
+// ─── Read More modal ────────────────────────────────────────────────────────
+
+function ReadMoreModal({
+  date,
+  digest,
+  channels,
+  decisions,
+  actionItems,
+  onClose,
+}: {
+  date: string;
+  digest: DigestRow;
+  channels: (ChannelScanSummary & { sentiment: string; topics: string[]; channelName: string })[];
+  decisions: DecisionLedgerRow[];
+  actionItems: ActionItemRow[];
+  onClose: () => void;
+}) {
+  // ESC closes
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  const takeaways = digest.top_3_takeaways ?? [];
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-start justify-center bg-black/60 px-4 py-8 overflow-y-auto"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+    >
+      <div
+        className="bg-bg-card border border-border-default rounded-xl max-w-3xl w-full px-6 py-6 my-4"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between mb-4">
+          <div>
+            <div className="mono text-[10px] uppercase tracking-[0.18em] text-[var(--accent)] font-semibold mb-1">
+              Slack digest details
+            </div>
+            <div className="mono text-[16px] text-text-primary">{relativeLabel(date)}</div>
+            <div className="mono text-[10px] text-text-muted mt-1">{formatDisplayDate(date)}</div>
+          </div>
+          <button
+            onClick={onClose}
+            className="mono text-[14px] text-text-secondary hover:text-text-primary transition-colors"
+            aria-label="Close"
+          >
+            ×
+          </button>
+        </div>
+
+        {digest.top_theme && (
+          <div className="mb-5">
+            <div className="mono text-[9px] uppercase tracking-wide text-text-muted mb-1">
+              Top theme
+            </div>
+            <p className="mono text-[12px] text-text-primary leading-snug italic">
+              {digest.top_theme}
+            </p>
+          </div>
+        )}
+
+        {takeaways.length > 0 && (
+          <ModalSection title={`Top takeaways (${takeaways.length})`}>
+            <ol className="flex flex-col gap-2.5">
+              {takeaways.map((t, i) => (
+                <TakeawayRow key={i} takeaway={t} index={i + 1} />
+              ))}
+            </ol>
+          </ModalSection>
+        )}
+
+        <ModalSection title={`Action items (${actionItems.length})`}>
+          {actionItems.length === 0 ? (
+            <div className="mono text-[11px] text-text-muted">None extracted today.</div>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {actionItems.map((ai) => (
+                <ActionItemCard key={ai.id} item={ai} />
+              ))}
+            </div>
+          )}
+        </ModalSection>
+
+        <ModalSection title={`Decisions (${decisions.length})`}>
+          {decisions.length === 0 ? (
+            <div className="mono text-[11px] text-text-muted">None logged today.</div>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {decisions.map((d) => (
+                <DecisionCard key={d.ledger_id} decision={d} />
+              ))}
+            </div>
+          )}
+        </ModalSection>
+
+        <ModalSection title={`Channel activity (${channels.length})`}>
+          {channels.length === 0 ? (
+            <div className="mono text-[11px] text-text-muted">No bot-member channel activity.</div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              {channels.map((c) => (
+                <ChannelCard key={c.ledger_id} channel={c} />
+              ))}
+            </div>
+          )}
+        </ModalSection>
+
+        <div className="flex justify-end mt-5">
+          <button
+            onClick={onClose}
+            className="mono text-[12px] text-text-secondary hover:text-text-primary transition-colors px-3 py-1.5 border border-border-default rounded-lg hover:border-border-hover"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ModalSection({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="mb-5">
+      <div className="mono text-[9px] uppercase tracking-wide text-text-muted mb-2">{title}</div>
+      {children}
+    </div>
+  );
 }

@@ -87,13 +87,33 @@ interface ExtractedDecision {
   source_message_ts?: string | null;
 }
 
+interface ExtractedTakeaway {
+  takeaway: string;
+  primary_author?: string | null;
+  source_message_ts?: string | null;
+  /** Tag the LLM uses to score impact; used by the cross-channel selector. */
+  impact?: 'milestone' | 'agreement' | 'customer' | 'thread' | 'other' | null;
+}
+
 interface PerChannelSummary {
   channel_theme: string;
   key_topics: string[];
   action_items: ExtractedActionItem[];
   decisions: ExtractedDecision[];
+  takeaways: ExtractedTakeaway[];
   sentiment: 'positive' | 'neutral' | 'concerned';
   message_count: number;
+}
+
+/** Final cross-channel takeaway with author + permalink baked in for the UI. */
+interface DigestTakeaway {
+  takeaway: string;
+  primary_author: string | null;
+  channel_name: string;
+  channel_id: string;
+  source_message_ts: string | null;
+  permalink: string | null;
+  impact: ExtractedTakeaway['impact'];
 }
 
 export interface SlackDailyScanResult {
@@ -103,6 +123,7 @@ export interface SlackDailyScanResult {
   action_items_extracted: number;
   decisions_extracted: number;
   top_theme: string;
+  top_3_takeaways: DigestTakeaway[];
   channels_skipped_no_messages: number;
   channels_failed: { channel_id: string; channel_name: string; error: string }[];
 }
@@ -194,12 +215,20 @@ export async function runSlackDailyScan(
     decisionsCount = perChannel.reduce((n, p) => n + p.summary.decisions.length, 0);
   }
 
-  // 4. Synthesize top theme.
+  // 4. Synthesize top theme + select top-3 cross-channel takeaways.
   const topTheme = await synthesizeTopTheme(
     perChannel.map((p) => ({
       channel: p.channel.channel_name,
       theme: p.summary.channel_theme,
       topics: p.summary.key_topics,
+    })),
+  );
+
+  const top3Takeaways = await selectTop3Takeaways(
+    perChannel.map((p) => ({
+      channel_id: p.channel.channel_id,
+      channel_name: p.channel.channel_name,
+      takeaways: p.summary.takeaways,
     })),
   );
 
@@ -212,6 +241,7 @@ export async function runSlackDailyScan(
       message_count: totalMessages,
       action_items_extracted: actionItemsCount,
       decisions_extracted: decisionsCount,
+      top_3_takeaways: top3Takeaways,
     });
 
     await appendAuditLog({
@@ -220,6 +250,7 @@ export async function runSlackDailyScan(
       message_count: totalMessages,
       action_items_extracted: actionItemsCount,
       decisions_extracted: decisionsCount,
+      takeaways_selected: top3Takeaways.length,
       channels_failed: channelsFailed.length,
     });
   }
@@ -231,6 +262,7 @@ export async function runSlackDailyScan(
     action_items_extracted: actionItemsCount,
     decisions_extracted: decisionsCount,
     top_theme: topTheme,
+    top_3_takeaways: top3Takeaways,
     channels_skipped_no_messages: channelsSkipped,
     channels_failed: channelsFailed,
   };
@@ -285,7 +317,7 @@ async function summarizeChannel(
       transcript.slice(-TRANSCRIPT_CHAR_CAP);
   }
 
-  const system = `You are summarizing a single Slack channel's last 24 hours for an internal company digest.
+  const system = `You are summarizing a single Slack channel's last 24 hours for an internal company digest. Better empty than noisy.
 
 Return ONLY valid JSON matching this exact schema:
 {
@@ -297,15 +329,18 @@ Return ONLY valid JSON matching this exact schema:
   "decisions": [
     { "decision": "single sentence stating the decision", "decided_by_hint": "name or null", "rationale": "one sentence why", "source_message_ts": "the ts of the message it came from" }
   ],
+  "takeaways": [
+    { "takeaway": "single sentence stating the most-impactful fact / agreement / customer info / new thread from this channel today", "primary_author": "name or null", "source_message_ts": "ts of the source message", "impact": "milestone | agreement | customer | thread | other" }
+  ],
   "sentiment": "positive" | "neutral" | "concerned",
   "message_count": <int>
 }
 
-Rules:
-- If the channel had no actionable content, return empty arrays for action_items and decisions.
-- Do NOT invent action items or decisions. Only extract what is explicit in the transcript.
-- "decision" means an explicit choice or commitment, not a passing comment.
-- "action_item" means an explicit task someone said they/another would do.
+Strict extraction rules — better empty than noisy:
+- action_items: ONLY explicit commitments. "I'll do X by Y", "@person can you handle Z", "Will draft this tonight". NOT vague intentions like "we should think about" or "maybe someone could".
+- decisions: ONLY explicit decisions or agreements. "We'll go with option B", "let's lock pricing at X", "Approved". NOT discussion or proposal exploration.
+- takeaways: the up-to-3 most-impactful items from the channel today. Mix of milestone facts ("LOI signed"), agreements ("pricing locked at $X"), customer info ("Zedcor wants Q3 expansion"), or new threads ("started outbound to construction adjacencies"). Skip if the channel had no signal worth surfacing.
+- Each item MUST cite the exact source_message_ts from the transcript header so we can deep-link back. If you can't cite a ts, omit the item.
 - Return ONLY the JSON object. No prose, no code fences.`;
 
   const msg = await anthropic.messages.create({
@@ -322,6 +357,7 @@ Rules:
     key_topics: [],
     action_items: [],
     decisions: [],
+    takeaways: [],
     sentiment: 'neutral',
     message_count: messages.length,
   };
@@ -331,6 +367,7 @@ Rules:
     const parsed = JSON.parse(match[0]) as Partial<PerChannelSummary> & {
       action_items?: unknown[];
       decisions?: unknown[];
+      takeaways?: unknown[];
     };
     return {
       channel_theme: typeof parsed.channel_theme === 'string' ? parsed.channel_theme : '',
@@ -342,6 +379,9 @@ Rules:
         : [],
       decisions: Array.isArray(parsed.decisions)
         ? parsed.decisions.map(coerceDecision).filter((d): d is ExtractedDecision => d !== null)
+        : [],
+      takeaways: Array.isArray(parsed.takeaways)
+        ? parsed.takeaways.map(coerceTakeaway).filter((t): t is ExtractedTakeaway => t !== null).slice(0, 3)
         : [],
       sentiment:
         parsed.sentiment === 'positive' || parsed.sentiment === 'concerned'
@@ -383,6 +423,98 @@ function coerceDecision(raw: unknown): ExtractedDecision | null {
     source_message_ts:
       typeof r.source_message_ts === 'string' ? r.source_message_ts : null,
   };
+}
+
+function coerceTakeaway(raw: unknown): ExtractedTakeaway | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const r = raw as Record<string, unknown>;
+  const takeaway = typeof r.takeaway === 'string' ? r.takeaway.trim() : '';
+  if (!takeaway) return null;
+  const allowedImpacts = new Set(['milestone', 'agreement', 'customer', 'thread', 'other']);
+  const impactRaw = typeof r.impact === 'string' ? r.impact : null;
+  return {
+    takeaway: takeaway.slice(0, 280),
+    primary_author: typeof r.primary_author === 'string' ? r.primary_author : null,
+    source_message_ts:
+      typeof r.source_message_ts === 'string' ? r.source_message_ts : null,
+    impact: impactRaw && allowedImpacts.has(impactRaw)
+      ? (impactRaw as ExtractedTakeaway['impact'])
+      : 'other',
+  };
+}
+
+/**
+ * Cross-channel selector: picks the 3 most-impactful takeaways across all
+ * scanned channels, biased toward variety (no two from the same channel
+ * unless the candidate pool is too small) and impact tag (milestone +
+ * agreement + customer rank above thread + other).
+ *
+ * Builds Slack permalinks server-side so the UI doesn't need workspace info.
+ * If permalink build fails (no SLACK_WORKSPACE_DOMAIN env), falls back to a
+ * slack:// channel deep link.
+ */
+async function selectTop3Takeaways(
+  perChannel: { channel_id: string; channel_name: string; takeaways: ExtractedTakeaway[] }[],
+): Promise<DigestTakeaway[]> {
+  // Flatten + score by impact rank, preserving channel attribution.
+  const impactRank: Record<string, number> = {
+    milestone: 0,
+    agreement: 1,
+    customer: 2,
+    thread: 3,
+    other: 4,
+  };
+  type Candidate = DigestTakeaway & { _rank: number };
+  const all: Candidate[] = [];
+  for (const ch of perChannel) {
+    for (const t of ch.takeaways) {
+      all.push({
+        takeaway: t.takeaway,
+        primary_author: t.primary_author ?? null,
+        channel_name: ch.channel_name,
+        channel_id: ch.channel_id,
+        source_message_ts: t.source_message_ts ?? null,
+        permalink: buildSlackPermalink(ch.channel_id, t.source_message_ts ?? null),
+        impact: t.impact ?? 'other',
+        _rank: impactRank[t.impact ?? 'other'] ?? 4,
+      });
+    }
+  }
+  all.sort((a, b) => a._rank - b._rank);
+
+  // Variety pass: prefer not-yet-represented channels until we hit 3.
+  const picked: Candidate[] = [];
+  const seenChannels = new Set<string>();
+  for (const c of all) {
+    if (picked.length >= 3) break;
+    if (seenChannels.has(c.channel_id)) continue;
+    picked.push(c);
+    seenChannels.add(c.channel_id);
+  }
+  // Backfill if we couldn't fill 3 with distinct channels.
+  if (picked.length < 3) {
+    for (const c of all) {
+      if (picked.length >= 3) break;
+      if (picked.includes(c)) continue;
+      picked.push(c);
+    }
+  }
+  return picked.map(({ _rank, ...rest }) => rest);
+}
+
+/**
+ * Build a Slack message permalink.
+ *   https://<workspace>.slack.com/archives/<channel_id>/p<ts_no_dots>
+ * Requires SLACK_WORKSPACE_DOMAIN env (e.g. "unicron-systems"). Falls back to
+ * a slack:// channel deep link if the env isn't set or ts is missing — better
+ * than a broken https:// link.
+ */
+function buildSlackPermalink(channelId: string, ts: string | null): string | null {
+  if (!ts) return `slack://channel?id=${channelId}`;
+  const workspace = process.env.SLACK_WORKSPACE_DOMAIN?.trim();
+  if (!workspace) return `slack://channel?id=${channelId}`;
+  const tsNoDots = ts.replace('.', '');
+  return `https://${workspace}.slack.com/archives/${channelId}/p${tsNoDots}`;
 }
 
 async function synthesizeTopTheme(
@@ -497,6 +629,7 @@ async function upsertDailyDigest(row: {
   message_count: number;
   action_items_extracted: number;
   decisions_extracted: number;
+  top_3_takeaways: DigestTakeaway[];
 }): Promise<void> {
   const { error } = await supabase.rpc('ns_slack_daily_scan_upsert_digest', {
     p_digest_date: row.digest_date,
@@ -505,6 +638,7 @@ async function upsertDailyDigest(row: {
     p_message_count: row.message_count,
     p_action_items_extracted: row.action_items_extracted,
     p_decisions_extracted: row.decisions_extracted,
+    p_top_3_takeaways: row.top_3_takeaways as unknown as object[],
   });
   if (error) {
     console.error(`[slack-daily-scan] digest upsert failed: ${error.message}`);
