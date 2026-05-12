@@ -5,12 +5,19 @@
 // Notion Call Transcripts DB and writes a row in nervous_system.ledger so the
 // call appears in the list immediately.
 //
-// At least one of transcript / summary_notes is required. Participants are
-// composed from (a) checked canonical team members loaded via
-// ns_list_team_members RPC and (b) free-text "external participants" lines.
+// Inputs supported (Item 1, usefulness-pass 2026-05-12):
+//   - Paste transcript text into the textarea, OR
+//   - Upload a transcript file (.txt/.md/.docx/.vtt/.srt). Browser-side
+//     extraction normalizes .docx (mammoth), strips VTT/SRT timestamps, and
+//     pre-fills the textarea so the operator can review/edit before submit.
+//   - Same applies to summary notes.
+// After file load we run a quick local heuristic to seed Title / Date /
+// Participants from the filename + first heading + Attendees/Speaker tags.
+// At least one of transcript / summary_notes is required.
 
 import { useEffect, useMemo, useState } from 'react';
 import { getSupabase } from '../../lib/supabase';
+import { extractFromFile, type ExtractResult } from '../../lib/callFileExtract';
 
 interface TeamMember {
   id: string;
@@ -45,6 +52,8 @@ export function UploadCallModal({ open, onClose, onUploaded }: UploadCallModalPr
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<UploadResult | null>(null);
+  const [extracting, setExtracting] = useState<'transcript' | 'summary' | null>(null);
+  const [extractNotice, setExtractNotice] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -65,6 +74,8 @@ export function UploadCallModal({ open, onClose, onUploaded }: UploadCallModalPr
     setSubmitting(false);
     setError(null);
     setSuccess(null);
+    setExtracting(null);
+    setExtractNotice(null);
   }, [open]);
 
   useEffect(() => {
@@ -85,6 +96,7 @@ export function UploadCallModal({ open, onClose, onUploaded }: UploadCallModalPr
 
   const canSubmit =
     !submitting &&
+    !extracting &&
     (transcript.trim().length > 0 || summaryNotes.trim().length > 0);
 
   function toggleInternal(name: string) {
@@ -94,6 +106,75 @@ export function UploadCallModal({ open, onClose, onUploaded }: UploadCallModalPr
       else next.add(name);
       return next;
     });
+  }
+
+  function applyExtractMetadata(meta: ExtractResult, defaultsApply: { title?: boolean; date?: boolean; participants?: boolean }) {
+    const notices: string[] = [];
+    if (meta.title && (!title.trim() || defaultsApply.title === false)) {
+      if (!title.trim()) {
+        setTitle(meta.title);
+        notices.push(`title: ${meta.title}`);
+      }
+    }
+    if (meta.date && /^\d{4}-\d{2}-\d{2}$/.test(meta.date)) {
+      // Only override default-today date — don't stomp user edits
+      if (callDate === todayIsoDate()) {
+        setCallDate(meta.date);
+        notices.push(`date: ${meta.date}`);
+      }
+    }
+    if (meta.participants && meta.participants.length > 0) {
+      const knownNames = new Set(members.map((m) => m.name.toLowerCase()));
+      const internalMatches: string[] = [];
+      const externalLines: string[] = [];
+      for (const p of meta.participants) {
+        const lc = p.toLowerCase();
+        const matched = [...knownNames].find((n) => lc.includes(n));
+        if (matched) {
+          const original = members.find((m) => m.name.toLowerCase() === matched)!;
+          internalMatches.push(original.name);
+        } else {
+          externalLines.push(p);
+        }
+      }
+      if (internalMatches.length) {
+        setInternalParticipants((prev) => {
+          const next = new Set(prev);
+          for (const n of internalMatches) next.add(n);
+          return next;
+        });
+      }
+      if (externalLines.length && !externalParticipantsRaw.trim()) {
+        setExternalParticipantsRaw(externalLines.join(', '));
+        notices.push(`participants: ${externalLines.length + internalMatches.length}`);
+      } else if (internalMatches.length) {
+        notices.push(`team participants: ${internalMatches.length}`);
+      }
+    }
+    if (notices.length) setExtractNotice(`Auto-filled — ${notices.join(' · ')}. Override any field before submit.`);
+  }
+
+  async function handleFileChange(field: 'transcript' | 'summary', e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // allow re-upload of same filename
+    if (!file) return;
+    setExtracting(field);
+    setError(null);
+    setExtractNotice(null);
+    try {
+      const extracted = await extractFromFile(file);
+      if (!extracted.text || !extracted.text.trim()) {
+        setError(`File "${file.name}" extracted no text. Paste content manually if needed.`);
+        return;
+      }
+      if (field === 'transcript') setTranscript((prev) => prev.trim() ? prev : extracted.text);
+      else setSummaryNotes((prev) => prev.trim() ? prev : extracted.text);
+      applyExtractMetadata(extracted, {});
+    } catch (err) {
+      setError(err instanceof Error ? err.message : `Failed to read ${file.name}`);
+    } finally {
+      setExtracting(null);
+    }
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -234,14 +315,32 @@ export function UploadCallModal({ open, onClose, onUploaded }: UploadCallModalPr
                 />
               </label>
 
+              {extractNotice && (
+                <div className="bg-[#6081BE]/10 border border-[#6081BE]/30 rounded-md px-3 py-2 text-[11px] text-[#3D5994]">
+                  {extractNotice}
+                </div>
+              )}
+
               <label className="flex flex-col gap-1.5">
-                <span className="text-[10.5px] uppercase tracking-[0.16em] text-text-muted font-semibold">
-                  Full transcript <span className="text-text-faint normal-case font-normal">(paste full text; either this or summary notes is required)</span>
+                <span className="text-[10.5px] uppercase tracking-[0.16em] text-text-muted font-semibold flex items-center gap-2">
+                  Full transcript <span className="text-text-faint normal-case font-normal">(paste below OR upload .txt / .md / .docx / .vtt / .srt; either this or summary notes is required)</span>
                 </span>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="file"
+                    accept=".txt,.md,.markdown,.docx,.vtt,.srt,text/plain,text/markdown,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                    onChange={(e) => void handleFileChange('transcript', e)}
+                    disabled={!!extracting}
+                    className="text-[11px] text-text-secondary file:mr-2 file:px-2 file:py-1 file:rounded-md file:border file:border-border-default file:bg-bg-card file:text-text-secondary file:text-[11px] file:cursor-pointer hover:file:border-border-hover"
+                  />
+                  {extracting === 'transcript' && (
+                    <span className="text-[10px] text-text-muted">Extracting…</span>
+                  )}
+                </div>
                 <textarea
                   value={transcript}
                   onChange={(e) => setTranscript(e.target.value)}
-                  placeholder="Paste the full transcript here. Long transcripts are chunked automatically."
+                  placeholder="Paste the full transcript here, or upload a file above. Long transcripts are chunked automatically."
                   rows={6}
                   className="border border-border-default rounded-md px-3 py-2 text-[12px] font-mono text-text-primary placeholder:text-text-muted focus:outline-none focus:border-[#6081BE] resize-y"
                 />
@@ -249,8 +348,20 @@ export function UploadCallModal({ open, onClose, onUploaded }: UploadCallModalPr
 
               <label className="flex flex-col gap-1.5">
                 <span className="text-[10.5px] uppercase tracking-[0.16em] text-text-muted font-semibold">
-                  Summary notes <span className="text-text-faint normal-case font-normal">(or paste shorthand notes if no transcript)</span>
+                  Summary notes <span className="text-text-faint normal-case font-normal">(or upload a separate notes file)</span>
                 </span>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="file"
+                    accept=".txt,.md,.markdown,.docx,.vtt,.srt,text/plain,text/markdown,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                    onChange={(e) => void handleFileChange('summary', e)}
+                    disabled={!!extracting}
+                    className="text-[11px] text-text-secondary file:mr-2 file:px-2 file:py-1 file:rounded-md file:border file:border-border-default file:bg-bg-card file:text-text-secondary file:text-[11px] file:cursor-pointer hover:file:border-border-hover"
+                  />
+                  {extracting === 'summary' && (
+                    <span className="text-[10px] text-text-muted">Extracting…</span>
+                  )}
+                </div>
                 <textarea
                   value={summaryNotes}
                   onChange={(e) => setSummaryNotes(e.target.value)}
