@@ -85,7 +85,9 @@ export const analystRun = inngest.createFunction(
  */
 export const analystNightlyCron = inngest.createFunction(
   { id: 'analyst-nightly', name: 'Analyst Nightly Cron', retries: 1 },
-  { cron: 'TZ=America/Los_Angeles 0 2 * * *' },
+  // Usefulness pass 2026-05-12: shifted to 05:00 ET so the digest is ready
+  // before the working day starts on the east coast.
+  { cron: 'TZ=America/New_York 0 5 * * *' },
   async ({ step }) => {
     const { decayTick, dailyDigest, driftFlagScan, analystWikiSync } = await import('./analyst.js');
     const decayResult = await step.run('decay-tick', () => decayTick());
@@ -370,7 +372,9 @@ export const continuityIngestRun = inngest.createFunction(
  */
 export const slackDailyScanCron = inngest.createFunction(
   { id: 'slack-daily-scan', name: 'Slack Daily Scan Cron', retries: 1 },
-  { cron: 'TZ=America/Los_Angeles 0 6 * * *' },
+  // Usefulness pass 2026-05-12: aligned with analyst-nightly at 05:00 ET so
+  // the morning briefing is consistent across coasts.
+  { cron: 'TZ=America/New_York 0 5 * * *' },
   async ({ step }) => {
     const { runSlackDailyScan } = await import('./slack-daily-scan.js');
     const result = await step.run('slack-daily-scan', () => runSlackDailyScan());

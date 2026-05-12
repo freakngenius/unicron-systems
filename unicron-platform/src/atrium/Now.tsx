@@ -695,13 +695,15 @@ function DigestTab() {
         <div className="flex items-start justify-between flex-wrap gap-4">
           <div>
             <div className="mono text-[10px] uppercase tracking-[0.18em] text-[var(--accent)] font-semibold mb-1">
-              Daily digest
+              Daily digest · Last 24h
             </div>
             <div className="mono text-[22px] font-medium text-text-primary leading-tight">
               {digestRelativeLabel(date)}
             </div>
             <div className="mono text-[10px] text-text-muted mt-1.5">
-              {digestFormatDisplayDate(date)}
+              {date === digestTodayPT()
+                ? `Yesterday — ${digestFormatDisplayDate(digestShiftDate(date, -1))}`
+                : digestFormatDisplayDate(date)}
             </div>
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
