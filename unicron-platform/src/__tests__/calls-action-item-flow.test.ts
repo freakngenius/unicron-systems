@@ -196,6 +196,15 @@ describe('runActionItemExtraction', () => {
     const fetchMock = globalThis.fetch as unknown as ReturnType<typeof vi.fn>;
     const pageCreates = fetchMock.mock.calls.filter((c) => typeof c[0] === 'string' && c[0].endsWith('/v1/pages'));
     expect(pageCreates).toHaveLength(2);
+
+    // Lock in the Status/Priority/Source values against the live Internal Org
+    // Kanban schema. Mis-cased values would 400 against Notion.
+    for (const call of pageCreates) {
+      const body = JSON.parse((call[1] as RequestInit & { body: string }).body);
+      expect(body.properties.Status.select.name).toBe('Backlog');
+      expect(['Low', 'Medium', 'High', 'Irreversible']).toContain(body.properties.Priority.select.name);
+      expect(body.properties.Source.select.name).toBe('Call');
+    }
     const blockAppends = fetchMock.mock.calls.filter((c) => typeof c[0] === 'string' && c[0].includes('/v1/blocks/call-page-1/children'));
     expect(blockAppends).toHaveLength(2);
   });
