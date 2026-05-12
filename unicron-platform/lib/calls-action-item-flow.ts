@@ -176,14 +176,22 @@ async function createInternalKanbanCard(input: KanbanCardInput): Promise<{ notio
   const dbId = process.env.NOTION_DB_INTERNAL_KANBAN;
   if (!token || !dbId) return null;
 
-  // The Internal Org Kanban schema (per CLAUDE.md) has Status / Priority /
-  // Source / Surface select columns + DRI + Title. We set Status='Not Yet
-  // Started' (Co-Pilot tasks could go to In Process but require additional
-  // executor wiring), Priority from the extracted value, Source='Call'.
+  // The Internal Org Kanban schema has Status / Priority / Source / Surface
+  // select columns + DRI + Title. Canonical Status options:
+  //   Backlog | In Process | Review | Deployed | Bug Fixes | Verified | Broken Off
+  // (CLAUDE.md's old "Not Yet Started" label was pre-rename — fetched live
+  // schema is the source of truth.) We seed new cards in Backlog; Co-Pilot
+  // tasks could be promoted to In Process later by an executor.
+  // Priority maps directly to the extracted value (Low | Medium | High |
+  // Irreversible — the schema's "Irreversible" option is the only one we
+  // don't currently emit). Source='Call'.
+  const priorityLabel =
+    input.priority === 'high' ? 'High' :
+    input.priority === 'low'  ? 'Low'  : 'Medium';
   const properties: Record<string, unknown> = {
     Title: { title: [{ type: 'text', text: { content: input.title.slice(0, 2000) } }] },
-    Status: { select: { name: 'Not Yet Started' } },
-    Priority: { select: { name: input.priority } },
+    Status: { select: { name: 'Backlog' } },
+    Priority: { select: { name: priorityLabel } },
     Source: { select: { name: 'Call' } },
   };
 
