@@ -1,18 +1,14 @@
-// Atrium Now tab — Sprint 5 Stream G upgrade (extends Sprint 4 Stream C).
+// Atrium Now tab.
 //
-// Sprint 5 upgrades:
-//  1. SkillsSurface — Research + Sales skills from DB; active skills show run modals;
-//                     scaffolded skills show dimmed disabled button ("Coming in Sprint 6")
-//  2. FUTURE_SKILL_STUBS — Research/Sales/Discovery domains removed (now in DB)
-//  3. SkillRow type — extended with status + run_endpoint from updated ns_list_skills()
+// Today sub-tab (editorial pass 2026-05-11): action-driving default.
+// Left column = greeting + "What needs you today" (TopOfMind, irreversible+high
+// for the signed-in DRI). Right rail = three real metric cards (Open items,
+// Refusals 24h, Decisions 7d) + Items-created-7d chart + Agent LLM spend
+// (if real) + RecentActivityFeed (gated to last-60s events).
 //
-// Sprint 4 upgrades (preserved):
-//  1. StatusPulse   — fully wired: agents (status field), escalations (audit_log 24h),
-//                     budget (budget jsonb), decay (ledger decay_at)
-//  2. TopOfMind     — replaced with attention-scored list (AttentionScorer)
-//  3. YesterdayDigest — explicit "No digest yet" on 404; vault path unchanged
-//  4. ActivityFeed  — dedupe window 30s, throttle 2s
-//  5. Mobile        — full 320–768px Tailwind responsive pass
+// Cuts: HeroStrip ("company is calm"), YesterdayDigest (Digest sub-tab owns
+// it), Ingest yield sidebar, Calendar placeholder (returns when per-user
+// OAuth ships), "Listening for activity" placeholder.
 
 import {
   useState,
@@ -28,18 +24,11 @@ import { useAuth } from '../lib/auth';
 import { QuickCapture } from './QuickCapture';
 import { AtriumIcon } from './icons';
 import { SlackDigest } from './now/SlackDigest';
+import { navigateAtrium } from './navigation';
 // Pass 2 (R1): AttentionScorer cut — was hand-rolled scoring across mixed
 // sources. TopOfMind now wires to ns_top_of_mind_for_dri RPC (real data).
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-
-interface AgentRow {
-  id: string;
-  name: string;
-  active: boolean;
-  status: string | null;
-  budget: { limit_usd_per_period: number; current_spent_usd: number } | null;
-}
 
 export interface SkillRow {
   id: string;
@@ -118,161 +107,6 @@ function formatRelativeTime(iso: string): string {
   return `${Math.floor(h / 24)}d ago`;
 }
 
-// ─── StatusPulse — Sprint 4 fully wired ───────────────────────────────────────
-
-interface PulseData {
-  agentStatus: 'green' | 'yellow' | 'red' | 'loading';
-  agentCount: number;
-  escalationCount: number;
-  budgetPct: number | null;
-  decayCount: number;
-  loading: boolean;
-}
-
-function usePulseData(): PulseData {
-  const [data, setData] = useState<PulseData>({
-    agentStatus: 'loading',
-    agentCount: 0,
-    escalationCount: 0,
-    budgetPct: null,
-    decayCount: 0,
-    loading: true,
-  });
-
-  useEffect(() => {
-    let cancelled = false;
-    const sb = getSupabase();
-
-    async function load() {
-      try {
-        // PGRST106 fix: nervous_system is not in PostgREST db-schemas.
-        // Use public.ns_* SECURITY DEFINER RPCs instead of .schema('nervous_system').
-
-        // 1. Agent fleet — active agents, check status field for errors
-        const { data: agents } = await sb
-          .rpc('ns_list_agents_active');
-
-        const activeAgents = (agents as AgentRow[] | null) ?? [];
-        const hasError = activeAgents.some((a) => a.status === 'error');
-        const agentStatus: 'green' | 'yellow' | 'red' =
-          hasError ? 'red' : activeAgents.length === 0 ? 'yellow' : 'green';
-
-        // 2. Escalations — audit_log action contains 'escalation' in last 24h
-        const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-        const { data: escalationData } = await sb
-          .rpc('ns_count_audit_log_escalations', { p_since: since24h });
-        const escalationCount = Number(escalationData ?? 0);
-
-        // 3. Decay alerts — ledger rows where decay_at < now and status != 'archived'
-        const { data: decayData } = await sb
-          .rpc('ns_count_ledger_decay');
-        const decayCount = Number(decayData ?? 0);
-
-        if (cancelled) return;
-
-        // 4. Budget burn — aggregate across active agents with budget jsonb
-        let totalSpent = 0;
-        let totalLimit = 0;
-        activeAgents.forEach((a) => {
-          if (a.budget) {
-            totalSpent += a.budget.current_spent_usd ?? 0;
-            totalLimit += a.budget.limit_usd_per_period ?? 0;
-          }
-        });
-        const budgetPct = totalLimit > 0 ? Math.round((totalSpent / totalLimit) * 100) : null;
-
-        setData({
-          agentStatus,
-          agentCount: activeAgents.length,
-          escalationCount: escalationCount ?? 0,
-          budgetPct,
-          decayCount: decayCount ?? 0,
-          loading: false,
-        });
-      } catch {
-        if (!cancelled) setData((d) => ({ ...d, loading: false, agentStatus: 'red' }));
-      }
-    }
-
-    void load();
-    return () => { cancelled = true; };
-  }, []);
-
-  return data;
-}
-
-const STATUS_COLORS = {
-  green: '#2E8E66',
-  yellow: '#C28A1F',
-  red: '#E14B4B',
-  loading: 'var(--border-strong)',
-};
-
-function StatusPulse() {
-  const { agentStatus, agentCount, escalationCount, budgetPct, decayCount, loading } = usePulseData();
-
-  const indicators = [
-    {
-      label: 'Agent Fleet',
-      color: STATUS_COLORS[agentStatus],
-      value: agentStatus === 'loading'
-        ? '—'
-        : agentStatus === 'green'
-          ? `${agentCount} Active`
-          : agentStatus === 'yellow'
-            ? 'No agents'
-            : 'Error',
-    },
-    {
-      label: 'Escalations',
-      color: escalationCount > 0 ? STATUS_COLORS.red : STATUS_COLORS.green,
-      value: loading ? '—' : String(escalationCount),
-    },
-    {
-      label: 'Budget Burn',
-      color:
-        budgetPct === null
-          ? STATUS_COLORS.loading
-          : budgetPct >= 80
-          ? STATUS_COLORS.red
-          : budgetPct >= 60
-          ? STATUS_COLORS.yellow
-          : STATUS_COLORS.green,
-      value: loading ? '—' : budgetPct === null ? '—' : `${budgetPct}%`,
-    },
-    {
-      label: 'Decay Alerts',
-      color: decayCount > 2 ? STATUS_COLORS.red : decayCount > 0 ? STATUS_COLORS.yellow : STATUS_COLORS.green,
-      value: loading ? '—' : String(decayCount),
-    },
-  ];
-
-  return (
-    // Sprint 4 mobile: stack 2-up on xs, 4-across on sm+
-    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-      {indicators.map((ind) => (
-        <div
-          key={ind.label}
-          className="bg-bg-card border border-border-default rounded-xl px-3 sm:px-4 py-3 flex items-center gap-2 sm:gap-3"
-        >
-          <div
-            className="w-2.5 h-2.5 rounded-full shrink-0"
-            style={{ backgroundColor: ind.color, boxShadow: `0 0 6px ${ind.color}60` }}
-          />
-          <div className="min-w-0">
-            <div className="mono text-[9px] uppercase tracking-[0.16em] text-text-secondary truncate">
-              {ind.label}
-            </div>
-            <div className="mono text-[12px] sm:text-[13px] text-text-primary font-medium truncate">
-              {ind.value}
-            </div>
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 // ─── TopOfMind — Pass 2 (R1): wired to ns_top_of_mind_for_dri ─────────────────
 // SLOT: TopOfMind · STATUS: real · SOURCE: ns_top_of_mind_for_dri(p_dri) RPC
 // Shows the signed-in user's open irreversible+high action items, top 5.
@@ -318,8 +152,27 @@ function useTopOfMind(teamMemberId: string | null) {
   return { items, loading };
 }
 
+// Hook: total open action items where the signed-in user is DRI. Powers
+// TopOfMind's honest empty state ("N items" deep link to Work > Items).
+function useOpenItemsForDri(teamMemberId: string | null) {
+  const [total, setTotal] = useState<number | null>(teamMemberId ? null : 0);
+  useEffect(() => {
+    if (!teamMemberId) return;
+    let cancelled = false;
+    getSupabase()
+      .rpc('ns_count_action_items_by_assignee', { p_member_id: teamMemberId })
+      .then(({ data }) => {
+        if (!cancelled) setTotal(Number(data ?? 0));
+      })
+      .catch(() => { if (!cancelled) setTotal(null); });
+    return () => { cancelled = true; };
+  }, [teamMemberId]);
+  return total;
+}
+
 function TopOfMind({ teamMemberId }: { teamMemberId: string | null }) {
   const { items, loading } = useTopOfMind(teamMemberId);
+  const totalOpen = useOpenItemsForDri(teamMemberId);
 
   if (loading) {
     return (
@@ -332,14 +185,19 @@ function TopOfMind({ teamMemberId }: { teamMemberId: string | null }) {
   }
 
   if (items.length === 0) {
+    const totalLabel = totalOpen === null ? '—' : String(totalOpen);
     return (
       <div className="bg-bg-card border border-border-default rounded-xl px-5 py-4">
-        <div className="mono text-[11px] text-text-secondary">
-          Nothing demanding attention right now.
+        <div className="mono text-[12px] text-text-primary">
+          No irreversible or high-priority items for you.
         </div>
-        <div className="mono text-[10px] text-text-muted mt-1.5">
-          Top of mind — open items where you are DRI, irreversible or high priority
-        </div>
+        <button
+          type="button"
+          onClick={() => navigateAtrium({ tab: 'work', subTab: 'items', filter: { dri: 'me' } })}
+          className="mono text-[11px] text-text-secondary mt-1.5 hover:text-text-primary underline-offset-2 hover:underline text-left"
+        >
+          Open Work &gt; Items to see all assigned to you ({totalLabel} items)
+        </button>
       </div>
     );
   }
@@ -375,103 +233,6 @@ function TopOfMind({ teamMemberId }: { teamMemberId: string | null }) {
           </div>
         );
       })}
-    </div>
-  );
-}
-
-// ─── CalendarStub — Sprint 4 mobile-aware ─────────────────────────────────────
-
-function CalendarStub() {
-  return (
-    <div className="bg-bg-card border border-border-default rounded-xl px-4 sm:px-5 py-4 sm:py-5">
-      {/* Full calendar on sm+; just next event hint on xs */}
-      <div className="flex items-center gap-2 mb-3">
-        <div className="w-4 h-4 rounded border border-border-hover flex items-center justify-center shrink-0">
-          <div className="w-2 h-2 bg-border-subtle rounded-sm" />
-        </div>
-        <div className="mono text-[11px] uppercase tracking-[0.16em] text-text-secondary">
-          {/* Mobile: abbreviated; sm+: full */}
-          <span className="sm:hidden">Today</span>
-          <span className="hidden sm:inline">Today's Calendar</span>
-        </div>
-      </div>
-
-      {/* On xs: compact next-event stub */}
-      <div className="sm:hidden mono text-[12px] text-text-secondary">
-        No upcoming events.
-      </div>
-
-      {/* On sm+: full placeholder */}
-      <div className="hidden sm:block">
-        <div className="mono text-[12px] text-text-secondary">
-          Connect Google Calendar to see today's events.
-        </div>
-        <div className="mono text-[9px] uppercase tracking-[0.14em] text-text-muted mt-2">
-          Calendar integration — Sprint 5
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── YesterdayDigest — Sprint 4: explicit "No digest yet" ─────────────────────
-
-function useYesterdayDigest() {
-  const [content, setContent] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    let cancelled = false;
-    const yesterday = new Date(Date.now() - 86400000);
-    const dateStr = yesterday.toISOString().split('T')[0];
-    // Vault path: wiki/memory/analyst/YYYY-MM-DD.md
-    const url = `https://raw.githubusercontent.com/freakngenius/unicron-knowledge/main/wiki/memory/analyst/${dateStr}.md`;
-
-    fetch(url)
-      .then((res) => {
-        if (!res.ok) throw new Error(`${res.status}`);
-        return res.text();
-      })
-      .then((text) => {
-        if (!cancelled) { setContent(text); setLoading(false); }
-      })
-      .catch(() => {
-        // 404 or network failure → show "No digest yet" (not an error)
-        if (!cancelled) { setContent(null); setLoading(false); }
-      });
-
-    return () => { cancelled = true; };
-  }, []);
-
-  return { content, loading };
-}
-
-function YesterdayDigest() {
-  const { content, loading } = useYesterdayDigest();
-
-  if (loading) {
-    return (
-      <div className="bg-bg-card border border-border-default rounded-xl px-4 sm:px-5 py-4 sm:py-5">
-        <div className="h-4 w-32 bg-bg-raised rounded animate-pulse mb-2" />
-        <div className="h-3 w-full bg-bg-raised rounded animate-pulse" />
-      </div>
-    );
-  }
-
-  return (
-    <div className="bg-bg-card border border-border-default rounded-xl px-4 sm:px-5 py-4 sm:py-5">
-      <div className="mono text-[11px] uppercase tracking-[0.16em] text-text-secondary mb-3">
-        Yesterday's Digest
-      </div>
-      {content ? (
-        <div className="mono text-[12px] text-text-primary leading-relaxed whitespace-pre-line line-clamp-6">
-          {content}
-        </div>
-      ) : (
-        <div className="mono text-[12px] text-text-secondary">
-          No digest yet.
-        </div>
-      )}
     </div>
   );
 }
@@ -635,9 +396,7 @@ function SourceDot({ sourceType }: { sourceType: string }) {
   );
 }
 
-function ActivityFeed() {
-  const events = useActivityFeed();
-
+function ActivityFeedView({ events }: { events: FeedEvent[] }) {
   return (
     // Sprint 4 mobile: full width
     <div className="w-full bg-bg-card border border-border-default rounded-xl overflow-hidden">
@@ -683,49 +442,6 @@ function ActivityFeed() {
             </div>
           ))}
         </div>
-      )}
-    </div>
-  );
-}
-
-// ─── HeroStrip — N-2: sentiment headline + context sentence ──────────────────
-
-function HeroStrip() {
-  const { agentStatus, agentCount, escalationCount, budgetPct, decayCount, loading } = usePulseData();
-
-  const headline = loading
-    ? ' '
-    : escalationCount > 0
-    ? 'There are escalations to address.'
-    : budgetPct !== null && budgetPct > 80
-    ? 'Budget pressure is high.'
-    : agentStatus === 'red'
-    ? 'The agent fleet needs attention.'
-    : decayCount > 2
-    ? 'Knowledge decay is accumulating.'
-    : 'The company is calm.';
-
-  const context = loading
-    ? ''
-    : ([
-        agentCount > 0 ? `${agentCount} agent${agentCount !== 1 ? 's' : ''} active` : null,
-        escalationCount > 0 ? `${escalationCount} escalation${escalationCount !== 1 ? 's' : ''}` : null,
-        budgetPct !== null ? `budget at ${budgetPct}%` : null,
-        decayCount > 0 ? `${decayCount} decay alert${decayCount !== 1 ? 's' : ''}` : null,
-      ] as (string | null)[])
-        .filter(Boolean)
-        .join(' · ');
-
-  return (
-    <div className="w-full bg-bg-card border border-border-default rounded-xl px-5 py-4">
-      <div
-        className="mono font-medium text-text-primary leading-tight mb-1"
-        style={{ fontSize: 'clamp(16px, 3vw, 22px)' }}
-      >
-        {loading ? <span className="opacity-0">placeholder</span> : headline}
-      </div>
-      {context && (
-        <div className="mono text-[12px] text-text-secondary">{context}</div>
       )}
     </div>
   );
@@ -2123,45 +1839,6 @@ function SkillsSurface({ onOpenQuickCapture }: { onOpenQuickCapture?: () => void
   );
 }
 
-// ─── N-1 Right rail panels ────────────────────────────────────────────────────
-
-function MiniBar({ value, max, color }: { value: number; max: number; color: string }) {
-  const pct = max > 0 ? (value / max) * 100 : 0;
-  return (
-    <div className="flex-1 flex items-end" style={{ height: 32 }}>
-      <div className="w-full rounded-sm" style={{ height: `${Math.max(4, pct)}%`, background: color }} />
-    </div>
-  );
-}
-
-function BarChart({ data, color, labels }: { data: number[]; color: string; labels?: string[] }) {
-  const max = Math.max(...data, 1);
-  return (
-    <div className="flex items-end gap-0.5" style={{ height: 32 }}>
-      {data.map((v, i) => (
-        <div key={i} className="flex-1 flex flex-col items-center gap-0.5">
-          <MiniBar value={v} max={max} color={color} />
-          {labels && <span className="mono text-[8px] text-text-secondary">{labels[i]}</span>}
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function DistBar({ label, percent, color }: { label: string; percent: number; color: string }) {
-  return (
-    <div className="flex flex-col gap-1">
-      <div className="flex items-baseline justify-between">
-        <span className="mono text-[11px] text-text-secondary">{label}</span>
-        <span className="mono text-[11px] text-text-primary">{percent}%</span>
-      </div>
-      <div className="h-1.5 rounded-full bg-bg-raised overflow-hidden">
-        <div className="h-full rounded-full" style={{ width: `${percent}%`, background: color }} />
-      </div>
-    </div>
-  );
-}
-
 // Pass 2 (R1) — ForecastPanel + RecentRunsPanel + RECENT_AGENT_RUNS const CUT.
 // Static fake numbers had no backing source. Replaced with two real-data charts.
 
@@ -2194,23 +1871,26 @@ function ActionItemsDailyChart() {
   const sumTotal = data.reduce((acc, d) => acc + Number(d.total), 0);
   const sumIrr = data.reduce((acc, d) => acc + Number(d.irreversible), 0);
   const labels = data.map((d) => new Date(d.day).toLocaleDateString('en-US', { weekday: 'short' })[0]);
+  // "+N today" delta — last bucket from the RPC is today (PT-anchored upstream).
+  const todayCount = data.length > 0 ? Number(data[data.length - 1].total) : 0;
   return (
     <div className="bg-bg-card border border-border-default rounded-xl p-4">
       <div className="flex items-baseline justify-between mb-0.5">
-        <div className="mono text-[12px] font-semibold text-text-primary">Action items per day</div>
+        <div className="mono text-[12px] font-semibold text-text-primary">Items created · 7d</div>
         <div className="mono text-[11px] text-text-primary">{sumTotal}</div>
       </div>
       <div className="mono text-[10px] text-text-secondary mb-3">
-        Last 7d · <span style={{ color: '#E14B4B' }}>{sumIrr} irreversible</span>
+        +{todayCount} today · <span style={{ color: '#E14B4B' }}>{sumIrr} irreversible</span>
       </div>
       <svg viewBox="0 0 200 60" preserveAspectRatio="none" className="w-full h-14">
         {data.map((d, i) => {
           const x = (i / Math.max(1, data.length - 1)) * 190 + 5;
           const total = Number(d.total);
           const h = (total / maxTotal) * 50;
+          const day = d.day;
           return (
             <rect
-              key={d.day}
+              key={day}
               x={x - 10}
               y={60 - h}
               width={20}
@@ -2218,7 +1898,13 @@ function ActionItemsDailyChart() {
               fill="#6081BE"
               opacity={0.7}
               rx={2}
-            />
+              style={{ cursor: 'pointer' }}
+              onClick={() =>
+                navigateAtrium({ tab: 'work', subTab: 'items', filter: { created_on: day } })
+              }
+            >
+              <title>{`${new Date(day).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}: ${total} items — click to filter`}</title>
+            </rect>
           );
         })}
         <polyline
@@ -2236,6 +1922,7 @@ function ActionItemsDailyChart() {
           strokeWidth="1.6"
           strokeLinecap="round"
           strokeLinejoin="round"
+          pointerEvents="none"
         />
       </svg>
       <div className="flex justify-between mt-1.5 mono text-[9px] text-text-muted">
@@ -2318,26 +2005,224 @@ function IngestYieldChart() {
   );
 }
 
-function VaultPulse() {
+// ─── Today sidebar metric cards — real, clickable ────────────────────────────
+// All three cards back to RPCs added in 20260512_ns_now_today_metrics.sql.
+
+interface MetricCardProps {
+  label: string;
+  value: string;
+  sub: string;
+  onClick: () => void;
+  loading?: boolean;
+  accent?: string;
+}
+
+function MetricCard({ label, value, sub, onClick, loading, accent = '#6081BE' }: MetricCardProps) {
   return (
-    <div className="bg-bg-card border border-border-default rounded-xl p-4">
-      <div className="mono text-[12px] font-semibold text-text-primary mb-0.5">Vault pulse</div>
-      <div className="mono text-[10px] text-text-secondary mb-3">Knowledge health</div>
-      <div className="flex items-baseline justify-between mb-3">
-        <span className="mono text-[11px] text-text-secondary">Total documents</span>
-        <span className="mono text-[11px] text-text-primary">1,247</span>
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={loading}
+      className="w-full text-left bg-bg-card border border-border-default rounded-xl p-4 hover:border-border-hover transition-colors disabled:cursor-wait"
+    >
+      <div className="mono text-[10px] uppercase tracking-[0.16em] text-text-secondary mb-1.5">
+        {label}
       </div>
-      <div className="flex flex-col gap-2.5">
-        <DistBar label="Fresh (≤30d)"   percent={62} color="#2E8E66" />
-        <DistBar label="Aging (30–90d)" percent={26} color="#C28A1F" />
-        <DistBar label="Decaying (90+)" percent={12} color="#E14B4B" />
+      <div className="flex items-baseline gap-2">
+        <span
+          className="text-[26px] font-semibold leading-none"
+          style={{ color: accent, fontFamily: 'var(--font-display)' }}
+        >
+          {loading ? '—' : value}
+        </span>
       </div>
-      <div className="flex justify-between items-baseline mt-3 pt-2.5 border-t border-border-subtle">
-        <span className="mono text-[10.5px] text-text-secondary">Embed coverage</span>
-        <span className="mono text-[10.5px] text-[#2E8E66]">98.3%</span>
-      </div>
-    </div>
+      <div className="mono text-[10px] text-text-muted mt-2 line-clamp-2">{sub}</div>
+    </button>
   );
+}
+
+function useOpenItemsBreakdown(teamMemberId: string | null) {
+  const [row, setRow] = useState<{ total: number; irreversible: number; high: number; medium: number; low: number } | null>(null);
+  const [loading, setLoading] = useState(Boolean(teamMemberId));
+  useEffect(() => {
+    if (!teamMemberId) return;
+    let cancelled = false;
+    getSupabase()
+      .rpc('ns_now_open_items_for_dri', { p_dri: teamMemberId })
+      .then(({ data }) => {
+        if (cancelled) return;
+        const rows = data as Array<{ total: number; irreversible: number; high: number; medium: number; low: number }> | null;
+        setRow(rows?.[0] ?? null);
+        setLoading(false);
+      })
+      .catch(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [teamMemberId]);
+  return { row, loading };
+}
+
+function OpenItemsCard({ teamMemberId }: { teamMemberId: string | null }) {
+  const { row, loading } = useOpenItemsBreakdown(teamMemberId);
+  const total = row?.total ?? 0;
+  const sub = row
+    ? `${row.irreversible} irreversible · ${row.high} high · ${row.medium} medium · ${row.low} low`
+    : '—';
+  return (
+    <MetricCard
+      label="Open items · you DRI"
+      value={String(total)}
+      sub={sub}
+      loading={loading}
+      onClick={() => navigateAtrium({ tab: 'work', subTab: 'items', filter: { dri: 'me' } })}
+    />
+  );
+}
+
+function useRefusals24h() {
+  const [row, setRow] = useState<{ total: number; needs_review: number } | null>(null);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    let cancelled = false;
+    getSupabase()
+      .rpc('ns_now_refusals_24h')
+      .then(({ data }) => {
+        if (cancelled) return;
+        const rows = data as Array<{ total: number; needs_review: number }> | null;
+        setRow(rows?.[0] ?? null);
+        setLoading(false);
+      })
+      .catch(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
+  return { row, loading };
+}
+
+function RefusalsCard() {
+  const { row, loading } = useRefusals24h();
+  const total = row?.total ?? 0;
+  const review = row?.needs_review ?? 0;
+  const accent = total > 0 ? '#E14B4B' : '#6081BE';
+  return (
+    <MetricCard
+      label="Refusals · 24h"
+      value={String(total)}
+      sub={`${review} need review`}
+      loading={loading}
+      accent={accent}
+      onClick={() => navigateAtrium({ tab: 'system', subTab: 'Refusal Log', filter: { window: '24h' } })}
+    />
+  );
+}
+
+function useDecisions7d() {
+  const [row, setRow] = useState<{ total: number; latest_title: string | null; latest_at: string | null } | null>(null);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    let cancelled = false;
+    getSupabase()
+      .rpc('ns_now_decisions_7d')
+      .then(({ data }) => {
+        if (cancelled) return;
+        const rows = data as Array<{ total: number; latest_title: string | null; latest_at: string | null }> | null;
+        setRow(rows?.[0] ?? null);
+        setLoading(false);
+      })
+      .catch(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
+  return { row, loading };
+}
+
+function DecisionsCard() {
+  const { row, loading } = useDecisions7d();
+  const total = row?.total ?? 0;
+  const latest = row?.latest_title?.trim();
+  const sub = total === 0
+    ? 'No decisions logged in the last 7d'
+    : latest
+      ? `Most recent: ${latest}`
+      : `${total} decision${total === 1 ? '' : 's'} · no title`;
+  return (
+    <MetricCard
+      label="Decisions · 7d"
+      value={String(total)}
+      sub={sub}
+      loading={loading}
+      onClick={() => navigateAtrium({ tab: 'work', subTab: 'decisions' })}
+    />
+  );
+}
+
+function useLlmSpend() {
+  const [row, setRow] = useState<{ spent_usd: number; limit_usd: number; period_days: number | null } | null>(null);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    let cancelled = false;
+    getSupabase()
+      .rpc('ns_now_llm_spend_current_period')
+      .then(({ data }) => {
+        if (cancelled) return;
+        const rows = data as Array<{ spent_usd: number; limit_usd: number; period_days: number | null }> | null;
+        setRow(rows?.[0] ?? null);
+        setLoading(false);
+      })
+      .catch(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
+  return { row, loading };
+}
+
+function AgentLlmSpendCard() {
+  const { row, loading } = useLlmSpend();
+  if (loading) {
+    return <div className="bg-bg-card border border-border-default rounded-xl p-4 h-24 animate-pulse" />;
+  }
+  // No real source rows → hide entirely (no fakery).
+  if (!row || (Number(row.limit_usd) === 0 && Number(row.spent_usd) === 0)) return null;
+  const spent = Number(row.spent_usd);
+  const limit = Number(row.limit_usd);
+  const pct = limit > 0 ? Math.round((spent / limit) * 100) : null;
+  const periodDays = row.period_days ?? null;
+  const periodLabel = periodDays === 7 ? '/ week' : periodDays ? `/ ${periodDays}d` : '· current period';
+  const accent = pct !== null && pct >= 80 ? '#E14B4B' : pct !== null && pct >= 60 ? '#C28A1F' : '#2E8E66';
+  return (
+    <button
+      type="button"
+      onClick={() => navigateAtrium({ tab: 'system', subTab: 'Services' })}
+      className="w-full text-left bg-bg-card border border-border-default rounded-xl p-4 hover:border-border-hover transition-colors"
+    >
+      <div className="flex items-baseline justify-between mb-1">
+        <div className="mono text-[12px] font-semibold text-text-primary">Agent LLM spend</div>
+        <div className="mono text-[11px]" style={{ color: accent }}>
+          {pct === null ? '—' : `${pct}%`}
+        </div>
+      </div>
+      <div className="mono text-[10px] text-text-secondary">
+        ${spent.toFixed(2)} of ${limit.toFixed(2)} {periodLabel}
+      </div>
+      <div className="mono text-[9px] uppercase tracking-[0.14em] text-text-muted mt-1.5">
+        nervous_system.agents.budget
+      </div>
+    </button>
+  );
+}
+
+// ActivityFeed wrapper that only renders when there's at least one event whose
+// created_at is within the last 60 seconds. Hides the entire panel otherwise.
+// `now` ticks every 5s so we re-evaluate the 60s window without calling
+// Date.now() directly during render (react-hooks/purity).
+function RecentActivityFeed() {
+  const events = useActivityFeed();
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 5_000);
+    return () => clearInterval(id);
+  }, []);
+  const recent = events.filter(
+    (e) => now - new Date(e.created_at).getTime() <= 60_000,
+  );
+  if (recent.length === 0) return null;
+  return <ActivityFeedView events={recent} />;
 }
 
 // ─── Now (main export) ────────────────────────────────────────────────────────
@@ -2478,14 +2363,18 @@ export function Now({ name }: Props) {
         </div>
       )}
 
-      {/* Today — hero strip + TopOfMind + Calendar + Yesterday's Digest + right rail */}
+      {/* Today — editorial pass 2026-05-11: action-driving default.
+          CUT: HeroStrip ("company is calm"), YesterdayDigest (Digest sub-tab owns it),
+               IngestYield card (jargon), Listening-for-activity placeholder.
+          Calendar panel gated on per-user OAuth connection — see Bug Fix card
+          "Calendar connection — per-user OAuth + shared team availability". */}
       {nowTab === 'today' && (
       <div className="now-layout grid gap-5" style={{ gridTemplateColumns: 'minmax(0, 1fr) 320px', alignItems: 'start' }}>
         <style>{`
           @media (max-width: 1023px) { .now-layout { grid-template-columns: 1fr !important; } .now-rail { display: none !important; } }
         `}</style>
 
-        {/* LEFT column */}
+        {/* LEFT column — header + primary action list + (calendar gated) */}
         <div className="flex flex-col gap-6 min-w-0">
           {/* Greeting */}
           <div className="flex items-start justify-between gap-4">
@@ -2499,25 +2388,28 @@ export function Now({ name }: Props) {
             </div>
           </div>
 
-          {/* Hero sentiment strip */}
-          <HeroStrip />
-
-          {/* Top of Mind — Pass 2: wired to ns_top_of_mind_for_dri */}
-          <TopOfMind teamMemberId={teamMemberId} />
-
-          {/* Calendar + Digest */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <CalendarStub />
-            <YesterdayDigest />
+          {/* PRIMARY: What needs you today — irreversible + high priority items
+              where the signed-in user is DRI. Honest empty state. */}
+          <div>
+            <div className="mono text-[10px] uppercase tracking-[0.18em] text-text-secondary mb-3">
+              What needs you today
+            </div>
+            <TopOfMind teamMemberId={teamMemberId} />
           </div>
+
+          {/* SECONDARY: Today's calendar — gated on per-user calendar OAuth.
+              Until that ships, do not render anything (no fake "connect" CTA). */}
         </div>
 
-        {/* RIGHT rail — Pass 2 R1: cut Forecast/RecentRuns/VaultPulse (static fakes); */}
-        {/* keep ActivityFeed (real Supabase realtime). Add two real-data charts. */}
+        {/* RIGHT rail — three real metric cards, then chart, then LLM spend
+            (if real), then ActivityFeed only when an event hit in the last 60s. */}
         <div className="now-rail flex flex-col gap-4 sticky top-0">
+          <OpenItemsCard teamMemberId={teamMemberId} />
+          <RefusalsCard />
+          <DecisionsCard />
           <ActionItemsDailyChart />
-          <IngestYieldChart />
-          <ActivityFeed />
+          <AgentLlmSpendCard />
+          <RecentActivityFeed />
         </div>
       </div>
       )}

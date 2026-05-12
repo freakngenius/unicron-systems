@@ -9,7 +9,7 @@
 //
 // Sprint 7 Stream D: lazy-load all non-Now tabs to reduce initial bundle size.
 
-import { useState, lazy, Suspense } from 'react';
+import { useEffect, useState, lazy, Suspense } from 'react';
 // Tokens are now loaded globally from src/main.tsx so Metacron + Atrium share
 // the same :root custom properties. (Pass 1 rebrand — see SPEC.)
 import { useAuth } from '../lib/auth';
@@ -17,6 +17,7 @@ import { AtriumLogin } from './AtriumLogin';
 import { AtriumLayout, AtriumPlaceholder, type AtriumTab } from './AtriumLayout';
 import { AtriumNow } from './AtriumNow';
 import { Skeleton } from './ui-primitives';
+import { onAtriumNavigate } from './navigation';
 
 // Heavy tabs — lazy-loaded so they're split into separate chunks
 const Library   = lazy(() => import('./Library').then(m => ({ default: m.Library })));
@@ -62,6 +63,14 @@ export function AtriumApp() {
   const auth = useAuth();
   const [activeTab, setActiveTab] = useState<AtriumTab>('now');
   const [settingsOpen, setSettingsOpen] = useState(false);
+
+  // Cross-tab navigation: components dispatch atrium:navigate to jump tabs.
+  useEffect(() => {
+    return onAtriumNavigate((detail) => {
+      setSettingsOpen(false);
+      setActiveTab(detail.tab);
+    });
+  }, []);
 
   if (!ATRIUM_ENABLED) {
     return (
