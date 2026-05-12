@@ -349,21 +349,41 @@ export function CallsLog() {
     ? rawCalls
     : rawCalls.filter((row) => getParticipantList(row).includes(participantFilter));
 
+  // The UploadCallModal is rendered alongside every list state (loading /
+  // error / empty / populated) so that an in-flight upload survives the
+  // refetch triggered by onUploaded → reloadKey++. Previously the loading
+  // and error early-returns dropped the modal from the tree, causing it to
+  // unmount mid-submit and remount with fresh state — the user saw a blank
+  // form pop back into place instead of the success view.
+  const uploadModal = (
+    <UploadCallModal
+      open={uploadOpen}
+      onClose={() => setUploadOpen(false)}
+      onUploaded={() => setReloadKey((k) => k + 1)}
+    />
+  );
+
   if (loading) {
     return (
-      <div className="space-y-3">
-        {[0, 1, 2].map((i) => (
-          <div key={i} className="h-20 bg-bg-card rounded-xl animate-pulse" />
-        ))}
-      </div>
+      <>
+        <div className="space-y-3">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="h-20 bg-bg-card rounded-xl animate-pulse" />
+          ))}
+        </div>
+        {uploadModal}
+      </>
     );
   }
 
   if (error) {
     return (
-      <div className="bg-[#E14B4B]/10 border border-[#E14B4B]/30 rounded-xl px-5 py-4">
-        <div className="mono text-[12px] text-[#E14B4B]">{error}</div>
-      </div>
+      <>
+        <div className="bg-[#E14B4B]/10 border border-[#E14B4B]/30 rounded-xl px-5 py-4">
+          <div className="mono text-[12px] text-[#E14B4B]">{error}</div>
+        </div>
+        {uploadModal}
+      </>
     );
   }
 
@@ -488,11 +508,7 @@ export function CallsLog() {
         </div>
       )}
 
-      <UploadCallModal
-        open={uploadOpen}
-        onClose={() => setUploadOpen(false)}
-        onUploaded={() => setReloadKey((k) => k + 1)}
-      />
+      {uploadModal}
     </div>
   );
 }
