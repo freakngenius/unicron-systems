@@ -3,6 +3,7 @@
 
 import { useState, useEffect } from 'react';
 import { getSupabase } from '../../lib/supabase';
+import { UploadCallModal } from './UploadCallModal';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -71,7 +72,7 @@ function getQuotes(insights: Record<string, unknown> | null): string[] {
 
 // ─── Hooks ────────────────────────────────────────────────────────────────────
 
-function useCallsLog(searchQuery: string) {
+function useCallsLog(searchQuery: string, reloadKey: number) {
   const [calls, setCalls] = useState<LedgerRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -102,7 +103,7 @@ function useCallsLog(searchQuery: string) {
 
     void load();
     return () => { cancelled = true; };
-  }, [searchQuery]);
+  }, [searchQuery, reloadKey]);
 
   return { calls, loading, error };
 }
@@ -276,7 +277,9 @@ export function CallsLog() {
   const [searchInput, setSearchInput] = useState('');
   const search = useDebounce(searchInput, 300);
   const [detail, setDetail] = useState<LedgerRow | null>(null);
-  const { calls, loading, error } = useCallsLog(search);
+  const [uploadOpen, setUploadOpen] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
+  const { calls, loading, error } = useCallsLog(search, reloadKey);
 
   if (loading) {
     return (
@@ -312,6 +315,13 @@ export function CallsLog() {
             className="w-full bg-bg-card border border-border-default rounded-lg pl-8 pr-3 py-2 mono text-[12px] text-text-primary placeholder:text-text-muted focus:outline-none focus:border-border-hover"
           />
         </div>
+        <button
+          type="button"
+          onClick={() => setUploadOpen(true)}
+          className="mono text-[10.5px] uppercase tracking-[0.14em] font-semibold px-3 py-2 rounded-lg bg-[#0B1530] text-white hover:bg-[#0B1530]/90 transition-colors"
+        >
+          + Upload call
+        </button>
         {calls.length > 0 && (
           <span className="mono text-[10px] text-text-muted">{calls.length} call{calls.length !== 1 ? 's' : ''}</span>
         )}
@@ -324,7 +334,7 @@ export function CallsLog() {
           </div>
           {!search && (
             <div className="mono text-[11px] text-text-muted">
-              Call transcripts are ingested via the Quick Capture or voice pipeline.
+              Use <span className="font-semibold text-text-secondary">+ Upload call</span> to paste a transcript, or wait for an auto-ingestion connector (Plaud / Fathom / Zoom).
             </div>
           )}
         </div>
@@ -376,6 +386,12 @@ export function CallsLog() {
           )}
         </div>
       )}
+
+      <UploadCallModal
+        open={uploadOpen}
+        onClose={() => setUploadOpen(false)}
+        onUploaded={() => setReloadKey((k) => k + 1)}
+      />
     </div>
   );
 }
