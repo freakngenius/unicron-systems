@@ -6,5 +6,8 @@
   "outputDirectory": "dist",
   "rewrites": [
     { "source": "/((?!api/).*)", "destination": "/index.html" }
+  ],
+  "crons": [
+    { "path": "/api/cron/voice/reconcile-costs", "schedule": "0 3 * * *" }
   ]
 }
