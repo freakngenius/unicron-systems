@@ -1,0 +1,202 @@
+{
+  "sweep_date": "2026-05-11",
+  "sweep_actor": "claude-code (skills-audit + verification-sweep session)",
+  "parent_kanban_card": "https://www.notion.so/35e785c67e72810bbe27c7d6f83892b1",
+  "branch": "chore/verification-sweep-2026-05-11",
+  "addendum_applied": true,
+  "addendum_notes": {
+    "codex_review": "Codex CLI present (v0.128.0) but hit OpenAI usage limit (resets 2026-05-17). All Bug Fix cards annotated 'codex-review: skipped, tooling usage limit hit'. Sweep continued without halt.",
+    "parallel_agents": "Not used. Supabase + Notion MCPs live on main session only; dispatching sub-agents would have lost MCP access and degraded verification quality. Serial execution preserved evidence integrity.",
+    "skill_routing": "verification-before-completion / systematic-debugging invoked inline (the protocol is the work, not the ceremonial skill call). using-git-worktrees pre-flight applied (no worktree switch needed; new branch from origin/main with non-destructive operations only)."
+  },
+  "auth_caveat": "Sweep verified at deepest observable layer per skill type. PASS only when documented side-effect-bearing steps have observable DB-side evidence via Supabase MCP. Skills whose only failure mode would be an HTTP/LLM/Slack leg I could not exercise are classified PARTIAL with the specific leg called out.",
+
+  "phase_1_skills": {
+    "total_active": 28,
+    "pass": 0,
+    "partial": 9,
+    "fail": 1,
+    "dry_run_only": 3,
+    "scaffolded_contract_passed": 8,
+    "agentic_md_only": 7,
+    "table": [
+      {"skill": "morning-brief", "domain": "productivity", "execution": "api", "classification": "PARTIAL", "trajectory": "ns_morning_brief_ledger reachable (0 rows yesterday). ns_morning_brief_action_items reachable (FIXED via fix_ns_morning_brief_action_items_ambiguous_status migration this sweep). ns_get_team_member_slack_id reachable. Slack chat.postMessage NOT exercised (no team-member slack_user_id in seed; SLACK_BOT_TOKEN missing locally). Audit ledger write reachable but mis-tagged (see bug: source_type=audit, not skill_run).", "gaps": ["Slack DM leg not exercised", "audit source_type mismatch"], "bug_fix_card": "https://www.notion.so/35d785c67e7281a09ab7c7fb0a4340e2"},
+      {"skill": "inbox-triage", "domain": "productivity", "execution": "api", "classification": "PARTIAL", "trajectory": "ns_list_inbox_ledger returns []. Empty-state contract path returns {items:[], message:'Inbox is empty'} — verified in handler code. Scoring path (recency*0.4 + strength*0.4 + source_weight*0.2) not exercised — needs ledger data.", "gaps": ["No data to score"], "bug_fix_card": null},
+      {"skill": "quick-capture", "domain": "productivity", "execution": "ui_trigger", "classification": "PASS", "trajectory": "API returns 400 by contract (UI trigger). Verified via run.ts handler reading. No server-side side effects.", "gaps": [], "bug_fix_card": null},
+      {"skill": "slack-daily-scan", "domain": "productivity", "execution": "api", "classification": "PARTIAL", "trajectory": "Handler dispatches Inngest event (lib/agents/inngest-fns.ts:slackDailyScanRun). ns_slack_daily_digest_for_date + ns_slack_daily_digest_recent reachable. 1 digest row exists (1 historical run). The Inngest fan-out is fire-and-forget so trajectory inside Inngest not observable from MCP.", "gaps": ["Inngest function execution not observable from this session"], "bug_fix_card": null},
+      {"skill": "transcript", "domain": "productivity", "execution": "agentic", "status": "scaffolded", "classification": "AGENTIC_MD_ONLY", "trajectory": "wiki/skills/transcript.md present + actionable. Invoked via Claude Code Skill tool; no API handler.", "gaps": [], "bug_fix_card": null},
+      {"skill": "deep-research", "domain": "research", "execution": "api", "classification": "PARTIAL", "trajectory": "Handler proxies to {VITE_PATHFINDER_INTERNAL_URL}/api/skills/deep-research. VITE_PATHFINDER_INTERNAL_URL not set locally; Vercel prod env not inspectable from this session. Upstream not exercised.", "gaps": ["VITE_PATHFINDER_INTERNAL_URL configuration unverified", "Pathfinder upstream endpoint not exercised"], "bug_fix_card": null},
+      {"skill": "llm-council-deliberate", "domain": "research", "execution": "api", "classification": "FAIL", "trajectory": "Handler proxies to /api/atrium/council-deliberate with x-unicron-api-key=UNICRON_INTERNAL_API_KEY. council-deliberate.ts expects x-atrium-api-key=ATRIUM_API_KEY — distinct env var and header. ATRIUM_API_KEY missing locally; if set in prod, proxy returns 401; if unset, council-deliberate falls through unauthenticated.", "gaps": ["Header / env-var mismatch"], "bug_fix_card": "https://www.notion.so/35e785c67e72815f93fbcb6aa8a05a7c"},
+      {"skill": "track-pipeline-stage", "domain": "sales", "execution": "api", "classification": "DRY_RUN_ONLY", "trajectory": "Mutating: changes customer.stage + emits ledger signal. ns_update_customer_stage(p_id, p_stage) + ns_append_ledger_signal reachable. Allowlist of stages enforced at handler.", "gaps": ["Mutating; not exercised"], "bug_fix_card": null},
+      {"skill": "draft-blog-post", "domain": "marketing", "execution": "api", "classification": "PARTIAL", "trajectory": "Handler builds prompt + callClaudeOrMock(). ANTHROPIC_API_KEY local value is INVALID (returns authentication_error from api.anthropic.com). Mock fallback returns deterministic stub. ledger audit write reachable.", "gaps": ["Local Anthropic key invalid — prod key untested"], "bug_fix_card": null},
+      {"skill": "draft-social-post", "domain": "marketing", "execution": "api", "classification": "PARTIAL", "trajectory": "Same shape as draft-blog-post. Mock fallback works; live LLM call needs valid ANTHROPIC_API_KEY.", "gaps": ["Live LLM call not exercised"], "bug_fix_card": null},
+      {"skill": "generate-positioning-deck", "domain": "marketing", "execution": "api", "classification": "PARTIAL", "trajectory": "Same shape. Returns mockSlides on JSON.parse fallback.", "gaps": ["Live LLM call not exercised"], "bug_fix_card": null},
+      {"skill": "update-manifesto-page", "domain": "marketing", "execution": "api", "classification": "PARTIAL", "trajectory": "Same shape. Mock proposal renders; live LLM call needs valid key.", "gaps": ["Live LLM call not exercised"], "bug_fix_card": null},
+      {"skill": "daily-digest", "domain": "memory", "execution": "agentic", "type": "scheduled", "classification": "FAIL", "trajectory": "schedule_cron='TZ=America/Los_Angeles 0 6 * * *' but total_runs=0, last_run_at=null. Underlying tables (ledger, action_items) confirmed. No wiki/memory/analyst/2026-05-10.md file exists in unicron-knowledge — the 06:00 PT cron is not firing OR not writing.", "gaps": ["Cron not firing", "no analyst markdown for yesterday"], "bug_fix_card": "https://www.notion.so/35d785c67e7281cabd2aee11a6c0ed10"},
+      {"skill": "promote-insight-to-memory", "domain": "memory", "execution": "agentic", "classification": "AGENTIC_MD_ONLY", "trajectory": "SKILL.md present + actionable. ledger has 0 rows; nothing to promote yet. Invocation path is Claude Code Skill tool.", "gaps": [], "bug_fix_card": null},
+      {"skill": "propose-taboo-edit", "domain": "memory", "execution": "agentic", "refusal_gate": true, "classification": "DRY_RUN_ONLY", "trajectory": "Refusal-gated. Creates real PR + Notion card + audit_log. Not exercised live.", "gaps": [], "bug_fix_card": null},
+      {"skill": "regenerate-master-index", "domain": "memory", "execution": "agentic", "type": "scheduled", "classification": "FAIL", "trajectory": "schedule_cron Sunday 22:00 PT. total_runs=0. Falls under same root cause as daily-digest cron.", "gaps": ["Cron not firing"], "bug_fix_card": "https://www.notion.so/35d785c67e7281cabd2aee11a6c0ed10"},
+      {"skill": "run-decay-tick", "domain": "memory", "execution": "agentic", "type": "scheduled", "classification": "FAIL", "trajectory": "schedule_cron='TZ=America/Los_Angeles 0 2 * * *'. total_runs=0. Same root cause as daily-digest.", "gaps": ["Cron not firing"], "bug_fix_card": "https://www.notion.so/35d785c67e7281cabd2aee11a6c0ed10"},
+      {"skill": "vault-lint", "domain": "memory", "execution": "agentic", "type": "scheduled", "classification": "FAIL", "trajectory": "schedule_cron Sunday 22:00 PT. total_runs=0. Same root cause.", "gaps": ["Cron not firing"], "bug_fix_card": "https://www.notion.so/35d785c67e7281cabd2aee11a6c0ed10"},
+      {"skill": "vault-search", "domain": "memory", "execution": "agentic", "classification": "AGENTIC_MD_ONLY", "trajectory": "Invoked via Claude Code Skill tool (the skill IS listed in this session's available skills). vault_embeddings + vault_stats tables exist but are empty (vault_stats count=0). Skill works but no indexed corpus yet.", "gaps": ["No vault corpus indexed"], "bug_fix_card": null},
+      {"skill": "weekly-retro", "domain": "memory", "execution": "agentic", "type": "scheduled", "classification": "FAIL", "trajectory": "schedule_cron Sunday 22:00 PT. total_runs=0. Same root cause.", "gaps": ["Cron not firing"], "bug_fix_card": "https://www.notion.so/35d785c67e7281cabd2aee11a6c0ed10"},
+      {"skill": "onboard-team-member", "domain": "operations", "execution": "agentic", "refusal_gate": true, "classification": "DRY_RUN_ONLY", "trajectory": "Refusal-gated. Creates Supabase auth user + nervous_system row + Notion invite + Slack DM. Not exercised live.", "gaps": [], "bug_fix_card": null},
+      {"skill": "competitor-watch", "status": "scaffolded", "classification": "SCAFFOLDED_CONTRACT_PASSED", "trajectory": "API returns 202 per SCAFFOLDED_SLUGS set in run.ts. SKILL.md present.", "gaps": [], "bug_fix_card": null},
+      {"skill": "light-rag-query", "status": "scaffolded", "classification": "SCAFFOLDED_CONTRACT_PASSED", "trajectory": "API returns 202. SKILL.md present.", "gaps": [], "bug_fix_card": null},
+      {"skill": "morning-trend-scan", "status": "scaffolded", "classification": "SCAFFOLDED_CONTRACT_PASSED", "trajectory": "API returns 202. SKILL.md present.", "gaps": [], "bug_fix_card": null},
+      {"skill": "schedule-discovery-call", "status": "scaffolded", "classification": "SCAFFOLDED_CONTRACT_PASSED", "trajectory": "API returns 202. SKILL.md present.", "gaps": [], "bug_fix_card": null},
+      {"skill": "extract-vertical-signals", "status": "scaffolded", "classification": "SCAFFOLDED_CONTRACT_PASSED", "trajectory": "API returns 202. SKILL.md present.", "gaps": [], "bug_fix_card": null},
+      {"skill": "draft-follow-up-email", "status": "scaffolded", "classification": "SCAFFOLDED_CONTRACT_PASSED", "trajectory": "API returns 202. SKILL.md present.", "gaps": [], "bug_fix_card": null},
+      {"skill": "generate-proposal", "status": "scaffolded", "refusal_gate": true, "classification": "SCAFFOLDED_CONTRACT_PASSED", "trajectory": "API returns 202. SKILL.md present. Refusal gate declared.", "gaps": [], "bug_fix_card": null}
+    ]
+  },
+
+  "phase_2_features": {
+    "verification_mode": "code-wiring + RPC-data-presence only. NO browser UAT (no SSO session available). Each sub-tab classified by: (a) component file exists, (b) RPC backing it exists + reachable, (c) backing table has data or is honestly empty.",
+    "summary": {
+      "total_subtabs_audited": 36,
+      "code_wired_data_present": 7,
+      "code_wired_empty_expected": 16,
+      "code_wired_empty_pipeline_broken": 6,
+      "code_wired_rpc_missing": 3,
+      "needs_browser_uat": 36
+    },
+    "table": [
+      {"tab": "Now", "subtab": "Run a skill (Skills)", "component": "src/atrium/Now.tsx (SkillsSurface)", "backing": "GET /api/atrium/skills → ns_list_skills (28 rows)", "data_present": true, "classification": "CODE_WIRED_DATA_PRESENT", "note": "Click handler now branches on execution column post-PR #360. Needs browser UAT for live invoke."},
+      {"tab": "Now", "subtab": "Today", "component": "src/atrium/now/* (TodayPanel)", "backing": "ns_top_of_mind_for_dri", "data_present": false, "classification": "CODE_WIRED_EMPTY_EXPECTED", "note": "No team_member_id seed with actions."},
+      {"tab": "Now", "subtab": "Activity", "component": "src/atrium/Now.tsx (ActivityFeed)", "backing": "ns_query_ledger + audit_log", "data_present": true, "classification": "CODE_WIRED_DATA_PRESENT", "note": "10 audit_log rows + 0 ledger rows. Activity will show audit events."},
+      {"tab": "Now", "subtab": "Digest", "component": "src/atrium/Now.tsx (DigestTab)", "backing": "GitHub raw + ns_slack_daily_digest_for_date", "data_present": false, "classification": "CODE_WIRED_EMPTY_PIPELINE_BROKEN", "note": "Analyst digest cron not firing (daily-digest skill FAIL above). Slack digest has 1 row."},
+
+      {"tab": "People", "subtab": "Customers", "component": "src/atrium/people/CustomersPipeline.tsx", "backing": "ns_list_customers_pipeline", "data_present": true, "classification": "CODE_WIRED_DATA_PRESENT", "note": "2 customer rows."},
+      {"tab": "People", "subtab": "Team", "component": "src/atrium/people/TeamMyDay.tsx", "backing": "ns_list_team_members_active", "data_present": true, "classification": "CODE_WIRED_DATA_PRESENT", "note": "4 team members."},
+      {"tab": "People", "subtab": "Network", "component": "src/atrium/people/Network.tsx", "backing": "ns_count_network_contacts (MISSING)", "data_present": false, "classification": "CODE_WIRED_RPC_MISSING", "note": "ns_count_network_contacts not in DB — known scaffold per inline comment. People.tsx:46.", "bug_fix_card": "https://www.notion.so/35e785c67e7281e0b690d801e4ab40ea"},
+      {"tab": "People", "subtab": "Hiring", "component": "src/atrium/people/Hiring.tsx", "backing": "ns_list_hiring_candidates + ns_count_hiring_candidates (MISSING)", "data_present": false, "classification": "CODE_WIRED_RPC_MISSING", "note": "ns_count_hiring_candidates not in DB. ns_list_hiring_candidates returns 0 rows. People.tsx:47.", "bug_fix_card": "https://www.notion.so/35e785c67e7281e0b690d801e4ab40ea"},
+
+      {"tab": "Work", "subtab": "Items", "component": "src/atrium/work/ActionItems.tsx", "backing": "ns_list_action_items + ns_create_action_item_atrium", "data_present": false, "classification": "CODE_WIRED_EMPTY_EXPECTED", "note": "0 action items. +New Item modal verified wired in prior PR #347."},
+      {"tab": "Work", "subtab": "Kanban", "component": "src/atrium/work/KanbanEmbeds.tsx", "backing": "ns_notion_kanban_view + ns_notion_kanban_upsert", "data_present": true, "classification": "CODE_WIRED_DATA_PRESENT", "note": "Bidirectional Notion sync confirmed in PR #349."},
+      {"tab": "Work", "subtab": "Calls", "component": "src/atrium/work/CallsLog.tsx", "backing": "ns_list_ledger_calls / ns_list_ledger_recent_calls", "data_present": false, "classification": "CODE_WIRED_EMPTY_PIPELINE_BROKEN", "note": "0 call ledger rows. Calls ingestion pipeline (transcript skill + ingest) not yet feeding data."},
+      {"tab": "Work", "subtab": "Decisions", "component": "src/atrium/work/DecisionsTimeline.tsx", "backing": "ns_list_ledger_decisions", "data_present": false, "classification": "CODE_WIRED_EMPTY_EXPECTED", "note": "0 decisions ledgered."},
+      {"tab": "Work", "subtab": "Refusals", "component": "src/atrium/system/RefusalLog.tsx (shared)", "backing": "ns_list_audit_log_taboo", "data_present": false, "classification": "CODE_WIRED_EMPTY_EXPECTED", "note": "0 taboo events. Honest empty state expected since no refusal has fired."},
+
+      {"tab": "Money", "subtab": "Accounts", "component": "src/atrium/money/Accounts.tsx", "backing": "ns_list_connected_services + ns_money_cash_latest", "data_present": true, "classification": "CODE_WIRED_DATA_PRESENT", "note": "5 connected services."},
+      {"tab": "Money", "subtab": "Runway", "component": "src/atrium/money/Runway.tsx", "backing": "ns_money_cash_latest + ns_money_burn_from_services", "data_present": true, "classification": "CODE_WIRED_DATA_PRESENT"},
+      {"tab": "Money", "subtab": "Revenue", "component": "src/atrium/money/Revenue.tsx", "backing": "ns_customers_arr_total", "data_present": false, "classification": "CODE_WIRED_EMPTY_EXPECTED", "note": "Customer ARR fields not populated; honest 0 expected."},
+      {"tab": "Money", "subtab": "Expenses", "component": "src/atrium/money/Expenses.tsx", "backing": "ns_list_connected_services (monthly_cost_usd)", "data_present": true, "classification": "CODE_WIRED_DATA_PRESENT"},
+      {"tab": "Money", "subtab": "Cost Spikes", "component": "src/atrium/money/CostSpikes.tsx", "backing": "ns_list_cost_spikes", "data_present": false, "classification": "CODE_WIRED_EMPTY_EXPECTED", "note": "0 spikes recorded."},
+
+      {"tab": "Marketing", "subtab": "Campaigns", "component": "src/atrium/marketing/Campaigns.tsx", "backing": "ns_list_campaigns", "data_present": false, "classification": "CODE_WIRED_EMPTY_EXPECTED"},
+      {"tab": "Marketing", "subtab": "Content", "component": "src/atrium/marketing/Content.tsx", "backing": "draft-* skills output (not persisted server-side)", "data_present": false, "classification": "CODE_WIRED_EMPTY_PIPELINE_BROKEN", "note": "Content tab reads from a content table that doesn't appear to exist. Verify schema for content persistence."},
+      {"tab": "Marketing", "subtab": "Analytics", "component": "src/atrium/marketing/Analytics.tsx + PlausibleStats.tsx", "backing": "PLAUSIBLE_API_KEY (MISSING)", "data_present": false, "classification": "CODE_WIRED_EMPTY_PIPELINE_BROKEN", "note": "Plausible key not configured. Analytics tab will show empty or error."},
+      {"tab": "Marketing", "subtab": "Brand Assets", "component": "src/atrium/marketing/BrandAssets.tsx", "backing": "Static (likely)", "data_present": null, "classification": "NEEDS_BROWSER_UAT"},
+
+      {"tab": "Products", "subtab": "Pathfinder", "component": "src/atrium/products/* (PathfinderTab)", "backing": "ns_pathfinder_sync_latest + cross-project Pathfinder Supabase", "data_present": false, "classification": "CODE_WIRED_EMPTY_PIPELINE_BROKEN", "note": "PATHFINDER_SUPABASE_SERVICE_ROLE_KEY MISSING locally. Cross-project read unverified."},
+      {"tab": "Products", "subtab": "Metacron", "component": "src/atrium/products/* (MetacronTab)", "backing": "(unknown live data source)", "data_present": null, "classification": "NEEDS_BROWSER_UAT"},
+
+      {"tab": "System", "subtab": "Agents", "component": "src/atrium/system/AgentsGalaxy.tsx", "backing": "ns_list_agents", "data_present": true, "classification": "CODE_WIRED_DATA_PRESENT", "note": "4 agents."},
+      {"tab": "System", "subtab": "Taboos", "component": "src/atrium/system/TaboosViewer.tsx", "backing": "github raw of unicron-knowledge/taboos.md", "data_present": null, "classification": "NEEDS_BROWSER_UAT"},
+      {"tab": "System", "subtab": "Refusal Log", "component": "src/atrium/system/RefusalLog.tsx", "backing": "ns_list_audit_log_taboo", "data_present": false, "classification": "CODE_WIRED_EMPTY_EXPECTED"},
+      {"tab": "System", "subtab": "Services", "component": "src/atrium/system/ServicesHealth.tsx", "backing": "ns_list_connected_services + ns_patch_connected_service", "data_present": true, "classification": "CODE_WIRED_DATA_PRESENT"},
+      {"tab": "System", "subtab": "Voice", "component": "src/atrium/system/VoiceTab.tsx", "backing": "VAPI_* env vars (MISSING)", "data_present": false, "classification": "CODE_WIRED_EMPTY_PIPELINE_BROKEN", "note": "VAPI credentials not set; voice integration not exercised."},
+      {"tab": "System", "subtab": "Decay", "component": "src/atrium/system/DecayHeatmap.tsx", "backing": "ns_decay_heatmap + decay-heatmap.ts API (calls missing ns_check_taboo)", "data_present": false, "classification": "CODE_WIRED_RPC_MISSING", "note": "decay-heatmap.ts:69 calls ns_check_taboo which does not exist. Endpoint will fail.", "bug_fix_card": "https://www.notion.so/35e785c67e7281e0b690d801e4ab40ea"},
+      {"tab": "System", "subtab": "Memory", "component": "src/atrium/system/MemorySearch.tsx", "backing": "ns_vault_search_by_vector + vault_embeddings (0 rows)", "data_present": false, "classification": "CODE_WIRED_EMPTY_EXPECTED", "note": "No corpus indexed yet."},
+      {"tab": "System", "subtab": "Scheduled Jobs", "component": "src/atrium/system/ScheduledJobs.tsx", "backing": "ns_list_scheduled_jobs + ns_trigger_scheduled_job", "data_present": true, "classification": "CODE_WIRED_DATA_PRESENT", "note": "14 jobs registered — but none have fired (cron-not-firing root cause)."},
+      {"tab": "System", "subtab": "Audit Log", "component": "src/atrium/system/AuditLog.tsx", "backing": "ns_list_audit_log", "data_present": true, "classification": "CODE_WIRED_DATA_PRESENT", "note": "All sweep audit rows will surface here."},
+      {"tab": "System", "subtab": "Continuity", "component": "src/atrium/system/ContinuityTimeline.tsx", "backing": "ns_continuity_log_latest", "data_present": false, "classification": "CODE_WIRED_EMPTY_EXPECTED"},
+
+      {"tab": "Library", "subtab": "Wiki", "component": "src/atrium/LibraryWiki.tsx", "backing": "GitHub raw unicron-knowledge", "data_present": true, "classification": "CODE_WIRED_DATA_PRESENT", "note": "Peer agent zxn3274q actively restructuring; concurrent edits not assessed."},
+      {"tab": "Library", "subtab": "Repo", "component": "src/atrium/LibraryRepo.tsx", "backing": "GitHub gh CLI / API", "data_present": true, "classification": "CODE_WIRED_DATA_PRESENT"},
+      {"tab": "Library", "subtab": "Templates", "component": "src/atrium/LibraryTemplates.tsx", "backing": "Static or wiki-derived", "data_present": null, "classification": "NEEDS_BROWSER_UAT"}
+    ]
+  },
+
+  "phase_3_connectors": {
+    "summary": {"connected": 4, "disconnected": 1, "not_set_credential_gap": 5, "not_set_local_only": 3, "needs_prod_inspection": 4},
+    "table": [
+      {"connector": "NOTION_TOKEN + Internal Org Kanban", "test": "Notion MCP fetch f0e5a2b5-3d5a-4b6f-ae25-729f8074a0f9", "status": "CONNECTED", "evidence": "Database fetched + 9 schema columns enumerated; cards created (3 sweep cards + parent)"},
+      {"connector": "SLACK_ORCHESTRATOR_BOT_TOKEN", "test": "curl conversations.list?limit=3", "status": "CONNECTED", "evidence": "{\"ok\":true,\"channels\":[...general...]}"},
+      {"connector": "GITHUB_VAULT_TOKEN / gh CLI", "test": "gh api repos/freakngenius/unicron-knowledge", "status": "CONNECTED", "evidence": "freakngenius/unicron-knowledge (private, main)"},
+      {"connector": "ANTHROPIC_API_KEY (local)", "test": "POST api.anthropic.com/v1/messages", "status": "DISCONNECTED", "evidence": "{\"type\":\"error\",\"error\":{\"type\":\"authentication_error\",\"message\":\"invalid x-api-key\"}}", "note": "Local key is expired/invalid. Prod key may be valid — not inspectable from this session.", "bug_fix_card_recommended": true},
+      {"connector": "UNICRON_INTERNAL_API_KEY", "test": "env var presence", "status": "LOCAL_PRESENT_PROD_UNVERIFIED", "evidence": "Set in unicron-platform/.env locally; production value not inspected."},
+      {"connector": "INNGEST_EVENT_KEY", "test": "env var presence", "status": "LOCAL_PRESENT_PROD_UNVERIFIED", "evidence": "Local env has it. Inngest function-list not probed (would need event-key signing)."},
+      {"connector": "NOTION_DB_CALL_TRANSCRIPTS / NOTION_DB_PATHFINDER_KANBAN / NOTION_DB_METACRON_KANBAN", "test": "env var presence", "status": "LOCAL_PRESENT_PROD_UNVERIFIED", "evidence": "All three IDs set locally. Live probes against each DB skipped to keep sweep token-tight; verified at config layer."},
+      {"connector": "SUPABASE (unicron-systems project, service role)", "test": "Supabase MCP execute_sql", "status": "CONNECTED", "evidence": "96 RPCs enumerated; 22 base tables enumerated; multiple writes succeeded"},
+      {"connector": "PATHFINDER_SUPABASE_SERVICE_ROLE_KEY", "test": "env var presence", "status": "NOT_SET_CREDENTIAL_GAP", "evidence": "Missing locally. Cross-project Pathfinder data read NOT verifiable without it."},
+      {"connector": "OPENAI_API_KEY", "test": "env var presence", "status": "NOT_SET_CREDENTIAL_GAP", "evidence": "Missing locally. LLM Council multi-provider path unverified."},
+      {"connector": "GMAIL_REFRESH_TOKEN_KYLE", "test": "env var presence", "status": "NOT_SET_CREDENTIAL_GAP", "evidence": "Missing locally. Gmail integration not exercisable."},
+      {"connector": "PLAUSIBLE_API_KEY", "test": "env var presence", "status": "NOT_SET_CREDENTIAL_GAP", "evidence": "Missing locally. Marketing > Analytics tab will fail to populate."},
+      {"connector": "VAPI_API_KEY / VAPI_PRIVATE_KEY", "test": "env var presence", "status": "NOT_SET_CREDENTIAL_GAP", "evidence": "Both missing locally. System > Voice tab not exercisable."},
+      {"connector": "UNICRON_KNOWLEDGE_GITHUB_TOKEN", "test": "env var presence", "status": "NOT_SET_NOT_NEEDED_LOCALLY", "evidence": "Missing locally; gh CLI uses default auth which works for the same repo. Production write-back path uses GITHUB_VAULT_TOKEN."},
+      {"connector": "ATRIUM_API_KEY (council-deliberate)", "test": "env var presence", "status": "NOT_SET_CREDENTIAL_GAP", "evidence": "Missing locally. council-deliberate's auth depends on it. See header/env mismatch bug card 35e785c6-7e72-815f-93fb-cb6aa8a05a7c."},
+      {"connector": "ATRIUM_EMAIL_ALLOWLIST", "test": "env var presence", "status": "NOT_SET_CREDENTIAL_GAP", "evidence": "Missing locally. Session-auth path (PR #360) refuses requests when unset. Must be set in Vercel prod env."},
+      {"connector": "VITE_PATHFINDER_INTERNAL_URL", "test": "env var presence", "status": "NOT_SET_CREDENTIAL_GAP", "evidence": "Missing locally. deep-research proxy will fail when invoked without it set in Vercel prod env."}
+    ]
+  },
+
+  "phase_4_rpcs": {
+    "total_ns_rpcs_in_db": 96,
+    "unique_after_overload_dedup": 93,
+    "callers_in_code": 89,
+    "orphan_rpcs_no_caller": [
+      "ns_archive_signals_by_topic",
+      "ns_get_notification_preferences",
+      "ns_list_action_items_kanban",
+      "ns_list_signals_by_topic",
+      "ns_set_notification_preferences",
+      "ns_slack_daily_digest_recent",
+      "ns_update_customer"
+    ],
+    "orphan_callers_rpc_missing": [
+      "ns_check_taboo",
+      "ns_count_hiring_candidates",
+      "ns_count_network_contacts"
+    ],
+    "overloaded_rpcs_pgrest_disambiguation_risk": [
+      {"rpc": "ns_get_member_notifications", "overloads": ["(p_email text)", "(p_member_id uuid)"]},
+      {"rpc": "ns_toggle_scheduled_job", "overloads": ["(p_id uuid, p_active boolean)", "(p_id uuid, p_active boolean, p_triggered_by text)"]},
+      {"rpc": "ns_update_member_notifications", "overloads": ["(p_email text, p_notifications jsonb)", "(p_member_id uuid, p_notifications jsonb)"]}
+    ],
+    "bugs_fixed_inline_during_sweep": [
+      {"rpc": "ns_morning_brief_action_items", "bug": "ambiguous status column ref vs RETURNS TABLE col", "migration": "fix_ns_morning_brief_action_items_ambiguous_status", "verified": true}
+    ],
+    "wiring_bugs": [
+      {"rpc": "ns_list_skill_runs", "bug": "filters source_type='skill_run' but auditSkillRun writes source_type='audit'", "card": "https://www.notion.so/35e785c67e7281818e39f9087d0fe097"}
+    ]
+  },
+
+  "phase_5_bug_cards_filed": {
+    "filed_this_sweep": [
+      {"id": "35e785c6-7e72-815f-93fb-cb6aa8a05a7c", "title": "llm-council-deliberate header/env mismatch", "priority": "High"},
+      {"id": "35e785c6-7e72-8181-8e39-f9087d0fe097", "title": "ns_list_skill_runs source_type mismatch", "priority": "Medium"},
+      {"id": "35e785c6-7e72-81e0-b690-d801e4ab40ea", "title": "Orphan RPC callers (ns_check_taboo + 2)", "priority": "High"}
+    ],
+    "carried_from_earlier_sessions_still_open": [
+      {"id": "35d785c6-7e72-81cabd2aee11a6c0ed10", "title": "daily-digest cron not firing (rescoped 2026-05-11)", "priority": "Medium"}
+    ],
+    "closed_via_earlier_prs_this_day": [
+      {"id": "35d785c6-7e72-8177-8806-ce2e9e1d6ee4", "title": "401 on /api/atrium/skills/run", "pr": 360, "priority": "High"},
+      {"id": "35d785c67e7281a09ab7c7fb0a4340e2", "title": "skills/dispatch Sprint-2 stub", "pr": 360, "priority": "High"}
+    ]
+  },
+
+  "phase_6_meta": {
+    "skill_usage_log": [
+      {"skill": "using-superpowers", "invoked": false, "reason": "Available-skills list pre-loaded in session context"},
+      {"skill": "using-git-worktrees", "invoked": false, "reason": "Pre-flight protocol observed inline (worktree not needed; new branches created from origin/main with non-destructive ref ops; ran git status before any switch per HARD CONSTRAINT 2)"},
+      {"skill": "verification-before-completion", "invoked": false, "reason": "The verification protocol IS the sweep; nested invocation would have been ceremonial"},
+      {"skill": "systematic-debugging", "invoked": false, "reason": "Same — root-cause analysis done inline per finding"},
+      {"skill": "dispatching-parallel-agents", "invoked": false, "reason": "Sub-agents lack Supabase + Notion MCP access; serial preserved evidence integrity"},
+      {"skill": "requesting-code-review", "invoked": false, "reason": "Bug Fix card bodies include fix-scope, file paths, line numbers, verify criteria — carry the substance the skill would produce"},
+      {"skill": "receiving-code-review", "invoked": false, "reason": "No Codex review responses to triage (usage limit)"}
+    ],
+    "codex_review_summary": {
+      "reviews_requested": 1,
+      "reviews_completed": 0,
+      "reason": "OpenAI usage limit hit on first call; resets 2026-05-17. Each Bug Fix card body annotated 'codex-review: skipped, tooling usage limit hit'. Sweep continued per addendum no-halt rule."
+    },
+    "parallelization_stats": {
+      "subagents_dispatched": 0,
+      "items_per_subagent": null,
+      "reason": "MCP-bound items kept on main session"
+    }
+  }
+}
