@@ -1,0 +1,80 @@
+/* =========================================================
+   ATRIUM v3 — voice surfaces only.
+   Scoped under .atrium-v3 so the rest of Atrium (which already
+   ships its own design tokens in atrium-tokens.css) stays
+   untouched. The voice views wrap their root render in
+   <div className="atrium-v3"> to opt into this scope.
+
+   Sourced verbatim from the voice prototype's src/app/globals.css
+   .atrium-v3 block. Variable names (--v3-*) are unchanged so the
+   lifted V3PanelCard / V3Btn / V3StatusPill / V3VoiceTabs primitives
+   resolve.
+
+   Font hooks: prototype loaded Geist via next/font/google. Atrium
+   uses Inter as its base sans (see src/index.css). The
+   --font-geist-* CSS vars fall back through the system stack, so
+   the voice surface inherits Atrium's font without breaking the
+   prototype's typography intent.
+   ========================================================= */
+.atrium-v3 {
+  /* Surfaces */
+  --v3-bg:        #F6F7F9;
+  --v3-bg-soft:   #ECEEF2;
+  --v3-surface:   #FFFFFF;
+  --v3-rail:      #1D2D4F;
+  --v3-rail-2:    #243861;
+  --v3-topbar:    #1D2D4F;
+  --v3-topbar-text: #C2CADB;
+  --v3-topbar-text-lo: #6E7A95;
+
+  /* Text on light */
+  --v3-ink:       #0B1530;
+  --v3-ink-md:    #46506A;
+  --v3-ink-lo:    #7E8AA3;
+  --v3-ink-faint: #BAC2D2;
+
+  /* Borders */
+  --v3-line:        #E5E8EE;
+  --v3-line-soft:   #EEF0F4;
+  --v3-line-strong: #D8DCE5;
+
+  /* Accents */
+  --v3-blue:        #6081BE;
+  --v3-blue-soft:   #E8EEF8;
+  --v3-purple:      #7355E5;
+  --v3-orange:      #E8763A;
+  --v3-orange-soft: #FFEFE3;
+  --v3-red:         #E14B4B;
+  --v3-red-soft:    #FCE8E8;
+  --v3-amber:       #C28A1F;
+  --v3-amber-soft:  #FFEFD0;
+  --v3-green:       #2E8E66;
+  --v3-green-soft:  #E1F2EA;
+
+  font-family: var(--font-geist-sans), "Geist", "Inter Tight", -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  background: var(--v3-bg);
+  color: var(--v3-ink);
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings: "ss01", "cv11";
+}
+.atrium-v3 *::-webkit-scrollbar { width: 8px; height: 8px; }
+.atrium-v3 *::-webkit-scrollbar-thumb { background: rgba(11,21,48,0.10); border-radius: 999px; }
+.atrium-v3 .v3-display { font-family: var(--font-geist-sans), "Geist", "Inter Tight", -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif; letter-spacing: -0.02em; }
+.atrium-v3 .v3-mono { font-family: var(--font-geist-mono), "Geist Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+.atrium-v3 button { background: none; border: none; padding: 0; color: inherit; cursor: pointer; font-family: inherit; }
+.atrium-v3 input, .atrium-v3 select, .atrium-v3 textarea { font-family: inherit; }
+
+@keyframes v3pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+@keyframes v3slide {
+  from { transform: translateX(40px); opacity: 0; }
+  to   { transform: translateX(0); opacity: 1; }
+}
+
+/* Pulse strip collapses to dots at narrower widths */
+@media (max-width: 1180px) {
+  .atrium-v3 .v3-pulse-text { display: none !important; }
+  .atrium-v3 .v3-pulse-pill { padding: 7px !important; }
+}

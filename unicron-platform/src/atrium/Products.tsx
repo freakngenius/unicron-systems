@@ -16,14 +16,19 @@ import { useState, useEffect } from 'react';
 import { getSupabase } from '../lib/supabase';
 import { PathfinderProduct } from './products/PathfinderProduct';
 import { MetacronProduct } from './products/MetacronProduct';
+import { VoiceTab } from './products/voice/VoiceTab';
 import { AtriumIcon, type AtriumIconName } from './icons';
 
-type ProductsTab = 'pathfinder' | 'metacron';
+type ProductsTab = 'pathfinder' | 'metacron' | 'voice';
 
 // v3-products.jsx:294-295 — Pathfinder→Compass, Metacron→Layers.
+// Voice Agents added as Sprint 5 Stream A foundation merge (spec §2).
+// Sub-tab is gated by Atrium's existing VITE_ATRIUM_EMAIL_ALLOWLIST sign-in.
+// Server-side requireVoiceAccess (api/_lib/voiceAuth.ts) is the real gate.
 const PRODUCTS_TABS: { id: ProductsTab; label: string; icon: AtriumIconName }[] = [
-  { id: 'pathfinder', label: 'Pathfinder', icon: 'Compass' },
-  { id: 'metacron',   label: 'Metacron',   icon: 'Layers'  },
+  { id: 'pathfinder', label: 'Pathfinder',   icon: 'Compass' },
+  { id: 'metacron',   label: 'Metacron',     icon: 'Layers'  },
+  { id: 'voice',      label: 'Voice Agents', icon: 'Phone'   },
 ];
 
 function useVerifierAccuracy(): { total: number | null; accuracyPct: number | null } {
@@ -106,6 +111,7 @@ export function Products() {
         <section role="tabpanel" aria-label={PRODUCTS_TABS.find((t) => t.id === active)?.label}>
           {active === 'pathfinder' && <PathfinderProduct />}
           {active === 'metacron' && <MetacronProduct />}
+          {active === 'voice' && <VoiceTab />}
         </section>
       </div>
     </div>
