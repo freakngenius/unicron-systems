@@ -489,30 +489,81 @@ function ActionItemCard({ item }: { item: ActionItemRow }) {
   const ts = item.requested_by?.source_message_ts;
   const link = channelId ? buildPermalink(channelId, ts) : null;
 
+  // Item 5 of the Atrium usefulness pass — checkbox marks done via Pathfinder
+  // PATCH endpoint. Optimistic UI, error rolls back.
+  const [done, setDone] = useState(item.status === 'done');
+  const [pending, setPending] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function handleToggle(e: React.MouseEvent) {
+    e.stopPropagation();
+    if (pending || done) return;
+    setPending(true);
+    setErr(null);
+    setDone(true); // optimistic
+    try {
+      const { patchActionItem } = await import('../../lib/actionItemsClient');
+      await patchActionItem(item.id, { closed: true, status: 'done' });
+    } catch (e2) {
+      setDone(false);
+      setErr(e2 instanceof Error ? e2.message : 'failed');
+    } finally {
+      setPending(false);
+    }
+  }
+
   return (
     <div className="bg-bg-raised border border-border-subtle rounded-lg px-3 py-2.5">
-      {link ? (
-        <a
-          href={link}
-          target="_blank"
-          rel="noreferrer"
-          className="block mono text-[12px] text-text-primary leading-snug hover:text-[var(--accent)] transition-colors"
+      <div className="flex items-start gap-2">
+        <button
+          type="button"
+          onClick={handleToggle}
+          disabled={pending || done}
+          aria-label={done ? 'Action item complete' : 'Mark action item as done'}
+          className={`mt-0.5 shrink-0 w-4 h-4 rounded border transition-colors ${
+            done
+              ? 'bg-[#2E8E66] border-[#2E8E66]'
+              : 'bg-transparent border-border-default hover:border-text-secondary'
+          }`}
         >
-          {item.title}
-        </a>
-      ) : (
-        <div className="mono text-[12px] text-text-primary leading-snug">{item.title}</div>
-      )}
-      <div className="flex items-center gap-2 flex-wrap mt-1.5">
-        {channel && <span className="mono text-[10px] text-text-muted">#{channel}</span>}
-        {item.requested_of?.hint && item.requested_of.hint !== 'unassigned' && (
-          <span className="mono text-[10px] text-text-secondary">→ {item.requested_of.hint}</span>
-        )}
-        {item.priority && item.priority !== 'medium' && (
-          <span className="mono text-[10px] uppercase tracking-wide text-[var(--accent)]">
-            {item.priority}
-          </span>
-        )}
+          {done && (
+            <span className="block text-white text-[10px] leading-none">✓</span>
+          )}
+        </button>
+        <div className="min-w-0 flex-1">
+          {link ? (
+            <a
+              href={link}
+              target="_blank"
+              rel="noreferrer"
+              className={`block mono text-[12px] leading-snug hover:text-[var(--accent)] transition-colors ${
+                done ? 'line-through text-text-muted' : 'text-text-primary'
+              }`}
+            >
+              {item.title}
+            </a>
+          ) : (
+            <div
+              className={`mono text-[12px] leading-snug ${
+                done ? 'line-through text-text-muted' : 'text-text-primary'
+              }`}
+            >
+              {item.title}
+            </div>
+          )}
+          <div className="flex items-center gap-2 flex-wrap mt-1.5">
+            {channel && <span className="mono text-[10px] text-text-muted">#{channel}</span>}
+            {item.requested_of?.hint && item.requested_of.hint !== 'unassigned' && (
+              <span className="mono text-[10px] text-text-secondary">→ {item.requested_of.hint}</span>
+            )}
+            {item.priority && item.priority !== 'medium' && (
+              <span className="mono text-[10px] uppercase tracking-wide text-[var(--accent)]">
+                {item.priority}
+              </span>
+            )}
+            {err && <span className="mono text-[10px] text-[#E14B4B]">{err}</span>}
+          </div>
+        </div>
       </div>
     </div>
   );
