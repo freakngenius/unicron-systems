@@ -430,3 +430,30 @@ export const slackDailyDigestPost = inngest.createFunction(
     return step.run('slack-daily-digest-post', () => postSlackDailyDigest(event.data));
   }
 );
+
+// ---------------------------------------------------------------------------
+// Notion Call Transcripts sync — Stream C4 of the Calls Ingestion sprint
+// ---------------------------------------------------------------------------
+
+/**
+ * Pulls the Notion Call Transcripts DB into nervous_system.calls every
+ * 10 minutes. Same architecture as notionKanbanSyncCron — the mirror keeps
+ * the read view fresh without the UI ever calling Notion directly.
+ */
+export const notionCallsSyncCron = inngest.createFunction(
+  { id: 'notion-calls-sync-pull', name: 'Notion Calls Sync Pull', retries: 2 },
+  { cron: '*/10 * * * *' },
+  async ({ step }) => {
+    const { notionCallsPull } = await import('./notion-calls-sync.js');
+    return step.run('notion-calls-pull', () => notionCallsPull('inngest_cron'));
+  },
+);
+
+export const notionCallsSyncRun = inngest.createFunction(
+  { id: 'notion-calls-sync-run', name: 'Notion Calls Sync Run', retries: 1 },
+  { event: 'notion-calls/sync' },
+  async ({ step }) => {
+    const { notionCallsPull } = await import('./notion-calls-sync.js');
+    return step.run('notion-calls-pull', () => notionCallsPull('inngest_cron'));
+  },
+);

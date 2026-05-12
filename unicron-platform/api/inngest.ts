@@ -31,6 +31,8 @@ import {
   slackDailyScanCron,
   slackDailyScanRun,
   slackDailyDigestPost,
+  notionCallsSyncCron,
+  notionCallsSyncRun,
 } from '../lib/agents/inngest-fns.js';
 
 // Disable Vercel's automatic JSON body parsing — inngest/node reads the raw stream.
@@ -68,5 +70,8 @@ export default serve({
     slackDailyScanCron,
     slackDailyScanRun,
     slackDailyDigestPost,
+    // Notion Call Transcripts mirror sync (Calls Ingestion C4)
+    notionCallsSyncCron,
+    notionCallsSyncRun,
   ],
 });
