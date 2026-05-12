@@ -65,22 +65,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     try {
       const sb = getServiceClient();
 
-      // Taboo Keeper check
+      // Taboo Keeper check — HARD CONSTRAINT 2: refusal layer is primary.
+      // The RPC ships block decisions to audit_log internally on every block.
+      // RPC errors fail closed; no silent bypass.
       const tabooCheck = await sb.rpc('ns_check_taboo', {
-        p_action:    'topic.archive',
-        p_target:    topic,
-        p_actor:     triggered_by,
-        p_context:   JSON.stringify({ topic }),
+        p_action:  'topic.archive',
+        p_target:  topic,
+        p_actor:   triggered_by,
+        p_context: JSON.stringify({ topic }),
       });
 
       if (tabooCheck.error) {
-        // If taboo check RPC doesn't exist yet, proceed (non-blocking)
-        console.warn('Taboo check skipped:', tabooCheck.error.message);
-      } else if (tabooCheck.data?.blocked === true) {
+        res.status(500).json({
+          ok: false,
+          error: `Taboo Keeper unreachable; refusing to proceed: ${tabooCheck.error.message}`,
+        });
+        return;
+      }
+      const tabooData = tabooCheck.data as { blocked?: boolean; reason?: string; matched_rule?: string } | null;
+      if (tabooData?.blocked === true) {
         res.status(403).json({
           ok: false,
           blocked: true,
-          reason: tabooCheck.data?.reason ?? 'Taboo Keeper blocked this action',
+          reason: tabooData.reason ?? 'Taboo Keeper blocked this action',
+          matched_rule: tabooData.matched_rule ?? null,
         });
         return;
       }
