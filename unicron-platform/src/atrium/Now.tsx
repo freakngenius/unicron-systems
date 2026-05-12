@@ -62,7 +62,40 @@ type Timeframe = '1h' | '24h' | '7d' | 'custom';
 // Sprint 4 upgrade: throttle 2s, dedupe 30s
 const THROTTLE_MS = 2_000;
 const DEDUPE_WINDOW_MS = 30_000;
-const FEED_MAX = 20;
+// Item 8 (usefulness pass): feed renders last 50 ledger rows + live INSERTs.
+const FEED_MAX = 50;
+const ACTIVITY_BACKFILL_LIMIT = 50;
+// Item 8 spec source-type filter chips. Dynamic chips for any source-type
+// observed at runtime are unioned with this list so new types still surface.
+const ACTIVITY_FILTER_DEFAULTS = [
+  'call',
+  'slack_channel_scan',
+  'voice_memo',
+  'apple_note',
+  'agent_run',
+  'decision',
+  'taboo_bounce',
+];
+// Item 7 sort dropdown — shared across Now > Today / Digest / Activity + Work.
+const SORT_ORDER_STORAGE = (tab: string) => `atrium:${tab}:sortOrder`;
+type SortOrder = 'recent' | 'oldest';
+function readSortOrder(tab: string): SortOrder {
+  if (typeof window === 'undefined') return 'recent';
+  try {
+    const v = window.localStorage.getItem(SORT_ORDER_STORAGE(tab));
+    return v === 'oldest' ? 'oldest' : 'recent';
+  } catch {
+    return 'recent';
+  }
+}
+function writeSortOrder(tab: string, order: SortOrder) {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(SORT_ORDER_STORAGE(tab), order);
+  } catch {
+    // localStorage unavailable — fall through; sort still works in-memory.
+  }
+}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -296,6 +329,39 @@ function useActivityFeed() {
   useEffect(() => {
     const sb = getSupabase();
 
+    // Item 8 backfill: pull the last ACTIVITY_BACKFILL_LIMIT ledger rows so the
+    // feed renders immediately on mount instead of waiting for a live INSERT.
+    let cancelled = false;
+    void (async () => {
+      try {
+        const { data, error } = await sb.rpc('ns_list_ledger_recent', {
+          p_limit: ACTIVITY_BACKFILL_LIMIT,
+        });
+        if (cancelled || error || !Array.isArray(data)) return;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const rows = (data as any[]).map((r) => ({
+          id: r.id as string,
+          source_type: r.source_type as string,
+          content_summary: (r.content_summary ?? null) as string | null,
+          created_at: r.created_at as string,
+          count: 1,
+          table: 'ledger' as const,
+        }));
+        setEvents((prev) => {
+          // Merge backfill with anything that already streamed in; dedupe by id.
+          const seen = new Set(prev.map((e) => e.id));
+          const merged = [...prev, ...rows.filter((r) => !seen.has(r.id))];
+          merged.sort(
+            (a, b) =>
+              new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+          );
+          return merged.slice(0, FEED_MAX);
+        });
+      } catch {
+        // Non-fatal: live INSERTs still flow through the Realtime channel.
+      }
+    })();
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const ledgerChannel = (sb.channel('atrium-now-ledger') as any)
       .on(
@@ -347,6 +413,7 @@ function useActivityFeed() {
       .subscribe();
 
     return () => {
+      cancelled = true;
       if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
       void sb.removeChannel(ledgerChannel);
       void sb.removeChannel(auditChannel);
@@ -457,6 +524,13 @@ function ActivityTab() {
   const [surface, setSurface] = useState<'all' | 'ledger' | 'audit_log'>('all');
   const [timeframe, setTimeframe] = useState<Timeframe>('24h');
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  // Item 7/8: persisted sort order under atrium:activity:sortOrder.
+  const [sortOrder, setSortOrder] = useState<SortOrder>(() => readSortOrder('activity'));
+
+  const handleSortChange = useCallback((next: SortOrder) => {
+    setSortOrder(next);
+    writeSortOrder('activity', next);
+  }, []);
 
   const cutoffMs = useMemo(() => {
     const now = Date.now();
@@ -467,20 +541,30 @@ function ActivityTab() {
   }, [timeframe]);
 
   const allSourceTypes = useMemo(
-    () => [...new Set([...KNOWN_SOURCES, ...events.map((e) => e.source_type)])],
+    () => [
+      ...new Set([
+        ...ACTIVITY_FILTER_DEFAULTS,
+        ...KNOWN_SOURCES,
+        ...events.map((e) => e.source_type),
+      ]),
+    ],
     [events],
   );
 
-  const filtered = useMemo(
-    () =>
-      events.filter((evt) => {
-        if (new Date(evt.created_at).getTime() < cutoffMs) return false;
-        if (surface !== 'all' && evt.table !== surface) return false;
-        if (activeSources.size > 0 && !activeSources.has(evt.source_type)) return false;
-        return true;
-      }),
-    [events, cutoffMs, surface, activeSources],
-  );
+  const filtered = useMemo(() => {
+    const next = events.filter((evt) => {
+      if (new Date(evt.created_at).getTime() < cutoffMs) return false;
+      if (surface !== 'all' && evt.table !== surface) return false;
+      if (activeSources.size > 0 && !activeSources.has(evt.source_type)) return false;
+      return true;
+    });
+    next.sort((a, b) => {
+      const at = new Date(a.created_at).getTime();
+      const bt = new Date(b.created_at).getTime();
+      return sortOrder === 'oldest' ? at - bt : bt - at;
+    });
+    return next;
+  }, [events, cutoffMs, surface, activeSources, sortOrder]);
 
   function toggleSource(src: string) {
     setActiveSources((prev) => {
@@ -511,6 +595,22 @@ function ActivityTab() {
             </button>
           ))}
         </div>
+
+        {/* Item 7/8 sort dropdown — persisted to localStorage. */}
+        <label className="flex items-center gap-1.5 bg-bg-card border border-border-default rounded-lg px-2 py-1 mr-1">
+          <span className="mono text-[9px] uppercase tracking-[0.14em] text-text-muted">
+            Sort
+          </span>
+          <select
+            value={sortOrder}
+            onChange={(e) => handleSortChange(e.target.value as SortOrder)}
+            className="mono text-[10px] uppercase tracking-[0.12em] bg-transparent text-text-primary focus:outline-none cursor-pointer"
+            aria-label="Sort order"
+          >
+            <option value="recent">Most recent</option>
+            <option value="oldest">Oldest first</option>
+          </select>
+        </label>
 
         {/* Surface chips */}
         {(['all', 'ledger', 'audit_log'] as const).map((s) => (
@@ -695,13 +795,15 @@ function DigestTab() {
         <div className="flex items-start justify-between flex-wrap gap-4">
           <div>
             <div className="mono text-[10px] uppercase tracking-[0.18em] text-[var(--accent)] font-semibold mb-1">
-              Daily digest
+              Daily digest · Last 24h
             </div>
             <div className="mono text-[22px] font-medium text-text-primary leading-tight">
               {digestRelativeLabel(date)}
             </div>
             <div className="mono text-[10px] text-text-muted mt-1.5">
-              {digestFormatDisplayDate(date)}
+              {date === digestTodayPT()
+                ? `Yesterday — ${digestFormatDisplayDate(digestShiftDate(date, -1))}`
+                : digestFormatDisplayDate(date)}
             </div>
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
@@ -2205,18 +2307,81 @@ function OvernightSummary({
   );
 }
 
-// Today's calendar panel — until the calendar OAuth feature ships there is no
-// nervous_system.calendar_events table, so render a CTA pointing to
-// Settings > Connections (the Connections section is the new placeholder
-// surface; the OAuth flow itself is a separate Bug Fix card).
-function TodaysCalendarPanel({ onOpenSettings }: { onOpenSettings?: () => void }) {
+// Today's calendar panel — reads nervous_system.calendar_events when the user
+// has connected their Google Calendar; otherwise renders a CTA pointing to
+// Settings > Connections. Item 4 of the Atrium usefulness pass (2026-05-12).
+interface CalendarTodayRow {
+  id: string;
+  title: string | null;
+  start_at: string;
+  end_at: string | null;
+  attendees: unknown;
+  location: string | null;
+}
+
+function useCalendarToday(ownerId: string | null) {
+  const [rows, setRows] = useState<CalendarTodayRow[] | null>(null);
+  const [loading, setLoading] = useState(false);
+  useEffect(() => {
+    if (!ownerId) { setRows(null); return; }
+    let cancelled = false;
+    setLoading(true);
+    getSupabase()
+      .rpc('ns_list_calendar_today', { p_owner_id: ownerId })
+      .then(({ data }) => {
+        if (cancelled) return;
+        setRows((data as CalendarTodayRow[] | null) ?? []);
+        setLoading(false);
+      })
+      .catch(() => { if (!cancelled) { setRows([]); setLoading(false); } });
+    return () => { cancelled = true; };
+  }, [ownerId]);
+  return { rows, loading };
+}
+
+function TodaysCalendarPanel({ onOpenSettings, teamMemberId }: { onOpenSettings?: () => void; teamMemberId?: string | null }) {
+  const { rows, loading } = useCalendarToday(teamMemberId ?? null);
+
+  if (loading) {
+    return (
+      <div className="bg-bg-card border border-border-default rounded-xl p-5">
+        <div className="mono text-[10px] uppercase tracking-[0.18em] text-text-secondary mb-3">
+          Today&apos;s calendar
+        </div>
+        <div className="mono text-[11px] text-text-muted animate-pulse">loading…</div>
+      </div>
+    );
+  }
+
+  if (rows && rows.length > 0) {
+    return (
+      <div className="bg-bg-card border border-border-default rounded-xl p-5">
+        <div className="mono text-[10px] uppercase tracking-[0.18em] text-text-secondary mb-3">
+          Today&apos;s calendar
+        </div>
+        <ul className="flex flex-col gap-2">
+          {rows.map((ev) => {
+            const start = new Date(ev.start_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+            const end = ev.end_at ? new Date(ev.end_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : null;
+            return (
+              <li key={ev.id} className="flex items-baseline gap-3">
+                <span className="mono text-[11px] text-text-muted w-[80px] shrink-0">{start}{end ? `–${end}` : ''}</span>
+                <span className="mono text-[12px] text-text-primary truncate">{ev.title ?? '(untitled)'}</span>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+    );
+  }
+
   return (
     <div className="bg-bg-card border border-border-default rounded-xl p-5">
       <div className="mono text-[10px] uppercase tracking-[0.18em] text-text-secondary mb-3">
         Today&apos;s calendar
       </div>
       <div className="mono text-[13px] text-text-primary mb-1.5">
-        No calendar connected yet.
+        {rows === null ? 'No calendar connected yet.' : 'No events today.'}
       </div>
       {onOpenSettings ? (
         <button
@@ -2224,7 +2389,7 @@ function TodaysCalendarPanel({ onOpenSettings }: { onOpenSettings?: () => void }
           onClick={onOpenSettings}
           className="mono text-[12px] text-[#6081BE] hover:underline underline-offset-2"
         >
-          Connect calendar in Settings → Connections
+          {rows === null ? 'Connect calendar in Settings → Connections' : 'Manage calendar in Settings → Connections'}
         </button>
       ) : (
         <div className="mono text-[12px] text-text-secondary">
@@ -2529,7 +2694,7 @@ export function Now({ name }: Props) {
           </div>
 
           {/* Today's calendar — Settings > Connections CTA until OAuth ships */}
-          <TodaysCalendarPanel onOpenSettings={() => openAtriumSettings('connections')} />
+          <TodaysCalendarPanel onOpenSettings={() => openAtriumSettings('connections')} teamMemberId={teamMemberId} />
         </div>
 
         {/* RIGHT rail — three meaningful cards + LLM spend footer micro-line */}

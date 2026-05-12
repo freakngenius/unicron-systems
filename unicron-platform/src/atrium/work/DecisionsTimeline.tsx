@@ -1,22 +1,26 @@
 // DecisionsTimeline.tsx — Sprint 4 Stream D
-// Vertical timeline of nervous_system.ledger rows where source_type='elder_decision'.
-// Gracefully degrades to empty state when the Elder agent has not yet logged a
-// decision row. Wired via the public.ns_list_ledger_decisions RPC.
+// Vertical timeline of nervous_system.ledger rows where source_type IN
+// ('decision','elder_decision'). Unified with the Now > Digest > Decisions
+// column (usefulness pass item 2 — 2026-05-12). Wired via the public
+// ns_list_ledger_decisions RPC.
 
 import { useState, useEffect } from 'react';
 import { getSupabase } from '../../lib/supabase';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
+// insights ledger column is jsonb — slack-daily-scan writes `[]` (array),
+// elder writes `{ decision_type, supersedes_id, evidence_url }`. Accept both.
+type DecisionInsights =
+  | { decision_type?: string; supersedes_id?: string; evidence_url?: string }
+  | unknown[]
+  | null;
+
 interface DecisionRow {
   id: string;
   source_type: string;
   content_summary: string | null;
-  insights: {
-    decision_type?: string;
-    supersedes_id?: string;
-    evidence_url?: string;
-  } | null;
+  insights: DecisionInsights;
   created_at: string;
 }
 
@@ -68,15 +72,12 @@ function useDecisions(typeFilter: string) {
           .rpc('ns_list_ledger_decisions', { p_limit: 100 });
         if (err) throw err;
 
-        const rows = data ?? [];
+        const rows = (data ?? []) as DecisionRow[];
         if (!cancelled) {
           setEmpty(rows.length === 0);
           const filtered =
             typeFilter && typeFilter !== 'all'
-              ? rows.filter(
-                  (r) =>
-                    (r.insights?.decision_type ?? 'unknown') === typeFilter,
-                )
+              ? rows.filter((r) => readInsight(r, 'decision_type') === typeFilter)
               : rows;
           setDecisions(filtered);
         }
@@ -101,8 +102,16 @@ function useDecisions(typeFilter: string) {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+function readInsight(row: DecisionRow, key: 'decision_type' | 'supersedes_id' | 'evidence_url'): string | undefined {
+  const ins = row.insights;
+  if (!ins || Array.isArray(ins)) return undefined;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const val = (ins as any)[key];
+  return typeof val === 'string' && val.length > 0 ? val : undefined;
+}
+
 function getDecisionType(row: DecisionRow): DecisionType {
-  const t = row.insights?.decision_type;
+  const t = readInsight(row, 'decision_type');
   if (
     t === 'customer_promise' ||
     t === 'architectural_decision' ||
@@ -176,9 +185,8 @@ export function DecisionsTimeline() {
           No decisions logged yet
         </div>
         <div className="mono text-[11px] text-text-muted max-w-xs mx-auto leading-relaxed">
-          The Elder agent writes here when it processes signals and logs a
-          strategic decision to the ledger. Run Elder via Skills or trigger
-          manually from System &rsaquo; Agents.
+          Decisions land here from the daily Slack scan and from Elder. Run
+          Slack daily scan via Skills, or wait for the next scheduled scan.
         </div>
       </div>
     );
@@ -272,20 +280,20 @@ export function DecisionsTimeline() {
                     </div>
 
                     {/* Supersedes link */}
-                    {row.insights?.supersedes_id && (
+                    {readInsight(row, 'supersedes_id') && (
                       <div className="mt-2 mono text-[10px] text-text-muted">
                         supersedes:{' '}
                         <span className="font-mono text-text-secondary">
-                          {row.insights.supersedes_id}
+                          {readInsight(row, 'supersedes_id')}
                         </span>
                       </div>
                     )}
 
                     {/* Evidence link */}
-                    {row.insights?.evidence_url && (
+                    {readInsight(row, 'evidence_url') && (
                       <div className="mt-2">
                         <a
-                          href={row.insights.evidence_url}
+                          href={readInsight(row, 'evidence_url')!}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="mono text-[10px] text-accent-orange hover:underline"

@@ -144,11 +144,25 @@ export async function runSlackDailyScan(
   const dryRun = !!opts.dryRun;
 
   // 1. Enumerate bot-member channels.
+  // Item 5 of the Atrium usefulness pass (2026-05-12): respect
+  // SCAN_EXCLUDE_CHANNELS (comma-separated channel IDs) so the bot can still
+  // POST to #daily-digest without recursively scanning its own output.
   const allChannels = await runMembershipAudit();
-  const memberChannels = allChannels.filter((c) => c.is_bot_member && !c.is_archived);
+  const excludeIds = new Set(
+    (process.env.SCAN_EXCLUDE_CHANNELS ?? '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean),
+  );
+  const memberChannels = allChannels.filter(
+    (c) => c.is_bot_member && !c.is_archived && !excludeIds.has(c.channel_id),
+  );
+  const excludedCount = allChannels.filter(
+    (c) => c.is_bot_member && !c.is_archived && excludeIds.has(c.channel_id),
+  ).length;
 
   console.log(
-    `[slack-daily-scan] digest_date=${digestDate} bot_member_channels=${memberChannels.length} dryRun=${dryRun}`,
+    `[slack-daily-scan] digest_date=${digestDate} bot_member_channels=${memberChannels.length} excluded=${excludedCount} dryRun=${dryRun}`,
   );
 
   // 2. Per-channel scan + summarize.

@@ -34,6 +34,10 @@ import {
   notionCallsSyncCron,
   notionCallsSyncRun,
   extractCallActionItemsRun,
+  calendarPullHourlyCron,
+  calendarPullRun,
+  atriumIncrementalRefreshCron,
+  atriumIncrementalRefreshRun,
 } from '../lib/agents/inngest-fns.js';
 
 // Disable Vercel's automatic JSON body parsing — inngest/node reads the raw stream.
@@ -76,5 +80,11 @@ export default serve({
     notionCallsSyncRun,
     // Call action-item extraction (Calls Ingestion C6)
     extractCallActionItemsRun,
+    // Google Calendar pull (usefulness pass item 4 — 2026-05-12)
+    calendarPullHourlyCron,
+    calendarPullRun,
+    // Atrium incremental refresh (usefulness pass item 7 — 2026-05-12)
+    atriumIncrementalRefreshCron,
+    atriumIncrementalRefreshRun,
   ],
 });
