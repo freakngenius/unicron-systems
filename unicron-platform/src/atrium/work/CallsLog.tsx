@@ -56,6 +56,38 @@ function getParticipants(insights: Record<string, unknown> | null): string {
   return '—';
 }
 
+function getParticipantList(row: LedgerRow): string[] {
+  const insights = row.insights;
+  if (!insights) return [];
+  const p = insights['participants'];
+  if (Array.isArray(p)) return p.map(String);
+  if (typeof p === 'string') return p.split(',').map((s) => s.trim()).filter(Boolean);
+  return [];
+}
+
+// Filter state is persisted across page refreshes via sessionStorage.
+// Defaults to 'all' when nothing is stored (or sessionStorage isn't available
+// during SSR / jsdom test envs).
+const CALLS_FILTER_STORAGE_KEY = 'atrium:calls:participant-filter';
+
+function readPersistedFilter(): string {
+  if (typeof window === 'undefined') return 'all';
+  try {
+    return window.sessionStorage.getItem(CALLS_FILTER_STORAGE_KEY) ?? 'all';
+  } catch {
+    return 'all';
+  }
+}
+
+function writePersistedFilter(value: string): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.sessionStorage.setItem(CALLS_FILTER_STORAGE_KEY, value);
+  } catch {
+    /* sessionStorage disabled in private windows */
+  }
+}
+
 function getDecisions(insights: Record<string, unknown> | null): string[] {
   if (!insights) return [];
   const d = insights['decisions'];
@@ -273,13 +305,49 @@ function CallDetailPanel({ call, onClose }: { call: LedgerRow; onClose: () => vo
 
 // ─── Main export ──────────────────────────────────────────────────────────────
 
+interface TeamMember {
+  id: string;
+  name: string;
+  email: string | null;
+}
+
+function useTeamMembers(): TeamMember[] {
+  const [members, setMembers] = useState<TeamMember[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    getSupabase()
+      .rpc('ns_list_team_members')
+      .then(({ data }) => {
+        if (!cancelled) setMembers((data as TeamMember[] | null) ?? []);
+      })
+      .catch(() => { /* leave empty */ });
+    return () => { cancelled = true; };
+  }, []);
+  return members;
+}
+
 export function CallsLog() {
   const [searchInput, setSearchInput] = useState('');
   const search = useDebounce(searchInput, 300);
   const [detail, setDetail] = useState<LedgerRow | null>(null);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
-  const { calls, loading, error } = useCallsLog(search, reloadKey);
+  const [participantFilter, setParticipantFilter] = useState<string>(readPersistedFilter);
+  const { calls: rawCalls, loading, error } = useCallsLog(search, reloadKey);
+  const teamMembers = useTeamMembers();
+
+  // Persist filter selection across refreshes.
+  useEffect(() => {
+    writePersistedFilter(participantFilter);
+  }, [participantFilter]);
+
+  // Client-side filter — ledger calls only have ~100 rows, so a server-side
+  // filter would be over-engineered. When C4 mirror migration lands and we
+  // switch the read RPC to ns_list_calls, the filter can move server-side
+  // for free via the p_participant arg.
+  const calls = participantFilter === 'all'
+    ? rawCalls
+    : rawCalls.filter((row) => getParticipantList(row).includes(participantFilter));
 
   if (loading) {
     return (
@@ -301,8 +369,19 @@ export function CallsLog() {
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Semantic search bar */}
-      <div className="flex items-center gap-2">
+      {/* Semantic search bar + participant filter */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <select
+          value={participantFilter}
+          onChange={(e) => setParticipantFilter(e.target.value)}
+          className="bg-bg-card border border-border-default rounded-lg px-2.5 py-2 mono text-[11px] text-text-primary focus:outline-none focus:border-border-hover"
+          aria-label="Filter calls by participant"
+        >
+          <option value="all">All calls</option>
+          {teamMembers.map((m) => (
+            <option key={m.id} value={m.name}>{m.name}'s calls</option>
+          ))}
+        </select>
         <div className="relative flex-1 sm:flex-none sm:w-80">
           <svg className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" width="12" height="12" viewBox="0 0 12 12" fill="none">
             <circle cx="5" cy="5" r="4" stroke="currentColor" strokeWidth="1.2" />
@@ -346,6 +425,9 @@ export function CallsLog() {
             {calls.map((call) => {
               const voice = isVoiceCall(call);
               const isSelected = detail?.id === call.id;
+              const title = typeof call.insights?.['title'] === 'string' ? (call.insights['title'] as string) : null;
+              const notionUrl = typeof call.insights?.['notion_url'] === 'string' ? (call.insights['notion_url'] as string) : null;
+              const participants = getParticipantList(call);
               return (
                 <div
                   key={call.id}
@@ -360,7 +442,15 @@ export function CallsLog() {
                         <span className="mono text-[9px] uppercase tracking-[0.14em] text-text-muted">
                           {formatRelativeTime(call.created_at)}
                         </span>
+                        {participants.length > 0 && (
+                          <span className="mono text-[9px] text-text-muted">· {participants.slice(0, 3).join(', ')}{participants.length > 3 ? ` +${participants.length - 3}` : ''}</span>
+                        )}
                       </div>
+                      {title && (
+                        <div className="mono text-[12px] font-medium text-text-primary mb-0.5 line-clamp-1">
+                          {title}
+                        </div>
+                      )}
                       <div className={`mono text-[11px] text-text-primary leading-relaxed ${detail ? 'line-clamp-2' : 'line-clamp-2'}`}>
                         {call.content_summary
                           ? call.content_summary.slice(0, 160)
@@ -368,6 +458,17 @@ export function CallsLog() {
                           ? call.content_full.slice(0, 160)
                           : 'No summary available.'}
                       </div>
+                      {notionUrl && (
+                        <a
+                          href={notionUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="mono text-[9.5px] uppercase tracking-[0.14em] text-[#6081BE] hover:underline mt-1 inline-block"
+                        >
+                          Open in Notion ›
+                        </a>
+                      )}
                     </div>
                     <div className="mono text-[10px] text-text-muted shrink-0 mt-0.5">
                       {isSelected ? '▸' : '›'}
