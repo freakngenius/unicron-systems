@@ -18,6 +18,12 @@ vi.mock('@supabase/supabase-js', () => ({
   }),
 }));
 
+// Mock the inngest client so we don't make real network calls to Inngest Cloud.
+const mockInngestSend = vi.fn().mockResolvedValue({ ids: ['evt-1'] });
+vi.mock('../../lib/inngest/client', () => ({
+  inngest: { send: mockInngestSend },
+}));
+
 const { default: uploadHandler } = await import('../../api/atrium/calls/upload.ts' as string);
 
 // ─── Stubs ────────────────────────────────────────────────────────────────────

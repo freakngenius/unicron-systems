@@ -16,6 +16,7 @@
 //     the caller can decide to surface 207 (manual upload) or 500 (auto-ingest)
 
 import { createClient } from '@supabase/supabase-js';
+import { inngest } from './inngest/client.js';
 import {
   createCallTranscriptPage,
   type CallTranscriptPayload,
@@ -59,10 +60,37 @@ export async function ingestCallTranscript(
     p_uploaded_by:    uploadedBy,
   });
 
-  return {
+  const result: IngestResult = {
     notion_page_id: notion.notion_page_id,
     notion_url: notion.notion_url,
     ledger_id: (ledgerId as string | null) ?? null,
     ledger_error: ledgerErr?.message ?? null,
   };
+
+  // Fire downstream event for C6 action-item extraction. Best-effort: a send
+  // failure (no INNGEST_EVENT_KEY, etc.) must not break ingestion. The Inngest
+  // function (extractCallActionItemsRun) listens on `call/transcript.uploaded`
+  // and runs the LLM extraction asynchronously.
+  if (!ledgerErr && result.ledger_id) {
+    try {
+      await inngest.send({
+        name: 'call/transcript.uploaded',
+        data: {
+          call_id:             result.ledger_id,
+          call_notion_page_id: result.notion_page_id,
+          call_notion_url:     result.notion_url,
+          call_title:          payload.title ?? null,
+          participants:        payload.participants ?? [],
+          transcript_text:     [payload.summary_notes, payload.transcript].filter(Boolean).join('\n\n').slice(0, 50000),
+          source:              payload.source ?? 'manual_upload',
+          uploaded_by:         uploadedBy,
+        },
+      });
+    } catch (err) {
+      // Non-fatal — log to console for observability but don't error the call.
+      console.warn('[calls-ingest] inngest.send failed:', err instanceof Error ? err.message : err);
+    }
+  }
+
+  return result;
 }

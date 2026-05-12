@@ -15,6 +15,11 @@ vi.mock('@supabase/supabase-js', () => ({
   createClient: () => ({ rpc: mockRpc }),
 }));
 
+// Mock the inngest client so we don't hit the network.
+vi.mock('../../lib/inngest/client', () => ({
+  inngest: { send: vi.fn().mockResolvedValue({ ids: ['evt-1'] }) },
+}));
+
 const { default: plaudHandler } = await import('../../api/inbound/plaud/calls.ts' as string);
 const { default: fathomHandler, __internals: fathomInternals } = await import('../../api/inbound/fathom/calls.ts' as string);
 const { default: zoomHandler, __internals: zoomInternals } = await import('../../api/inbound/zoom/calls.ts' as string);
