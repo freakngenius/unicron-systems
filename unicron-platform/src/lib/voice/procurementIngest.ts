@@ -9,16 +9,16 @@
  */
 
 // Translated for Atrium: prototype's `import { supabaseAdmin as supabase } from "./supabase"`
-// becomes a lazy proxy over the shared service-role client. Lazy avoids
-// throwing at module-load time if env is missing (and keeps the module
-// safely importable from any context that doesn't actually call into it).
-import { getServiceClient } from "../../../api/_lib/supabaseAdmin";
+// becomes a lazy proxy over the pathfinder-default service client. The proxy
+// avoids throwing at module-load time if env is missing, so the module stays
+// safe to import from any context that doesn't actually call into it.
+import { getPathfinderServiceClient } from "../../../api/_lib/supabaseAdmin";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 let _client: SupabaseClient | null = null;
 const supabase: SupabaseClient = new Proxy({} as SupabaseClient, {
   get(_target, prop) {
-    if (!_client) _client = getServiceClient();
+    if (!_client) _client = getPathfinderServiceClient();
     return Reflect.get(_client, prop, _client);
   },
 });
