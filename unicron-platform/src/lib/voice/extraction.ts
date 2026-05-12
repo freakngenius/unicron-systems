@@ -10,7 +10,7 @@
  * confidence is high, the caller may auto-apply facts to the customer row.
  */
 
-import { callClaude, extractJson } from "./anthropic";
+import { callClaude, extractJson } from "./anthropic.js";
 
 export type ExtractionResult = {
   decision_makers: Array<{ name?: string; title?: string; note?: string }>;

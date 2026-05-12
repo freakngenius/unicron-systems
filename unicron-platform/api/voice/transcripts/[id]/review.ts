@@ -7,8 +7,8 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { z } from 'zod';
-import { requireVoiceAccess, denyResponse } from '../../../_lib/voiceAuth';
-import { getPathfinderServiceClient } from '../../../_lib/supabaseAdmin';
+import { requireVoiceAccess, denyResponse } from '../../../_lib/voiceAuth.js';
+import { getPathfinderServiceClient } from '../../../_lib/supabaseAdmin.js';
 
 const Body = z.object({
   status: z.enum(['pending', 'approved', 'rejected', 'needs_followup']),

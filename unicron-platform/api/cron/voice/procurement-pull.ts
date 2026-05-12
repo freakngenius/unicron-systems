@@ -14,7 +14,7 @@
 // Translated from prototype src/app/api/cron/procurement-pull/route.ts.
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { getPathfinderServiceClient } from '../../_lib/supabaseAdmin';
+import { getPathfinderServiceClient } from '../../_lib/supabaseAdmin.js';
 
 type TargetOffice = {
   key: string;

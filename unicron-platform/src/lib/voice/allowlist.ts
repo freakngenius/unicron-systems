@@ -14,7 +14,7 @@
  * The env allowlist (VOICE_ALLOWLIST) is a global circuit breaker that overrides
  * everything. Set it on Vercel during dev/staging; leave empty to disable.
  */
-import { phoneInHubspotFilter } from "./hubspot";
+import { phoneInHubspotFilter } from "./hubspot.js";
 
 export function normalizeE164(input: string): string {
   const trimmed = (input ?? "").trim();

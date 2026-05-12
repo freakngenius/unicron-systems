@@ -13,9 +13,9 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { z } from 'zod';
-import { requireVoiceAccess, denyResponse } from '../../_lib/voiceAuth';
-import { getPathfinderServiceClient } from '../../_lib/supabaseAdmin';
-import { runExtraction, buildFactsPatch } from '../../../src/lib/voice/extraction';
+import { requireVoiceAccess, denyResponse } from '../../_lib/voiceAuth.js';
+import { getPathfinderServiceClient } from '../../_lib/supabaseAdmin.js';
+import { runExtraction, buildFactsPatch } from '../../../src/lib/voice/extraction.js';
 
 const BodySchema = z.object({
   transcript_id: z.string().uuid(),

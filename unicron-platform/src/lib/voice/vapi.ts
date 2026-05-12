@@ -8,7 +8,7 @@
  * - Endpointing: 700ms wait. Patient. Avoids early-Boardy interruption.
  */
 
-import { providerForModel } from "./llmCatalog";
+import { providerForModel } from "./llmCatalog.js";
 
 const VAPI_BASE = "https://api.vapi.ai";
 

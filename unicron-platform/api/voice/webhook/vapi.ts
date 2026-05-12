@@ -18,11 +18,11 @@
 //     end-of-call-report as the prototype did.
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { getPathfinderServiceClient } from '../../_lib/supabaseAdmin';
-import { normalizeE164 } from '../../../src/lib/voice/allowlist';
-import { ingestProcurementPull } from '../../../src/lib/voice/procurementIngest';
-import type { ExtractedPayload } from '../../../src/lib/voice/procurementIngest';
-import { logSdrOutcome } from '../../../src/lib/voice/hubspot';
+import { getPathfinderServiceClient } from '../../_lib/supabaseAdmin.js';
+import { normalizeE164 } from '../../../src/lib/voice/allowlist.js';
+import { ingestProcurementPull } from '../../../src/lib/voice/procurementIngest.js';
+import type { ExtractedPayload } from '../../../src/lib/voice/procurementIngest.js';
+import { logSdrOutcome } from '../../../src/lib/voice/hubspot.js';
 
 const VAPI_FROM = process.env.VAPI_FROM_NUMBER ?? '+17377026283';
 

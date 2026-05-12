@@ -6,7 +6,7 @@
 // Translated from prototype src/app/api/voices/preview/route.ts.
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { requireVoiceAccess, denyResponse } from '../../_lib/voiceAuth';
+import { requireVoiceAccess, denyResponse } from '../../_lib/voiceAuth.js';
 
 const DEFAULT_TEXT =
   "Hi, this is a quick sample of how I'll sound on the call. Let me know if you'd like me to adjust the warmth, pace, or style.";

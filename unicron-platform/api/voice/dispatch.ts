@@ -18,12 +18,12 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { z } from 'zod';
-import { requireVoiceAccess, denyResponse } from '../_lib/voiceAuth';
-import { getPathfinderServiceClient } from '../_lib/supabaseAdmin';
-import { assertAllowlistedForSource } from '../../src/lib/voice/allowlist';
-import { buildAssistantPayload, placeOutboundCall } from '../../src/lib/voice/vapi';
-import { buildSystemPrompt } from '../../src/lib/voice/systemPrompt';
-import { DEFAULT_LLM_MODEL, isKnownModel } from '../../src/lib/voice/llmCatalog';
+import { requireVoiceAccess, denyResponse } from '../_lib/voiceAuth.js';
+import { getPathfinderServiceClient } from '../_lib/supabaseAdmin.js';
+import { assertAllowlistedForSource } from '../../src/lib/voice/allowlist.js';
+import { buildAssistantPayload, placeOutboundCall } from '../../src/lib/voice/vapi.js';
+import { buildSystemPrompt } from '../../src/lib/voice/systemPrompt.js';
+import { DEFAULT_LLM_MODEL, isKnownModel } from '../../src/lib/voice/llmCatalog.js';
 
 const Body = z.object({
   source_id: z.string().uuid(),

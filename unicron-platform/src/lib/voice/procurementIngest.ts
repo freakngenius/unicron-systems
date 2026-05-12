@@ -8,11 +8,11 @@
  * entry becomes a row in pathfinder.project_contacts.
  */
 
-// Translated for Atrium: prototype's `import { supabaseAdmin as supabase } from "./supabase"`
+// Translated for Atrium: prototype's `import { supabaseAdmin as supabase } from "./supabase.js"`
 // becomes a lazy proxy over the pathfinder-default service client. The proxy
 // avoids throwing at module-load time if env is missing, so the module stays
 // safe to import from any context that doesn't actually call into it.
-import { getPathfinderServiceClient } from "../../../api/_lib/supabaseAdmin";
+import { getPathfinderServiceClient } from "../../../api/_lib/supabaseAdmin.js";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 let _client: SupabaseClient | null = null;

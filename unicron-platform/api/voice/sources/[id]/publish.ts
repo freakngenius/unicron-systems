@@ -9,9 +9,9 @@
 // Foundation merge skips the version-bookkeeping insert. Document in PR.
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { requireVoiceAccess, denyResponse } from '../../../_lib/voiceAuth';
-import { getPathfinderServiceClient } from '../../../_lib/supabaseAdmin';
-import { buildAssistantPayload } from '../../../../src/lib/voice/vapi';
+import { requireVoiceAccess, denyResponse } from '../../../_lib/voiceAuth.js';
+import { getPathfinderServiceClient } from '../../../_lib/supabaseAdmin.js';
+import { buildAssistantPayload } from '../../../../src/lib/voice/vapi.js';
 
 const VAPI_BASE = 'https://api.vapi.ai';
 

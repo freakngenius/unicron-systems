@@ -6,8 +6,8 @@
 // Translated from prototype src/app/api/extractions/route.ts.
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { requireVoiceAccess, denyResponse } from '../_lib/voiceAuth';
-import { getPathfinderServiceClient } from '../_lib/supabaseAdmin';
+import { requireVoiceAccess, denyResponse } from '../_lib/voiceAuth.js';
+import { getPathfinderServiceClient } from '../_lib/supabaseAdmin.js';
 
 function pickStr(v: string | string[] | undefined): string | undefined {
   if (Array.isArray(v)) return v[0];

@@ -7,7 +7,7 @@
 // Translated from prototype src/app/api/voices/route.ts.
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { requireVoiceAccess, denyResponse } from '../_lib/voiceAuth';
+import { requireVoiceAccess, denyResponse } from '../_lib/voiceAuth.js';
 
 type VoiceRow = {
   voice_id: string;

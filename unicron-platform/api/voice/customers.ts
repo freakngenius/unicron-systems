@@ -7,8 +7,8 @@
 // Translated from prototype src/app/api/customers/route.ts.
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { requireVoiceAccess, denyResponse } from '../_lib/voiceAuth';
-import { getPathfinderServiceClient } from '../_lib/supabaseAdmin';
+import { requireVoiceAccess, denyResponse } from '../_lib/voiceAuth.js';
+import { getPathfinderServiceClient } from '../_lib/supabaseAdmin.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   if (req.method === 'OPTIONS') { res.status(204).end(); return; }
