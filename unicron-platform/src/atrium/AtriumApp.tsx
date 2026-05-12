@@ -17,7 +17,7 @@ import { AtriumLogin } from './AtriumLogin';
 import { AtriumLayout, AtriumPlaceholder, type AtriumTab } from './AtriumLayout';
 import { AtriumNow } from './AtriumNow';
 import { Skeleton } from './ui-primitives';
-import { onAtriumNavigate } from './navigation';
+import { onAtriumNavigate, onOpenAtriumSettings } from './navigation';
 
 // Heavy tabs — lazy-loaded so they're split into separate chunks
 const Library   = lazy(() => import('./Library').then(m => ({ default: m.Library })));
@@ -70,6 +70,11 @@ export function AtriumApp() {
       setSettingsOpen(false);
       setActiveTab(detail.tab);
     });
+  }, []);
+
+  // Companion: components can request the Settings drawer.
+  useEffect(() => {
+    return onOpenAtriumSettings(() => setSettingsOpen(true));
   }, []);
 
   if (!ATRIUM_ENABLED) {

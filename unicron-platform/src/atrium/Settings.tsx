@@ -318,6 +318,38 @@ export function Settings({ memberId, onClose }: SettingsProps) {
         </PrefRow>
       </Section>
 
+      {/* Connections — placeholder surface; OAuth flows ship on dedicated cards. */}
+      <Section title="Connections">
+        <PrefRow
+          id="conn-google-calendar"
+          label="Google Calendar"
+          description="Connect your calendar so Now > Today shows today's events. OAuth flow pending."
+        >
+          <button
+            id="conn-google-calendar"
+            disabled
+            title="OAuth flow pending — see Bug Fix card"
+            className="mono text-[10px] uppercase tracking-[0.14em] px-2.5 py-1.5 rounded-md border border-border-default text-text-faint cursor-not-allowed"
+          >
+            Coming soon
+          </button>
+        </PrefRow>
+        <PrefRow
+          id="conn-slack-id"
+          label="Slack user ID"
+          description="Used to map @-mentions from the Slack daily scan to your DRI items."
+        >
+          <button
+            id="conn-slack-id"
+            disabled
+            title="Self-service Slack ID capture pending"
+            className="mono text-[10px] uppercase tracking-[0.14em] px-2.5 py-1.5 rounded-md border border-border-default text-text-faint cursor-not-allowed"
+          >
+            Coming soon
+          </button>
+        </PrefRow>
+      </Section>
+
       {/* Email + Push */}
       <Section title="Email & push">
         <PrefRow

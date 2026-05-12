@@ -24,7 +24,7 @@ import { useAuth } from '../lib/auth';
 import { QuickCapture } from './QuickCapture';
 import { AtriumIcon } from './icons';
 import { SlackDigest } from './now/SlackDigest';
-import { navigateAtrium } from './navigation';
+import { navigateAtrium, openAtriumSettings } from './navigation';
 // Pass 2 (R1): AttentionScorer cut — was hand-rolled scoring across mixed
 // sources. TopOfMind now wires to ns_top_of_mind_for_dri RPC (real data).
 
@@ -2061,7 +2061,7 @@ function useOpenItemsBreakdown(teamMemberId: string | null) {
   return { row, loading };
 }
 
-function OpenItemsCard({ teamMemberId }: { teamMemberId: string | null }) {
+function YourOpenItemsCard({ teamMemberId }: { teamMemberId: string | null }) {
   const { row, loading } = useOpenItemsBreakdown(teamMemberId);
   const total = row?.total ?? 0;
   const sub = row
@@ -2069,86 +2069,11 @@ function OpenItemsCard({ teamMemberId }: { teamMemberId: string | null }) {
     : '—';
   return (
     <MetricCard
-      label="Open items · you DRI"
+      label="Your open items"
       value={String(total)}
       sub={sub}
       loading={loading}
       onClick={() => navigateAtrium({ tab: 'work', subTab: 'items', filter: { dri: 'me' } })}
-    />
-  );
-}
-
-function useRefusals24h() {
-  const [row, setRow] = useState<{ total: number; needs_review: number } | null>(null);
-  const [loading, setLoading] = useState(true);
-  useEffect(() => {
-    let cancelled = false;
-    getSupabase()
-      .rpc('ns_now_refusals_24h')
-      .then(({ data }) => {
-        if (cancelled) return;
-        const rows = data as Array<{ total: number; needs_review: number }> | null;
-        setRow(rows?.[0] ?? null);
-        setLoading(false);
-      })
-      .catch(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
-  }, []);
-  return { row, loading };
-}
-
-function RefusalsCard() {
-  const { row, loading } = useRefusals24h();
-  const total = row?.total ?? 0;
-  const review = row?.needs_review ?? 0;
-  const accent = total > 0 ? '#E14B4B' : '#6081BE';
-  return (
-    <MetricCard
-      label="Refusals · 24h"
-      value={String(total)}
-      sub={`${review} need review`}
-      loading={loading}
-      accent={accent}
-      onClick={() => navigateAtrium({ tab: 'system', subTab: 'Refusal Log', filter: { window: '24h' } })}
-    />
-  );
-}
-
-function useDecisions7d() {
-  const [row, setRow] = useState<{ total: number; latest_title: string | null; latest_at: string | null } | null>(null);
-  const [loading, setLoading] = useState(true);
-  useEffect(() => {
-    let cancelled = false;
-    getSupabase()
-      .rpc('ns_now_decisions_7d')
-      .then(({ data }) => {
-        if (cancelled) return;
-        const rows = data as Array<{ total: number; latest_title: string | null; latest_at: string | null }> | null;
-        setRow(rows?.[0] ?? null);
-        setLoading(false);
-      })
-      .catch(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
-  }, []);
-  return { row, loading };
-}
-
-function DecisionsCard() {
-  const { row, loading } = useDecisions7d();
-  const total = row?.total ?? 0;
-  const latest = row?.latest_title?.trim();
-  const sub = total === 0
-    ? 'No decisions logged in the last 7d'
-    : latest
-      ? `Most recent: ${latest}`
-      : `${total} decision${total === 1 ? '' : 's'} · no title`;
-  return (
-    <MetricCard
-      label="Decisions · 7d"
-      value={String(total)}
-      sub={sub}
-      loading={loading}
-      onClick={() => navigateAtrium({ tab: 'work', subTab: 'decisions' })}
     />
   );
 }
@@ -2172,57 +2097,251 @@ function useLlmSpend() {
   return { row, loading };
 }
 
-function AgentLlmSpendCard() {
-  const { row, loading } = useLlmSpend();
+// ─── Morning-briefing components (Today v2) ──────────────────────────────────
+
+// Overnight summary — last-24h Slack scan + ingest totals.
+// Backed by ns_now_overnight_summary; omits empty lines per "real or cut".
+interface OvernightRow {
+  slack_scans: number;
+  slack_channels_scanned: number;
+  slack_messages_scanned: number;
+  slack_action_items: number;
+  slack_decisions: number;
+  ingest_captures: number;
+  ingest_voice_memo: number;
+  ingest_apple_note: number;
+  ingest_manual: number;
+}
+
+function useOvernightSummary() {
+  const [row, setRow] = useState<OvernightRow | null>(null);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    let cancelled = false;
+    getSupabase()
+      .rpc('ns_now_overnight_summary')
+      .then(({ data }) => {
+        if (cancelled) return;
+        const rows = data as OvernightRow[] | null;
+        setRow(rows?.[0] ?? null);
+        setLoading(false);
+      })
+      .catch(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
+  return { row, loading };
+}
+
+function OvernightSummary({
+  onJumpDigest,
+  onJumpCaptures,
+}: {
+  onJumpDigest: () => void;
+  onJumpCaptures: () => void;
+}) {
+  const { row, loading } = useOvernightSummary();
   if (loading) {
-    return <div className="bg-bg-card border border-border-default rounded-xl p-4 h-24 animate-pulse" />;
+    return <div className="bg-bg-card border border-border-default rounded-xl h-24 animate-pulse" />;
   }
-  // No real source rows → hide entirely (no fakery).
+  const slackScans = Number(row?.slack_scans ?? 0);
+  const slackChannels = Number(row?.slack_channels_scanned ?? 0);
+  const slackMessages = Number(row?.slack_messages_scanned ?? 0);
+  const slackAI = Number(row?.slack_action_items ?? 0);
+  const slackDec = Number(row?.slack_decisions ?? 0);
+  const captures = Number(row?.ingest_captures ?? 0);
+
+  const lines: Array<{ key: string; text: string; onClick: () => void }> = [];
+
+  if (slackScans > 0 || slackChannels > 0 || slackMessages > 0) {
+    const channelClause = slackChannels > 0
+      ? `${slackChannels} channel${slackChannels === 1 ? '' : 's'}`
+      : `${slackScans} scan${slackScans === 1 ? '' : 's'}`;
+    const messageClause = slackMessages > 0 ? `, ${slackMessages} message${slackMessages === 1 ? '' : 's'}` : '';
+    const surfacedParts: string[] = [];
+    if (slackAI > 0) surfacedParts.push(`${slackAI} action item${slackAI === 1 ? '' : 's'}`);
+    if (slackDec > 0) surfacedParts.push(`${slackDec} decision${slackDec === 1 ? '' : 's'}`);
+    const surfaced = surfacedParts.length > 0 ? ` Surfaced ${surfacedParts.join(', ')}.` : '';
+    lines.push({
+      key: 'slack',
+      text: `Slack scan: ${channelClause}${messageClause}.${surfaced}`,
+      onClick: onJumpDigest,
+    });
+  }
+
+  if (captures > 0) {
+    lines.push({
+      key: 'ingest',
+      text: `Ingest: ${captures} voice/note capture${captures === 1 ? '' : 's'} landed since yesterday.`,
+      onClick: onJumpCaptures,
+    });
+  }
+
+  // Agent runs intentionally omitted: ledger.created_by_agent is NULL today,
+  // so we have no real source to count overnight runs.
+
+  return (
+    <div className="bg-bg-card border border-border-default rounded-xl p-5">
+      <div className="mono text-[10px] uppercase tracking-[0.18em] text-text-secondary mb-3">
+        Since last night
+      </div>
+      {lines.length === 0 ? (
+        <div className="mono text-[13px] text-text-secondary">Nothing logged overnight.</div>
+      ) : (
+        <ul className="flex flex-col gap-2">
+          {lines.map((l) => (
+            <li key={l.key}>
+              <button
+                type="button"
+                onClick={l.onClick}
+                className="text-left mono text-[13px] text-text-primary hover:text-[#6081BE] transition-colors"
+              >
+                {l.text}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+// Today's calendar panel — until the calendar OAuth feature ships there is no
+// nervous_system.calendar_events table, so render a CTA pointing to
+// Settings > Connections (the Connections section is the new placeholder
+// surface; the OAuth flow itself is a separate Bug Fix card).
+function TodaysCalendarPanel({ onOpenSettings }: { onOpenSettings?: () => void }) {
+  return (
+    <div className="bg-bg-card border border-border-default rounded-xl p-5">
+      <div className="mono text-[10px] uppercase tracking-[0.18em] text-text-secondary mb-3">
+        Today&apos;s calendar
+      </div>
+      <div className="mono text-[13px] text-text-primary mb-1.5">
+        No calendar connected yet.
+      </div>
+      {onOpenSettings ? (
+        <button
+          type="button"
+          onClick={onOpenSettings}
+          className="mono text-[12px] text-[#6081BE] hover:underline underline-offset-2"
+        >
+          Connect calendar in Settings → Connections
+        </button>
+      ) : (
+        <div className="mono text-[12px] text-text-secondary">
+          Connect calendar in Settings → Connections
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Card 2: Customer signals · 7d
+function useCustomerSignals7d() {
+  const [row, setRow] = useState<{ total: number; customers_touched: number } | null>(null);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    let cancelled = false;
+    getSupabase()
+      .rpc('ns_now_customer_signals_7d')
+      .then(({ data }) => {
+        if (cancelled) return;
+        const rows = data as Array<{ total: number; customers_touched: number }> | null;
+        setRow(rows?.[0] ?? null);
+        setLoading(false);
+      })
+      .catch(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
+  return { row, loading };
+}
+
+function CustomerSignalsCard() {
+  const { row, loading } = useCustomerSignals7d();
+  const total = row?.total ?? 0;
+  const touched = row?.customers_touched ?? 0;
+  return (
+    <MetricCard
+      label="Customer signals · 7d"
+      value={String(total)}
+      sub={`${touched} customer${touched === 1 ? '' : 's'} touched`}
+      loading={loading}
+      onClick={() => navigateAtrium({ tab: 'people', subTab: 'customers' })}
+    />
+  );
+}
+
+// Card 3: Agent throughput · 24h
+interface AgentThroughputRow {
+  total: number;
+  orchestrator: number;
+  analyst: number;
+  elder: number;
+  taboo_keeper: number;
+  other: number;
+}
+
+function useAgentThroughput24h() {
+  const [row, setRow] = useState<AgentThroughputRow | null>(null);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    let cancelled = false;
+    getSupabase()
+      .rpc('ns_now_agent_throughput_24h')
+      .then(({ data }) => {
+        if (cancelled) return;
+        const rows = data as AgentThroughputRow[] | null;
+        setRow(rows?.[0] ?? null);
+        setLoading(false);
+      })
+      .catch(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
+  return { row, loading };
+}
+
+function AgentThroughputCard() {
+  const { row, loading } = useAgentThroughput24h();
+  const total = row?.total ?? 0;
+  const parts: string[] = [];
+  if (row) {
+    if (row.orchestrator > 0) parts.push(`Orchestrator: ${row.orchestrator}`);
+    if (row.analyst > 0)      parts.push(`Analyst: ${row.analyst}`);
+    if (row.elder > 0)        parts.push(`Elder: ${row.elder}`);
+    if (row.taboo_keeper > 0) parts.push(`Taboo Keeper: ${row.taboo_keeper}`);
+    if (row.other > 0)        parts.push(`Other: ${row.other}`);
+  }
+  const sub = parts.length > 0 ? parts.join(' · ') : 'No agent runs in the last 24h';
+  return (
+    <MetricCard
+      label="Agent throughput · 24h"
+      value={String(total)}
+      sub={sub}
+      loading={loading}
+      onClick={() => navigateAtrium({ tab: 'system', subTab: 'Agents' })}
+    />
+  );
+}
+
+// Footer micro-line under the cards. Real source only — hides if 0/0.
+function LlmSpendFooter() {
+  const { row, loading } = useLlmSpend();
+  if (loading) return null;
   if (!row || (Number(row.limit_usd) === 0 && Number(row.spent_usd) === 0)) return null;
   const spent = Number(row.spent_usd);
   const limit = Number(row.limit_usd);
   const pct = limit > 0 ? Math.round((spent / limit) * 100) : null;
   const periodDays = row.period_days ?? null;
-  const periodLabel = periodDays === 7 ? '/ week' : periodDays ? `/ ${periodDays}d` : '· current period';
-  const accent = pct !== null && pct >= 80 ? '#E14B4B' : pct !== null && pct >= 60 ? '#C28A1F' : '#2E8E66';
+  const periodLabel = periodDays === 7 ? '/week' : periodDays ? `/${periodDays}d` : '';
   return (
     <button
       type="button"
       onClick={() => navigateAtrium({ tab: 'system', subTab: 'Services' })}
-      className="w-full text-left bg-bg-card border border-border-default rounded-xl p-4 hover:border-border-hover transition-colors"
+      className="mono text-[11px] text-text-secondary hover:text-text-primary text-left px-1 pt-1"
     >
-      <div className="flex items-baseline justify-between mb-1">
-        <div className="mono text-[12px] font-semibold text-text-primary">Agent LLM spend</div>
-        <div className="mono text-[11px]" style={{ color: accent }}>
-          {pct === null ? '—' : `${pct}%`}
-        </div>
-      </div>
-      <div className="mono text-[10px] text-text-secondary">
-        ${spent.toFixed(2)} of ${limit.toFixed(2)} {periodLabel}
-      </div>
-      <div className="mono text-[9px] uppercase tracking-[0.14em] text-text-muted mt-1.5">
-        nervous_system.agents.budget
-      </div>
+      Agent LLM spend · ${spent.toFixed(2)} of ${limit.toFixed(2)}{periodLabel}
+      {pct !== null && ` · ${pct}%`}
     </button>
   );
-}
-
-// ActivityFeed wrapper that only renders when there's at least one event whose
-// created_at is within the last 60 seconds. Hides the entire panel otherwise.
-// `now` ticks every 5s so we re-evaluate the 60s window without calling
-// Date.now() directly during render (react-hooks/purity).
-function RecentActivityFeed() {
-  const events = useActivityFeed();
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 5_000);
-    return () => clearInterval(id);
-  }, []);
-  const recent = events.filter(
-    (e) => now - new Date(e.created_at).getTime() <= 60_000,
-  );
-  if (recent.length === 0) return null;
-  return <ActivityFeedView events={recent} />;
 }
 
 // ─── Now (main export) ────────────────────────────────────────────────────────
@@ -2282,13 +2401,13 @@ export function Now({ name }: Props) {
 
   return (
     <div className="relative w-full">
-      {/* v3 sub-tab nav — Run a skill default, then Today / Activity / Digest */}
+      {/* Morning-briefing order — Today is default + first, then Digest / Activity / Run a skill. */}
       <div className="flex gap-1 px-2 sm:px-7 pt-1 border-b border-border-default">
         {([
           { id: 'today',    label: 'Today',       Icon: AtriumIcon.Now },
-          { id: 'skills',   label: 'Run a skill', Icon: AtriumIcon.Bolt },
-          { id: 'activity', label: 'Activity',    Icon: AtriumIcon.Pulse },
           { id: 'digest',   label: 'Digest',      Icon: AtriumIcon.Inbox },
+          { id: 'activity', label: 'Activity',    Icon: AtriumIcon.Pulse },
+          { id: 'skills',   label: 'Run a skill', Icon: AtriumIcon.Bolt },
         ] as const).map((tab) => (
           <button
             key={tab.id}
@@ -2363,18 +2482,19 @@ export function Now({ name }: Props) {
         </div>
       )}
 
-      {/* Today — editorial pass 2026-05-11: action-driving default.
-          CUT: HeroStrip ("company is calm"), YesterdayDigest (Digest sub-tab owns it),
-               IngestYield card (jargon), Listening-for-activity placeholder.
-          Calendar panel gated on per-user OAuth connection — see Bug Fix card
-          "Calendar connection — per-user OAuth + shared team availability". */}
+      {/* Today — morning-briefing redesign 2026-05-12.
+          Left: greeting, "Since last night" overnight summary, "What needs you
+          today" (real DRI items), Today's calendar with Settings CTA.
+          Right rail: Your open items · Customer signals 7d · Agent throughput
+          24h, with a small Agent LLM spend footer line. Refusals, Decisions,
+          and the items-per-day chart moved to System / Digest / cut. */}
       {nowTab === 'today' && (
       <div className="now-layout grid gap-5" style={{ gridTemplateColumns: 'minmax(0, 1fr) 320px', alignItems: 'start' }}>
         <style>{`
           @media (max-width: 1023px) { .now-layout { grid-template-columns: 1fr !important; } .now-rail { display: none !important; } }
         `}</style>
 
-        {/* LEFT column — header + primary action list + (calendar gated) */}
+        {/* LEFT column — greeting + overnight summary + DRI list + calendar */}
         <div className="flex flex-col gap-6 min-w-0">
           {/* Greeting */}
           <div className="flex items-start justify-between gap-4">
@@ -2388,8 +2508,19 @@ export function Now({ name }: Props) {
             </div>
           </div>
 
-          {/* PRIMARY: What needs you today — irreversible + high priority items
-              where the signed-in user is DRI. Honest empty state. */}
+          {/* Since last night — overnight summary block */}
+          <OvernightSummary
+            onJumpDigest={() => setNowTab('digest')}
+            onJumpCaptures={() =>
+              navigateAtrium({
+                tab: 'work',
+                subTab: 'items',
+                filter: { source: 'voice_memo,apple_note,manual', since: 'yesterday' },
+              })
+            }
+          />
+
+          {/* What needs you today */}
           <div>
             <div className="mono text-[10px] uppercase tracking-[0.18em] text-text-secondary mb-3">
               What needs you today
@@ -2397,19 +2528,16 @@ export function Now({ name }: Props) {
             <TopOfMind teamMemberId={teamMemberId} />
           </div>
 
-          {/* SECONDARY: Today's calendar — gated on per-user calendar OAuth.
-              Until that ships, do not render anything (no fake "connect" CTA). */}
+          {/* Today's calendar — Settings > Connections CTA until OAuth ships */}
+          <TodaysCalendarPanel onOpenSettings={() => openAtriumSettings('connections')} />
         </div>
 
-        {/* RIGHT rail — three real metric cards, then chart, then LLM spend
-            (if real), then ActivityFeed only when an event hit in the last 60s. */}
+        {/* RIGHT rail — three meaningful cards + LLM spend footer micro-line */}
         <div className="now-rail flex flex-col gap-4 sticky top-0">
-          <OpenItemsCard teamMemberId={teamMemberId} />
-          <RefusalsCard />
-          <DecisionsCard />
-          <ActionItemsDailyChart />
-          <AgentLlmSpendCard />
-          <RecentActivityFeed />
+          <YourOpenItemsCard teamMemberId={teamMemberId} />
+          <CustomerSignalsCard />
+          <AgentThroughputCard />
+          <LlmSpendFooter />
         </div>
       </div>
       )}
