@@ -39,7 +39,7 @@ function detectTitle(text: string, filename: string): string | undefined {
 function detectParticipants(text: string): string[] {
   const out: string[] = [];
   // Pattern 1: explicit Attendees:/Participants: line.
-  const attLine = text.match(/^(?:Attendees|Participants|Present)\s*[:\-]\s*(.+)$/im);
+  const attLine = text.match(/^(?:Attendees|Participants|Present)\s*[:-]\s*(.+)$/im);
   if (attLine) {
     const parts = attLine[1].split(/[,;]| and /).map((p) => p.trim()).filter(Boolean);
     out.push(...parts);
@@ -47,7 +47,7 @@ function detectParticipants(text: string): string[] {
   // Pattern 2: speaker tags like "Kyle Kesterson:" at the start of a line.
   if (out.length === 0) {
     const seen = new Set<string>();
-    const speakerMatches = text.matchAll(/^([A-Z][a-zA-Z'\-]+(?:\s+[A-Z][a-zA-Z'\-]+){0,3})\s*:\s/gm);
+    const speakerMatches = text.matchAll(/^([A-Z][a-zA-Z'-]+(?:\s+[A-Z][a-zA-Z'-]+){0,3})\s*:\s/gm);
     for (const m of speakerMatches) {
       const name = m[1].trim();
       // Filter obvious junk like "VTT" / "WEBVTT" / single-word common words.

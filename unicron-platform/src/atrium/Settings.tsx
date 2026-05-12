@@ -9,6 +9,7 @@
 // via ns_get_member_notifications / ns_update_member_notifications RPCs.
 
 import { useState, useEffect, useCallback } from 'react';
+import { getSupabase } from '../lib/supabase';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -318,36 +319,9 @@ export function Settings({ memberId, onClose }: SettingsProps) {
         </PrefRow>
       </Section>
 
-      {/* Connections — placeholder surface; OAuth flows ship on dedicated cards. */}
+      {/* Connections — Google Calendar OAuth + self-reported Slack user ID. */}
       <Section title="Connections">
-        <PrefRow
-          id="conn-google-calendar"
-          label="Google Calendar"
-          description="Connect your calendar so Now > Today shows today's events. OAuth flow pending."
-        >
-          <button
-            id="conn-google-calendar"
-            disabled
-            title="OAuth flow pending — see Bug Fix card"
-            className="mono text-[10px] uppercase tracking-[0.14em] px-2.5 py-1.5 rounded-md border border-border-default text-text-faint cursor-not-allowed"
-          >
-            Coming soon
-          </button>
-        </PrefRow>
-        <PrefRow
-          id="conn-slack-id"
-          label="Slack user ID"
-          description="Used to map @-mentions from the Slack daily scan to your DRI items."
-        >
-          <button
-            id="conn-slack-id"
-            disabled
-            title="Self-service Slack ID capture pending"
-            className="mono text-[10px] uppercase tracking-[0.14em] px-2.5 py-1.5 rounded-md border border-border-default text-text-faint cursor-not-allowed"
-          >
-            Coming soon
-          </button>
-        </PrefRow>
+        <ConnectionsBlock memberId={memberId} />
       </Section>
 
       {/* Email + Push */}
@@ -401,6 +375,179 @@ export function Settings({ memberId, onClose }: SettingsProps) {
         </button>
       </div>
     </div>
+  );
+}
+
+// ─── ConnectionsBlock — Google Calendar OAuth + Slack user ID ────────────────
+// Item 4 of the Atrium usefulness pass (2026-05-12).
+
+interface ConnectionsRow {
+  slack_user_id: string | null;
+  google_connected: boolean;
+  google_connected_at: string | null;
+}
+
+function ConnectionsBlock({ memberId }: { memberId?: string }) {
+  const [row, setRow] = useState<ConnectionsRow | null>(null);
+  const [slackInput, setSlackInput] = useState('');
+  const [slackSaving, setSlackSaving] = useState(false);
+  const [slackSavedAt, setSlackSavedAt] = useState<number | null>(null);
+  const [slackError, setSlackError] = useState<string | null>(null);
+  const [googleError, setGoogleError] = useState<string | null>(null);
+  const [googleStarting, setGoogleStarting] = useState(false);
+
+  // Read URL hash params for callback feedback (?google=connected / =error&detail=...)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const status = params.get('google');
+    if (status === 'connected') {
+      // Refresh state — Sup the new connection in
+      setGoogleError(null);
+    } else if (status === 'error') {
+      const detail = params.get('detail') ?? 'unknown';
+      if (detail === 'credential_gap') {
+        setGoogleError('GOOGLE_OAUTH_CLIENT_ID / SECRET not configured on this deploy.');
+      } else {
+        setGoogleError(`Connection failed: ${detail}`);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!memberId) return;
+    let cancelled = false;
+    getSupabase()
+      .rpc('ns_get_my_connections', { p_member_id: memberId })
+      .then(({ data }) => {
+        if (cancelled) return;
+        const rows = data as ConnectionsRow[] | null;
+        const r = rows?.[0] ?? null;
+        setRow(r);
+        setSlackInput(r?.slack_user_id ?? '');
+      });
+    return () => { cancelled = true; };
+  }, [memberId]);
+
+  async function handleConnectGoogle() {
+    if (!memberId) return;
+    setGoogleError(null);
+    setGoogleStarting(true);
+    try {
+      const sb = getSupabase();
+      const { data: sessionData } = await sb.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      if (!token) {
+        setGoogleError('Sign in again to connect Google Calendar.');
+        return;
+      }
+      const res = await fetch('/api/auth/google/start', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        if (res.status === 503 && json?.error === 'credential_gap') {
+          setGoogleError(
+            'Credential gap — GOOGLE_OAUTH_CLIENT_ID / SECRET not set on this deploy. ' +
+            'See the open Bug Fix card on the Internal Org Kanban.',
+          );
+        } else {
+          setGoogleError(json?.error ?? `start failed (HTTP ${res.status})`);
+        }
+        return;
+      }
+      const { url } = json as { url: string };
+      window.location.assign(url);
+    } catch (err) {
+      setGoogleError(err instanceof Error ? err.message : 'failed to start OAuth');
+    } finally {
+      setGoogleStarting(false);
+    }
+  }
+
+  async function handleSaveSlackId() {
+    if (!memberId) return;
+    const trimmed = slackInput.trim();
+    setSlackError(null);
+    setSlackSaving(true);
+    try {
+      const { error } = await getSupabase().rpc('ns_set_my_slack_user_id', {
+        p_member_id: memberId,
+        p_slack_user_id: trimmed,
+      });
+      if (error) throw error;
+      setSlackSavedAt(Date.now());
+      setRow((prev) => prev ? { ...prev, slack_user_id: trimmed || null } : prev);
+    } catch (err) {
+      setSlackError(err instanceof Error ? err.message : 'save failed');
+    } finally {
+      setSlackSaving(false);
+    }
+  }
+
+  const googleConnectedLabel = row?.google_connected
+    ? `Connected${row.google_connected_at ? ` · ${new Date(row.google_connected_at).toLocaleDateString()}` : ''}`
+    : null;
+
+  return (
+    <>
+      <PrefRow
+        id="conn-google-calendar"
+        label="Google Calendar"
+        description="Connect your calendar so Now > Today shows today's events. Read-only OAuth scopes."
+      >
+        <div className="flex flex-col items-end gap-1">
+          <button
+            id="conn-google-calendar"
+            onClick={handleConnectGoogle}
+            disabled={!memberId || googleStarting}
+            className="mono text-[10px] uppercase tracking-[0.14em] px-2.5 py-1.5 rounded-md border border-border-default text-text-secondary hover:border-border-hover hover:text-text-primary transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {row?.google_connected ? 'Reconnect' : googleStarting ? 'Starting…' : 'Connect Google Calendar'}
+          </button>
+          {googleConnectedLabel && (
+            <span className="mono text-[10px] text-[#2E8E66]">{googleConnectedLabel}</span>
+          )}
+          {googleError && (
+            <span className="mono text-[10px] text-[#E14B4B] max-w-[260px] text-right leading-snug">
+              {googleError}
+            </span>
+          )}
+        </div>
+      </PrefRow>
+
+      <PrefRow
+        id="conn-slack-id"
+        label="Slack user ID"
+        description="Find at app.slack.com/client/T.../profile → click your name → More → Copy member ID."
+      >
+        <div className="flex flex-col items-end gap-1.5">
+          <div className="flex items-center gap-2">
+            <input
+              id="conn-slack-id"
+              type="text"
+              value={slackInput}
+              onChange={(e) => setSlackInput(e.target.value)}
+              placeholder="U0ASVPF5GN6"
+              className="mono text-[11px] bg-bg-raised border border-border-default rounded-md px-2 py-1 w-[140px] focus:outline-none focus:border-[#E8763A] text-text-primary"
+            />
+            <button
+              onClick={handleSaveSlackId}
+              disabled={!memberId || slackSaving}
+              className="mono text-[10px] uppercase tracking-[0.14em] px-2.5 py-1 rounded-md border border-border-default text-text-secondary hover:border-border-hover hover:text-text-primary disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {slackSaving ? 'Saving…' : 'Save'}
+            </button>
+          </div>
+          {slackError && (
+            <span className="mono text-[10px] text-[#E14B4B]">{slackError}</span>
+          )}
+          {slackSavedAt && !slackError && (
+            <span className="mono text-[10px] text-[#2E8E66]">Saved</span>
+          )}
+        </div>
+      </PrefRow>
+    </>
   );
 }
 

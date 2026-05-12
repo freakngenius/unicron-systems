@@ -507,3 +507,57 @@ export const extractCallActionItemsRun = inngest.createFunction(
     );
   },
 );
+
+// ---------------------------------------------------------------------------
+// Calendar pull — Item 4 of the Atrium usefulness pass (2026-05-12)
+// ---------------------------------------------------------------------------
+
+/**
+ * Hourly pull of every team member's Google Calendar (today + tomorrow) into
+ * nervous_system.calendar_events. No-op when GOOGLE_OAUTH_CLIENT_ID/SECRET
+ * are unset — see the credential-gap Bug Fix card.
+ */
+export const calendarPullHourlyCron = inngest.createFunction(
+  { id: 'calendar-pull-hourly', name: 'Calendar Pull Hourly', retries: 1 },
+  { cron: '0 * * * *' },
+  async ({ step }) => {
+    const { runCalendarPull } = await import('./calendar-pull.js');
+    return step.run('calendar-pull', () => runCalendarPull());
+  },
+);
+
+export const calendarPullRun = inngest.createFunction(
+  { id: 'calendar-pull-run', name: 'Calendar Pull Run', retries: 1 },
+  { event: 'calendar/pull.run' },
+  async ({ step }) => {
+    const { runCalendarPull } = await import('./calendar-pull.js');
+    return step.run('calendar-pull', () => runCalendarPull());
+  },
+);
+
+// ---------------------------------------------------------------------------
+// Atrium incremental refresh — Item 7 of the usefulness pass
+// ---------------------------------------------------------------------------
+
+/**
+ * Lightweight 3-hour refresh that augments today's slack_daily_digest with
+ * in-progress takeaways since the last full scan. Cron times below match the
+ * spec (08/11/14/17/20/23 America/New_York).
+ */
+export const atriumIncrementalRefreshCron = inngest.createFunction(
+  { id: 'atrium-incremental-refresh', name: 'Atrium Incremental Refresh', retries: 1 },
+  { cron: 'TZ=America/New_York 0 8,11,14,17,20,23 * * *' },
+  async ({ step }) => {
+    const { runIncrementalRefresh } = await import('./atrium-incremental-refresh.js');
+    return step.run('atrium-incremental-refresh', () => runIncrementalRefresh());
+  },
+);
+
+export const atriumIncrementalRefreshRun = inngest.createFunction(
+  { id: 'atrium-incremental-refresh-run', name: 'Atrium Incremental Refresh Run', retries: 1 },
+  { event: 'atrium/incremental-refresh.run' },
+  async ({ step }) => {
+    const { runIncrementalRefresh } = await import('./atrium-incremental-refresh.js');
+    return step.run('atrium-incremental-refresh', () => runIncrementalRefresh());
+  },
+);

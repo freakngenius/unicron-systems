@@ -2207,18 +2207,81 @@ function OvernightSummary({
   );
 }
 
-// Today's calendar panel — until the calendar OAuth feature ships there is no
-// nervous_system.calendar_events table, so render a CTA pointing to
-// Settings > Connections (the Connections section is the new placeholder
-// surface; the OAuth flow itself is a separate Bug Fix card).
-function TodaysCalendarPanel({ onOpenSettings }: { onOpenSettings?: () => void }) {
+// Today's calendar panel — reads nervous_system.calendar_events when the user
+// has connected their Google Calendar; otherwise renders a CTA pointing to
+// Settings > Connections. Item 4 of the Atrium usefulness pass (2026-05-12).
+interface CalendarTodayRow {
+  id: string;
+  title: string | null;
+  start_at: string;
+  end_at: string | null;
+  attendees: unknown;
+  location: string | null;
+}
+
+function useCalendarToday(ownerId: string | null) {
+  const [rows, setRows] = useState<CalendarTodayRow[] | null>(null);
+  const [loading, setLoading] = useState(false);
+  useEffect(() => {
+    if (!ownerId) { setRows(null); return; }
+    let cancelled = false;
+    setLoading(true);
+    getSupabase()
+      .rpc('ns_list_calendar_today', { p_owner_id: ownerId })
+      .then(({ data }) => {
+        if (cancelled) return;
+        setRows((data as CalendarTodayRow[] | null) ?? []);
+        setLoading(false);
+      })
+      .catch(() => { if (!cancelled) { setRows([]); setLoading(false); } });
+    return () => { cancelled = true; };
+  }, [ownerId]);
+  return { rows, loading };
+}
+
+function TodaysCalendarPanel({ onOpenSettings, teamMemberId }: { onOpenSettings?: () => void; teamMemberId?: string | null }) {
+  const { rows, loading } = useCalendarToday(teamMemberId ?? null);
+
+  if (loading) {
+    return (
+      <div className="bg-bg-card border border-border-default rounded-xl p-5">
+        <div className="mono text-[10px] uppercase tracking-[0.18em] text-text-secondary mb-3">
+          Today&apos;s calendar
+        </div>
+        <div className="mono text-[11px] text-text-muted animate-pulse">loading…</div>
+      </div>
+    );
+  }
+
+  if (rows && rows.length > 0) {
+    return (
+      <div className="bg-bg-card border border-border-default rounded-xl p-5">
+        <div className="mono text-[10px] uppercase tracking-[0.18em] text-text-secondary mb-3">
+          Today&apos;s calendar
+        </div>
+        <ul className="flex flex-col gap-2">
+          {rows.map((ev) => {
+            const start = new Date(ev.start_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+            const end = ev.end_at ? new Date(ev.end_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : null;
+            return (
+              <li key={ev.id} className="flex items-baseline gap-3">
+                <span className="mono text-[11px] text-text-muted w-[80px] shrink-0">{start}{end ? `–${end}` : ''}</span>
+                <span className="mono text-[12px] text-text-primary truncate">{ev.title ?? '(untitled)'}</span>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+    );
+  }
+
   return (
     <div className="bg-bg-card border border-border-default rounded-xl p-5">
       <div className="mono text-[10px] uppercase tracking-[0.18em] text-text-secondary mb-3">
         Today&apos;s calendar
       </div>
       <div className="mono text-[13px] text-text-primary mb-1.5">
-        No calendar connected yet.
+        {rows === null ? 'No calendar connected yet.' : 'No events today.'}
       </div>
       {onOpenSettings ? (
         <button
@@ -2226,7 +2289,7 @@ function TodaysCalendarPanel({ onOpenSettings }: { onOpenSettings?: () => void }
           onClick={onOpenSettings}
           className="mono text-[12px] text-[#6081BE] hover:underline underline-offset-2"
         >
-          Connect calendar in Settings → Connections
+          {rows === null ? 'Connect calendar in Settings → Connections' : 'Manage calendar in Settings → Connections'}
         </button>
       ) : (
         <div className="mono text-[12px] text-text-secondary">
@@ -2531,7 +2594,7 @@ export function Now({ name }: Props) {
           </div>
 
           {/* Today's calendar — Settings > Connections CTA until OAuth ships */}
-          <TodaysCalendarPanel onOpenSettings={() => openAtriumSettings('connections')} />
+          <TodaysCalendarPanel onOpenSettings={() => openAtriumSettings('connections')} teamMemberId={teamMemberId} />
         </div>
 
         {/* RIGHT rail — three meaningful cards + LLM spend footer micro-line */}
