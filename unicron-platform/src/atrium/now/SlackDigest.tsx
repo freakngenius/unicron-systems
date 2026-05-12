@@ -176,11 +176,23 @@ function parseChannelNameFromSummary(s: string | null): string {
 
 // ─── Component ──────────────────────────────────────────────────────────────
 
-export function SlackDigest() {
+interface SlackDigestProps {
+  /**
+   * Optional — when omitted, the component owns its own date state (legacy
+   * standalone usage). When provided, the component is controlled by the
+   * page-level picker in DigestTab and renders no internal date nav.
+   */
+  date?: string;
+}
+
+export function SlackDigest({ date: dateProp }: SlackDigestProps = {}) {
   const today = todayInPT();
   const beforeSixPT = ptHour() < 6;
   const initialDate = beforeSixPT ? shiftDate(today, -1) : today;
-  const [date, setDate] = useState(initialDate);
+  const [internalDate, setInternalDate] = useState(initialDate);
+  const date = dateProp ?? internalDate;
+  const setDate = setInternalDate;
+  const controlled = dateProp !== undefined;
   const [payload, setPayload] = useState<DigestPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -236,46 +248,45 @@ export function SlackDigest() {
       <div className="flex flex-col gap-4">
         {/* ─── Header card ─── */}
         <div className="bg-bg-card border border-border-default rounded-xl px-5 py-5">
-          <div className="flex items-start justify-between flex-wrap gap-4 mb-4">
+          <div className="flex items-start justify-between flex-wrap gap-4 mb-3">
             <div>
               <div className="mono text-[10px] uppercase tracking-[0.18em] text-[var(--accent)] font-semibold mb-1">
                 Slack daily digest
               </div>
-              <div className="mono text-[22px] font-medium text-text-primary leading-tight">
-                {relativeLabel(date)}
-              </div>
-              <div className="mono text-[10px] text-text-muted mt-1.5">
-                {formatDisplayDate(date)} ·{' '}
+              <div className="mono text-[10px] text-text-muted">
                 {exists
                   ? `${digest?.channel_count ?? 0} channels · ${digest?.message_count ?? 0} messages`
                   : 'no scan yet'}
               </div>
             </div>
 
-            <div className="flex items-center gap-1.5 shrink-0">
-              <button
-                onClick={() => setDate(shiftDate(date, -1))}
-                className="w-8 h-8 flex items-center justify-center bg-bg-raised border border-border-default rounded-lg mono text-text-secondary hover:text-text-primary hover:border-border-hover transition-colors"
-                aria-label="Previous day"
-              >
-                ←
-              </button>
-              <input
-                type="date"
-                value={date}
-                max={today}
-                onChange={(e) => setDate(e.target.value)}
-                className="bg-bg-raised border border-border-default rounded-lg px-2.5 py-1.5 mono text-[12px] text-text-primary focus:outline-none focus:border-border-hover"
-              />
-              <button
-                onClick={() => setDate(shiftDate(date, +1))}
-                disabled={date >= today}
-                className="w-8 h-8 flex items-center justify-center bg-bg-raised border border-border-default rounded-lg mono text-text-secondary hover:text-text-primary hover:border-border-hover transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                aria-label="Next day"
-              >
-                →
-              </button>
-            </div>
+            {/* Internal date picker — only when uncontrolled (no `date` prop). */}
+            {!controlled && (
+              <div className="flex items-center gap-1.5 shrink-0">
+                <button
+                  onClick={() => setDate(shiftDate(date, -1))}
+                  className="w-8 h-8 flex items-center justify-center bg-bg-raised border border-border-default rounded-lg mono text-text-secondary hover:text-text-primary hover:border-border-hover transition-colors"
+                  aria-label="Previous day"
+                >
+                  ←
+                </button>
+                <input
+                  type="date"
+                  value={date}
+                  max={today}
+                  onChange={(e) => setDate(e.target.value)}
+                  className="bg-bg-raised border border-border-default rounded-lg px-2.5 py-1.5 mono text-[12px] text-text-primary focus:outline-none focus:border-border-hover"
+                />
+                <button
+                  onClick={() => setDate(shiftDate(date, +1))}
+                  disabled={date >= today}
+                  className="w-8 h-8 flex items-center justify-center bg-bg-raised border border-border-default rounded-lg mono text-text-secondary hover:text-text-primary hover:border-border-hover transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                  aria-label="Next day"
+                >
+                  →
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Top theme — small subtitle */}

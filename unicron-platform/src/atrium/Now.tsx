@@ -935,21 +935,93 @@ function ActivityTab() {
 }
 
 // ─── DigestTab — N-5 (vault Analyst digest) + S3 (Slack daily-scan) ──────────
-// Composition: SlackDigest (S3) renders ABOVE the existing Analyst-vault
-// digest. Slack is the more action-bearing surface, so it leads.
+// Page-level shared date picker. Both Analyst-vault and Slack-scan tiles read
+// from the same `date` state. Render order: picker → Analyst → Slack.
+
+function digestTodayPT(): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Los_Angeles',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date());
+}
+
+function digestShiftDate(iso: string, delta: number): string {
+  const d = new Date(iso + 'T12:00:00Z');
+  d.setUTCDate(d.getUTCDate() + delta);
+  return d.toISOString().slice(0, 10);
+}
+
+function digestRelativeLabel(iso: string): string {
+  const today = digestTodayPT();
+  if (iso === today) return 'Today';
+  if (iso === digestShiftDate(today, -1)) return 'Yesterday';
+  return new Date(iso + 'T12:00:00Z').toLocaleDateString('en-US', {
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'America/Los_Angeles',
+  });
+}
+
+function digestFormatDisplayDate(iso: string): string {
+  return new Date(iso + 'T12:00:00Z').toLocaleDateString('en-US', {
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'America/Los_Angeles',
+  });
+}
 
 function DigestTab() {
+  const today = digestTodayPT();
+  const [date, setDate] = useState(today);
+
   return (
     <div className="flex flex-col gap-6">
-      <SlackDigest />
-      <AnalystVaultDigest />
+      {/* Page-level date picker — drives both tiles below. */}
+      <div className="bg-bg-card border border-border-default rounded-xl px-5 py-5">
+        <div className="flex items-start justify-between flex-wrap gap-4">
+          <div>
+            <div className="mono text-[10px] uppercase tracking-[0.18em] text-[var(--accent)] font-semibold mb-1">
+              Daily digest
+            </div>
+            <div className="mono text-[22px] font-medium text-text-primary leading-tight">
+              {digestRelativeLabel(date)}
+            </div>
+            <div className="mono text-[10px] text-text-muted mt-1.5">
+              {digestFormatDisplayDate(date)}
+            </div>
+          </div>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button
+              onClick={() => setDate(digestShiftDate(date, -1))}
+              className="w-8 h-8 flex items-center justify-center bg-bg-raised border border-border-default rounded-lg mono text-text-secondary hover:text-text-primary hover:border-border-hover transition-colors"
+              aria-label="Previous day"
+            >
+              ←
+            </button>
+            <input
+              type="date"
+              value={date}
+              max={today}
+              onChange={(e) => setDate(e.target.value)}
+              className="bg-bg-raised border border-border-default rounded-lg px-2.5 py-1.5 mono text-[12px] text-text-primary focus:outline-none focus:border-border-hover"
+            />
+            <button
+              onClick={() => setDate(digestShiftDate(date, +1))}
+              disabled={date >= today}
+              className="w-8 h-8 flex items-center justify-center bg-bg-raised border border-border-default rounded-lg mono text-text-secondary hover:text-text-primary hover:border-border-hover transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+              aria-label="Next day"
+            >
+              →
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <AnalystVaultDigest date={date} />
+      <SlackDigest date={date} />
     </div>
   );
 }
 
-function AnalystVaultDigest() {
-  const today = new Date().toISOString().split('T')[0];
-  const [date, setDate] = useState(today);
+function AnalystVaultDigest({ date }: { date: string }) {
   const [content, setContent] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -997,58 +1069,17 @@ function AnalystVaultDigest() {
     };
   }, [content]);
 
-  function shiftDate(delta: number) {
-    const d = new Date(date + 'T12:00:00');
-    d.setDate(d.getDate() + delta);
-    setDate(d.toISOString().split('T')[0]);
-  }
-
-  const displayDate = new Date(date + 'T12:00:00').toLocaleDateString('en-US', {
-    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
-  });
-
   const SECTION_LABELS = ['Calls', 'Actions', 'PRs', 'Taboos', 'Decay', 'Sprints'];
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Header card */}
+      {/* Header card — eyebrow + narrative; date already rendered at the page level. */}
       <div className="bg-bg-card border border-border-default rounded-xl px-5 py-5">
-        <div className="flex items-start justify-between flex-wrap gap-4 mb-4">
-          <div>
-            <div className="mono text-[10px] uppercase tracking-[0.18em] text-[var(--accent)] font-semibold mb-1">
-              Analyst · Daily digest
-            </div>
-            <div className="mono text-[22px] font-medium text-text-primary leading-tight">{displayDate}</div>
-            <div className="mono text-[10px] text-text-muted mt-1.5">
-              vault/Memory/analyst/{date}.md
-            </div>
-          </div>
-
-          {/* Date nav */}
-          <div className="flex items-center gap-1.5 shrink-0">
-            <button
-              onClick={() => shiftDate(-1)}
-              className="w-8 h-8 flex items-center justify-center bg-bg-raised border border-border-default rounded-lg mono text-text-secondary hover:text-text-primary hover:border-border-hover transition-colors"
-              aria-label="Previous day"
-            >
-              ←
-            </button>
-            <input
-              type="date"
-              value={date}
-              max={today}
-              onChange={(e) => setDate(e.target.value)}
-              className="bg-bg-raised border border-border-default rounded-lg px-2.5 py-1.5 mono text-[12px] text-text-primary focus:outline-none focus:border-border-hover"
-            />
-            <button
-              onClick={() => shiftDate(1)}
-              disabled={date >= today}
-              className="w-8 h-8 flex items-center justify-center bg-bg-raised border border-border-default rounded-lg mono text-text-secondary hover:text-text-primary hover:border-border-hover transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-              aria-label="Next day"
-            >
-              →
-            </button>
-          </div>
+        <div className="mono text-[10px] uppercase tracking-[0.18em] text-[var(--accent)] font-semibold mb-1">
+          Analyst · Daily digest
+        </div>
+        <div className="mono text-[10px] text-text-muted mb-3">
+          vault/Memory/analyst/{date}.md
         </div>
 
         {loading ? (
