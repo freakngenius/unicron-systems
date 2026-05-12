@@ -19,7 +19,7 @@ import { I } from "./icons";
    V3VoiceTabs — Agents / Campaigns / Activity sub-nav for the
    Voice sub-tab inside Products. State-driven (no URL routing).
    ============================================================ */
-export type VoiceSubSection = "agents" | "campaigns" | "activity";
+export type VoiceSubSection = "agents" | "campaigns" | "activity" | "account";
 
 export function V3VoiceTabs({
   active,
@@ -32,6 +32,7 @@ export function V3VoiceTabs({
     { id: "agents",     label: "Agents",     icon: I.Phone },
     { id: "campaigns",  label: "Campaigns",  icon: I.Calendar },
     { id: "activity",   label: "Activity",   icon: I.Activity },
+    { id: "account",    label: "Account",    icon: I.CreditCard },
   ];
   return (
     <div

@@ -22,6 +22,7 @@ deploy will still build without them, but voice handlers will 500.
 | `CRON_SECRET` | Already present. |
 | `VOICE_ALLOWLIST` | Comma-separated E.164 phone numbers. Hard whitelist of phones the system may dial. Required as a global circuit breaker — set to a known-safe test number while bringing up; production set per `voice_agent_sources.allowlist_phones`. |
 | `INTERNAL_VOICE_DISPATCH_TOKEN` | **Optional / follow-up:** if set, `api/cron/voice/procurement-pull.ts` passes it as `Authorization: Bearer ...` to `api/voice/dispatch`. Required only after a future change makes `requireVoiceAccess` accept this token. Foundation merge ships without this wired, so cron→dispatch will 401 until the follow-up lands. |
+| `HUBSPOT_PRIVATE_APP_TOKEN` | **Added in Sprint 5 Stream A — Voice Surface Parity Catch-up.** HubSpot Private App token consumed by `src/lib/voice/hubspot.ts` for two purposes: (1) `phoneInHubspotFilter` lookups when an agent's `allowlist_mode = 'hubspot'`, and (2) `logSdrOutcome` writing call outcomes back as HubSpot Call activities. Missing token causes both helpers to short-circuit with `{ ok: false, skipped: true }` — voice dispatch keeps working for `allowlist` and `open` modes; only `hubspot` mode rejects with `"HUBSPOT_PRIVATE_APP_TOKEN not set"`. Get the token from HubSpot Settings → Integrations → Private Apps. |
 
 ## Client-exposed (Vite-bundled)
 
