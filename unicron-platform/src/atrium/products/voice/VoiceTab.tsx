@@ -10,6 +10,7 @@ import type { VoiceSubSection } from "./components/v3primitives";
 import { VoiceAgentsView } from "./VoiceAgentsView";
 import { VoiceCampaignsView } from "./VoiceCampaignsView";
 import { VoiceActivityView } from "./VoiceActivityView";
+import { VoiceAccountView } from "./VoiceAccountView";
 
 export function VoiceTab() {
   const [sub, setSub] = useState<VoiceSubSection>("agents");
@@ -26,6 +27,7 @@ export function VoiceTab() {
           {sub === "agents"    && <VoiceAgentsView />}
           {sub === "campaigns" && <VoiceCampaignsView />}
           {sub === "activity"  && <VoiceActivityView />}
+          {sub === "account"   && <VoiceAccountView />}
         </div>
       </V3PageBody>
     </div>
