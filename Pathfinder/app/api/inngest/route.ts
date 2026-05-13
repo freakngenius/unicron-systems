@@ -19,6 +19,7 @@ import {
   coverageExpansionRun,
   ingestRouter,
   ingestAllOrgsCron,
+  verifyBuildOut,
 } from '@/lib/inngest/functions';
 
 export const { GET, POST, PUT } = serve({
@@ -36,6 +37,8 @@ export const { GET, POST, PUT } = serve({
     coverageExpansionRun,
     ingestRouter,
     ingestAllOrgsCron,
+    // Build-Out Pass slices 3+5 — subscribes to pathfinder/org.ready_to_view.
+    verifyBuildOut,
   ],
 });
 

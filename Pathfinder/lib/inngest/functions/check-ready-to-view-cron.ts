@@ -148,6 +148,21 @@ export const checkReadyToViewCron = inngest.createFunction(
         },
       });
 
+      // Build-Out Pass slice 3+5: emit org.ready_to_view on the ready_to_view
+      // transition so `verifyBuildOut` can HTTP-check the /[slug] route and
+      // flip status to build_out_complete / build_out_failed.
+      if (next_status === 'ready_to_view') {
+        await stepCtx.sendEvent(`ready-to-view-${org.slug}`, {
+          name: 'pathfinder/org.ready_to_view',
+          data: {
+            organization_id: org.id,
+            slug: org.slug,
+            verified_count: counts.verified,
+            transitioned_at: new Date().toISOString(),
+          },
+        });
+      }
+
       transitions.push({
         organization_id: org.id,
         slug: org.slug,
