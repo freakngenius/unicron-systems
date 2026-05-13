@@ -1,19 +1,26 @@
 // lib/calls-action-item-flow.ts — Calls Ingestion Sprint Stream C6
+//                                  + Bug Fix 2026-05-13 (fan-out expansion)
 //
-// End-to-end action-item extraction pipeline. Called by:
+// End-to-end transcript fan-out pipeline. Called by:
 //   - Inngest function actionItemsExtractFromCallRun (event: call/transcript.uploaded)
-//   - Manual trigger via /api/atrium/calls/:id/extract-action-items (future)
+//   - Sync from api/atrium/calls/upload.ts via processCallUpload (so the modal
+//     can render extracted counts in its success view)
 //
-// Flow:
-//   1. Load the call from nervous_system.calls (or the freshly-uploaded ledger row).
-//   2. Send the transcript + summary_notes to Claude with a structured-output
-//      prompt asking for action items with title/owner/outcome/steps/due/priority.
-//   3. For each extracted item:
-//      a. INSERT into nervous_system.action_items via ns_create_action_item_from_call.
-//      b. Create a Notion task in the Internal Org Kanban (NOTION_DB_INTERNAL_KANBAN)
-//         linking back to the call's Notion page.
-//      c. Patch the action_item row with the resulting Notion page id.
-//      d. Append a bullet to the call's Notion page body via linkActionItemToCall.
+// Single LLM call returns:
+//   { action_items: [...], decisions: [...], customer_mentions: [...] }
+//
+// Fan-out writes (all audit_log-gated):
+//   1. For each action_item:
+//        - ns_create_action_item_from_call → nervous_system.action_items
+//        - Internal Org Kanban page (Notion)
+//        - ns_set_action_item_notion_page_id
+//        - linkActionItemToCall → bullet on the call's Notion page
+//   2. For each decision:
+//        - ns_create_decision_from_call → ledger row source_type='decision',
+//          insights.parent_call_ledger_id linking back to the call
+//   3. ns_link_call_customer_mentions(call_ledger_id, mentions[]) → patches the
+//      call's ledger row with insights.mentioned_customers + sets customer_id
+//      to the dominant resolved customer
 //
 // LLM call is gated by ANTHROPIC_API_KEY. When unset, the flow short-circuits
 // to a no-op with a clear reason — the rest of the call ingestion still works
@@ -28,24 +35,47 @@ import { linkActionItemToCall } from './notion-call-transcripts.js';
 export interface ExtractedActionItem {
   title: string;
   description: string;
-  owner: string;            // "Kyle" | "Keenan" | "Curtis" | "Co-Pilot" | external name
+  owner: string;
   outcome: string;
   steps: string[];
   priority: 'high' | 'medium' | 'low';
-  due_iso: string | null;   // ISO datetime when inferable, else null
+  due_iso: string | null;
+}
+
+export interface ExtractedDecision {
+  decision: string;       // the decision text (what was decided)
+  decided_by: string;     // who decided (free-text speaker label)
+  rationale: string;      // why; may be empty
+}
+
+export interface ExtractedCustomerMention {
+  name: string;           // customer name as spoken/written
+  quote: string;          // verbatim transcript span supporting the mention
+  confidence: number;     // 0..1
+}
+
+export interface ExtractedBundle {
+  action_items: ExtractedActionItem[];
+  decisions: ExtractedDecision[];
+  customer_mentions: ExtractedCustomerMention[];
 }
 
 export interface FlowInput {
-  call_id: string;             // nervous_system.calls.id (or ledger id when running pre-mirror)
+  call_id: string;             // nervous_system.ledger.id of the call row
   call_notion_page_id: string;
   call_notion_url: string;
   call_title: string | null;
-  transcript_text: string;     // joined transcript + summary
+  transcript_text: string;
   participants: string[];
+  uploaded_by?: string;        // operator email; used by audit_log payloads
 }
 
 export interface FlowResult {
-  extracted_count: number;
+  extracted_counts: {
+    action_items: number;
+    decisions: number;
+    customer_mentions: number;
+  };
   written_action_items: Array<{
     id: string;
     title: string;
@@ -53,6 +83,15 @@ export interface FlowResult {
     priority: string;
     notion_page_id: string | null;
   }>;
+  written_decisions: Array<{ id: string; decision: string; decided_by: string }>;
+  customer_mentions_result: {
+    resolved: Array<{ name: string; customer_id: string; customer_name: string; quote: string; confidence: number }>;
+    unresolved: Array<{ name: string; quote: string; confidence: number }>;
+    dominant_customer_id: string | null;
+    dominant_customer_name: string | null;
+    count_resolved: number;
+    count_unresolved: number;
+  };
   errors: string[];
   skipped_reason?: string;
 }
@@ -74,22 +113,47 @@ function getServiceSupabase() {
 
 // ─── Extraction prompt ────────────────────────────────────────────────────────
 
-const EXTRACTION_SYSTEM = `You are an action-item extractor for a 2-person company called Unicron Systems.
-You read a call transcript and surface every explicit commitment, follow-up, or deliverable.
+const EXTRACTION_SYSTEM = `You extract structured intelligence from a call transcript for a 2-person company called Unicron Systems.
 
-Output a JSON object with one key "action_items" whose value is an array. Each item must have:
-  - title:       short imperative phrase, e.g. "Send Zedcor the pilot SOW"
-  - description: one or two sentence rationale based on the transcript context
-  - owner:       one of "Kyle", "Keenan", "Curtis", "Co-Pilot", or a free-text external name.
-                 "Co-Pilot" means the autonomous AI agent can do this without a human.
-                 Use the closest match — never invent owners.
-  - outcome:     what "done" looks like in one sentence
-  - steps:       array of 1-5 concrete sub-steps
-  - priority:    "high" | "medium" | "low" based on urgency signals in the conversation
-  - due_iso:     ISO 8601 datetime when a deadline is stated or inferable, else null
+Return ONE JSON object with EXACTLY these three top-level keys:
+{
+  "action_items":      [ ... ],
+  "decisions":         [ ... ],
+  "customer_mentions": [ ... ]
+}
 
-If no action items are present, return { "action_items": [] }.
-Output ONLY the JSON object — no surrounding text, no markdown fences.`;
+action_items — every explicit commitment, follow-up, or deliverable spoken on the call.
+  Each item:
+    - title:       short imperative phrase, e.g. "Send Zedcor the pilot SOW"
+    - description: one or two sentence rationale based on the transcript context
+    - owner:       one of "Kyle", "Keenan", "Curtis", "Co-Pilot", or a free-text external name.
+                   "Co-Pilot" means the autonomous AI agent can do this without a human.
+                   Use the closest match — never invent owners.
+    - outcome:     what "done" looks like in one sentence
+    - steps:       array of 1-5 concrete sub-steps
+    - priority:    "high" | "medium" | "low" based on urgency signals in the conversation
+    - due_iso:     ISO 8601 datetime when a deadline is stated or inferable, else null
+
+decisions — every concrete decision reached on the call. A decision is a choice between
+alternatives, an architectural call, a customer promise, or a public statement that
+forecloses future options. Casual opinions are NOT decisions; commitments to act are
+action_items, not decisions.
+  Each item:
+    - decision:   one-sentence description of what was decided (verbatim if possible)
+    - decided_by: who decided it, as a free-text speaker label (use "Kyle", "Keenan",
+                  "Curtis", a customer name, or "joint" when multiple parties agreed)
+    - rationale:  brief reason if stated; empty string if not
+
+customer_mentions — every named customer, prospect, vendor, competitor, or company
+mentioned during the call. Names only — no roles, no products. Each unique name once.
+  Each item:
+    - name:       the company / person name as spoken
+    - quote:      verbatim transcript span where the name appears (a sentence is fine)
+    - confidence: 0..1 — your confidence that this is a real, distinct entity (not a
+                  pronoun or vague reference)
+
+If a category has no items, return an empty array. Output ONLY the JSON object — no
+prose, no markdown fences.`;
 
 function buildExtractionUserMessage(input: FlowInput): string {
   const meta = [
@@ -101,49 +165,95 @@ function buildExtractionUserMessage(input: FlowInput): string {
 }
 
 // Defensive JSON parser — Claude sometimes prefixes/suffixes with prose.
-function parseExtractionResponse(raw: string): ExtractedActionItem[] {
+function parseExtractionResponse(raw: string): ExtractedBundle {
+  const empty: ExtractedBundle = { action_items: [], decisions: [], customer_mentions: [] };
   const first = raw.indexOf('{');
   const last = raw.lastIndexOf('}');
-  if (first === -1 || last === -1 || last <= first) return [];
+  if (first === -1 || last === -1 || last <= first) return empty;
   const slice = raw.slice(first, last + 1);
   let parsed: unknown;
   try {
     parsed = JSON.parse(slice);
   } catch {
-    return [];
+    return empty;
   }
-  if (!parsed || typeof parsed !== 'object') return [];
-  const items = (parsed as { action_items?: unknown }).action_items;
-  if (!Array.isArray(items)) return [];
-  return items
-    .map((r): ExtractedActionItem | null => {
-      if (!r || typeof r !== 'object') return null;
-      const row = r as Partial<ExtractedActionItem>;
-      if (!row.title || typeof row.title !== 'string') return null;
-      const owner = typeof row.owner === 'string' && row.owner.trim() ? row.owner.trim() : 'Co-Pilot';
-      const priorityRaw = typeof row.priority === 'string' ? row.priority.toLowerCase() : 'medium';
-      const priority: ExtractedActionItem['priority'] =
-        priorityRaw === 'high' || priorityRaw === 'low' ? priorityRaw : 'medium';
-      return {
-        title: row.title.trim(),
-        description: typeof row.description === 'string' ? row.description.trim() : '',
-        owner,
-        outcome: typeof row.outcome === 'string' ? row.outcome.trim() : '',
-        steps: Array.isArray(row.steps) ? row.steps.filter((s): s is string => typeof s === 'string').slice(0, 5) : [],
-        priority,
-        due_iso: typeof row.due_iso === 'string' && /^\d{4}-\d{2}-\d{2}/.test(row.due_iso) ? row.due_iso : null,
-      };
-    })
-    .filter((x): x is ExtractedActionItem => x !== null);
+  if (!parsed || typeof parsed !== 'object') return empty;
+  const obj = parsed as Record<string, unknown>;
+
+  const action_items = Array.isArray(obj.action_items)
+    ? obj.action_items
+        .map((r): ExtractedActionItem | null => {
+          if (!r || typeof r !== 'object') return null;
+          const row = r as Partial<ExtractedActionItem>;
+          if (!row.title || typeof row.title !== 'string') return null;
+          const owner = typeof row.owner === 'string' && row.owner.trim() ? row.owner.trim() : 'Co-Pilot';
+          const priorityRaw = typeof row.priority === 'string' ? row.priority.toLowerCase() : 'medium';
+          const priority: ExtractedActionItem['priority'] =
+            priorityRaw === 'high' || priorityRaw === 'low' ? priorityRaw : 'medium';
+          return {
+            title: row.title.trim(),
+            description: typeof row.description === 'string' ? row.description.trim() : '',
+            owner,
+            outcome: typeof row.outcome === 'string' ? row.outcome.trim() : '',
+            steps: Array.isArray(row.steps) ? row.steps.filter((s): s is string => typeof s === 'string').slice(0, 5) : [],
+            priority,
+            due_iso: typeof row.due_iso === 'string' && /^\d{4}-\d{2}-\d{2}/.test(row.due_iso) ? row.due_iso : null,
+          };
+        })
+        .filter((x): x is ExtractedActionItem => x !== null)
+    : [];
+
+  const decisions = Array.isArray(obj.decisions)
+    ? obj.decisions
+        .map((r): ExtractedDecision | null => {
+          if (!r || typeof r !== 'object') return null;
+          const row = r as Partial<ExtractedDecision>;
+          if (!row.decision || typeof row.decision !== 'string' || !row.decision.trim()) return null;
+          return {
+            decision: row.decision.trim(),
+            decided_by: typeof row.decided_by === 'string' ? row.decided_by.trim() : '',
+            rationale: typeof row.rationale === 'string' ? row.rationale.trim() : '',
+          };
+        })
+        .filter((x): x is ExtractedDecision => x !== null)
+    : [];
+
+  const customer_mentions = Array.isArray(obj.customer_mentions)
+    ? obj.customer_mentions
+        .map((r): ExtractedCustomerMention | null => {
+          if (!r || typeof r !== 'object') return null;
+          const row = r as Partial<ExtractedCustomerMention>;
+          if (!row.name || typeof row.name !== 'string' || !row.name.trim()) return null;
+          const conf = typeof row.confidence === 'number' ? Math.max(0, Math.min(1, row.confidence)) : 0.5;
+          return {
+            name: row.name.trim(),
+            quote: typeof row.quote === 'string' ? row.quote.trim() : '',
+            confidence: conf,
+          };
+        })
+        .filter((x): x is ExtractedCustomerMention => x !== null)
+    : [];
+
+  // Deduplicate customer_mentions by case-insensitive name; keep first occurrence.
+  const seen = new Set<string>();
+  const deduped: ExtractedCustomerMention[] = [];
+  for (const m of customer_mentions) {
+    const k = m.name.toLowerCase();
+    if (seen.has(k)) continue;
+    seen.add(k);
+    deduped.push(m);
+  }
+
+  return { action_items, decisions, customer_mentions: deduped };
 }
 
-export async function extractActionItems(input: FlowInput): Promise<ExtractedActionItem[]> {
+export async function extractBundle(input: FlowInput): Promise<ExtractedBundle> {
   const anthropic = getAnthropic();
-  if (!anthropic) return [];
+  if (!anthropic) return { action_items: [], decisions: [], customer_mentions: [] };
 
   const res = await anthropic.messages.create({
     model: 'claude-sonnet-4-6',
-    max_tokens: 2048,
+    max_tokens: 3072,
     system: EXTRACTION_SYSTEM,
     messages: [{ role: 'user', content: buildExtractionUserMessage(input) }],
   });
@@ -154,6 +264,12 @@ export async function extractActionItems(input: FlowInput): Promise<ExtractedAct
     .join('\n');
 
   return parseExtractionResponse(text);
+}
+
+// Back-compat shim for existing call sites that only want action_items.
+export async function extractActionItems(input: FlowInput): Promise<ExtractedActionItem[]> {
+  const bundle = await extractBundle(input);
+  return bundle.action_items;
 }
 
 // ─── Notion Internal Org Kanban: create card ──────────────────────────────────
@@ -176,15 +292,6 @@ async function createInternalKanbanCard(input: KanbanCardInput): Promise<{ notio
   const dbId = process.env.NOTION_DB_INTERNAL_KANBAN;
   if (!token || !dbId) return null;
 
-  // The Internal Org Kanban schema has Status / Priority / Source / Surface
-  // select columns + DRI + Title. Canonical Status options:
-  //   Backlog | In Process | Review | Deployed | Bug Fixes | Verified | Broken Off
-  // (CLAUDE.md's old "Not Yet Started" label was pre-rename — fetched live
-  // schema is the source of truth.) We seed new cards in Backlog; Co-Pilot
-  // tasks could be promoted to In Process later by an executor.
-  // Priority maps directly to the extracted value (Low | Medium | High |
-  // Irreversible — the schema's "Irreversible" option is the only one we
-  // don't currently emit). Source='Call'.
   const priorityLabel =
     input.priority === 'high' ? 'High' :
     input.priority === 'low'  ? 'Low'  : 'Medium';
@@ -235,28 +342,49 @@ async function createInternalKanbanCard(input: KanbanCardInput): Promise<{ notio
 
 // ─── Public: run() ────────────────────────────────────────────────────────────
 
+const EMPTY_RESULT_BASE: Omit<FlowResult, 'skipped_reason'> = {
+  extracted_counts: { action_items: 0, decisions: 0, customer_mentions: 0 },
+  written_action_items: [],
+  written_decisions: [],
+  customer_mentions_result: {
+    resolved: [],
+    unresolved: [],
+    dominant_customer_id: null,
+    dominant_customer_name: null,
+    count_resolved: 0,
+    count_unresolved: 0,
+  },
+  errors: [],
+};
+
 export async function runActionItemExtraction(input: FlowInput): Promise<FlowResult> {
   if (!process.env.ANTHROPIC_API_KEY) {
     return {
-      extracted_count: 0,
-      written_action_items: [],
-      errors: [],
-      skipped_reason: 'ANTHROPIC_API_KEY not configured — action-item extraction is disabled',
+      ...EMPTY_RESULT_BASE,
+      skipped_reason: 'ANTHROPIC_API_KEY not configured — transcript extraction is disabled',
     };
   }
 
-  const items = await extractActionItems(input);
-  if (items.length === 0) {
-    return { extracted_count: 0, written_action_items: [], errors: [] };
+  const bundle = await extractBundle(input);
+  const counts = {
+    action_items: bundle.action_items.length,
+    decisions: bundle.decisions.length,
+    customer_mentions: bundle.customer_mentions.length,
+  };
+
+  // Short-circuit: nothing extracted at all.
+  if (counts.action_items === 0 && counts.decisions === 0 && counts.customer_mentions === 0) {
+    return { ...EMPTY_RESULT_BASE, extracted_counts: counts };
   }
 
   const sb = getServiceSupabase();
-  const written: FlowResult['written_action_items'] = [];
+  const writtenActionItems: FlowResult['written_action_items'] = [];
+  const writtenDecisions: FlowResult['written_decisions'] = [];
   const errors: string[] = [];
 
-  for (const item of items) {
+  // ─── Action items ───────────────────────────────────────────────────────────
+  for (const item of bundle.action_items) {
     try {
-      // (a) Insert action_items row.
       const { data: actionItemId, error: insertErr } = await sb.rpc('ns_create_action_item_from_call', {
         p_call_id:          input.call_id,
         p_call_notion_url:  input.call_notion_url,
@@ -268,11 +396,10 @@ export async function runActionItemExtraction(input: FlowInput): Promise<FlowRes
         p_kanban_workspace: 'internal',
       });
       if (insertErr || !actionItemId) {
-        errors.push(`insert(${item.title}): ${insertErr?.message ?? 'no id returned'}`);
+        errors.push(`action_item insert(${item.title}): ${insertErr?.message ?? 'no id returned'}`);
         continue;
       }
 
-      // (b) Create Notion Kanban card.
       let notionPageId: string | null = null;
       try {
         const card = await createInternalKanbanCard({
@@ -291,7 +418,6 @@ export async function runActionItemExtraction(input: FlowInput): Promise<FlowRes
             p_notion_page_id: notionPageId,
           });
 
-          // (c) Append a bullet to the call's Notion page body.
           try {
             await linkActionItemToCall(input.call_notion_page_id, {
               action_item_id: actionItemId as string,
@@ -308,7 +434,7 @@ export async function runActionItemExtraction(input: FlowInput): Promise<FlowRes
         errors.push(`kanban-create(${item.title}): ${kanbanErr instanceof Error ? kanbanErr.message : 'unknown'}`);
       }
 
-      written.push({
+      writtenActionItems.push({
         id: actionItemId as string,
         title: item.title,
         owner: item.owner,
@@ -320,9 +446,56 @@ export async function runActionItemExtraction(input: FlowInput): Promise<FlowRes
     }
   }
 
+  // ─── Decisions ──────────────────────────────────────────────────────────────
+  for (const d of bundle.decisions) {
+    try {
+      const { data: decisionId, error: decErr } = await sb.rpc('ns_create_decision_from_call', {
+        p_parent_call_ledger_id:  input.call_id,
+        p_parent_call_notion_url: input.call_notion_url,
+        p_parent_call_title:      input.call_title,
+        p_decision_text:          d.decision,
+        p_rationale:              d.rationale,
+        p_decided_by:             d.decided_by,
+        p_uploaded_by:            input.uploaded_by ?? 'unknown',
+      });
+      if (decErr || !decisionId) {
+        errors.push(`decision insert: ${decErr?.message ?? 'no id returned'}`);
+        continue;
+      }
+      writtenDecisions.push({
+        id: decisionId as string,
+        decision: d.decision,
+        decided_by: d.decided_by,
+      });
+    } catch (err) {
+      errors.push(`decision: ${err instanceof Error ? err.message : 'unknown'}`);
+    }
+  }
+
+  // ─── Customer mentions (batch RPC) ──────────────────────────────────────────
+  let customerMentionsResult = EMPTY_RESULT_BASE.customer_mentions_result;
+  if (bundle.customer_mentions.length > 0) {
+    try {
+      const { data, error: cmErr } = await sb.rpc('ns_link_call_customer_mentions', {
+        p_call_ledger_id: input.call_id,
+        p_mentions:       bundle.customer_mentions,
+        p_uploaded_by:    input.uploaded_by ?? 'unknown',
+      });
+      if (cmErr) {
+        errors.push(`customer_mentions: ${cmErr.message}`);
+      } else if (data) {
+        customerMentionsResult = data as FlowResult['customer_mentions_result'];
+      }
+    } catch (err) {
+      errors.push(`customer_mentions: ${err instanceof Error ? err.message : 'unknown'}`);
+    }
+  }
+
   return {
-    extracted_count: items.length,
-    written_action_items: written,
+    extracted_counts: counts,
+    written_action_items: writtenActionItems,
+    written_decisions: writtenDecisions,
+    customer_mentions_result: customerMentionsResult,
     errors,
   };
 }

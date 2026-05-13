@@ -1,19 +1,27 @@
 // lib/calls-ingest.ts
 //
 // Shared call-transcript ingestion helper. Used by:
-//   - api/atrium/calls/upload.ts        — manual upload from Atrium Work > Calls (C3)
-//   - api/inbound/fathom/calls.ts       — Fathom recording.completed webhook   (C5b)
-//   - api/inbound/zoom/calls.ts         — Zoom recording.completed webhook     (C5c)
-//   - api/inbound/plaud/calls.ts        — placeholder; Plaud has no public API (C5a)
+//   - api/atrium/calls/upload.ts        — manual upload from Atrium Work > Calls
+//   - api/inbound/fathom/calls.ts       — Fathom recording.completed webhook
+//   - api/inbound/zoom/calls.ts         — Zoom recording.completed webhook
+//   - api/inbound/plaud/calls.ts        — placeholder; Plaud has no public API
 //
-// Wraps two operations as one transaction-shaped flow:
-//   1. createCallTranscriptPage from lib/notion-call-transcripts → Notion page
-//   2. public.ns_create_call_transcript_ledger_row RPC → nervous_system.ledger row
+// Two entry points:
 //
-// Failure modes:
-//   - Notion failure → throws; ledger row not written (clean retry state)
-//   - Ledger failure → return value carries ledger_error + the Notion URL so
-//     the caller can decide to surface 207 (manual upload) or 500 (auto-ingest)
+//   ingestCallTranscript(payload, uploadedBy)
+//     Notion write + ledger row + best-effort Inngest event for async
+//     transcript fan-out. Webhooks use this — they want to return 200 fast
+//     and let extractCallActionItemsRun do the work later.
+//
+//   processCallUpload(payload, uploadedBy)
+//     Wraps ingestCallTranscript and ALSO runs runActionItemExtraction
+//     synchronously so the API response carries the extracted counts. The
+//     Atrium upload modal uses this — operators see "Processed: N action
+//     items, M decisions, K customer mentions" in the success view.
+//
+// Both paths fire the Inngest event as a retry-safety net; the sync extractor
+// is best-effort and any failure is captured in the response under `errors`
+// without rolling back the Notion + ledger writes.
 
 import { createClient } from '@supabase/supabase-js';
 import { inngest } from './inngest/client.js';
@@ -21,12 +29,18 @@ import {
   createCallTranscriptPage,
   type CallTranscriptPayload,
 } from './notion-call-transcripts.js';
+import { runActionItemExtraction, type FlowResult } from './calls-action-item-flow.js';
 
 export interface IngestResult {
   notion_page_id: string;
   notion_url: string;
   ledger_id: string | null;
   ledger_error: string | null;
+}
+
+export interface ProcessResult extends IngestResult {
+  extraction: FlowResult | null;       // null when ledger failed (extraction never ran)
+  extraction_error: string | null;     // top-level error if the extractor threw
 }
 
 function makeServiceSupabase() {
@@ -67,10 +81,11 @@ export async function ingestCallTranscript(
     ledger_error: ledgerErr?.message ?? null,
   };
 
-  // Fire downstream event for C6 action-item extraction. Best-effort: a send
-  // failure (no INNGEST_EVENT_KEY, etc.) must not break ingestion. The Inngest
-  // function (extractCallActionItemsRun) listens on `call/transcript.uploaded`
-  // and runs the LLM extraction asynchronously.
+  // Fire downstream event for the async Inngest extractor. Best-effort —
+  // an inngest.send failure (no INNGEST_EVENT_KEY, etc.) must not break
+  // ingestion. The sync extractor in processCallUpload is the primary path
+  // for the Atrium upload modal; this event is the retry/redundancy hook
+  // and remains the only fan-out trigger for the webhook callers.
   if (!ledgerErr && result.ledger_id) {
     try {
       await inngest.send({
@@ -87,10 +102,68 @@ export async function ingestCallTranscript(
         },
       });
     } catch (err) {
-      // Non-fatal — log to console for observability but don't error the call.
       console.warn('[calls-ingest] inngest.send failed:', err instanceof Error ? err.message : err);
     }
   }
 
   return result;
+}
+
+export async function processCallUpload(
+  payload: CallTranscriptPayload,
+  uploadedBy: string,
+): Promise<ProcessResult> {
+  const ingest = await ingestCallTranscript(payload, uploadedBy);
+
+  if (ingest.ledger_error || !ingest.ledger_id) {
+    return {
+      ...ingest,
+      extraction: null,
+      extraction_error: null,
+    };
+  }
+
+  const transcriptText = [payload.summary_notes, payload.transcript]
+    .filter(Boolean)
+    .join('\n\n')
+    .slice(0, 50000);
+
+  if (!transcriptText.trim()) {
+    return {
+      ...ingest,
+      extraction: {
+        extracted_counts: { action_items: 0, decisions: 0, customer_mentions: 0 },
+        written_action_items: [],
+        written_decisions: [],
+        customer_mentions_result: {
+          resolved: [],
+          unresolved: [],
+          dominant_customer_id: null,
+          dominant_customer_name: null,
+          count_resolved: 0,
+          count_unresolved: 0,
+        },
+        errors: [],
+        skipped_reason: 'empty transcript_text',
+      },
+      extraction_error: null,
+    };
+  }
+
+  try {
+    const extraction = await runActionItemExtraction({
+      call_id:             ingest.ledger_id,
+      call_notion_page_id: ingest.notion_page_id,
+      call_notion_url:     ingest.notion_url,
+      call_title:          payload.title ?? null,
+      transcript_text:     transcriptText,
+      participants:        payload.participants ?? [],
+      uploaded_by:         uploadedBy,
+    });
+    return { ...ingest, extraction, extraction_error: null };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'unknown extractor failure';
+    console.warn('[calls-ingest] runActionItemExtraction failed:', message);
+    return { ...ingest, extraction: null, extraction_error: message };
+  }
 }

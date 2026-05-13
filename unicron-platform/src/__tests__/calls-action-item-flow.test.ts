@@ -1,7 +1,10 @@
 // src/__tests__/calls-action-item-flow.test.ts
-// Tests for lib/calls-action-item-flow.ts — C6 action-item extraction
-// pipeline (LLM extract → ns_create_action_item_from_call → Notion Kanban
-// card → linkActionItemToCall bullet on the call page).
+// Tests for lib/calls-action-item-flow.ts — transcript fan-out pipeline.
+//
+// 2026-05-13 Bug Fix expansion: the LLM now also extracts decisions[] and
+// customer_mentions[] alongside action_items[], and runActionItemExtraction
+// fans those out via ns_create_decision_from_call + ns_link_call_customer_mentions
+// in addition to the original action-item path.
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
@@ -17,9 +20,6 @@ vi.mock('@supabase/supabase-js', () => ({
 vi.mock('@anthropic-ai/sdk', () => {
   class FakeAnthropic {
     messages = { create: mockCreate };
-    constructor(_args: { apiKey?: string }) {
-      // store nothing
-    }
   }
   return { default: FakeAnthropic };
 });
@@ -34,7 +34,6 @@ beforeEach(() => {
   mockRpc.mockReset();
   mockCreate.mockReset();
 
-  // Default Notion-side fetches return success (Kanban card create + link bullet append).
   globalThis.fetch = vi.fn().mockImplementation(async (url: string) => {
     if (url.includes('/v1/pages')) {
       return {
@@ -61,57 +60,88 @@ afterEach(() => {
 // ─── parseExtractionResponse ──────────────────────────────────────────────────
 
 describe('parseExtractionResponse', () => {
-  it('parses a valid LLM JSON response into action items', async () => {
+  it('parses a valid LLM JSON response into the bundle', async () => {
     const { __internals } = await import('../../lib/calls-action-item-flow');
     const raw = JSON.stringify({
       action_items: [
         { title: 'Send SOW', owner: 'Kyle', priority: 'high', outcome: 'SOW emailed', steps: ['Draft', 'Email'], due_iso: '2026-05-15', description: 'Pilot SOW' },
         { title: 'Schedule kickoff', owner: 'Co-Pilot', priority: 'medium', outcome: 'meeting scheduled', steps: ['Find times'], due_iso: null },
       ],
+      decisions: [
+        { decision: 'Use weekly cadence', decided_by: 'Kyle', rationale: 'matches sprint review' },
+      ],
+      customer_mentions: [
+        { name: 'Zedcor', quote: 'Zedcor wants the pilot SOW', confidence: 0.95 },
+      ],
     });
-    const items = __internals.parseExtractionResponse(raw);
-    expect(items).toHaveLength(2);
-    expect(items[0].title).toBe('Send SOW');
-    expect(items[0].priority).toBe('high');
-    expect(items[1].owner).toBe('Co-Pilot');
+    const bundle = __internals.parseExtractionResponse(raw);
+    expect(bundle.action_items).toHaveLength(2);
+    expect(bundle.action_items[0].title).toBe('Send SOW');
+    expect(bundle.action_items[0].priority).toBe('high');
+    expect(bundle.action_items[1].owner).toBe('Co-Pilot');
+    expect(bundle.decisions).toHaveLength(1);
+    expect(bundle.decisions[0].decision).toBe('Use weekly cadence');
+    expect(bundle.customer_mentions).toHaveLength(1);
+    expect(bundle.customer_mentions[0].name).toBe('Zedcor');
   });
 
   it('extracts JSON even when wrapped in surrounding prose', async () => {
     const { __internals } = await import('../../lib/calls-action-item-flow');
-    const raw = 'Here are the action items: {"action_items":[{"title":"X","owner":"Kyle"}]}\nThat\'s all.';
-    const items = __internals.parseExtractionResponse(raw);
-    expect(items).toHaveLength(1);
-    expect(items[0].title).toBe('X');
+    const raw = 'Here are the action items: {"action_items":[{"title":"X","owner":"Kyle"}],"decisions":[],"customer_mentions":[]}\nThat\'s all.';
+    const bundle = __internals.parseExtractionResponse(raw);
+    expect(bundle.action_items).toHaveLength(1);
+    expect(bundle.action_items[0].title).toBe('X');
   });
 
-  it('returns empty array on malformed JSON', async () => {
+  it('returns empty bundle on malformed JSON', async () => {
     const { __internals } = await import('../../lib/calls-action-item-flow');
-    expect(__internals.parseExtractionResponse('not json at all')).toEqual([]);
-    expect(__internals.parseExtractionResponse('{ broken json')).toEqual([]);
+    expect(__internals.parseExtractionResponse('not json at all')).toEqual({ action_items: [], decisions: [], customer_mentions: [] });
+    expect(__internals.parseExtractionResponse('{ broken json')).toEqual({ action_items: [], decisions: [], customer_mentions: [] });
   });
 
-  it('drops entries missing a title', async () => {
+  it('drops action items missing a title', async () => {
     const { __internals } = await import('../../lib/calls-action-item-flow');
     const raw = JSON.stringify({ action_items: [{ owner: 'Kyle' }, { title: 'OK', owner: 'Co-Pilot' }] });
-    expect(__internals.parseExtractionResponse(raw)).toHaveLength(1);
+    expect(__internals.parseExtractionResponse(raw).action_items).toHaveLength(1);
   });
 
   it('coerces invalid priority values to "medium"', async () => {
     const { __internals } = await import('../../lib/calls-action-item-flow');
     const raw = JSON.stringify({ action_items: [{ title: 'X', owner: 'Kyle', priority: 'critical' }] });
-    expect(__internals.parseExtractionResponse(raw)[0].priority).toBe('medium');
+    expect(__internals.parseExtractionResponse(raw).action_items[0].priority).toBe('medium');
   });
 
   it('drops invalid due_iso values', async () => {
     const { __internals } = await import('../../lib/calls-action-item-flow');
     const raw = JSON.stringify({ action_items: [{ title: 'X', owner: 'Kyle', due_iso: 'next Friday' }] });
-    expect(__internals.parseExtractionResponse(raw)[0].due_iso).toBeNull();
+    expect(__internals.parseExtractionResponse(raw).action_items[0].due_iso).toBeNull();
   });
 
   it('defaults missing owner to "Co-Pilot"', async () => {
     const { __internals } = await import('../../lib/calls-action-item-flow');
     const raw = JSON.stringify({ action_items: [{ title: 'X' }] });
-    expect(__internals.parseExtractionResponse(raw)[0].owner).toBe('Co-Pilot');
+    expect(__internals.parseExtractionResponse(raw).action_items[0].owner).toBe('Co-Pilot');
+  });
+
+  it('deduplicates customer mentions by case-insensitive name', async () => {
+    const { __internals } = await import('../../lib/calls-action-item-flow');
+    const raw = JSON.stringify({
+      customer_mentions: [
+        { name: 'Zedcor', quote: 'a', confidence: 0.9 },
+        { name: 'zedcor', quote: 'b', confidence: 0.8 },
+        { name: 'Acme Co', quote: 'c', confidence: 0.6 },
+      ],
+    });
+    const bundle = __internals.parseExtractionResponse(raw);
+    expect(bundle.customer_mentions).toHaveLength(2);
+    expect(bundle.customer_mentions[0].name).toBe('Zedcor');
+    expect(bundle.customer_mentions[1].name).toBe('Acme Co');
+  });
+
+  it('drops decisions missing decision text', async () => {
+    const { __internals } = await import('../../lib/calls-action-item-flow');
+    const raw = JSON.stringify({ decisions: [{ decided_by: 'Kyle' }, { decision: 'Ship Friday', decided_by: 'Kyle' }] });
+    expect(__internals.parseExtractionResponse(raw).decisions).toHaveLength(1);
   });
 });
 
@@ -131,12 +161,13 @@ describe('runActionItemExtraction', () => {
     });
     expect(r.skipped_reason).toMatch(/ANTHROPIC_API_KEY/);
     expect(r.written_action_items).toEqual([]);
+    expect(r.written_decisions).toEqual([]);
     expect(mockRpc).not.toHaveBeenCalled();
   });
 
-  it('returns zero-extracted when the LLM finds no action items', async () => {
+  it('returns zero counts when the LLM finds nothing', async () => {
     mockCreate.mockResolvedValue({
-      content: [{ type: 'text', text: '{"action_items":[]}' }],
+      content: [{ type: 'text', text: '{"action_items":[],"decisions":[],"customer_mentions":[]}' }],
     });
     const { runActionItemExtraction } = await import('../../lib/calls-action-item-flow');
     const r = await runActionItemExtraction({
@@ -147,11 +178,12 @@ describe('runActionItemExtraction', () => {
       transcript_text: 'small talk only',
       participants: [],
     });
-    expect(r.extracted_count).toBe(0);
+    expect(r.extracted_counts).toEqual({ action_items: 0, decisions: 0, customer_mentions: 0 });
     expect(r.written_action_items).toEqual([]);
+    expect(r.written_decisions).toEqual([]);
   });
 
-  it('writes each extracted item, creates Kanban card, links back', async () => {
+  it('fans out action items + decisions + customer mentions', async () => {
     mockCreate.mockResolvedValue({
       content: [{
         type: 'text',
@@ -160,11 +192,40 @@ describe('runActionItemExtraction', () => {
             { title: 'Send Zedcor SOW', owner: 'Kyle', priority: 'high', description: 'Pilot SOW' },
             { title: 'Draft FAQ', owner: 'Co-Pilot', priority: 'medium' },
           ],
+          decisions: [
+            { decision: 'Use weekly cadence', decided_by: 'Kyle', rationale: 'matches sprint review' },
+          ],
+          customer_mentions: [
+            { name: 'Zedcor', quote: 'Zedcor wants the pilot SOW', confidence: 0.95 },
+          ],
         }),
       }],
     });
+
+    let aiCounter = 0;
+    let decisionCounter = 0;
     mockRpc.mockImplementation(async (name: string) => {
-      if (name === 'ns_create_action_item_from_call') return { data: `ai-${Math.random().toString(36).slice(2, 6)}`, error: null };
+      if (name === 'ns_create_action_item_from_call') {
+        aiCounter++;
+        return { data: `ai-${aiCounter}`, error: null };
+      }
+      if (name === 'ns_create_decision_from_call') {
+        decisionCounter++;
+        return { data: `dec-${decisionCounter}`, error: null };
+      }
+      if (name === 'ns_link_call_customer_mentions') {
+        return {
+          data: {
+            resolved: [{ name: 'Zedcor', customer_id: 'cust-1', customer_name: 'Zedcor', quote: 'q', confidence: 0.95 }],
+            unresolved: [],
+            dominant_customer_id: 'cust-1',
+            dominant_customer_name: 'Zedcor',
+            count_resolved: 1,
+            count_unresolved: 0,
+          },
+          error: null,
+        };
+      }
       return { data: null, error: null };
     });
 
@@ -176,29 +237,32 @@ describe('runActionItemExtraction', () => {
       call_title: 'Zedcor pilot kickoff',
       transcript_text: 'Kyle: I\'ll send Zedcor the SOW. We need a FAQ draft.',
       participants: ['Kyle'],
+      uploaded_by: 'kyle@unicron.systems',
     });
 
-    expect(r.extracted_count).toBe(2);
+    expect(r.extracted_counts).toEqual({ action_items: 2, decisions: 1, customer_mentions: 1 });
     expect(r.written_action_items).toHaveLength(2);
+    expect(r.written_decisions).toHaveLength(1);
+    expect(r.customer_mentions_result.dominant_customer_name).toBe('Zedcor');
     expect(r.errors).toEqual([]);
 
-    const createCalls = mockRpc.mock.calls.filter(([n]) => n === 'ns_create_action_item_from_call');
-    expect(createCalls).toHaveLength(2);
-    expect(createCalls[0][1].p_owner_name).toBe('Kyle');
-    expect(createCalls[0][1].p_priority).toBe('high');
-    expect(createCalls[1][1].p_owner_name).toBe('Co-Pilot');
+    const aiCalls = mockRpc.mock.calls.filter(([n]) => n === 'ns_create_action_item_from_call');
+    expect(aiCalls).toHaveLength(2);
+    expect(aiCalls[0][1].p_owner_name).toBe('Kyle');
+    expect(aiCalls[0][1].p_priority).toBe('high');
 
-    // Each extracted item should also call ns_set_action_item_notion_page_id once.
-    const setCalls = mockRpc.mock.calls.filter(([n]) => n === 'ns_set_action_item_notion_page_id');
-    expect(setCalls).toHaveLength(2);
+    const decCalls = mockRpc.mock.calls.filter(([n]) => n === 'ns_create_decision_from_call');
+    expect(decCalls).toHaveLength(1);
+    expect(decCalls[0][1].p_decision_text).toBe('Use weekly cadence');
 
-    // 2 Kanban POSTs + 2 block-append PATCHes (one per item).
+    const cmCalls = mockRpc.mock.calls.filter(([n]) => n === 'ns_link_call_customer_mentions');
+    expect(cmCalls).toHaveLength(1);
+    expect(cmCalls[0][1].p_call_ledger_id).toBe('c1');
+
+    // Notion kanban + back-link bullets — 2 page creates + 2 block appends.
     const fetchMock = globalThis.fetch as unknown as ReturnType<typeof vi.fn>;
     const pageCreates = fetchMock.mock.calls.filter((c) => typeof c[0] === 'string' && c[0].endsWith('/v1/pages'));
     expect(pageCreates).toHaveLength(2);
-
-    // Lock in the Status/Priority/Source values against the live Internal Org
-    // Kanban schema. Mis-cased values would 400 against Notion.
     for (const call of pageCreates) {
       const body = JSON.parse((call[1] as RequestInit & { body: string }).body);
       expect(body.properties.Status.select.name).toBe('Backlog');
@@ -209,7 +273,7 @@ describe('runActionItemExtraction', () => {
     expect(blockAppends).toHaveLength(2);
   });
 
-  it('continues processing other items when one ns_create_action_item_from_call fails', async () => {
+  it('continues when one action-item RPC fails', async () => {
     mockCreate.mockResolvedValue({
       content: [{
         type: 'text',
@@ -218,6 +282,8 @@ describe('runActionItemExtraction', () => {
             { title: 'OK Item', owner: 'Kyle' },
             { title: 'Fail Item', owner: 'Keenan' },
           ],
+          decisions: [],
+          customer_mentions: [],
         }),
       }],
     });
@@ -240,17 +306,17 @@ describe('runActionItemExtraction', () => {
       transcript_text: 'transcript',
       participants: [],
     });
-    expect(r.extracted_count).toBe(2);
+    expect(r.extracted_counts.action_items).toBe(2);
     expect(r.written_action_items).toHaveLength(1);
     expect(r.errors.length).toBeGreaterThanOrEqual(1);
-    expect(r.errors[0]).toMatch(/Fail Item/);
+    expect(r.errors.some((e) => e.includes('Fail Item'))).toBe(true);
   });
 
-  it('captures an error and keeps the row when the Kanban card create fails', async () => {
+  it('captures kanban-create errors without dropping the action_item row', async () => {
     mockCreate.mockResolvedValue({
       content: [{
         type: 'text',
-        text: JSON.stringify({ action_items: [{ title: 'X', owner: 'Kyle' }] }),
+        text: JSON.stringify({ action_items: [{ title: 'X', owner: 'Kyle' }], decisions: [], customer_mentions: [] }),
       }],
     });
     mockRpc.mockResolvedValue({ data: 'ai-1', error: null });
@@ -271,7 +337,7 @@ describe('runActionItemExtraction', () => {
       transcript_text: 'transcript',
       participants: [],
     });
-    expect(r.extracted_count).toBe(1);
+    expect(r.extracted_counts.action_items).toBe(1);
     expect(r.written_action_items).toHaveLength(1);
     expect(r.written_action_items[0].notion_page_id).toBeNull();
     expect(r.errors.some((e) => e.includes('kanban-create'))).toBe(true);

@@ -29,7 +29,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
 import type { CallTranscriptPayload } from '../../../lib/notion-call-transcripts.js';
-import { ingestCallTranscript } from '../../../lib/calls-ingest.js';
+import { processCallUpload } from '../../../lib/calls-ingest.js';
 
 // ─── Auth (mirrors api/internal/kanban-update.ts) ─────────────────────────────
 
@@ -157,10 +157,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return;
     }
 
-    // Run the full ingest (Notion write + ledger row + 'call/transcript.uploaded'
-    // event for C6 action-item extraction) via the shared helper. Same code
-    // path that the Fathom + Zoom connectors use.
-    const result = await ingestCallTranscript(
+    // Run the full upload pipeline: Notion write + ledger row + SYNC
+    // transcript fan-out (action items + decisions + customer mentions).
+    // The Inngest event fires inside ingestCallTranscript as a retry-safety
+    // net; the sync path lets the modal render extracted counts immediately.
+    const result = await processCallUpload(
       {
         title:          parsed.title,
         date:           parsed.date,
@@ -181,7 +182,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const notion = { notion_page_id: result.notion_page_id, notion_url: result.notion_url };
 
     if (ledgerErr) {
-      // Notion succeeded; ledger failed. Surface both so the operator still has a link.
       res.status(207).json({
         ok: false,
         notion_page_id: notion.notion_page_id,
@@ -193,9 +193,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     res.status(200).json({
       ok: true,
-      notion_page_id: notion.notion_page_id,
-      notion_url:     notion.notion_url,
-      ledger_id:      ledgerId,
+      notion_page_id:   notion.notion_page_id,
+      notion_url:       notion.notion_url,
+      ledger_id:        ledgerId,
+      extraction:       result.extraction,
+      extraction_error: result.extraction_error,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'upload failed';

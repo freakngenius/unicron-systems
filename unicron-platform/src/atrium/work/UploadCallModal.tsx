@@ -25,10 +25,27 @@ interface TeamMember {
   email: string | null;
 }
 
+interface ExtractionResult {
+  extracted_counts: {
+    action_items: number;
+    decisions: number;
+    customer_mentions: number;
+  };
+  customer_mentions_result?: {
+    dominant_customer_name: string | null;
+    count_resolved: number;
+    count_unresolved: number;
+  };
+  errors?: string[];
+  skipped_reason?: string;
+}
+
 interface UploadResult {
   notion_page_id: string;
   notion_url: string;
   ledger_id: string;
+  extraction?: ExtractionResult | null;
+  extraction_error?: string | null;
 }
 
 export interface UploadCallModalProps {
@@ -269,7 +286,7 @@ export function UploadCallModal({ open, onClose, onUploaded }: UploadCallModalPr
         {success ? (
           <div className="px-5 py-6 space-y-3">
             <div className="text-[13px] text-text-primary font-medium">
-              Call stored in Notion + ledger.
+              Call stored in Notion + Atrium ledger.
             </div>
             <a
               href={success.notion_url}
@@ -279,9 +296,53 @@ export function UploadCallModal({ open, onClose, onUploaded }: UploadCallModalPr
             >
               Open in Notion ›
             </a>
-            <div className="text-[11px] text-text-muted">
-              Action items will appear in the Internal Org Kanban once the transcript skill runs.
-            </div>
+
+            {success.extraction ? (
+              <div className="rounded-md border border-border-default bg-bg-card/40 px-3 py-2 space-y-1">
+                <div className="text-[10.5px] uppercase tracking-[0.16em] text-text-muted font-semibold">
+                  Processed
+                </div>
+                <div className="text-[12px] text-text-primary">
+                  {success.extraction.extracted_counts.action_items} action item
+                  {success.extraction.extracted_counts.action_items === 1 ? '' : 's'},{' '}
+                  {success.extraction.extracted_counts.decisions} decision
+                  {success.extraction.extracted_counts.decisions === 1 ? '' : 's'},{' '}
+                  {success.extraction.extracted_counts.customer_mentions} customer mention
+                  {success.extraction.extracted_counts.customer_mentions === 1 ? '' : 's'}
+                </div>
+                {success.extraction.customer_mentions_result?.dominant_customer_name && (
+                  <div className="text-[11px] text-text-muted">
+                    Linked to{' '}
+                    <span className="text-text-primary font-medium">
+                      {success.extraction.customer_mentions_result.dominant_customer_name}
+                    </span>
+                  </div>
+                )}
+                {success.extraction.skipped_reason && (
+                  <div className="text-[11px] text-[#E8763A]">
+                    Extraction skipped: {success.extraction.skipped_reason}
+                  </div>
+                )}
+                {success.extraction.errors && success.extraction.errors.length > 0 && (
+                  <div className="text-[11px] text-[#E14B4B]">
+                    {success.extraction.errors.length} partial error
+                    {success.extraction.errors.length === 1 ? '' : 's'} during fan-out (see logs).
+                  </div>
+                )}
+                <div className="text-[10px] text-text-muted">
+                  ledger_id: <span className="font-mono">{success.ledger_id}</span>
+                </div>
+              </div>
+            ) : success.extraction_error ? (
+              <div className="rounded-md border border-[#E14B4B]/30 bg-[#E14B4B]/10 px-3 py-2 text-[11px] text-[#E14B4B]">
+                Notion + ledger written, but transcript fan-out failed: {success.extraction_error}
+              </div>
+            ) : (
+              <div className="text-[11px] text-text-muted">
+                Action items will appear in the Internal Org Kanban once the transcript skill runs.
+              </div>
+            )}
+
             <div className="flex gap-2 pt-2">
               <button
                 type="button"
@@ -448,7 +509,7 @@ export function UploadCallModal({ open, onClose, onUploaded }: UploadCallModalPr
                 disabled={!canSubmit}
                 className="px-4 py-2 text-[12px] font-medium text-white bg-[#0B1530] rounded-md hover:bg-[#0B1530]/90 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {submitting ? 'Uploading…' : 'Upload call'}
+                {submitting ? 'Uploading & processing…' : 'Upload call'}
               </button>
             </div>
           </>
