@@ -30,3 +30,6 @@ export { ingestAllOrgsCron } from './ingest-all-orgs-cron';
 // → ready_to_view or awaiting_threshold.
 export { orgCreated } from './org-created';
 export { checkReadyToViewCron } from './check-ready-to-view-cron';
+// Build-Out Pass slices 3+5 — HTTP-verifies the /[slug] route after
+// ready_to_view and flips status to build_out_complete / build_out_failed.
+export { verifyBuildOut } from './verify-build-out';

@@ -139,16 +139,44 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       }
 
       const result = Array.isArray(update.data) ? update.data[0] : update.data;
-      const cronAdvisory =
-        typeof changes['schedule_cron'] === 'string'
-          ? 'schedule_cron persisted to nervous_system.agents. Inngest cron schedules are bound to deployed function definitions — the new schedule goes live on next deploy.'
-          : null;
+
+      // Sprint 7.5 H1 Option 2: if schedule_cron changed, fire the Vercel
+      // Deploy Hook so Inngest function registration re-runs against the new
+      // generated-agent-cron.ts file. Without VERCEL_DEPLOY_HOOK_URL set, the
+      // value persists to DB only (advisory) until the next deploy.
+      let cronSync: { triggered: boolean; deploy_id?: string | null; note?: string } | null = null;
+      if (typeof changes['schedule_cron'] === 'string') {
+        const hookUrl = process.env.VERCEL_DEPLOY_HOOK_URL;
+        if (!hookUrl) {
+          cronSync = {
+            triggered: false,
+            note: 'VERCEL_DEPLOY_HOOK_URL not configured. schedule_cron persisted to nervous_system.agents; honored on next deploy.',
+          };
+        } else {
+          try {
+            const hookResp = await fetch(hookUrl, { method: 'POST' });
+            const hookBody = await hookResp.json().catch(() => null) as { job?: { id?: string } } | null;
+            cronSync = {
+              triggered: hookResp.ok,
+              deploy_id: hookBody?.job?.id ?? null,
+              note: hookResp.ok
+                ? 'Vercel Deploy Hook triggered. Inngest re-registers cron from DB on the new deploy. Use /api/atrium/agents/verify-cron-sync to confirm match.'
+                : `Deploy Hook returned HTTP ${hookResp.status}; schedule_cron persisted to DB but no deploy triggered.`,
+            };
+          } catch (err) {
+            cronSync = {
+              triggered: false,
+              note: `Deploy Hook fetch failed: ${err instanceof Error ? err.message : String(err)}. schedule_cron persisted to DB.`,
+            };
+          }
+        }
+      }
 
       res.status(200).json({
         ok: true,
         agent: result?.updated_row ?? null,
         audit_log_id: result?.audit_log_id ?? null,
-        cron_advisory: cronAdvisory,
+        cron_sync: cronSync,
       });
     } catch (err) {
       res.status(500).json({ ok: false, error: err instanceof Error ? err.message : String(err) });

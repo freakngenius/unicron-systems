@@ -951,3 +951,34 @@ Operator setup: `MEMORY/operator-todos/2026-05-03-teams-user-setup.md` — Micro
 **Last verified against spec:** 2026-05-13.
 **Drift:** none — stub layer matches the spec's "current value (from real query)" deferred to a later slice.
 **Tests:** exercised indirectly via `Pathfinder/__tests__/components/KPIStrip.test.tsx` which asserts the em-dash fallback for unmapped metric_ids.
+
+---
+
+## Pathfinder Build-Out Pass — Slices 3+5: verification + status flip
+
+**State:** PR open on `buildout-slice3-verification`. Adds the verification side of the Build-Out Pass: a new `pathfinder/org.ready_to_view` event fired by `check-ready-to-view-cron` and a new `verifyBuildOut` Inngest function that HTTP-fetches `${PATHFINDER_BASE_URL}/pathfinder/${slug}`, parses the returned HTML via regex, and flips `pathfinder.organizations.status` to either `build_out_complete` (pass) or `build_out_failed` with a `build_out_diagnostic` jsonb (fail). Single-attempt only; the iterate-to-green retry loop and real Playwright headless screenshotting are deferred to follow-up cards.
+
+#### Pathfinder/supabase/migrations/20260513_phase2e_buildout_status.sql
+**Implements:** Company Docs/Metacron/SPEC - Pathfinder Build-Out Pass.md §3 + §5. Extends `pathfinder.organizations.status` CHECK constraint to add `build_out_complete` + `build_out_failed`; adds `build_out_diagnostic jsonb null` column. Pure additive; existing rows unaffected.
+**Last verified against spec:** 2026-05-13.
+**Drift:** none. Applied via Supabase MCP `apply_migration` on project `anfihcusvekpovcchpoh` (unicron-systems).
+
+#### Pathfinder/lib/inngest/events.ts
+**Implements:** Build-Out Pass §3 event surface. Adds `pathfinder/org.ready_to_view` event type (organization_id, slug, verified_count, transitioned_at). Existing `pathfinder/org.ranking_complete` retained for observability sinks.
+**Last verified against spec:** 2026-05-13.
+**Drift:** none.
+
+#### Pathfinder/lib/inngest/functions/check-ready-to-view-cron.ts
+**Implements:** Phase 2E threshold check + Build-Out Pass §3 hand-off. On a `ready_to_view` transition, additionally sends `pathfinder/org.ready_to_view` so `verifyBuildOut` can pick it up. `awaiting_threshold` transitions are unchanged.
+**Last verified against spec:** 2026-05-13.
+**Drift:** none (additive).
+
+#### Pathfinder/lib/inngest/functions/verify-build-out.ts
+**Implements:** Company Docs/Metacron/SPEC - Pathfinder Build-Out Pass.md §"Build-out verification" + §5. Subscribes to `pathfinder/org.ready_to_view`, HTTP-fetches the customer's `/pathfinder/${slug}` route, parses the HTML via regex against `data-kpi-strip`, `data-lead-card` (>=3 OR `data-empty-state`), `data-chart`, and `data-error`. On pass: status → `build_out_complete`, `build_out_diagnostic = null`. On fail: status → `build_out_failed`, `build_out_diagnostic = { reason, html_snippet?, http_status? }`. **Drift:** **major, justified.** No Playwright; regex over HTML is the demo-day form factor and the iterate-to-green loop is deferred (TODO comment at top of file).
+**Last verified against spec:** 2026-05-13.
+**Tests:** `Pathfinder/__tests__/inngest/verifyBuildOut.test.ts` — six cases covering pass, empty-state pass, too_few_lead_cards fail, http_401 fail, http_5xx fail, and missing-org throw (Inngest retry surface).
+
+#### Pathfinder/app/api/inngest/route.ts
+**Implements:** Inngest serve registration of `verifyBuildOut`. Additive only — existing function list intact.
+**Last verified against spec:** 2026-05-13.
+**Drift:** none.
