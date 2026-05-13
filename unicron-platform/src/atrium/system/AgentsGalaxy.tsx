@@ -35,30 +35,20 @@ interface Agent {
   schedule_cron?: string | null;
   active: boolean;
   budget: Budget | null;
-  config: Config | null;
+  config: (Config & { lifecycle?: 'live' | 'scheduled' }) | null;
   last_run_at?: string | null;
   last_run_synthetic?: boolean | null;
   created_at: string;
   updated_at?: string;
-  // R7 Option 2: demo-flagged agents render at 60% opacity + DEMO pill;
-  // real agents render at 100% with live load percentage.
-  demo?: boolean;
 }
 
-// 8 design-fiction archetypes per R7 Option 2 — render alongside the 4 real
-// agents (Analyst, Elder, Orchestrator, Taboo Keeper) returned by ns_list_agents.
-// Demo agents land in upcoming sprints; until then they communicate the target
-// fleet shape so the constellation reads as v3 design intent.
-const DEMO_AGENTS: Agent[] = [
-  { id: 'demo-pathfinder',  name: 'Pathfinder',  archetype: 'operator',  specialty: 'Customer-facing lead intelligence — Sprint 6',  active: false, budget: null, config: null, created_at: '', demo: true },
-  { id: 'demo-curator',     name: 'Curator',     archetype: 'curator',   specialty: 'Vault hygiene + decay sweeps — Sprint 6',        active: false, budget: null, config: null, created_at: '', demo: true },
-  { id: 'demo-researcher',  name: 'Researcher',  archetype: 'research',  specialty: 'Deep dives + source verification — Sprint 7',    active: false, budget: null, config: null, created_at: '', demo: true },
-  { id: 'demo-trend-scout', name: 'Trend Scout', archetype: 'research',  specialty: 'Competitor + market trend monitor — Sprint 7',   active: false, budget: null, config: null, created_at: '', demo: true },
-  { id: 'demo-pipe-hunter', name: 'Pipe Hunter', archetype: 'sales',     specialty: 'Cross-pollination + lead surface — Sprint 6',    active: false, budget: null, config: null, created_at: '', demo: true },
-  { id: 'demo-architect',   name: 'Architect',   archetype: 'builder',   specialty: 'Proposes + tunes system config — Sprint 5+',     active: false, budget: null, config: null, created_at: '', demo: true },
-  { id: 'demo-boundary',    name: 'Boundary',    archetype: 'guardian',  specialty: 'Tier-2 source + adjacency guardrails — Sprint 7',active: false, budget: null, config: null, created_at: '', demo: true },
-  { id: 'demo-janitor',     name: 'Janitor',     archetype: 'operator',  specialty: 'Sweeps stale state + rotates secrets — Sprint 7',active: false, budget: null, config: null, created_at: '', demo: true },
-];
+// Lifecycle is derived from config.lifecycle on each row in nervous_system.agents.
+// 'live'      → real, opacity 100%
+// 'scheduled' → seeded but no handler yet, opacity 60% + SCHEDULED pill
+// (no lifecycle field) → treat as live for backward compatibility.
+function isScheduled(a: Agent): boolean {
+  return a.config?.lifecycle === 'scheduled';
+}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -196,19 +186,19 @@ function AgentGalaxySVG({
           CORE
         </text>
 
-        {/* Agent nodes — demo-flagged render at 60% opacity with DEMO pill */}
+        {/* Agent nodes — demo-flagged render at 60% opacity with SCHEDULED pill */}
         {nodes.map(({ agent, x, y, r }) => {
           const color = archetypeColor(agent.archetype).dot;
           const isSelected = selectedId === agent.id;
           const label = agent.name.length > 13 ? agent.name.slice(0, 12) + '…' : agent.name;
-          const nodeOpacity = agent.demo ? 0.6 : (agent.active ? 0.88 : 0.35);
+          const nodeOpacity = isScheduled(agent) ? 0.6 : (agent.active ? 0.88 : 0.35);
           return (
             <g
               key={agent.id}
               onClick={() => onSelect(isSelected ? null : agent)}
               style={{ cursor: 'pointer' }}
             >
-              <line x1={cx} y1={cy} x2={x} y2={y} stroke={color} strokeWidth="1" opacity={agent.demo ? 0.08 : 0.14} />
+              <line x1={cx} y1={cy} x2={x} y2={y} stroke={color} strokeWidth="1" opacity={isScheduled(agent) ? 0.08 : 0.14} />
               <circle
                 cx={x}
                 cy={y}
@@ -216,13 +206,13 @@ function AgentGalaxySVG({
                 fill={color}
                 opacity={nodeOpacity}
               />
-              {agent.demo && (
+              {isScheduled(agent) && (
                 <circle cx={x} cy={y} r={r + 2} fill="none" stroke={color} strokeWidth="1" strokeDasharray="2 2" opacity="0.5" />
               )}
               {isSelected && (
                 <circle cx={x} cy={y} r={r + 4} fill="none" stroke={color} strokeWidth="1.5" opacity="0.65" />
               )}
-              {!agent.demo && !agent.active && (
+              {!isScheduled(agent) && !agent.active && (
                 <circle cx={x} cy={y} r={r + 3} fill="none" stroke="rgba(255,255,255,0.10)" strokeWidth="1" strokeDasharray="2 3" />
               )}
               <text
@@ -230,16 +220,16 @@ function AgentGalaxySVG({
                 y={y + r + 13}
                 textAnchor="middle"
                 fontSize="10"
-                fill={agent.demo ? 'rgba(126,138,163,0.85)' : 'rgba(70,80,106,0.85)'}
+                fill={isScheduled(agent) ? 'rgba(126,138,163,0.85)' : 'rgba(70,80,106,0.85)'}
                 fontFamily="monospace"
               >
                 {label}
               </text>
-              {agent.demo && (
+              {isScheduled(agent) && (
                 <g transform={`translate(${x + r - 1}, ${y - r - 8})`}>
                   <rect x={-13} y={-7} width={26} height={11} rx={2} fill="rgba(96,129,190,0.15)" stroke="rgba(96,129,190,0.45)" strokeWidth="0.5" />
                   <text x={0} y={1.5} textAnchor="middle" fontSize="7" fontWeight="700" fill="#6081BE" fontFamily="monospace">
-                    DEMO
+                    SCHEDULED
                   </text>
                 </g>
               )}
@@ -298,25 +288,23 @@ export default function AgentsGalaxy() {
   const [actorId, setActorId] = useState<string | null>(null);
 
   async function refresh() {
-    const real = await fetchAgents();
-    const realFlagged = real.map((a) => ({ ...a, demo: false }));
-    setAgents([...realFlagged, ...DEMO_AGENTS]);
+    const all = await fetchAgents();
+    setAgents(all);
   }
 
   useEffect(() => {
-    fetchAgents().then((real) => {
-      const realFlagged = real.map((a) => ({ ...a, demo: false }));
-      setAgents([...realFlagged, ...DEMO_AGENTS]);
+    fetchAgents().then((all) => {
+      setAgents(all);
       setLoading(false);
     });
     fetchActorId().then(setActorId);
   }, []);
 
+  // Every agent (live or scheduled) opens the cockpit modal so Kyle can edit
+  // metadata even for agents whose handler hasn't shipped yet.
   function openAgent(a: Agent | null) {
     setSelected(a);
-    if (a && !a.demo) {
-      setEditing(a);
-    }
+    if (a) setEditing(a);
   }
 
   if (loading) {
@@ -338,7 +326,7 @@ export default function AgentsGalaxy() {
       <div className="flex gap-4">
       {/* Agent grid */}
       <div className={`flex-1 grid grid-cols-2 sm:grid-cols-3 gap-3 ${selected ? 'min-w-0' : ''}`}>
-        {[...agents].sort((a, b) => Number(!!a.demo) - Number(!!b.demo)).map((agent) => {
+        {[...agents].sort((a, b) => Number(isScheduled(a)) - Number(isScheduled(b))).map((agent) => {
           const color = archetypeColor(agent.archetype);
           const budgetPct =
             agent.budget && agent.budget.limit_usd_per_period > 0
@@ -356,20 +344,20 @@ export default function AgentsGalaxy() {
               style={{
                 borderColor: isSelected ? color.border : 'var(--border-default)',
                 boxShadow: isSelected ? `0 0 0 1px ${color.dot}40` : 'none',
-                opacity: agent.demo ? 0.6 : 1,
+                opacity: isScheduled(agent) ? 0.6 : 1,
               }}
             >
-              {agent.demo && (
+              {isScheduled(agent) && (
                 <span className="absolute top-2 right-2 text-[9px] uppercase tracking-[0.12em] font-bold px-1.5 py-0.5 rounded" style={{ background: 'rgba(96,129,190,0.12)', color: '#6081BE' }}>
-                  DEMO
+                  SCHEDULED
                 </span>
               )}
               <div className="flex items-center gap-2 mb-2">
                 <span
                   className="w-2 h-2 rounded-full shrink-0"
                   style={{
-                    backgroundColor: agent.demo ? '#BAC2D2' : (agent.active ? '#2E8E66' : '#6B7280'),
-                    boxShadow: agent.active && !agent.demo ? '0 0 4px #2E8E6660' : 'none',
+                    backgroundColor: isScheduled(agent) ? '#BAC2D2' : (agent.active ? '#2E8E66' : '#6B7280'),
+                    boxShadow: agent.active && !isScheduled(agent) ? '0 0 4px #2E8E6660' : 'none',
                   }}
                 />
                 <span className="mono text-[12px] text-text-primary font-medium truncate">
@@ -399,7 +387,7 @@ export default function AgentsGalaxy() {
                   </div>
                 </div>
               )}
-              {agent.demo && (
+              {isScheduled(agent) && (
                 <div className="mt-2 text-[10px] text-text-muted leading-snug">
                   Demo data — production agents land in upcoming sprints
                 </div>
@@ -475,7 +463,7 @@ export default function AgentsGalaxy() {
             <div className="mono text-[9px] text-text-muted">
               Created: {new Date(selected.created_at).toLocaleDateString()}
             </div>
-            {!selected.demo && (
+            {(
               <button
                 onClick={() => setEditing(selected)}
                 className="mt-2 mono text-[11px] px-3 py-1.5 rounded border border-border-default text-text-secondary hover:text-text-primary w-full text-left"
