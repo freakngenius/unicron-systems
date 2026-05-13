@@ -1,16 +1,11 @@
 import { useEffect, useState } from 'react';
 import { listCustomerOrgs } from '../lib/customersClient';
 import type { CustomerOrg } from '../lib/contracts/customers';
+import { STATUS_LABEL, STATUS_TONE } from './customerStatus';
 
 interface Props {
   onSelect: (org: CustomerOrg) => void;
 }
-
-const STATUS_TONE: Record<CustomerOrg['status'], string> = {
-  active: 'text-emerald-400 border-emerald-400/40',
-  onboarding: 'text-accent-gold border-accent-gold/40',
-  paused: 'text-rose-400 border-rose-400/40',
-};
 
 export function CustomersView({ onSelect }: Props) {
   const [orgs, setOrgs] = useState<CustomerOrg[] | null>(null);
@@ -73,7 +68,7 @@ export function CustomersView({ onSelect }: Props) {
                       STATUS_TONE[org.status],
                     ].join(' ')}
                   >
-                    {org.status}
+                    {STATUS_LABEL[org.status]}
                   </span>
                 </div>
                 <span className="mono text-[10px] uppercase tracking-[0.18em] text-text-primary/40">
