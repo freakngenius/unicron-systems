@@ -5,7 +5,7 @@
 // If the spec changes, update this string AND bump the prompt version
 // at the top of the constant. spec-references.md tracks the version.
 
-export const DECOMPOSITION_PROMPT_VERSION = '2026-05-04-v3';
+export const DECOMPOSITION_PROMPT_VERSION = '2026-05-13-v4';
 
 export const DECOMPOSITION_SYSTEM_PROMPT = `You are the Architect for Unicron Systems. You decompose buyer-pain prompts
 into agent architectures.
@@ -72,4 +72,22 @@ REJECTED SOURCES DISCIPLINE:
 data_sources_rejected must only contain sources that are genuinely applicable to this customer's vertical and were evaluated but found unsuitable. Do NOT list sources from unrelated industries — simply omit them. A rejection entry is only warranted when:
 - The source is in-vertical (its industry overlaps with the buyer's domain), AND
 - There is a substantive reason to reject it (tier_3 complexity, geographic mismatch for this specific deployment, signal quality insufficient for this use case, etc.)
-If no in-vertical sources merit rejection, set data_sources_rejected to an empty array. Cross-industry sources that were never candidates do not belong in this list.`;
+If no in-vertical sources merit rejection, set data_sources_rejected to an empty array. Cross-industry sources that were never candidates do not belong in this list.
+
+UI PLAN GENERATION:
+After business_summary, generate a ui_plan object describing how the customer's dashboard should be laid out. Choose 3-5 most-meaningful lead fields for prominent display based on the customer's vertical. Select KPIs that matter for their business model (deal volume for acquirers, conversion rate for sales orgs, coverage for fleet/asset orgs). Pick chart types that match the data shape. Default dashboard_emphasis based on the customer's stated priority: 'volume' for high-throughput orgs, 'quality' for high-stakes deal orgs, 'velocity' for fast-cycle orgs, 'coverage' for geographic expansion orgs.
+
+ui_plan shape:
+{
+  lead_card_layout: {
+    primary_fields: string[],      // 3-5 lead schema field names shown prominently
+    secondary_fields: string[],    // additional fields in the expandable section
+    score_position: 'top-right' | 'top-left' | 'bottom'
+  },
+  kpis: [{ label, metric_id, unit?, target?, invert? }],
+  charts: [{ title, type: 'line'|'bar'|'pie'|'area', metric_id, grouping? }],
+  filters: [{ field, label, default? }],
+  dashboard_emphasis: 'volume' | 'quality' | 'velocity' | 'coverage'
+}
+
+Use the same lead schema field names you defined in lead_unit.schema for primary_fields, secondary_fields, and filters[].field. Keep metric_id values lowercase snake_case. Include ui_plan in the finalizeProposal payload alongside business_summary and the existing decomposition fields.`;

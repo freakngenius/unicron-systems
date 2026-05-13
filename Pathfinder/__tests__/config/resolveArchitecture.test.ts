@@ -100,4 +100,46 @@ describe('resolveArchitecture', () => {
     resolveArchitecture(partial);
     expect(JSON.stringify(partial)).toBe(before);
   });
+
+  // Build-Out Pass Slice 1 — Architect emits ui_plan.
+  // Spec: Company Docs/Metacron/SPEC - Pathfinder Build-Out Pass.md.
+  describe('ui_plan (Build-Out Pass Slice 1)', () => {
+    it('BASE_ARCHITECTURE carries a safe default ui_plan with volume emphasis', () => {
+      expect(BASE_ARCHITECTURE.ui_plan).toBeDefined();
+      expect(BASE_ARCHITECTURE.ui_plan?.dashboard_emphasis).toBe('volume');
+      expect(BASE_ARCHITECTURE.ui_plan?.lead_card_layout.primary_fields).toEqual([]);
+      expect(BASE_ARCHITECTURE.ui_plan?.kpis).toEqual([]);
+      expect(BASE_ARCHITECTURE.ui_plan?.charts).toEqual([]);
+      expect(BASE_ARCHITECTURE.ui_plan?.filters).toEqual([]);
+    });
+
+    it('returns base ui_plan when partial omits it', () => {
+      const out = resolveArchitecture({ vertical: 'x' });
+      expect(out.ui_plan).toEqual(BASE_ARCHITECTURE.ui_plan);
+    });
+
+    it('shallow-merges ui_plan field-by-field with base defaults', () => {
+      const out = resolveArchitecture({
+        ui_plan: {
+          dashboard_emphasis: 'coverage',
+          lead_card_layout: {
+            primary_fields: ['name', 'asset_class', 'score'],
+            secondary_fields: ['source'],
+            score_position: 'top-right',
+          },
+          kpis: [{ label: 'Leads this week', metric_id: 'leads_weekly' }],
+          charts: [],
+          filters: [],
+        },
+      });
+      expect(out.ui_plan?.dashboard_emphasis).toBe('coverage');
+      expect(out.ui_plan?.lead_card_layout.primary_fields).toEqual([
+        'name',
+        'asset_class',
+        'score',
+      ]);
+      expect(out.ui_plan?.kpis).toHaveLength(1);
+      expect(out.ui_plan?.kpis?.[0]?.metric_id).toBe('leads_weekly');
+    });
+  });
 });

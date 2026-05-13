@@ -47,4 +47,20 @@ export const BASE_ARCHITECTURE: OrgArchitecture = {
   branding: { display_name: 'Pathfinder' },
   compliance: [],
   integrations: [],
+  // Build-Out Pass Slice 1 default
+  // (Spec: Company Docs/Metacron/SPEC - Pathfinder Build-Out Pass.md).
+  // Safe-default ui_plan with empty layout arrays and a volume emphasis so
+  // existing orgs persisted before the v4 Architect prompt still resolve
+  // cleanly through the schema-driven renderer in later slices.
+  ui_plan: {
+    lead_card_layout: {
+      primary_fields: [],
+      secondary_fields: [],
+      score_position: 'top-right',
+    },
+    kpis: [],
+    charts: [],
+    filters: [],
+    dashboard_emphasis: 'volume',
+  },
 };
