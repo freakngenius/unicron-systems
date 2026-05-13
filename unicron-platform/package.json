@@ -5,13 +5,15 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "prebuild": "node scripts/generate-agent-cron.mjs",
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
     "typecheck": "tsc -b --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "slack:audit": "node scripts/slack-membership-audit.mjs"
+    "slack:audit": "node scripts/slack-membership-audit.mjs",
+    "agent-cron:generate": "node scripts/generate-agent-cron.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.52.0",
