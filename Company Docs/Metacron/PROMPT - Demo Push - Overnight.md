@@ -25,127 +25,109 @@ The 11-step TestCorp synthetic smoke test in that SPEC is the gate. Metacron is 
 
 ## ADDITIONAL SPEC — Pathfinder Build-Out Pass
 
-**`Company Docs/Metacron/SPEC - Pathfinder Build-Out Pass.md`** describes the architecture-driven UI generation step (step 5 of the demo path). Read this too — it's the final phase that makes the customer's Pathfinder fully tailored.
+**`Company Docs/Metacron/SPEC - Pathfinder Build-Out Pass.md`** describes the architecture-driven UI generation step (step 5 of the demo path). Read this too.
 
 ## PRE-AUTH (overnight, expires 7am Pacific)
 
 - Additive migrations may auto-apply without halt: new tables, new columns with safe defaults, new indexes, new RLS policies, new functions. Print every SQL applied for audit.
-- Halts remain on: destructive changes, schema renames, RLS leak detection, CI red after 2 fix attempts, production safety triggers, secret leaks, Verified column moves, smoke test failures.
+- **Scope expansion on the active card is auto-authorized.** If you find more work that fits the active card's intent (more RLS leaks while on the RLS-fix card, more mock fixtures while on the dashboard card, etc.), expand scope and keep going. Do NOT halt to ask permission.
 - /codex review approved for parallel execution after every card.
+- **Auto-merge authorized** after CI green + multi-Vercel green + /codex pass. Kyle's "Kyle merges only" durable memory is overridden for this window. Post merge SHA + timestamp to chat after each merge.
+
+## HARD HALT CONDITIONS — these are the ONLY reasons to halt
+
+Halt and surface to chat (do NOT continue the active card; CONTINUE other unblocked cards in parallel if safe):
+
+- **Destructive migration** (DROP TABLE, DROP COLUMN, ALTER COLUMN TYPE, DELETE without WHERE, TRUNCATE, schema rename). Surface SQL for Kyle review.
+- **RLS leak detected AFTER a fix migration applied** (i.e., the fix didn't take). NOT for finding more leaks while actively fixing leaks — those expand scope automatically.
+- **Production 5xx spike post-deploy** → auto-revert + halt entire loop, surface immediately.
+- **Secret detected in commit** → halt entire loop, surface immediately. Never push.
+- **CI red after 3 fix attempts on the same card** (not 2 — give the loop room).
+- **Smoke test fails on the same step 3 consecutive times after fix attempts** → halt that step's cycle, surface diagnostic, continue OTHER cards. Don't loop forever on the same broken thing.
+- **Authentication/authorization failure on the deploy pipeline** (token expired, etc.) → halt and surface.
+- **Verified column move requested** → never auto-promote. Surface for Kyle to move manually.
+
+DO NOT halt for:
+
+- More work found while doing current work (RLS scope expansion, mock fixture sweep, etc.) — auto-expand.
+- Single test failure → fix and retry up to 3 times before halting.
+- Vercel preview slow → wait, then proceed.
+- Mergeable=UNKNOWN → refresh, retry.
+- /codex unavailable → skip review for that PR, log a follow-up audit card, continue cycling.
+- Spec interpretation ambiguity → make the call that best serves the demo path goal, document the choice in the PR, continue.
 
 ## CYCLE STRUCTURE — each card, every time
 
-1. **Status check + skill discovery.** Run `list_skills` MCP. Snapshot kanban + schema + git + Vercel. Print one-screen summary. Re-read DoD SPEC + Build-Out SPEC if context has shifted.
+1. **Status check + skill discovery.** Run `list_skills` MCP. Snapshot kanban + schema + git + Vercel. One-screen summary. Re-read DoD SPEC + Build-Out SPEC if context has shifted.
 
-2. **Pick next card.** Priority: Bug Fixes → Review → In Process → Not Yet Started. Within Not Yet Started, dependency-respecting order:
-   - Phase 2C slices 2-6 (org-aware ranker, outreach drafter, verifier, geography, registry, compliance) — parallel-safe between slices in disjoint files
-   - Phase 2D Real Per-Org Dashboard Data — parallel with 2C
-   - Phase 2E Onboarding-to-Live state machine — depends on 2C + 2D
-   - Pathfinder Build-Out Pass (NEW) — depends on 2C + 2D + 2E
-   - Customer Profile Architect History (table + UI tab)
-   - 2 RLS gaps (artifact_templates, voice_call_artifacts)
-   - Atrium env-var collision diagnosis
-   - Pre-existing Test Stabilization
-   - Production Hardening
+2. **Pick next card.** Priority: Bug Fixes → Review → In Process → Not Yet Started.
 
-3. **Plan.** Use `writing-plans` skill. Tight, file-disjoint, parallel-friendly plan.
+3. **Plan.** Use `writing-plans` skill. File-disjoint, parallel-friendly plan.
 
-4. **Implement.** TDD: failing test first, then green. Use specialized skills as fit:
+4. **Implement.** TDD: failing test first, then green. Use:
    - `test-driven-development`
    - `using-git-worktrees` — fresh worktree per card
    - `subagent-driven-development` / `dispatching-parallel-agents` — for file-disjoint slices
 
-5. **Self-verify.** Run build, typecheck, tests, SQL probes, local smoke. All green before proceeding.
+5. **Self-verify.** Build, typecheck, tests, SQL probes, local smoke. All green.
 
-6. **External review.** Throw to /codex: `/codex review feat/<branch>`. WHILE /codex runs, IMMEDIATELY pick up the next file-disjoint card in a parallel worktree. Do not idle.
+6. **External review.** `/codex review feat/<branch>`. WHILE /codex runs, IMMEDIATELY pick up the next file-disjoint card in parallel worktree. Do not idle.
 
-7. **Apply findings.** When /codex returns:
-   - Empty/trivial findings → open PR with /codex transcript in body
-   - Substantive findings → fold into branch, re-run /codex once, then PR
-   - Architectural concerns → file Bug Fix card, halt that card, surface to Kyle in this thread, continue other cards
+7. **Apply findings.** When /codex returns: trivial → PR. Substantive → fold + re-review. Architectural → file Bug Fix, halt that card, continue others.
 
-8. **Multi-Vercel verify.** Pathfinder + unicron-platform both green on preview before merge.
+8. **Multi-Vercel verify.** Pathfinder + unicron-platform both green on preview.
 
-9. **Merge.** Once CI green + multi-Vercel green + /codex passed.
+9. **Merge.** Auto-merge once CI green + multi-Vercel green + /codex pass. Post SHA + timestamp to chat.
 
-10. **Post-merge.** Move kanban card to Deployed. Capture merge SHA + timestamp. Worktree cleanup via `git worktree remove`.
+10. **Post-merge.** Move kanban card to Deployed (never Verified — human only).
 
-11. **Re-check DoD.** Would the TestCorp synthetic smoke test pass NOW with the latest main? If yes → run synthetic smoke. If no → continue cycling.
+11. **Re-check DoD.** Run synthetic smoke. Pass → continue or halt if goal met. Fail → file Bug Fix for failed step, continue cycling.
 
 ## SELF-REVIEW LOOP
 
 After EVERY card merges, run a fresh DoD smoke check:
-- Create or refresh a synthetic test org "TestCorp-<timestamp>"
-- Run all 11 smoke steps from the DoD SPEC
-- Pass → print "DoD smoke PASS at <commit>" and continue to next card OR halt if all cards done
-- Fail → identify which step failed, file Bug Fix card naming the failure, continue cycling
+- Create synthetic test org "TestCorp-<timestamp>"
+- Run 11 smoke steps from DoD SPEC
+- Pass → print "DoD smoke PASS at <commit>" and continue
+- Fail → identify failed step, file Bug Fix card, continue cycling
 
-This means: even if you "finish" the planned card list, if the synthetic smoke fails, you keep going. The synthetic smoke is the only true exit condition.
+Synthetic smoke is the only true exit condition. Even if planned card list is complete, if smoke fails, keep going.
 
-## NEW: PATHFINDER BUILD-OUT PASS — THE DEMO STAR
+## PARALLEL SUB-AGENT DISPATCH
 
-This is what makes the demo memorable. After 2C + 2D + 2E land:
-
-1. Extend Architect output schema to include `ui_plan` (per Build-Out SPEC)
-2. Extend Architect system prompt to generate ui_plan per the customer's vertical
-3. Wire Pathfinder renderer to honor ui_plan (KPI strip, charts, lead card layout, filters)
-4. Implement build-out verification Inngest function with headless browser + screenshot
-5. Add iterate-to-green loop (max 5 attempts)
-6. Status flips `build_out_complete` on pass
-
-This is what makes the demo land: operator clicks Accept, system literally builds the agents AND designs the UI, then proves it works by visiting the URL and screenshotting. No demo magic; the system shows its work.
-
-## REAL DATA SOURCES
-
-Every source declared in any active org's `architecture.sources` must be one of:
-- **Live** — real adapter producing real rows
-- **Tier-2-queued** — declared, operator queue for manual fetch (no silent failure)
-- **Voice-agent** — Phase 3+ (no silent failure)
-- **Pending** — Source Onboarder explicitly building adapter, declared in UI
-
-If any source returns mock data or fails silently, file a Bug Fix card naming that source and continue cycling. By morning, every source for at least the TestCorp synthetic test org must be Live or have a clear status declared.
-
-## HARD HALT CONDITIONS
-
-Halt and surface to this thread (continue OTHER unblocked cards while halted on one):
-- Migration with destructive change → halt that migration, continue other cards
-- CI red after 2 fix attempts → halt that card, continue others
-- RLS leak detected in any probe → halt entire loop, surface immediately
-- Production deploy 5xx spike → auto-revert + halt entire loop, surface immediately
-- Secret detected in commit → halt entire loop, surface immediately
-- Smoke test fails 3 consecutive times on same step → halt the cycle for that step, surface diagnostic, continue other unrelated cards
-
-DO NOT halt for:
-- Single test failure (fix and retry)
-- Vercel preview slow (wait, then proceed)
-- Mergeable=UNKNOWN (refresh, retry)
-- /codex unavailable (skip review for that PR, continue cycling, file follow-up audit card)
-
-## FAILURE MODES — DON'T LOOP FOREVER
-
-If you cycle the same card 3 times without progress (same test failing, same Vercel error, same /codex finding):
-- Halt that card
-- File Bug Fix detailing every attempt + diagnostic
-- Continue cycling other unblocked cards
-- Surface the stuck card to Kyle in this thread with current state + next-attempt suggestion
+Authorized aggressively for file-disjoint cards. Concurrent worktrees:
+- Phase 2C slices 2-6
+- Phase 2D real dashboard data
+- Customer Profile Architect History
+- RLS gap sweeps (parallel-safe schema-only)
+- Test stabilization
+- Production Hardening
 
 ## REPORTING CADENCE
 
-Every 30 minutes of clock time, post a status summary in this thread:
-- Cards in-flight (which worktrees, which slices)
-- Cards merged this hour
-- /codex queue
-- Active halts
-- DoD smoke pass/fail status
+Every 30 minutes of clock time, post one line in chat:
+- Cards merged this hour (count + names)
+- Cards in flight (worktree IDs)
+- Active halts (if any)
+- Current DoD smoke status
+
+Keep it tight — single line per cycle is fine. Don't ask permission, just report.
+
+## FAILURE MODES — DON'T LOOP FOREVER
+
+If you cycle the same card 3 times without progress:
+- Halt that card
+- File Bug Fix detailing every attempt + diagnostic
+- Continue cycling OTHER cards
+- Surface stuck card with current state + suggested next attempt
 
 ## FINAL DELIVERABLE BY 7AM PACIFIC
 
-Either:
-**Path A:** Synthetic TestCorp smoke passes all 11 steps + the demo path (Architect input → Accept → real agents run → tailored Pathfinder live at URL) verified working end-to-end. Print "Demo path GREEN at <timestamp>" and halt.
+**Path A:** Synthetic smoke passes all 11 steps. Demo path verified. Print "Demo path GREEN at <timestamp>" and halt.
 
-**Path B:** Some cards still in flight. Print a status summary listing what's green, what's red, what's blocked, what next-cycle would tackle. Kyle will review at 7am.
+**Path B:** Cards in flight. Print status summary listing what's green / red / blocked / next-cycle target. Kyle reviews at 7am.
 
-If Path B and there's still time before 7am, keep cycling. Path A is the goal.
+If Path B and time before 7am: keep cycling.
 
 ## BEGIN
 
@@ -156,4 +138,4 @@ If Path B and there's still time before 7am, keep cycling. Path A is the goal.
 5. Pick first card.
 6. Start cycling.
 
-Don't idle. Don't ask permission for things in the pre-auth window. Surface only on actual halt conditions.
+Don't idle. Don't ask permission for anything in the pre-auth window. Don't halt on scope expansion. Surface only on actual hard halt conditions.
