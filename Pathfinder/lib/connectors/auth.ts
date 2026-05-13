@@ -60,6 +60,12 @@ export const DEFAULT_ORG_ID = 'zedcor';
  * Returns null when the caller is not an operator (route should 401/403).
  * Gate 10B's HubSpot install/callback/disconnect routes rely on this
  * to scope OAuth grants to the right user_connections row.
+ *
+ * Gate 13Y-A note: a future-uuid resolver now exists at
+ * `lib/auth/user-bootstrap.ts` (`resolveUserId`). It is NOT wired here
+ * yet — the swap is 13Y-D, gated behind MULTI_REP_ENABLED. This helper
+ * remains the single-source identity reader until then so flag-off
+ * production behavior is byte-identical to pre-13Y.
  */
 export function getCurrentUserId(req: NextRequest): string | null {
   // Today: 1:1 with operator email. Future-uuid migration flips this
