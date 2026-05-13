@@ -942,6 +942,16 @@ Operator setup: `MEMORY/operator-todos/2026-05-03-teams-user-setup.md` — Micro
 **Drift:** additive only — v4 extends v3 without removing any existing instruction.
 **Tests:** `Pathfinder/__tests__/architect/decomposition-prompt-shape.test.ts` asserts the prompt contains `ui_plan` + `dashboard_emphasis` + at least one of the four emphasis values, and that the version is pinned to `2026-05-13-v4`. `Pathfinder/__tests__/config/resolveArchitecture.test.ts` extends the resolver suite with a `ui_plan (Build-Out Pass Slice 1)` describe — covers the base default and the shallow-merge behaviour.
 
+## Pathfinder Build-Out Pass — Slice 2: Pathfinder renderer reads ui_plan
+
+**State:** PR open. Wires `/[slug]` to honor `org.architecture.ui_plan` so DoD smoke step 8 (`scripts/dod-smoke.ts`) can flip BLOCKED → PASS. Headless verification agent (Slice 3), iterate-to-green loop (Slice 4), and `build_out_complete` status flip (Slice 5) remain out of scope here.
+
+#### Pathfinder/lib/metrics/kpiQueries.ts
+**Implements:** Company Docs/Metacron/SPEC - Pathfinder Build-Out Pass.md §"Pathfinder renderer changes" — KPI value resolution. Slice 2 ships the registry stub only: `kpiQueryByMetricId: Record<string, KpiQueryFn>` initially empty so every metric_id resolves to `null` (em-dash placeholder in the KPI card). Real query functions (`leads_weekly`, `conversion_rate`, etc.) land in Slice 3+ alongside the headless verification agent.
+**Last verified against spec:** 2026-05-13.
+**Drift:** none — stub layer matches the spec's "current value (from real query)" deferred to a later slice.
+**Tests:** exercised indirectly via `Pathfinder/__tests__/components/KPIStrip.test.tsx` which asserts the em-dash fallback for unmapped metric_ids.
+
 ---
 
 ## Pathfinder Build-Out Pass — Slices 3+5: verification + status flip
