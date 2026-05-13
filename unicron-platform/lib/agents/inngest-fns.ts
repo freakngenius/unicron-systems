@@ -83,11 +83,18 @@ export const analystRun = inngest.createFunction(
 /**
  * Nightly: decay signals/ledger, write daily digest, scan for drift.
  */
+// Sprint 7.5 H1 Option 2 (2026-05-13): cron sourced from nervous_system.agents
+// via generated-agent-cron.ts (rebuilt on every deploy from
+// public.ns_list_agents() — see scripts/generate-agent-cron.mjs and the
+// prebuild step in package.json). Fallback literal preserved so the build
+// stays green if the DB is unreachable at build time.
+import { agentCron } from './generated-agent-cron.js';
+
 export const analystNightlyCron = inngest.createFunction(
   { id: 'analyst-nightly', name: 'Analyst Nightly Cron', retries: 1 },
   // Usefulness pass 2026-05-12: shifted to 05:00 ET so the digest is ready
   // before the working day starts on the east coast.
-  { cron: 'TZ=America/New_York 0 5 * * *' },
+  { cron: agentCron('Analyst', 'TZ=America/New_York 0 5 * * *') },
   async ({ step }) => {
     const { decayTick, dailyDigest, driftFlagScan, analystWikiSync } = await import('./analyst.js');
     const decayResult = await step.run('decay-tick', () => decayTick());
