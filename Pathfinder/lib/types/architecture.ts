@@ -20,6 +20,12 @@ export interface OrgArchitecture {
   compliance: string[];
   integrations: string[];
   business_summary?: BusinessSummary;
+  // Build-Out Pass Slice 1 (Spec: SPEC - Pathfinder Build-Out Pass.md):
+  // Architect emits a ui_plan describing how the customer's tailored
+  // Pathfinder should be laid out. Optional for backward compat with
+  // existing orgs persisted before the v4 prompt — resolveArchitecture
+  // falls back to the BASE_ARCHITECTURE default ui_plan when missing.
+  ui_plan?: UIPlan;
 }
 
 export interface LeadUnitConfig {
@@ -74,4 +80,36 @@ export interface BusinessSummary {
   business_area: string;
   problem_solved: string;
   what_they_get: string;
+}
+
+// UIPlan — verbatim from SPEC - Pathfinder Build-Out Pass.md
+// (§"Architecture JSON extension"). Drives the schema-driven renderer
+// at /[slug] in later slices (KPI strip, charts, lead card layout,
+// filter sidebar). This file ships the type only — renderer wiring is
+// Slice 2.
+export interface UIPlan {
+  lead_card_layout: {
+    primary_fields: string[]; // 3-5 fields displayed prominently
+    secondary_fields: string[]; // additional fields in expandable section
+    score_position: 'top-right' | 'top-left' | 'bottom';
+  };
+  kpis: Array<{
+    label: string; // "Leads this week"
+    metric_id: string; // maps to a query function
+    unit?: string; // "%", "$", null
+    target?: number;
+    invert?: boolean; // lower is better
+  }>;
+  charts: Array<{
+    title: string;
+    type: 'line' | 'bar' | 'pie' | 'area';
+    metric_id: string;
+    grouping?: string; // "day", "week", "source", "asset_class"
+  }>;
+  filters: Array<{
+    field: string; // lead schema field name
+    label: string;
+    default?: unknown;
+  }>;
+  dashboard_emphasis: 'volume' | 'quality' | 'velocity' | 'coverage';
 }

@@ -62,6 +62,25 @@ export function resolveArchitecture(
   if (p.compliance) out.compliance = [...p.compliance];
   if (p.integrations) out.integrations = [...p.integrations];
   if (p.business_summary) out.business_summary = { ...p.business_summary };
+  if (p.ui_plan) {
+    // Build-Out Pass Slice 1 (Spec: SPEC - Pathfinder Build-Out Pass.md).
+    // Shallow-merge ui_plan with the base default so partial overrides
+    // (e.g. dashboard_emphasis only) preserve the rest of the layout
+    // shape. Inner arrays are replaced wholesale when the partial
+    // provides them — same semantics as sources/compliance.
+    const baseUi = out.ui_plan!;
+    out.ui_plan = {
+      ...baseUi,
+      ...p.ui_plan,
+      lead_card_layout: {
+        ...baseUi.lead_card_layout,
+        ...(p.ui_plan.lead_card_layout ?? {}),
+      },
+      kpis: p.ui_plan.kpis ? [...p.ui_plan.kpis] : baseUi.kpis,
+      charts: p.ui_plan.charts ? [...p.ui_plan.charts] : baseUi.charts,
+      filters: p.ui_plan.filters ? [...p.ui_plan.filters] : baseUi.filters,
+    };
+  }
   return out;
 }
 
@@ -92,5 +111,14 @@ function cloneBase(): OrgArchitecture {
     branding: { ...BASE_ARCHITECTURE.branding },
     compliance: [...BASE_ARCHITECTURE.compliance],
     integrations: [...BASE_ARCHITECTURE.integrations],
+    ui_plan: BASE_ARCHITECTURE.ui_plan
+      ? {
+          ...BASE_ARCHITECTURE.ui_plan,
+          lead_card_layout: { ...BASE_ARCHITECTURE.ui_plan.lead_card_layout },
+          kpis: [...BASE_ARCHITECTURE.ui_plan.kpis],
+          charts: [...BASE_ARCHITECTURE.ui_plan.charts],
+          filters: [...BASE_ARCHITECTURE.ui_plan.filters],
+        }
+      : undefined,
   };
 }

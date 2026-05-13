@@ -913,3 +913,31 @@ Operator setup: `MEMORY/operator-todos/2026-05-03-teams-user-setup.md` — Micro
 **Implements:** SPEC - Phase 2E Onboarding Completion Loop.md §"Flow" — adds `flipToOperatorViewed` call after org fetch, before render. Side-effect only; rendering unaffected by transition success/failure (the threshold cron + future renders reconcile any missed flip).
 **Last verified against spec:** 2026-05-11.
 **Drift:** none.
+
+
+---
+
+## Pathfinder Build-Out Pass — Slice 1: Architect emits ui_plan
+
+**State:** PR open. Opens the schema gate so Architect's `finalizeProposal` output carries a `ui_plan` object alongside `business_summary` and the decomposition. Renderer wiring, headless verification, iterate-to-green loop, and `build_out_complete` status flips ship in later slices.
+
+#### Pathfinder/lib/types/architecture.ts
+**Implements:** Company Docs/Metacron/SPEC - Pathfinder Build-Out Pass.md §"Architecture JSON extension". Adds the `UIPlan` interface verbatim (lead_card_layout, kpis, charts, filters, dashboard_emphasis) and an optional `ui_plan?: UIPlan` field on `OrgArchitecture`. Optional so orgs persisted before the v4 Architect prompt resolve cleanly through the base default.
+**Last verified against spec:** 2026-05-13.
+**Drift:** none.
+
+#### Pathfinder/lib/config/baseTemplate.ts
+**Implements:** Company Docs/Metacron/SPEC - Pathfinder Build-Out Pass.md §"Architecture JSON extension". `BASE_ARCHITECTURE.ui_plan` carries a safe default — empty `primary_fields`/`secondary_fields`, `score_position: 'top-right'`, empty kpis/charts/filters arrays, `dashboard_emphasis: 'volume'` — so the schema-driven renderer in Slice 2 never receives an undefined plan.
+**Last verified against spec:** 2026-05-13.
+**Drift:** none.
+
+#### Pathfinder/lib/config/resolveArchitecture.ts
+**Implements:** Company Docs/Metacron/SPEC - Pathfinder Build-Out Pass.md §"Architecture JSON extension". `resolveArchitecture` shallow-merges per-org `ui_plan` overrides on top of the base default (lead_card_layout merged field-by-field; kpis/charts/filters replaced wholesale when the partial provides them — same semantics as sources/compliance).
+**Last verified against spec:** 2026-05-13.
+**Drift:** none.
+
+#### Pathfinder/services/architect/prompts/decomposition.ts
+**Implements:** Company Docs/Metacron/SPEC - Pathfinder Build-Out Pass.md §"Architect prompt extension". Appended a `UI PLAN GENERATION` block after the rejected-sources discipline; instructs the Architect to emit a `ui_plan` object describing lead_card_layout, KPIs, charts, filters, and `dashboard_emphasis` (volume / quality / velocity / coverage) tuned to the customer's stated priority. Bumped `DECOMPOSITION_PROMPT_VERSION` to `2026-05-13-v4` so proposals record which prompt revision generated them; v3 fallback for older proposals.
+**Last verified against spec:** 2026-05-13.
+**Drift:** additive only — v4 extends v3 without removing any existing instruction.
+**Tests:** `Pathfinder/__tests__/architect/decomposition-prompt-shape.test.ts` asserts the prompt contains `ui_plan` + `dashboard_emphasis` + at least one of the four emphasis values, and that the version is pinned to `2026-05-13-v4`. `Pathfinder/__tests__/config/resolveArchitecture.test.ts` extends the resolver suite with a `ui_plan (Build-Out Pass Slice 1)` describe — covers the base default and the shallow-merge behaviour.
