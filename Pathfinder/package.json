@@ -12,7 +12,8 @@
     "seed": "tsx scripts/seed.ts",
     "backfill": "tsx scripts/backfill.ts",
     "prepare": "cd .. && husky",
-    "seed:zedcor": "tsx scripts/seed-zedcor.ts"
+    "seed:zedcor": "tsx scripts/seed-zedcor.ts",
+    "dod-smoke": "tsx scripts/dod-smoke.ts"
   },
   "lint-staged": {
     "*.{ts,tsx}": "next lint --file"
