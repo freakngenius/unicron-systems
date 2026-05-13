@@ -5,6 +5,7 @@
 
 import { useEffect, useState } from 'react';
 import { getSupabase } from '../../lib/supabase';
+import AgentDetailModal, { type AgentRecord } from './AgentDetailModal';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -18,6 +19,10 @@ interface Budget {
 interface Config {
   watches_agents: string[];
   watches_signal_topics: string[];
+  connected_tools?: string[];
+  connected_agents?: string[];
+  connected_sections?: string[];
+  data_sources?: string[];
 }
 
 interface Agent {
@@ -25,10 +30,16 @@ interface Agent {
   name: string;
   archetype: string;
   specialty: string | null;
+  description?: string | null;
+  guiding_prompt?: string | null;
+  schedule_cron?: string | null;
   active: boolean;
   budget: Budget | null;
   config: Config | null;
+  last_run_at?: string | null;
+  last_run_synthetic?: boolean | null;
   created_at: string;
+  updated_at?: string;
   // R7 Option 2: demo-flagged agents render at 60% opacity + DEMO pill;
   // real agents render at 100% with live load percentage.
   demo?: boolean;
@@ -265,20 +276,48 @@ async function fetchAgents(): Promise<Agent[]> {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
+async function fetchActorId(): Promise<string | null> {
+  const sb = getSupabase();
+  const { data: sessionData } = await sb.auth.getSession();
+  const email = sessionData.session?.user?.email;
+  if (!email) return null;
+  const { data, error } = await sb.rpc('ns_get_team_member_by_email', { p_email: email });
+  if (error) {
+    console.warn('[AgentsGalaxy] fetchActorId error:', error.message);
+    return null;
+  }
+  const row = Array.isArray(data) ? data[0] : data;
+  return (row?.id as string | undefined) ?? null;
+}
+
 export default function AgentsGalaxy() {
   const [agents, setAgents] = useState<Agent[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Agent | null>(null);
+  const [editing, setEditing] = useState<Agent | null>(null);
+  const [actorId, setActorId] = useState<string | null>(null);
+
+  async function refresh() {
+    const real = await fetchAgents();
+    const realFlagged = real.map((a) => ({ ...a, demo: false }));
+    setAgents([...realFlagged, ...DEMO_AGENTS]);
+  }
 
   useEffect(() => {
     fetchAgents().then((real) => {
-      // R7 Option 2: render all 12 archetypes. Real agents from ns_list_agents
-      // come first (no demo flag); 8 design-fiction agents follow with demo=true.
       const realFlagged = real.map((a) => ({ ...a, demo: false }));
       setAgents([...realFlagged, ...DEMO_AGENTS]);
       setLoading(false);
     });
+    fetchActorId().then(setActorId);
   }, []);
+
+  function openAgent(a: Agent | null) {
+    setSelected(a);
+    if (a && !a.demo) {
+      setEditing(a);
+    }
+  }
 
   if (loading) {
     return (
@@ -293,7 +332,7 @@ export default function AgentsGalaxy() {
   return (
     <div>
       {/* SVG galaxy visualization */}
-      <AgentGalaxySVG agents={agents} selectedId={selected?.id ?? null} onSelect={setSelected} />
+      <AgentGalaxySVG agents={agents} selectedId={selected?.id ?? null} onSelect={openAgent} />
 
       {/* Roster + detail panel — real agents sort first per R7 Option 2 */}
       <div className="flex gap-4">
@@ -312,7 +351,7 @@ export default function AgentsGalaxy() {
           return (
             <button
               key={agent.id}
-              onClick={() => setSelected(isSelected ? null : agent)}
+              onClick={() => openAgent(isSelected ? null : agent)}
               className="bg-bg-card hover:bg-bg-raised rounded-xl p-4 text-left border transition-all relative"
               style={{
                 borderColor: isSelected ? color.border : 'var(--border-default)',
@@ -436,10 +475,27 @@ export default function AgentsGalaxy() {
             <div className="mono text-[9px] text-text-muted">
               Created: {new Date(selected.created_at).toLocaleDateString()}
             </div>
+            {!selected.demo && (
+              <button
+                onClick={() => setEditing(selected)}
+                className="mt-2 mono text-[11px] px-3 py-1.5 rounded border border-border-default text-text-secondary hover:text-text-primary w-full text-left"
+              >
+                Edit in cockpit →
+              </button>
+            )}
           </div>
         </div>
       )}
       </div>
+      {editing && (
+        <AgentDetailModal
+          agentId={editing.id}
+          initialAgent={editing as AgentRecord}
+          actorId={actorId}
+          onClose={() => setEditing(null)}
+          onSaved={() => { refresh(); }}
+        />
+      )}
     </div>
   );
 }
