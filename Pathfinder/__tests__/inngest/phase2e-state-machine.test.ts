@@ -216,8 +216,13 @@ describe('Phase 2E slice 2 — check-ready-to-view cron', () => {
     })) as { transition_count: number; transitions: Array<{ next_status: string }> };
     expect(result.transition_count).toBe(1);
     expect(result.transitions[0].next_status).toBe('ready_to_view');
-    expect(ctx.events).toHaveLength(1);
-    expect(ctx.events[0].name).toBe('pathfinder/org.ranking_complete');
+    // Build-Out Pass slice 3+5: ranking_complete is always emitted; on
+    // ready_to_view transitions we additionally emit org.ready_to_view
+    // so the verifyBuildOut function can HTTP-check the /[slug] route.
+    expect(ctx.events).toHaveLength(2);
+    const eventNames = ctx.events.map((e) => e.name);
+    expect(eventNames).toContain('pathfinder/org.ranking_complete');
+    expect(eventNames).toContain('pathfinder/org.ready_to_view');
   });
 
   it('transitions to awaiting_threshold when verified_count < 3', async () => {

@@ -222,4 +222,24 @@ export type PathfinderEvents = {
       completed_at: string;
     };
   };
+
+  /**
+   * Org transitioned into `ready_to_view` (Build-Out Pass slice 3+5).
+   * Emitted by `check-ready-to-view-cron` immediately after the status
+   * flip. Subscribed by `verifyBuildOut`, which HTTP-fetches the
+   * customer's /[slug] route and either flips status to
+   * `build_out_complete` (pass) or `build_out_failed` with a diagnostic
+   * jsonb on `pathfinder.organizations` (fail).
+   *
+   * Spec: Company Docs/Metacron/SPEC - Pathfinder Build-Out Pass.md §3 + §5.
+   */
+  'pathfinder/org.ready_to_view': {
+    name: 'pathfinder/org.ready_to_view';
+    data: {
+      organization_id: string;
+      slug: string;
+      verified_count: number;
+      transitioned_at: string;
+    };
+  };
 };
