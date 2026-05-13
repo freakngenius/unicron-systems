@@ -7,7 +7,19 @@
 
 import type { DecompositionArchitecture } from './architect';
 
-export type OrgStatus = 'active' | 'onboarding' | 'paused';
+// Phase 2E onboarding-to-live state machine — mirrors the CHECK constraint
+// on pathfinder.organizations.status added by migration
+// 20260511_phase2e_organizations_status.sql. The API proxy at
+// /api/internal/organizations passes this value through unchanged from
+// Pathfinder. See Company Docs/Metacron/SPEC - Phase 2E Onboarding
+// Completion Loop.md.
+export type OrgStatus =
+  | 'setting_up'
+  | 'first_run'
+  | 'ranking'
+  | 'awaiting_threshold'
+  | 'ready_to_view'
+  | 'operator_viewed';
 
 export interface CustomerOrg {
   /** Stable identifier — currently equal to slug; matches `customer_org_id` discriminator. */

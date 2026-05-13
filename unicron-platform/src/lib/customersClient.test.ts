@@ -9,6 +9,7 @@
 // the module boundary instead of via env-flag toggle.
 
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
+import type { OrgStatus } from './contracts/customers';
 
 interface CapturedCall {
   table: string;
@@ -286,5 +287,52 @@ describe('getOrgHealth', () => {
     // 2 errors total in 30d, both inside 7d window
     expect(rollup.error_total_7d).toBe(2);
     expect(rollup.error_rate_7d).toBeCloseTo(2 / 2, 5);
+  });
+});
+
+// Phase 2E Slice 3 — verify the full 6-state machine round-trips through
+// listCustomerOrgs unchanged. The proxy at /api/internal/organizations
+// passes pathfinder.organizations.status through verbatim, so the Metacron
+// frontend type must accept every value the DB CHECK constraint allows.
+
+const ALL_PHASE2E_STATUSES: OrgStatus[] = [
+  'setting_up',
+  'first_run',
+  'ranking',
+  'awaiting_threshold',
+  'ready_to_view',
+  'operator_viewed',
+];
+
+describe('listCustomerOrgs · Phase 2E status round-trip', () => {
+  const originalFetch = globalThis.fetch;
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+    vi.restoreAllMocks();
+  });
+
+  it('round-trips every Phase 2E status value from the API proxy unchanged', async () => {
+    const rows = ALL_PHASE2E_STATUSES.map((status, i) => ({
+      id: `org-${i}`,
+      slug: `org-${i}`,
+      display_name: `Org ${i}`,
+      status,
+      onboarded_at: '2026-05-12T00:00:00.000Z',
+    }));
+
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      expect(url).toBe('/api/internal/organizations');
+      return new Response(JSON.stringify(rows), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    }) as unknown as typeof fetch;
+
+    const { listCustomerOrgs } = await import('./customersClient');
+    const orgs = await listCustomerOrgs();
+
+    expect(orgs).toHaveLength(ALL_PHASE2E_STATUSES.length);
+    expect(orgs.map((o) => o.status)).toEqual(ALL_PHASE2E_STATUSES);
   });
 });

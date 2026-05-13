@@ -3,6 +3,12 @@ import { getOrgHealth } from '../lib/customersClient';
 import type { CustomerOrg, OrgHealthRollup } from '../lib/contracts/customers';
 import { HealthMetricCard } from '../components/HealthMetricCard';
 import { MiniSparkline } from '../components/MiniSparkline';
+import {
+  OPEN_PATHFINDER_ENABLED,
+  STATUS_LABEL,
+  STATUS_TONE,
+  openPathfinderDisabledReason,
+} from './customerStatus';
 
 interface Props {
   org: CustomerOrg;
@@ -31,6 +37,10 @@ export function CustomerDetailView({ org, onBack }: Props) {
     };
   }, [org.id]);
 
+  const openEnabled = OPEN_PATHFINDER_ENABLED.has(org.status);
+  const disabledReason = openPathfinderDisabledReason(org.status);
+  const openLabel = `OPEN PATHFINDER FOR ${org.display_name.toUpperCase()} →`;
+
   return (
     <div className="px-6 py-8">
       <header className="flex items-center justify-between mb-6">
@@ -49,16 +59,41 @@ export function CustomerDetailView({ org, onBack }: Props) {
           <span className="mono text-[11px] uppercase tracking-[0.18em] text-text-primary/40">
             {org.id}
           </span>
+          <span
+            data-testid="customer-detail-status-badge"
+            data-status={org.status}
+            className={[
+              'mono text-[10px] uppercase tracking-[0.18em] border rounded-md px-2 py-0.5',
+              STATUS_TONE[org.status],
+            ].join(' ')}
+          >
+            {STATUS_LABEL[org.status]}
+          </span>
         </div>
-        <a
-          href={`https://unicron.systems/pathfinder/${encodeURIComponent(org.slug)}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          data-testid="customer-detail-open-pathfinder"
-          className="mono text-[11px] uppercase tracking-[0.18em] border border-text-primary px-3 py-1 rounded-md text-text-primary hover:bg-text-primary hover:text-bg-base transition-colors"
-        >
-          OPEN PATHFINDER FOR {org.display_name.toUpperCase()} →
-        </a>
+        {openEnabled ? (
+          <a
+            href={`https://unicron.systems/pathfinder/${encodeURIComponent(org.slug)}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            data-testid="customer-detail-open-pathfinder"
+            data-status={org.status}
+            className="mono text-[11px] uppercase tracking-[0.18em] border border-text-primary px-3 py-1 rounded-md text-text-primary hover:bg-text-primary hover:text-bg-base transition-colors"
+          >
+            {openLabel}
+          </a>
+        ) : (
+          <button
+            type="button"
+            disabled
+            aria-disabled="true"
+            title={disabledReason}
+            data-testid="customer-detail-open-pathfinder"
+            data-status={org.status}
+            className="mono text-[11px] uppercase tracking-[0.18em] border border-border-default px-3 py-1 rounded-md text-text-primary/40 cursor-not-allowed"
+          >
+            {openLabel}
+          </button>
+        )}
       </header>
 
       {error ? (
