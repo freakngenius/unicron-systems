@@ -494,6 +494,7 @@ export const extractCallActionItemsRun = inngest.createFunction(
       call_title?: string | null;
       participants?: string[];
       transcript_text?: string;
+      uploaded_by?: string;
     };
     const data = event.data as EventData;
 
@@ -510,6 +511,7 @@ export const extractCallActionItemsRun = inngest.createFunction(
         call_title:          data.call_title ?? null,
         transcript_text:     data.transcript_text!,
         participants:        data.participants ?? [],
+        uploaded_by:         data.uploaded_by,
       }),
     );
   },

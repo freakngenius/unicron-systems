@@ -1,9 +1,16 @@
-// CallsLog.tsx — Sprint 4 Stream D / W-5 upgrade
-// W-5: inline split-panel detail, voice badge on voice-agent calls, semantic search bar.
+// CallsLog.tsx — Atrium Work > Calls
+//
+// Goal "Fix Atrium call upload end-to-end":
+//   Condition 1 — owns the bottom-of-viewport status bar that cycles
+//     "Call uploading..." → "Processing transcript..." → "Done: N to-dos,
+//     M decisions, K mentions" with audit_log id. Persists ~5s after done.
+//   Condition 5 — expanded call view (ExpandedCallView) renders the
+//     prescribed top-to-bottom structure when the operator clicks a call.
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { getSupabase } from '../../lib/supabase';
-import { UploadCallModal } from './UploadCallModal';
+import { UploadCallModal, type UploadSubmitPayload } from './UploadCallModal';
+import { ExpandedCallView, type CallRow } from './ExpandedCallView';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -15,13 +22,6 @@ interface LedgerRow {
   insights: Record<string, unknown> | null;
   created_at: string;
   customer_id: string | null;
-}
-
-interface ActionItemRow {
-  id: string;
-  title: string;
-  priority: string;
-  status: string;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -48,14 +48,6 @@ function formatRelativeTime(iso: string): string {
   return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-function getParticipants(insights: Record<string, unknown> | null): string {
-  if (!insights) return '—';
-  const p = insights['participants'];
-  if (Array.isArray(p)) return p.join(', ');
-  if (typeof p === 'string') return p;
-  return '—';
-}
-
 function getParticipantList(row: LedgerRow): string[] {
   const insights = row.insights;
   if (!insights) return [];
@@ -65,9 +57,6 @@ function getParticipantList(row: LedgerRow): string[] {
   return [];
 }
 
-// Filter state is persisted across page refreshes via sessionStorage.
-// Defaults to 'all' when nothing is stored (or sessionStorage isn't available
-// during SSR / jsdom test envs).
 const CALLS_FILTER_STORAGE_KEY = 'atrium:calls:participant-filter';
 
 function readPersistedFilter(): string {
@@ -84,22 +73,8 @@ function writePersistedFilter(value: string): void {
   try {
     window.sessionStorage.setItem(CALLS_FILTER_STORAGE_KEY, value);
   } catch {
-    /* sessionStorage disabled in private windows */
+    /* sessionStorage disabled */
   }
-}
-
-function getDecisions(insights: Record<string, unknown> | null): string[] {
-  if (!insights) return [];
-  const d = insights['decisions'];
-  if (Array.isArray(d)) return d.map(String);
-  return [];
-}
-
-function getQuotes(insights: Record<string, unknown> | null): string[] {
-  if (!insights) return [];
-  const q = insights['quotes'];
-  if (Array.isArray(q)) return q.map(String);
-  return [];
 }
 
 // ─── Hooks ────────────────────────────────────────────────────────────────────
@@ -111,14 +86,16 @@ function useCallsLog(searchQuery: string, reloadKey: number) {
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
-    setError(null);
+    queueMicrotask(() => {
+      if (cancelled) return;
+      setLoading(true);
+      setError(null);
+    });
 
     const sb = getSupabase();
 
     async function load() {
       try {
-        // PGRST106 fix: use ns_list_ledger_calls RPC
         const { data, error: err } = await sb
           .rpc('ns_list_ledger_calls', {
             p_search: searchQuery.trim() || null,
@@ -140,30 +117,6 @@ function useCallsLog(searchQuery: string, reloadKey: number) {
   return { calls, loading, error };
 }
 
-function useCallDetail(callId: string | null) {
-  const [actionItems, setActionItems] = useState<ActionItemRow[]>([]);
-  const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    if (!callId) { setActionItems([]); return; }
-    let cancelled = false;
-    setLoading(true);
-
-    // PGRST106 fix: use ns_list_action_items_by_ledger RPC
-    getSupabase()
-      .rpc('ns_list_action_items_by_ledger', { p_ledger_id: callId })
-      .then(({ data }) => {
-        if (!cancelled) { setActionItems((data as ActionItemRow[] | null) ?? []); setLoading(false); }
-      }, () => { if (!cancelled) setLoading(false); });
-
-    return () => { cancelled = true; };
-  }, [callId]);
-
-  return { actionItems, loading };
-}
-
-// ─── Semantic search with debounce ────────────────────────────────────────────
-
 function useDebounce<T>(value: T, ms: number): T {
   const [debounced, setDebounced] = useState(value);
   useEffect(() => {
@@ -172,138 +125,6 @@ function useDebounce<T>(value: T, ms: number): T {
   }, [value, ms]);
   return debounced;
 }
-
-// ─── Voice badge ──────────────────────────────────────────────────────────────
-
-function VoiceBadge() {
-  return (
-    <span className="inline-flex items-center gap-1 mono text-[9px] uppercase tracking-[0.12em] px-1.5 py-0.5 rounded border border-[rgba(232,118,58,0.25)] bg-[rgba(232,118,58,0.10)] text-[#E8763A]">
-      <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
-        <rect x="2.5" y="0.5" width="3" height="5" rx="1.5" fill="currentColor" />
-        <path d="M1 3.5C1 5.16 2.34 6.5 4 6.5C5.66 6.5 7 5.16 7 3.5" stroke="currentColor" strokeWidth="1" strokeLinecap="round" />
-        <line x1="4" y1="6.5" x2="4" y2="7.5" stroke="currentColor" strokeWidth="1" strokeLinecap="round" />
-      </svg>
-      Voice
-    </span>
-  );
-}
-
-// ─── Inline detail panel ──────────────────────────────────────────────────────
-
-function CallDetailPanel({ call, onClose }: { call: LedgerRow; onClose: () => void }) {
-  const { actionItems, loading: aiLoading } = useCallDetail(call.id);
-  const participants = getParticipants(call.insights);
-  const decisions = getDecisions(call.insights);
-  const quotes = getQuotes(call.insights);
-  const voice = isVoiceCall(call);
-
-  return (
-    <div className="flex flex-col h-full bg-bg-card border border-border-default rounded-xl overflow-hidden">
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-border-default shrink-0">
-        <div className="flex items-center gap-2 min-w-0">
-          {voice && <VoiceBadge />}
-          <div>
-            <div className="mono text-[11px] font-medium text-text-primary">Call Detail</div>
-            <div className="mono text-[9px] text-text-muted">
-              {new Date(call.created_at).toLocaleDateString('en-US', {
-                weekday: 'short', month: 'short', day: 'numeric', year: 'numeric',
-              })}
-            </div>
-          </div>
-        </div>
-        <button
-          onClick={onClose}
-          className="mono text-[10px] uppercase tracking-[0.14em] text-text-muted hover:text-text-primary transition-colors shrink-0"
-        >
-          ✕
-        </button>
-      </div>
-
-      <div className="overflow-y-auto flex-1 px-4 py-4 space-y-4">
-        {/* Meta */}
-        <div className="space-y-1.5">
-          {[
-            { label: 'Participants', value: participants },
-          ].map(({ label, value }) => (
-            <div key={label} className="flex items-baseline gap-3">
-              <div className="mono text-[9px] uppercase tracking-[0.16em] text-text-muted w-24 shrink-0">{label}</div>
-              <div className="mono text-[11px] text-text-primary min-w-0 truncate">{value}</div>
-            </div>
-          ))}
-        </div>
-
-        {/* Summary */}
-        {call.content_summary && (
-          <div>
-            <div className="mono text-[9px] uppercase tracking-[0.16em] text-text-muted mb-1.5">Summary</div>
-            <div className="mono text-[11px] text-text-primary leading-relaxed">{call.content_summary}</div>
-          </div>
-        )}
-
-        {/* Decisions */}
-        {decisions.length > 0 && (
-          <div>
-            <div className="mono text-[9px] uppercase tracking-[0.16em] text-text-muted mb-1.5">Decisions</div>
-            <div className="space-y-1">
-              {decisions.map((d, i) => (
-                <div key={i} className="flex gap-2">
-                  <span className="mono text-[9px] text-text-muted mt-1">·</span>
-                  <span className="mono text-[11px] text-text-primary leading-relaxed">{d}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Action items */}
-        <div>
-          <div className="mono text-[9px] uppercase tracking-[0.16em] text-text-muted mb-1.5">Action Items</div>
-          {aiLoading ? (
-            <div className="h-8 bg-bg-raised rounded-lg animate-pulse" />
-          ) : actionItems.length === 0 ? (
-            <div className="mono text-[11px] text-text-muted">None linked.</div>
-          ) : (
-            <div className="space-y-1.5">
-              {actionItems.map((ai) => (
-                <div key={ai.id} className="flex items-center justify-between gap-2 bg-bg-raised border border-border-default rounded-lg px-3 py-2">
-                  <div className="mono text-[11px] text-text-primary truncate">{ai.title}</div>
-                  <span className="mono text-[9px] uppercase tracking-[0.12em] text-text-muted shrink-0">{ai.status}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Quotes */}
-        {quotes.length > 0 && (
-          <div>
-            <div className="mono text-[9px] uppercase tracking-[0.16em] text-text-muted mb-1.5">Quotes</div>
-            <div className="space-y-2">
-              {quotes.map((q, i) => (
-                <blockquote key={i} className="border-l-2 border-accent pl-3 mono text-[11px] text-text-secondary italic leading-relaxed">
-                  {q}
-                </blockquote>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Transcript */}
-        {call.content_full && (
-          <div>
-            <div className="mono text-[9px] uppercase tracking-[0.16em] text-text-muted mb-1.5">Transcript</div>
-            <div className="bg-bg-raised border border-border-default rounded-lg p-3 max-h-64 overflow-y-auto">
-              <pre className="mono text-[10px] text-text-secondary whitespace-pre-wrap leading-relaxed">{call.content_full}</pre>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ─── Main export ──────────────────────────────────────────────────────────────
 
 interface TeamMember {
   id: string;
@@ -326,6 +147,247 @@ function useTeamMembers(): TeamMember[] {
   return members;
 }
 
+// ─── Voice badge ──────────────────────────────────────────────────────────────
+
+function VoiceBadge() {
+  return (
+    <span className="inline-flex items-center gap-1 mono text-[9px] uppercase tracking-[0.12em] px-1.5 py-0.5 rounded border border-[rgba(232,118,58,0.25)] bg-[rgba(232,118,58,0.10)] text-[#E8763A]">
+      <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
+        <rect x="2.5" y="0.5" width="3" height="5" rx="1.5" fill="currentColor" />
+        <path d="M1 3.5C1 5.16 2.34 6.5 4 6.5C5.66 6.5 7 5.16 7 3.5" stroke="currentColor" strokeWidth="1" strokeLinecap="round" />
+        <line x1="4" y1="6.5" x2="4" y2="7.5" stroke="currentColor" strokeWidth="1" strokeLinecap="round" />
+      </svg>
+      Voice
+    </span>
+  );
+}
+
+// ─── Bottom status bar ────────────────────────────────────────────────────────
+
+type UploadStage =
+  | { state: 'uploading' }
+  | { state: 'processing'; ledgerId: string; notionUrl: string | null }
+  | {
+      state: 'done';
+      ledgerId: string;
+      auditLogId: string | null;
+      actionItems: number;
+      decisions: number;
+      mentions: number;
+    }
+  | { state: 'error'; message: string };
+
+function UploadStatusBar({ stage, onDismiss }: { stage: UploadStage; onDismiss: () => void }) {
+  let label: string;
+  let detail: string | null = null;
+  let tone: 'progress' | 'done' | 'error' = 'progress';
+
+  switch (stage.state) {
+    case 'uploading':
+      label = 'Call uploading…';
+      break;
+    case 'processing':
+      label = 'Processing transcript…';
+      break;
+    case 'done':
+      tone = 'done';
+      label = `Done: ${stage.actionItems} to-do${stage.actionItems === 1 ? '' : 's'}, ${stage.decisions} decision${stage.decisions === 1 ? '' : 's'}, ${stage.mentions} mention${stage.mentions === 1 ? '' : 's'}`;
+      detail = stage.auditLogId ? `audit_log ${stage.auditLogId.slice(0, 8)}` : null;
+      break;
+    case 'error':
+      tone = 'error';
+      label = stage.message;
+      break;
+  }
+
+  const bg =
+    tone === 'done'
+      ? 'bg-[#1F8F4F] text-white'
+      : tone === 'error'
+      ? 'bg-[#E14B4B] text-white'
+      : 'bg-[#0B1530] text-white';
+
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-3 px-5 py-3 rounded-full shadow-xl"
+      style={{
+        boxShadow: '0 12px 36px rgba(11,21,48,0.28)',
+      }}
+      data-testid="upload-status-bar"
+    >
+      <div className={`flex items-center gap-3 rounded-full px-5 py-2 ${bg}`}>
+        {tone === 'progress' && (
+          <svg
+            className="animate-spin"
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+            aria-hidden="true"
+          >
+            <circle cx="12" cy="12" r="10" stroke="currentColor" strokeOpacity="0.25" strokeWidth="3" />
+            <path d="M12 2 A10 10 0 0 1 22 12" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+          </svg>
+        )}
+        {tone === 'done' && (
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M5 12.5l4 4 10-10" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        )}
+        <span className="mono text-[12px] font-medium">{label}</span>
+        {detail && <span className="mono text-[10px] opacity-80">· {detail}</span>}
+        {(stage.state === 'done' || stage.state === 'error') && (
+          <button
+            type="button"
+            onClick={onDismiss}
+            className="ml-1 text-[14px] leading-none opacity-80 hover:opacity-100"
+            aria-label="Dismiss"
+          >
+            ✕
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Upload + processing driver ───────────────────────────────────────────────
+//
+// Drives the entire post-submit lifecycle:
+//   1. POST /api/atrium/calls/upload (modal already closed)
+//   2. On 200/207, transition to processing and poll ns_call_processing_status
+//   3. On state='done', flip to done and auto-dismiss after ~5s
+//   4. Any error path → stage=error (no auto-dismiss; user clicks ✕)
+//
+// Uses an effect on stage to manage polling + auto-dismiss timers.
+
+function useUploadDriver(onAnyChange: () => void) {
+  const [stage, setStage] = useState<UploadStage | null>(null);
+
+  const dismiss = useCallback(() => setStage(null), []);
+
+  const startUpload = useCallback(async (payload: UploadSubmitPayload) => {
+    setStage({ state: 'uploading' });
+    const sb = getSupabase();
+    try {
+      const { data: sessionData } = await sb.auth.getSession();
+      const accessToken = sessionData?.session?.access_token;
+      if (!accessToken) {
+        setStage({ state: 'error', message: 'Not signed in — refresh and sign in to upload.' });
+        return;
+      }
+
+      const res = await fetch('/api/atrium/calls/upload', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+      const json = await res.json().catch(() => ({}));
+
+      if (!res.ok && res.status !== 207) {
+        setStage({ state: 'error', message: (json?.error as string) ?? `Upload failed (HTTP ${res.status})` });
+        return;
+      }
+
+      const ledgerId = (json?.ledger_id as string | null) ?? null;
+      const notionUrl = (json?.notion_url as string | null) ?? null;
+
+      if (!ledgerId) {
+        if (res.status === 207 && notionUrl) {
+          setStage({
+            state: 'error',
+            message: `Saved to Notion (${notionUrl}) but ledger write failed.`,
+          });
+          return;
+        }
+        setStage({ state: 'error', message: 'Upload returned no ledger_id.' });
+        return;
+      }
+
+      onAnyChange();
+      setStage({ state: 'processing', ledgerId, notionUrl });
+    } catch (err) {
+      setStage({
+        state: 'error',
+        message: err instanceof Error ? err.message : 'Upload failed',
+      });
+    }
+  }, [onAnyChange]);
+
+  // Poll while in processing state; auto-dismiss in done state.
+  useEffect(() => {
+    if (!stage) return;
+    if (stage.state === 'processing') {
+      const ledgerId = stage.ledgerId;
+      let cancelled = false;
+      let attempts = 0;
+      const MAX_ATTEMPTS = 60; // ~60s at 1s interval
+
+      async function poll() {
+        if (cancelled) return;
+        attempts += 1;
+        try {
+          const { data, error } = await getSupabase().rpc('ns_call_processing_status', { p_call_id: ledgerId });
+          if (cancelled) return;
+          if (error) {
+            // transient — keep trying
+          } else if (Array.isArray(data) && data.length > 0) {
+            const row = data[0] as {
+              state: string;
+              action_items_count: number;
+              decisions_count: number;
+              mentions_count: number;
+              audit_log_id: string | null;
+            };
+            if (row.state === 'done') {
+              setStage({
+                state: 'done',
+                ledgerId,
+                auditLogId: row.audit_log_id,
+                actionItems: row.action_items_count,
+                decisions: row.decisions_count,
+                mentions: row.mentions_count,
+              });
+              onAnyChange();
+              return;
+            }
+          }
+        } catch {
+          /* keep polling */
+        }
+        if (attempts >= MAX_ATTEMPTS) {
+          setStage({
+            state: 'error',
+            message: 'Processing timed out — refresh to see partial results.',
+          });
+          return;
+        }
+        setTimeout(poll, 1000);
+      }
+      const t = setTimeout(poll, 800); // first poll after a short delay
+      return () => {
+        cancelled = true;
+        clearTimeout(t);
+      };
+    }
+    if (stage.state === 'done') {
+      const t = setTimeout(() => setStage(null), 5000);
+      return () => clearTimeout(t);
+    }
+    return undefined;
+  }, [stage, onAnyChange]);
+
+  return { stage, startUpload, dismiss };
+}
+
+// ─── Main export ──────────────────────────────────────────────────────────────
+
 export function CallsLog() {
   const [searchInput, setSearchInput] = useState('');
   const search = useDebounce(searchInput, 300);
@@ -336,32 +398,26 @@ export function CallsLog() {
   const { calls: rawCalls, loading, error } = useCallsLog(search, reloadKey);
   const teamMembers = useTeamMembers();
 
-  // Persist filter selection across refreshes.
+  const triggerReload = useCallback(() => setReloadKey((k) => k + 1), []);
+  const { stage, startUpload, dismiss } = useUploadDriver(triggerReload);
+
   useEffect(() => {
     writePersistedFilter(participantFilter);
   }, [participantFilter]);
 
-  // Client-side filter — ledger calls only have ~100 rows, so a server-side
-  // filter would be over-engineered. When C4 mirror migration lands and we
-  // switch the read RPC to ns_list_calls, the filter can move server-side
-  // for free via the p_participant arg.
   const calls = participantFilter === 'all'
     ? rawCalls
     : rawCalls.filter((row) => getParticipantList(row).includes(participantFilter));
 
-  // The UploadCallModal is rendered alongside every list state (loading /
-  // error / empty / populated) so that an in-flight upload survives the
-  // refetch triggered by onUploaded → reloadKey++. Previously the loading
-  // and error early-returns dropped the modal from the tree, causing it to
-  // unmount mid-submit and remount with fresh state — the user saw a blank
-  // form pop back into place instead of the success view.
   const uploadModal = (
     <UploadCallModal
       open={uploadOpen}
       onClose={() => setUploadOpen(false)}
-      onUploaded={() => setReloadKey((k) => k + 1)}
+      onSubmit={(payload) => { void startUpload(payload); }}
     />
   );
+
+  const statusBar = stage ? <UploadStatusBar stage={stage} onDismiss={dismiss} /> : null;
 
   if (loading) {
     return (
@@ -372,6 +428,7 @@ export function CallsLog() {
           ))}
         </div>
         {uploadModal}
+        {statusBar}
       </>
     );
   }
@@ -383,13 +440,13 @@ export function CallsLog() {
           <div className="mono text-[12px] text-[#E14B4B]">{error}</div>
         </div>
         {uploadModal}
+        {statusBar}
       </>
     );
   }
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Semantic search bar + participant filter */}
       <div className="flex items-center gap-2 flex-wrap">
         <select
           value={participantFilter}
@@ -438,77 +495,75 @@ export function CallsLog() {
           )}
         </div>
       ) : (
-        /* Split-panel layout — list + optional detail side by side */
-        <div className={`flex gap-4 ${detail ? 'items-start' : ''}`}>
-          {/* Call list */}
-          <div className={`flex flex-col gap-2 ${detail ? 'w-72 shrink-0' : 'flex-1'}`}>
-            {calls.map((call) => {
-              const voice = isVoiceCall(call);
-              const isSelected = detail?.id === call.id;
-              const title = typeof call.insights?.['title'] === 'string' ? (call.insights['title'] as string) : null;
-              const notionUrl = typeof call.insights?.['notion_url'] === 'string' ? (call.insights['notion_url'] as string) : null;
-              const participants = getParticipantList(call);
-              return (
-                <div
-                  key={call.id}
-                  onClick={() => setDetail(isSelected ? null : call)}
-                  className="bg-bg-card border rounded-xl px-4 py-3 hover:border-border-hover transition-colors cursor-pointer"
-                  style={{ borderColor: isSelected ? 'rgba(232,118,58,0.25)' : 'var(--border-default)' }}
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2 mb-1 flex-wrap">
-                        {voice && <VoiceBadge />}
-                        <span className="mono text-[9px] uppercase tracking-[0.14em] text-text-muted">
-                          {formatRelativeTime(call.created_at)}
-                        </span>
-                        {participants.length > 0 && (
-                          <span className="mono text-[9px] text-text-muted">· {participants.slice(0, 3).join(', ')}{participants.length > 3 ? ` +${participants.length - 3}` : ''}</span>
-                        )}
-                      </div>
-                      {title && (
-                        <div className="mono text-[12px] font-medium text-text-primary mb-0.5 line-clamp-1">
-                          {title}
-                        </div>
-                      )}
-                      <div className={`mono text-[11px] text-text-primary leading-relaxed ${detail ? 'line-clamp-2' : 'line-clamp-2'}`}>
-                        {call.content_summary
-                          ? call.content_summary.slice(0, 160)
-                          : call.content_full
-                          ? call.content_full.slice(0, 160)
-                          : 'No summary available.'}
-                      </div>
-                      {notionUrl && (
-                        <a
-                          href={notionUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          onClick={(e) => e.stopPropagation()}
-                          className="mono text-[9.5px] uppercase tracking-[0.14em] text-[#6081BE] hover:underline mt-1 inline-block"
-                        >
-                          Open in Notion ›
-                        </a>
+        <div className="flex flex-col gap-2">
+          {calls.map((call) => {
+            const voice = isVoiceCall(call);
+            const title = typeof call.insights?.['title'] === 'string' ? (call.insights['title'] as string) : null;
+            const notionUrl = typeof call.insights?.['notion_url'] === 'string' ? (call.insights['notion_url'] as string) : null;
+            const participants = getParticipantList(call);
+            return (
+              <div
+                key={call.id}
+                onClick={() => setDetail(call)}
+                className="bg-bg-card border border-border-default rounded-xl px-4 py-3 hover:border-border-hover transition-colors cursor-pointer"
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    setDetail(call);
+                  }
+                }}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
+                      {voice && <VoiceBadge />}
+                      <span className="mono text-[9px] uppercase tracking-[0.14em] text-text-muted">
+                        {formatRelativeTime(call.created_at)}
+                      </span>
+                      {participants.length > 0 && (
+                        <span className="mono text-[9px] text-text-muted">· {participants.slice(0, 3).join(', ')}{participants.length > 3 ? ` +${participants.length - 3}` : ''}</span>
                       )}
                     </div>
-                    <div className="mono text-[10px] text-text-muted shrink-0 mt-0.5">
-                      {isSelected ? '▸' : '›'}
+                    {title && (
+                      <div className="mono text-[12px] font-medium text-text-primary mb-0.5 line-clamp-1">
+                        {title}
+                      </div>
+                    )}
+                    <div className="mono text-[11px] text-text-primary leading-relaxed line-clamp-2">
+                      {call.content_summary
+                        ? call.content_summary.slice(0, 160)
+                        : call.content_full
+                        ? call.content_full.slice(0, 160)
+                        : 'No summary available.'}
                     </div>
+                    {notionUrl && (
+                      <a
+                        href={notionUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="mono text-[9.5px] uppercase tracking-[0.14em] text-[#6081BE] hover:underline mt-1 inline-block"
+                      >
+                        Open in Notion ›
+                      </a>
+                    )}
                   </div>
+                  <div className="mono text-[10px] text-text-muted shrink-0 mt-0.5">›</div>
                 </div>
-              );
-            })}
-          </div>
-
-          {/* Detail panel */}
-          {detail && (
-            <div className="flex-1 min-w-0" style={{ minHeight: '400px' }}>
-              <CallDetailPanel call={detail} onClose={() => setDetail(null)} />
-            </div>
-          )}
+              </div>
+            );
+          })}
         </div>
       )}
 
+      {detail && (
+        <ExpandedCallView call={detail as CallRow} onClose={() => setDetail(null)} />
+      )}
+
       {uploadModal}
+      {statusBar}
     </div>
   );
 }

@@ -1,18 +1,18 @@
 // UploadCallModal.tsx — Atrium Work > Calls > Upload call
 //
-// Modal that captures a transcript + summary notes + date + participants and
-// POSTs to /api/atrium/calls/upload. The server stores the transcript in the
-// Notion Call Transcripts DB and writes a row in nervous_system.ledger so the
-// call appears in the list immediately.
+// Goal "Fix Atrium call upload end-to-end" — Condition 1 split-of-concerns:
+// the modal NO LONGER owns the upload promise or the in-modal success view.
+// On submit it validates locally, calls onSubmit(payload), and closes
+// immediately. CallsLog (the parent) renders a bottom-of-viewport status bar
+// that cycles "Call uploading..." → "Processing transcript..." → "Done: ..."
+// with the audit_log id while the upload + transcript pipeline run async.
 //
-// Inputs supported (Item 1, usefulness-pass 2026-05-12):
+// Inputs supported:
 //   - Paste transcript text into the textarea, OR
 //   - Upload a transcript file (.txt/.md/.docx/.vtt/.srt). Browser-side
 //     extraction normalizes .docx (mammoth), strips VTT/SRT timestamps, and
 //     pre-fills the textarea so the operator can review/edit before submit.
 //   - Same applies to summary notes.
-// After file load we run a quick local heuristic to seed Title / Date /
-// Participants from the filename + first heading + Attendees/Speaker tags.
 // At least one of transcript / summary_notes is required.
 
 import { useEffect, useMemo, useState } from 'react';
@@ -25,23 +25,26 @@ interface TeamMember {
   email: string | null;
 }
 
-interface UploadResult {
-  notion_page_id: string;
-  notion_url: string;
-  ledger_id: string;
+export interface UploadSubmitPayload {
+  title?: string;
+  transcript?: string;
+  summary_notes?: string;
+  date: string;
+  participants: string[];
+  source: 'manual_upload';
 }
 
 export interface UploadCallModalProps {
   open: boolean;
   onClose: () => void;
-  onUploaded: () => void;
+  onSubmit: (payload: UploadSubmitPayload) => void;
 }
 
 function todayIsoDate(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-export function UploadCallModal({ open, onClose, onUploaded }: UploadCallModalProps) {
+export function UploadCallModal({ open, onClose, onSubmit }: UploadCallModalProps) {
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [title, setTitle] = useState('');
   const [transcript, setTranscript] = useState('');
@@ -49,9 +52,7 @@ export function UploadCallModal({ open, onClose, onUploaded }: UploadCallModalPr
   const [callDate, setCallDate] = useState<string>(todayIsoDate());
   const [internalParticipants, setInternalParticipants] = useState<Set<string>>(new Set());
   const [externalParticipantsRaw, setExternalParticipantsRaw] = useState('');
-  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<UploadResult | null>(null);
   const [extracting, setExtracting] = useState<'transcript' | 'summary' | null>(null);
   const [extractNotice, setExtractNotice] = useState<string | null>(null);
 
@@ -63,29 +64,32 @@ export function UploadCallModal({ open, onClose, onUploaded }: UploadCallModalPr
       .catch(() => { /* leave empty — user can still type externals */ });
   }, [open]);
 
+  // Form reset on modal close. queueMicrotask defers the setState calls so
+  // they don't fire synchronously inside the effect body (React 19 purity
+  // rule prohibits the synchronous form).
   useEffect(() => {
     if (open) return;
-    setTitle('');
-    setTranscript('');
-    setSummaryNotes('');
-    setCallDate(todayIsoDate());
-    setInternalParticipants(new Set());
-    setExternalParticipantsRaw('');
-    setSubmitting(false);
-    setError(null);
-    setSuccess(null);
-    setExtracting(null);
-    setExtractNotice(null);
+    queueMicrotask(() => {
+      setTitle('');
+      setTranscript('');
+      setSummaryNotes('');
+      setCallDate(todayIsoDate());
+      setInternalParticipants(new Set());
+      setExternalParticipantsRaw('');
+      setError(null);
+      setExtracting(null);
+      setExtractNotice(null);
+    });
   }, [open]);
 
   useEffect(() => {
     if (!open) return;
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !submitting) onClose();
+      if (e.key === 'Escape') onClose();
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [open, submitting, onClose]);
+  }, [open, onClose]);
 
   const externalParticipants = useMemo(() => {
     return externalParticipantsRaw
@@ -95,7 +99,6 @@ export function UploadCallModal({ open, onClose, onUploaded }: UploadCallModalPr
   }, [externalParticipantsRaw]);
 
   const canSubmit =
-    !submitting &&
     !extracting &&
     (transcript.trim().length > 0 || summaryNotes.trim().length > 0);
 
@@ -108,16 +111,13 @@ export function UploadCallModal({ open, onClose, onUploaded }: UploadCallModalPr
     });
   }
 
-  function applyExtractMetadata(meta: ExtractResult, defaultsApply: { title?: boolean; date?: boolean; participants?: boolean }) {
+  function applyExtractMetadata(meta: ExtractResult) {
     const notices: string[] = [];
-    if (meta.title && (!title.trim() || defaultsApply.title === false)) {
-      if (!title.trim()) {
-        setTitle(meta.title);
-        notices.push(`title: ${meta.title}`);
-      }
+    if (meta.title && !title.trim()) {
+      setTitle(meta.title);
+      notices.push(`title: ${meta.title}`);
     }
     if (meta.date && /^\d{4}-\d{2}-\d{2}$/.test(meta.date)) {
-      // Only override default-today date — don't stomp user edits
       if (callDate === todayIsoDate()) {
         setCallDate(meta.date);
         notices.push(`date: ${meta.date}`);
@@ -156,7 +156,7 @@ export function UploadCallModal({ open, onClose, onUploaded }: UploadCallModalPr
 
   async function handleFileChange(field: 'transcript' | 'summary', e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
-    e.target.value = ''; // allow re-upload of same filename
+    e.target.value = '';
     if (!file) return;
     setExtracting(field);
     setError(null);
@@ -169,7 +169,7 @@ export function UploadCallModal({ open, onClose, onUploaded }: UploadCallModalPr
       }
       if (field === 'transcript') setTranscript((prev) => prev.trim() ? prev : extracted.text);
       else setSummaryNotes((prev) => prev.trim() ? prev : extracted.text);
-      applyExtractMetadata(extracted, {});
+      applyExtractMetadata(extracted);
     } catch (err) {
       setError(err instanceof Error ? err.message : `Failed to read ${file.name}`);
     } finally {
@@ -177,60 +177,22 @@ export function UploadCallModal({ open, onClose, onUploaded }: UploadCallModalPr
     }
   }
 
-  async function handleSubmit(e: React.FormEvent) {
+  function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!canSubmit) return;
-    setSubmitting(true);
-    setError(null);
-    try {
-      const sb = getSupabase();
-      const { data: sessionData } = await sb.auth.getSession();
-      const accessToken = sessionData?.session?.access_token;
-      if (!accessToken) {
-        throw new Error('Not signed in — refresh and sign back in to upload calls.');
-      }
-
-      const participants = [
-        ...Array.from(internalParticipants),
-        ...externalParticipants,
-      ];
-
-      const res = await fetch('/api/atrium/calls/upload', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          title:        title.trim() || undefined,
-          transcript:   transcript.trim() || undefined,
-          summary_notes: summaryNotes.trim() || undefined,
-          date:         callDate,
-          participants,
-          source:       'manual_upload',
-        }),
-      });
-
-      const json = await res.json().catch(() => ({}));
-
-      if (!res.ok) {
-        // 207: Notion succeeded but ledger failed — surface partial success.
-        if (res.status === 207 && json?.notion_url) {
-          setError(
-            `Saved to Notion (${json.notion_url}) but local ledger write failed: ${json.ledger_error ?? 'unknown error'}`,
-          );
-          return;
-        }
-        throw new Error(json?.error ?? `upload failed (HTTP ${res.status})`);
-      }
-
-      setSuccess(json as UploadResult);
-      onUploaded();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Upload failed');
-    } finally {
-      setSubmitting(false);
-    }
+    const participants = [
+      ...Array.from(internalParticipants),
+      ...externalParticipants,
+    ];
+    onSubmit({
+      title:         title.trim() || undefined,
+      transcript:    transcript.trim() || undefined,
+      summary_notes: summaryNotes.trim() || undefined,
+      date:          callDate,
+      participants,
+      source:        'manual_upload',
+    });
+    onClose();
   }
 
   if (!open) return null;
@@ -239,7 +201,7 @@ export function UploadCallModal({ open, onClose, onUploaded }: UploadCallModalPr
     <div className="fixed inset-0 z-[90] flex items-center justify-center px-4">
       <div
         className="absolute inset-0 bg-black/55 backdrop-blur-sm"
-        onClick={() => { if (!submitting) onClose(); }}
+        onClick={onClose}
       />
 
       <form
@@ -258,7 +220,7 @@ export function UploadCallModal({ open, onClose, onUploaded }: UploadCallModalPr
           </div>
           <button
             type="button"
-            onClick={() => { if (!submitting) onClose(); }}
+            onClick={onClose}
             className="text-[12px] text-text-secondary hover:text-text-primary px-2 py-1"
             aria-label="Close"
           >
@@ -266,193 +228,155 @@ export function UploadCallModal({ open, onClose, onUploaded }: UploadCallModalPr
           </button>
         </div>
 
-        {success ? (
-          <div className="px-5 py-6 space-y-3">
-            <div className="text-[13px] text-text-primary font-medium">
-              Call stored in Notion + ledger.
+        <div className="px-5 py-4 space-y-3.5 max-h-[70vh] overflow-y-auto">
+          <label className="flex flex-col gap-1.5">
+            <span className="text-[10.5px] uppercase tracking-[0.16em] text-text-muted font-semibold">
+              Title <span className="text-text-faint normal-case font-normal">(optional — auto-generated from participants + date)</span>
+            </span>
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="e.g. Zedcor pilot kickoff"
+              className="border border-border-default rounded-md px-3 py-2 text-[13px] text-text-primary placeholder:text-text-muted focus:outline-none focus:border-[#6081BE]"
+            />
+          </label>
+
+          {extractNotice && (
+            <div className="bg-[#6081BE]/10 border border-[#6081BE]/30 rounded-md px-3 py-2 text-[11px] text-[#3D5994]">
+              {extractNotice}
             </div>
-            <a
-              href={success.notion_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="block text-[12px] text-[#6081BE] hover:underline truncate"
-            >
-              Open in Notion ›
-            </a>
-            <div className="text-[11px] text-text-muted">
-              Action items will appear in the Internal Org Kanban once the transcript skill runs.
+          )}
+
+          <label className="flex flex-col gap-1.5">
+            <span className="text-[10.5px] uppercase tracking-[0.16em] text-text-muted font-semibold flex items-center gap-2">
+              Full transcript <span className="text-text-faint normal-case font-normal">(paste below OR upload .txt / .md / .docx / .vtt / .srt; either this or summary notes is required)</span>
+            </span>
+            <div className="flex items-center gap-2">
+              <input
+                type="file"
+                accept=".txt,.md,.markdown,.docx,.vtt,.srt,text/plain,text/markdown,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                onChange={(e) => void handleFileChange('transcript', e)}
+                disabled={!!extracting}
+                className="text-[11px] text-text-secondary file:mr-2 file:px-2 file:py-1 file:rounded-md file:border file:border-border-default file:bg-bg-card file:text-text-secondary file:text-[11px] file:cursor-pointer hover:file:border-border-hover"
+              />
+              {extracting === 'transcript' && (
+                <span className="text-[10px] text-text-muted">Extracting…</span>
+              )}
             </div>
-            <div className="flex gap-2 pt-2">
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-3 py-2 text-[12px] text-text-primary border border-border-default rounded-md hover:bg-bg-card"
-              >
-                Done
-              </button>
-              <button
-                type="button"
-                onClick={() => setSuccess(null)}
-                className="px-3 py-2 text-[12px] text-text-secondary hover:text-text-primary"
-              >
-                Upload another
-              </button>
+            <textarea
+              value={transcript}
+              onChange={(e) => setTranscript(e.target.value)}
+              placeholder="Paste the full transcript here, or upload a file above. Long transcripts are chunked automatically."
+              rows={6}
+              className="border border-border-default rounded-md px-3 py-2 text-[12px] font-mono text-text-primary placeholder:text-text-muted focus:outline-none focus:border-[#6081BE] resize-y"
+            />
+          </label>
+
+          <label className="flex flex-col gap-1.5">
+            <span className="text-[10.5px] uppercase tracking-[0.16em] text-text-muted font-semibold">
+              Summary notes <span className="text-text-faint normal-case font-normal">(or upload a separate notes file)</span>
+            </span>
+            <div className="flex items-center gap-2">
+              <input
+                type="file"
+                accept=".txt,.md,.markdown,.docx,.vtt,.srt,text/plain,text/markdown,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                onChange={(e) => void handleFileChange('summary', e)}
+                disabled={!!extracting}
+                className="text-[11px] text-text-secondary file:mr-2 file:px-2 file:py-1 file:rounded-md file:border file:border-border-default file:bg-bg-card file:text-text-secondary file:text-[11px] file:cursor-pointer hover:file:border-border-hover"
+              />
+              {extracting === 'summary' && (
+                <span className="text-[10px] text-text-muted">Extracting…</span>
+              )}
+            </div>
+            <textarea
+              value={summaryNotes}
+              onChange={(e) => setSummaryNotes(e.target.value)}
+              placeholder="Quick notes from the call, key topics discussed, decisions reached."
+              rows={3}
+              className="border border-border-default rounded-md px-3 py-2 text-[12px] text-text-primary placeholder:text-text-muted focus:outline-none focus:border-[#6081BE] resize-y"
+            />
+          </label>
+
+          <div className="grid grid-cols-2 gap-3">
+            <label className="flex flex-col gap-1.5">
+              <span className="text-[10.5px] uppercase tracking-[0.16em] text-text-muted font-semibold">
+                Call date
+              </span>
+              <input
+                type="date"
+                value={callDate}
+                onChange={(e) => setCallDate(e.target.value)}
+                className="border border-border-default rounded-md px-3 py-2 text-[13px] text-text-primary focus:outline-none focus:border-[#6081BE]"
+              />
+            </label>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <span className="text-[10.5px] uppercase tracking-[0.16em] text-text-muted font-semibold">
+              Participants — team
+            </span>
+            <div className="flex flex-wrap gap-2">
+              {members.length === 0 && (
+                <span className="text-[11px] text-text-muted italic">No team members found — add externals below.</span>
+              )}
+              {members.map((m) => {
+                const checked = internalParticipants.has(m.name);
+                return (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => toggleInternal(m.name)}
+                    className={
+                      'px-2.5 py-1 text-[12px] rounded-md border transition-colors ' +
+                      (checked
+                        ? 'bg-[#6081BE]/10 border-[#6081BE]/40 text-[#6081BE] font-medium'
+                        : 'bg-bg-card border-border-default text-text-secondary hover:border-border-hover')
+                    }
+                  >
+                    {checked ? '✓ ' : ''}{m.name}
+                  </button>
+                );
+              })}
             </div>
           </div>
-        ) : (
-          <>
-            <div className="px-5 py-4 space-y-3.5 max-h-[70vh] overflow-y-auto">
-              <label className="flex flex-col gap-1.5">
-                <span className="text-[10.5px] uppercase tracking-[0.16em] text-text-muted font-semibold">
-                  Title <span className="text-text-faint normal-case font-normal">(optional — auto-generated from participants + date)</span>
-                </span>
-                <input
-                  type="text"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  placeholder="e.g. Zedcor pilot kickoff"
-                  className="border border-border-default rounded-md px-3 py-2 text-[13px] text-text-primary placeholder:text-text-muted focus:outline-none focus:border-[#6081BE]"
-                />
-              </label>
 
-              {extractNotice && (
-                <div className="bg-[#6081BE]/10 border border-[#6081BE]/30 rounded-md px-3 py-2 text-[11px] text-[#3D5994]">
-                  {extractNotice}
-                </div>
-              )}
+          <label className="flex flex-col gap-1.5">
+            <span className="text-[10.5px] uppercase tracking-[0.16em] text-text-muted font-semibold">
+              Participants — external <span className="text-text-faint normal-case font-normal">(comma- or newline-separated; written to page body, not multi_select)</span>
+            </span>
+            <textarea
+              value={externalParticipantsRaw}
+              onChange={(e) => setExternalParticipantsRaw(e.target.value)}
+              placeholder="Jane Doe (Zedcor), John Smith (Vendor)"
+              rows={2}
+              className="border border-border-default rounded-md px-3 py-2 text-[12px] text-text-primary placeholder:text-text-muted focus:outline-none focus:border-[#6081BE] resize-y"
+            />
+          </label>
 
-              <label className="flex flex-col gap-1.5">
-                <span className="text-[10.5px] uppercase tracking-[0.16em] text-text-muted font-semibold flex items-center gap-2">
-                  Full transcript <span className="text-text-faint normal-case font-normal">(paste below OR upload .txt / .md / .docx / .vtt / .srt; either this or summary notes is required)</span>
-                </span>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="file"
-                    accept=".txt,.md,.markdown,.docx,.vtt,.srt,text/plain,text/markdown,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                    onChange={(e) => void handleFileChange('transcript', e)}
-                    disabled={!!extracting}
-                    className="text-[11px] text-text-secondary file:mr-2 file:px-2 file:py-1 file:rounded-md file:border file:border-border-default file:bg-bg-card file:text-text-secondary file:text-[11px] file:cursor-pointer hover:file:border-border-hover"
-                  />
-                  {extracting === 'transcript' && (
-                    <span className="text-[10px] text-text-muted">Extracting…</span>
-                  )}
-                </div>
-                <textarea
-                  value={transcript}
-                  onChange={(e) => setTranscript(e.target.value)}
-                  placeholder="Paste the full transcript here, or upload a file above. Long transcripts are chunked automatically."
-                  rows={6}
-                  className="border border-border-default rounded-md px-3 py-2 text-[12px] font-mono text-text-primary placeholder:text-text-muted focus:outline-none focus:border-[#6081BE] resize-y"
-                />
-              </label>
-
-              <label className="flex flex-col gap-1.5">
-                <span className="text-[10.5px] uppercase tracking-[0.16em] text-text-muted font-semibold">
-                  Summary notes <span className="text-text-faint normal-case font-normal">(or upload a separate notes file)</span>
-                </span>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="file"
-                    accept=".txt,.md,.markdown,.docx,.vtt,.srt,text/plain,text/markdown,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                    onChange={(e) => void handleFileChange('summary', e)}
-                    disabled={!!extracting}
-                    className="text-[11px] text-text-secondary file:mr-2 file:px-2 file:py-1 file:rounded-md file:border file:border-border-default file:bg-bg-card file:text-text-secondary file:text-[11px] file:cursor-pointer hover:file:border-border-hover"
-                  />
-                  {extracting === 'summary' && (
-                    <span className="text-[10px] text-text-muted">Extracting…</span>
-                  )}
-                </div>
-                <textarea
-                  value={summaryNotes}
-                  onChange={(e) => setSummaryNotes(e.target.value)}
-                  placeholder="Quick notes from the call, key topics discussed, decisions reached."
-                  rows={3}
-                  className="border border-border-default rounded-md px-3 py-2 text-[12px] text-text-primary placeholder:text-text-muted focus:outline-none focus:border-[#6081BE] resize-y"
-                />
-              </label>
-
-              <div className="grid grid-cols-2 gap-3">
-                <label className="flex flex-col gap-1.5">
-                  <span className="text-[10.5px] uppercase tracking-[0.16em] text-text-muted font-semibold">
-                    Call date
-                  </span>
-                  <input
-                    type="date"
-                    value={callDate}
-                    onChange={(e) => setCallDate(e.target.value)}
-                    className="border border-border-default rounded-md px-3 py-2 text-[13px] text-text-primary focus:outline-none focus:border-[#6081BE]"
-                  />
-                </label>
-              </div>
-
-              <div className="flex flex-col gap-1.5">
-                <span className="text-[10.5px] uppercase tracking-[0.16em] text-text-muted font-semibold">
-                  Participants — team
-                </span>
-                <div className="flex flex-wrap gap-2">
-                  {members.length === 0 && (
-                    <span className="text-[11px] text-text-muted italic">No team members found — add externals below.</span>
-                  )}
-                  {members.map((m) => {
-                    const checked = internalParticipants.has(m.name);
-                    return (
-                      <button
-                        key={m.id}
-                        type="button"
-                        onClick={() => toggleInternal(m.name)}
-                        className={
-                          'px-2.5 py-1 text-[12px] rounded-md border transition-colors ' +
-                          (checked
-                            ? 'bg-[#6081BE]/10 border-[#6081BE]/40 text-[#6081BE] font-medium'
-                            : 'bg-bg-card border-border-default text-text-secondary hover:border-border-hover')
-                        }
-                      >
-                        {checked ? '✓ ' : ''}{m.name}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <label className="flex flex-col gap-1.5">
-                <span className="text-[10.5px] uppercase tracking-[0.16em] text-text-muted font-semibold">
-                  Participants — external <span className="text-text-faint normal-case font-normal">(comma- or newline-separated; written to page body, not multi_select)</span>
-                </span>
-                <textarea
-                  value={externalParticipantsRaw}
-                  onChange={(e) => setExternalParticipantsRaw(e.target.value)}
-                  placeholder="Jane Doe (Zedcor), John Smith (Vendor)"
-                  rows={2}
-                  className="border border-border-default rounded-md px-3 py-2 text-[12px] text-text-primary placeholder:text-text-muted focus:outline-none focus:border-[#6081BE] resize-y"
-                />
-              </label>
-
-              {error && (
-                <div className="bg-[#E14B4B]/10 border border-[#E14B4B]/30 rounded-md px-3 py-2 text-[12px] text-[#E14B4B]">
-                  {error}
-                </div>
-              )}
+          {error && (
+            <div className="bg-[#E14B4B]/10 border border-[#E14B4B]/30 rounded-md px-3 py-2 text-[12px] text-[#E14B4B]">
+              {error}
             </div>
+          )}
+        </div>
 
-            <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-border-default bg-bg-card/40">
-              <button
-                type="button"
-                onClick={onClose}
-                disabled={submitting}
-                className="px-3 py-2 text-[12px] text-text-secondary hover:text-text-primary disabled:opacity-50"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={!canSubmit}
-                className="px-4 py-2 text-[12px] font-medium text-white bg-[#0B1530] rounded-md hover:bg-[#0B1530]/90 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {submitting ? 'Uploading…' : 'Upload call'}
-              </button>
-            </div>
-          </>
-        )}
+        <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-border-default bg-bg-card/40">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-3 py-2 text-[12px] text-text-secondary hover:text-text-primary"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={!canSubmit}
+            className="px-4 py-2 text-[12px] font-medium text-white bg-[#0B1530] rounded-md hover:bg-[#0B1530]/90 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Upload call
+          </button>
+        </div>
       </form>
     </div>
   );
