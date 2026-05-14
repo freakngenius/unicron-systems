@@ -38,6 +38,7 @@ import {
   calendarPullRun,
   atriumIncrementalRefreshCron,
   atriumIncrementalRefreshRun,
+  janitorSweepRun,
 } from '../lib/agents/inngest-fns.js';
 
 // Disable Vercel's automatic JSON body parsing — inngest/node reads the raw stream.
@@ -86,5 +87,7 @@ export default serve({
     // Atrium incremental refresh (usefulness pass item 7 — 2026-05-12)
     atriumIncrementalRefreshCron,
     atriumIncrementalRefreshRun,
+    // Janitor (Sprint 7.5 reification — 2026-05-13)
+    janitorSweepRun,
   ],
 });
