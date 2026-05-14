@@ -1,10 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Visualizer } from '../visualizer/Visualizer';
 import { useSettings } from '../SettingsContext';
-import { useSystem } from '../../context/SystemContext';
 import { postDecomposition } from '../../lib/architectClient';
 import { architectureToSystemConfig } from '../../lib/architectAdapters';
 import { listCustomerOrgs } from '../../lib/customersClient';
+import { ArchitectCanvas } from './ArchitectCanvas';
 import type {
   BusinessSummary,
   DecompositionArchitecture,
@@ -33,7 +32,6 @@ const REVEAL_INTERVAL_MS = 60;
 
 export function ArchitectThinking({ buyerPain, onApprove }: Props) {
   const { settings } = useSettings();
-  const { config } = useSystem();
   const [response, setResponse] = useState<DecompositionResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [revealed, setRevealed] = useState(0);
@@ -192,14 +190,17 @@ export function ArchitectThinking({ buyerPain, onApprove }: Props) {
 
   return (
     <div className="w-full max-w-[1180px] px-6 grid grid-cols-1 lg:grid-cols-[3fr_2fr] gap-10 items-start py-12">
-      <div className="flex flex-col items-center justify-center">
-        <div className="relative w-[420px] h-[420px]">
-          <Visualizer
-            config={config}
-            showInternalCostMetrics={false}
-            reducedMotion={settings.reducedMotion}
-            density="compact"
-            showHud={false}
+      <div className="flex flex-col">
+        <div className="relative w-full h-[520px]">
+          <ArchitectCanvas
+            architecture={response?.architecture ?? null}
+            loadingLabel={
+              error
+                ? 'Architect · decomposition failed'
+                : !response
+                ? 'Architect · decomposing'
+                : undefined
+            }
           />
         </div>
         <div className="mt-6 mono text-[11px] uppercase tracking-[0.22em] text-accent-gold flex items-center gap-1">
