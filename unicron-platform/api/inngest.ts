@@ -42,6 +42,7 @@ import {
   curatorSweepRun,
   boundarySweepRun,
   trendScoutFnRun,
+  researcherBriefRun,
 } from '../lib/agents/inngest-fns.js';
 
 // Disable Vercel's automatic JSON body parsing — inngest/node reads the raw stream.
@@ -98,5 +99,7 @@ export default serve({
     boundarySweepRun,
     // Trend Scout (Sprint 7.5 reification — 2026-05-13)
     trendScoutFnRun,
+    // Researcher (Sprint 7.5 reification — 2026-05-13)
+    researcherBriefRun,
   ],
 });

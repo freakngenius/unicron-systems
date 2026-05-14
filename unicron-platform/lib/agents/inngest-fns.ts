@@ -630,3 +630,18 @@ export const trendScoutFnRun = inngest.createFunction(
     return step.run('trend-scout', () => trendScoutRun({ forDate }));
   },
 );
+
+// ---------------------------------------------------------------------------
+// Researcher — Sprint 7.5 reification
+// ---------------------------------------------------------------------------
+
+export const researcherBriefRun = inngest.createFunction(
+  { id: 'researcher-brief-run', name: 'Researcher Brief Run', retries: 1 },
+  { event: 'researcher/brief.run' },
+  async ({ event, step }) => {
+    const { researcherBrief } = await import('./researcher.js');
+    const data = (event.data as { topic?: string; for_date?: string } | undefined) ?? {};
+    if (!data.topic) throw new Error('event.data.topic is required');
+    return step.run('researcher-brief', () => researcherBrief({ topic: data.topic!, forDate: data.for_date }));
+  },
+);
