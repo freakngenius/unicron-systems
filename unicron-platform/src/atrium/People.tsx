@@ -10,6 +10,7 @@ import { CustomersPipeline } from './people/CustomersPipeline';
 import { TeamMyDay } from './people/TeamMyDay';
 import { Network } from './people/Network';
 import { Hiring } from './people/Hiring';
+import { AddPersonModal, type PeopleAddTab } from './people/AddPersonModal';
 import { useFilterSidebarCollapsed } from './useFilterSidebarCollapsed';
 import { FilterSidebarToggle, FilterSidebarExpandStrip } from './components/FilterSidebarToggle';
 import { AtriumIcon, type AtriumIconName } from './icons';
@@ -194,11 +195,30 @@ function FilterRow({ label, count, dot }: { label: string; count?: number | null
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
+// Atrium People (2026-05-14): the page-level Add button is context-aware —
+// label + modal fields change with the active sub-tab.
+const ADD_BUTTON_LABEL: Record<PeopleTab, string> = {
+  customers: '+ Add Customer',
+  team:      '+ Add Team member',
+  network:   '+ Add Contact',
+  hiring:    '+ Add Applicant',
+};
+
 export function People() {
   const [active, setActive] = useState<PeopleTab>('customers');
   const counts = useBoardCounts();
   const m = useCustomerMetrics();
   const [collapsed, setCollapsed] = useFilterSidebarCollapsed();
+  // The single Add modal adapts its title + fields + RPC based on `active`.
+  const [addOpen, setAddOpen] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
+
+  // After any successful insert, bump reloadKey so child views can re-fetch.
+  useEffect(() => {
+    const handler = () => setReloadKey((k) => k + 1);
+    window.addEventListener('atrium:people-record-added', handler);
+    return () => window.removeEventListener('atrium:people-record-added', handler);
+  }, []);
 
   return (
     <div className="w-full">
@@ -211,13 +231,21 @@ export function People() {
           </h1>
         </div>
         <button
-          className="text-[13px] font-semibold px-3.5 py-2 rounded-md text-white"
+          type="button"
+          onClick={() => setAddOpen(true)}
+          className="text-[13px] font-semibold px-3.5 py-2 rounded-md text-white hover:opacity-90 transition-opacity"
           style={{ background: '#6081BE' }}
-          title="Add contact"
+          title={ADD_BUTTON_LABEL[active].replace(/^\+\s*/, '')}
         >
-          + Add contact
+          {ADD_BUTTON_LABEL[active]}
         </button>
       </div>
+
+      <AddPersonModal
+        open={addOpen}
+        tab={active as PeopleAddTab}
+        onClose={() => setAddOpen(false)}
+      />
 
       {/* Sub-tab nav — v3 blue underline */}
       <div className="flex gap-1 px-7 border-b border-border-default">
@@ -314,12 +342,14 @@ export function People() {
             </div>
           )}
 
-          {/* Sub-tab content */}
+          {/* Sub-tab content. `key={reloadKey}` forces a remount after an Add
+              succeeds so the list refetches without each view needing its own
+              event subscription. */}
           <section role="tabpanel" aria-label={PEOPLE_TABS.find((t) => t.id === active)?.label}>
-            {active === 'customers' && <CustomersPipeline />}
-            {active === 'team' && <TeamMyDay />}
-            {active === 'network' && <Network />}
-            {active === 'hiring' && <Hiring forceShow />}
+            {active === 'customers' && <CustomersPipeline key={`customers-${reloadKey}`} />}
+            {active === 'team' && <TeamMyDay key={`team-${reloadKey}`} />}
+            {active === 'network' && <Network key={`network-${reloadKey}`} />}
+            {active === 'hiring' && <Hiring forceShow key={`hiring-${reloadKey}`} />}
           </section>
         </div>
       </div>
