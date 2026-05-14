@@ -20,6 +20,8 @@ import {
   ingestRouter,
   ingestAllOrgsCron,
   verifyBuildOut,
+  orgCreated,
+  checkReadyToViewCron,
 } from '@/lib/inngest/functions';
 
 export const { GET, POST, PUT } = serve({
@@ -39,6 +41,14 @@ export const { GET, POST, PUT } = serve({
     ingestAllOrgsCron,
     // Build-Out Pass slices 3+5 — subscribes to pathfinder/org.ready_to_view.
     verifyBuildOut,
+    // Phase 2E slice 2 — Onboarding-to-Live state machine: status flip on
+    // org.created + periodic threshold check transitioning first_run/ranking
+    // → ready_to_view or awaiting_threshold. Both were exported from
+    // lib/inngest/functions but not previously wired into serve(), so the
+    // Inngest cloud never received them. DoD smoke step 3 was blocked on
+    // this; registering them here unblocks the cascade through steps 4-6.
+    orgCreated,
+    checkReadyToViewCron,
   ],
 });
 

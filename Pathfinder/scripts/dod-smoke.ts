@@ -125,8 +125,20 @@ async function step1(ctx: SmokeContext): Promise<Omit<Result, 'step' | 'name' | 
   const row = data?.[0] as { id: string; output_payload: Record<string, unknown> | null } | undefined;
   const payload = row?.output_payload ?? null;
   const hasBusinessSummary = !!payload && 'business_summary' in payload;
-  const hasDecomposition = !!payload && 'decomposition' in payload;
   const hasUiPlan = !!payload && 'ui_plan' in payload;
+  // The SPEC describes "decomposition" as the cluster of sources / agents
+  // fields. The Architect (per DecompositionProposal in
+  // services/architect/types.ts) emits these flat at the top of the proposal
+  // rather than nested under a literal `decomposition` key. Recognise either
+  // shape: explicit wrap OR any of the canonical decomposition fields.
+  const decompositionFields = [
+    'decomposition',
+    'data_sources_proposed',
+    'layer_2_watchers',
+    'layer_3_agents',
+    'layer_4_agents',
+  ];
+  const hasDecomposition = !!payload && decompositionFields.some((k) => k in payload);
   if (hasBusinessSummary && hasDecomposition && hasUiPlan) {
     return { status: 'pass', details: { sample_session: row?.id, hasBusinessSummary, hasDecomposition, hasUiPlan } };
   }
