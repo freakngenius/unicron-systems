@@ -69,6 +69,14 @@ export interface FlowInput {
   transcript_text: string;      // joined transcript + summary
   participants: string[];
   uploaded_by?: string;         // operator email (or 'system' for connectors)
+  /**
+   * Bug 1 of the Atrium blockers goal (2026-05-13): job id from
+   * nervous_system.call_processing_jobs. The flow updates it
+   * 'queued' → 'processing' → 'complete'/'failed' so the UI can stop
+   * polling and re-render sections without a manual refresh.
+   * Optional for legacy callers that didn't create a job.
+   */
+  processing_job_id?: string | null;
 }
 
 export interface FlowResult {
@@ -386,6 +394,51 @@ async function createInternalKanbanCard(input: KanbanCardInput): Promise<{ notio
   return { notion_page_id: data.id, notion_url: data.url };
 }
 
+// ─── Processing-job helper ────────────────────────────────────────────────────
+//
+// Bug 1 of the Atrium blockers goal (2026-05-13): every transition writes
+// through `ns_update_call_processing_job` so the UI's 5s poll sees an
+// authoritative status. All failures here are non-fatal (logged + swallowed)
+// — the UI's wall-clock timeout still guards against permanently-stuck jobs.
+
+export interface JobUpdateFields {
+  error_message?: string | null;
+  action_items_count?: number;
+  decisions_count?: number;
+  mentions_count?: number;
+  key_takeaways_count?: number;
+  insights_count?: number;
+  audit_log_id?: string | null;
+}
+
+export async function markCallProcessingJob(
+  jobId: string,
+  status: 'queued' | 'processing' | 'complete' | 'failed',
+  fields: JobUpdateFields = {},
+): Promise<void> {
+  if (!jobId) return;
+  try {
+    const sb = getServiceSupabase();
+    const { error } = await sb.rpc('ns_update_call_processing_job', {
+      p_job_id:              jobId,
+      p_status:              status,
+      p_error_message:       fields.error_message ?? null,
+      p_action_items_count:  fields.action_items_count ?? null,
+      p_decisions_count:     fields.decisions_count ?? null,
+      p_mentions_count:      fields.mentions_count ?? null,
+      p_key_takeaways_count: fields.key_takeaways_count ?? null,
+      p_insights_count:      fields.insights_count ?? null,
+      p_audit_log_id:        fields.audit_log_id ?? null,
+    });
+    if (error) {
+      console.warn(`[calls-action-item-flow] mark job ${jobId} ${status} failed:`, error.message);
+    }
+  } catch (err) {
+    console.warn(`[calls-action-item-flow] mark job ${jobId} ${status} threw:`,
+      err instanceof Error ? err.message : err);
+  }
+}
+
 // ─── Audit log helper ─────────────────────────────────────────────────────────
 
 async function auditLog(
@@ -418,11 +471,16 @@ export async function runActionItemExtraction(input: FlowInput): Promise<FlowRes
     errors: [],
   };
 
+  const jobId = input.processing_job_id ?? null;
+
+  // Bug 1: flip job → 'processing' as soon as the function starts.
+  if (jobId) await markCallProcessingJob(jobId, 'processing');
+
   if (!process.env.ANTHROPIC_API_KEY) {
-    return {
-      ...baseResult,
-      skipped_reason: 'ANTHROPIC_API_KEY not configured — extraction is disabled',
-    };
+    const reason = 'ANTHROPIC_API_KEY not configured — extraction is disabled';
+    // Even a skip closes the job so the UI's poll resolves.
+    if (jobId) await markCallProcessingJob(jobId, 'failed', { error_message: reason });
+    return { ...baseResult, skipped_reason: reason };
   }
 
   const sb = getServiceSupabase();
@@ -432,10 +490,9 @@ export async function runActionItemExtraction(input: FlowInput): Promise<FlowRes
   try {
     bundle = await extractBundle(input);
   } catch (err) {
-    return {
-      ...baseResult,
-      errors: [`extract: ${err instanceof Error ? err.message : String(err)}`],
-    };
+    const msg = err instanceof Error ? err.message : String(err);
+    if (jobId) await markCallProcessingJob(jobId, 'failed', { error_message: `extract: ${msg}` });
+    return { ...baseResult, errors: [`extract: ${msg}`] };
   }
 
   const errors: string[] = [];
@@ -615,6 +672,23 @@ export async function runActionItemExtraction(input: FlowInput): Promise<FlowRes
     'call_upload_fixed_complete',
     completionPayload,
   );
+
+  // Bug 1: mark the job as complete with all counts so the UI can render
+  // section results immediately on the next 5s poll. Even when `errors`
+  // is non-empty we still complete (the per-item errors are surfaced via
+  // audit_log + console.warn) — the job concept means "extraction ran to
+  // completion", not "every Notion side-effect succeeded".
+  if (jobId) {
+    await markCallProcessingJob(jobId, 'complete', {
+      action_items_count:  written.length,
+      decisions_count:     writtenDecisions.length,
+      mentions_count:      writtenMentions,
+      key_takeaways_count: bundle.key_takeaways.length,
+      insights_count:      bundle.insights.length,
+      audit_log_id:        finalAuditId,
+      error_message:       errors.length ? errors.slice(0, 4).join(' · ') : null,
+    });
+  }
 
   return {
     extracted_count: bundle.action_items.length,

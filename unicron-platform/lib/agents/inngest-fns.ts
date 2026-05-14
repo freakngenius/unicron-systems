@@ -498,10 +498,19 @@ export const extractCallActionItemsRun = inngest.createFunction(
       participants?: string[];
       transcript_text?: string;
       uploaded_by?: string;
+      processing_job_id?: string | null;
     };
     const data = event.data as EventData;
 
     if (!data.transcript_text || !data.transcript_text.trim()) {
+      // Bug 1 (Atrium blockers): even on skip, close out the job so the UI
+      // doesn't spin. Status='failed' with a clear reason; counts stay 0.
+      if (data.processing_job_id) {
+        const { markCallProcessingJob } = await import('../calls-action-item-flow.js');
+        await step.run('mark-skipped', () =>
+          markCallProcessingJob(data.processing_job_id!, 'failed', { error_message: 'empty transcript_text' }),
+        );
+      }
       return { status: 'skipped', reason: 'empty transcript_text', call_id: data.call_id };
     }
 
@@ -515,6 +524,7 @@ export const extractCallActionItemsRun = inngest.createFunction(
         transcript_text:     data.transcript_text!,
         participants:        data.participants ?? [],
         uploaded_by:         data.uploaded_by,
+        processing_job_id:   data.processing_job_id ?? null,
       }),
     );
   },

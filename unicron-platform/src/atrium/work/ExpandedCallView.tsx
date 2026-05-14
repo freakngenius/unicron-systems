@@ -110,6 +110,19 @@ function useExpandedCallData(callId: string) {
   const [decisions, setDecisions] = useState<DecisionRow[]>([]);
   const [mentions, setMentions] = useState<CustomerMentionRow[]>([]);
   const [loading, setLoading] = useState(true);
+  // Bug 1: bump on `atrium:call-processing-complete` so sections re-fetch
+  // without a manual refresh when Inngest finishes extraction.
+  const [reloadKey, setReloadKey] = useState(0);
+
+  useEffect(() => {
+    if (!callId) return;
+    function handler(e: Event) {
+      const detail = (e as CustomEvent<{ call_id?: string }>).detail;
+      if (detail?.call_id === callId) setReloadKey((k) => k + 1);
+    }
+    window.addEventListener('atrium:call-processing-complete', handler);
+    return () => window.removeEventListener('atrium:call-processing-complete', handler);
+  }, [callId]);
 
   useEffect(() => {
     if (!callId) return;
@@ -134,7 +147,7 @@ function useExpandedCallData(callId: string) {
       });
 
     return () => { cancelled = true; };
-  }, [callId]);
+  }, [callId, reloadKey]);
 
   return { actionItems, decisions, mentions, loading };
 }
@@ -168,6 +181,30 @@ interface ExpandedCallViewProps {
 export function ExpandedCallView({ call, onClose }: ExpandedCallViewProps) {
   const { actionItems, decisions, mentions, loading } = useExpandedCallData(call.id);
   const [transcriptOpen, setTranscriptOpen] = useState(false);
+  // Bug 1: when processing completes, the parent ledger row's insights jsonb
+  // grows (key_takeaways, extracted_insights). The prop `call` is frozen at
+  // open-time, so we maintain a local `liveCall` that re-fetches on the
+  // `atrium:call-processing-complete` event.
+  const [liveCall, setLiveCall] = useState<CallRow>(call);
+  useEffect(() => { setLiveCall(call); }, [call]);
+
+  useEffect(() => {
+    function handler(e: Event) {
+      const detail = (e as CustomEvent<{ call_id?: string }>).detail;
+      if (detail?.call_id !== call.id) return;
+      getSupabase()
+        .rpc('ns_get_call_ledger_row', { p_call_id: call.id })
+        .then(
+          ({ data }) => {
+            const rows = (data as CallRow[] | null) ?? [];
+            if (rows[0]) setLiveCall(rows[0]);
+          },
+          () => { /* leave stale data — sections will still refresh */ },
+        );
+    }
+    window.addEventListener('atrium:call-processing-complete', handler);
+    return () => window.removeEventListener('atrium:call-processing-complete', handler);
+  }, [call.id]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -178,13 +215,13 @@ export function ExpandedCallView({ call, onClose }: ExpandedCallViewProps) {
   }, [onClose]);
 
   const title =
-    getString(call.insights, 'title') ??
-    (call.content_summary ? call.content_summary.slice(0, 80) : 'Call');
-  const callNotionUrl = getString(call.insights, 'notion_url');
-  const participants = getParticipants(call.insights);
-  const dateLabel = formatCallDate(call.insights, call.created_at);
-  const keyTakeaways = getStringArray(call.insights, 'key_takeaways');
-  const extractedInsights = getStringArray(call.insights, 'extracted_insights');
+    getString(liveCall.insights, 'title') ??
+    (liveCall.content_summary ? liveCall.content_summary.slice(0, 80) : 'Call');
+  const callNotionUrl = getString(liveCall.insights, 'notion_url');
+  const participants = getParticipants(liveCall.insights);
+  const dateLabel = formatCallDate(liveCall.insights, liveCall.created_at);
+  const keyTakeaways = getStringArray(liveCall.insights, 'key_takeaways');
+  const extractedInsights = getStringArray(liveCall.insights, 'extracted_insights');
 
   return (
     <div className="fixed inset-0 z-[95] flex items-start justify-center overflow-y-auto bg-black/55 backdrop-blur-sm px-4 py-10">
@@ -400,7 +437,7 @@ export function ExpandedCallView({ call, onClose }: ExpandedCallViewProps) {
           </Section>
 
           {/* (g) Transcript (collapsed by default) */}
-          {call.content_full && (
+          {liveCall.content_full && (
             <Section label="Transcript">
               <button
                 type="button"
@@ -413,7 +450,7 @@ export function ExpandedCallView({ call, onClose }: ExpandedCallViewProps) {
               {transcriptOpen && (
                 <div className="mt-3 bg-bg-raised border border-border-default rounded-xl p-4 max-h-96 overflow-y-auto">
                   <pre className="mono text-[11.5px] text-text-secondary whitespace-pre-wrap leading-relaxed">
-                    {call.content_full}
+                    {liveCall.content_full}
                   </pre>
                 </div>
               )}
