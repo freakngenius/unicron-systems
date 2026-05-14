@@ -16,7 +16,12 @@ type Filter = 'all' | ProposalCategory;
 // response carries the new SystemConfig. The legacy pre-C3 client-side
 // fallback path has been removed alongside the env-flag gates.
 
-export function ArchitectInbox() {
+type ArchitectInboxProps = {
+  /** Routes the operator to the Onboarding tab to kick off a NEW Architect run. */
+  onStartNewDecomposition?: () => void;
+};
+
+export function ArchitectInbox({ onStartNewDecomposition }: ArchitectInboxProps = {}) {
   const [items, setItems] = useState<Proposal[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -139,10 +144,24 @@ export function ArchitectInbox() {
 
   return (
     <div className="max-w-[800px] mx-auto px-6 py-12">
-      <h1 className="text-[22px] text-text-primary mb-2">ARCHITECT INBOX</h1>
-      <p className="text-[15px] text-text-secondary mb-8">
-        proposals from the system that need your attention
-      </p>
+      <header className="flex items-start justify-between gap-4 mb-8">
+        <div>
+          <h1 className="text-[22px] text-text-primary mb-2">ARCHITECT INBOX</h1>
+          <p className="text-[15px] text-text-secondary">
+            proposals from the system that need your attention
+          </p>
+        </div>
+        {onStartNewDecomposition ? (
+          <button
+            type="button"
+            onClick={onStartNewDecomposition}
+            data-testid="architect-inbox-new-decomposition"
+            className="bg-accent-primary text-white mono text-[12px] tracking-[0.12em] uppercase py-2.5 px-4 rounded-md hover:bg-accent-primary/90 transition-colors shrink-0"
+          >
+            + NEW DECOMPOSITION
+          </button>
+        ) : null}
+      </header>
 
       {/* This Week — Pass 3 of the rebrand. Folds the
           pathfinder.architect_proposals weekly digest (previously rendered

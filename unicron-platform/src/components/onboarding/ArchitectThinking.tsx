@@ -251,8 +251,8 @@ export function ArchitectThinking({ buyerPain, onApprove }: Props) {
                 disabled={!done}
                 onClick={handleApprove}
                 className={[
-                  'bg-white text-bg-base mono text-[12px] tracking-[0.12em] uppercase py-3 px-5 rounded-md transition-all',
-                  done ? 'hover:bg-text-primary' : 'opacity-40 cursor-not-allowed',
+                  'bg-accent-primary text-white mono text-[12px] tracking-[0.12em] uppercase py-3 px-5 rounded-md transition-all',
+                  done ? 'hover:bg-accent-primary/90' : 'opacity-40 cursor-not-allowed',
                 ].join(' ')}
               >
                 APPROVE & DEPLOY

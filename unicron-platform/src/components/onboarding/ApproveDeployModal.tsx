@@ -181,8 +181,8 @@ export function ApproveDeployModal({
             disabled={!valid}
             data-testid="approve-deploy-confirm"
             className={[
-              'bg-white text-bg-base mono text-[12px] tracking-[0.12em] uppercase py-2 px-5 rounded-md transition-all',
-              valid ? 'hover:bg-text-primary' : 'opacity-40 cursor-not-allowed',
+              'bg-accent-primary text-white mono text-[12px] tracking-[0.12em] uppercase py-2 px-5 rounded-md transition-all',
+              valid ? 'hover:bg-accent-primary/90' : 'opacity-40 cursor-not-allowed',
             ].join(' ')}
           >
             {submitting ? 'Deploying…' : 'Deploy'}

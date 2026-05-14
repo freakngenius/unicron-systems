@@ -69,7 +69,7 @@ export function LiveSystem({ onArchitectClick, onGoToOnboarding }: Props) {
           <button
             type="button"
             onClick={onGoToOnboarding}
-            className="bg-white text-bg-base mono text-[12px] tracking-[0.12em] uppercase py-3 px-5 rounded-md hover:bg-text-primary transition-colors"
+            className="bg-accent-primary text-white mono text-[12px] tracking-[0.12em] uppercase py-3 px-5 rounded-md hover:bg-accent-primary/90 transition-colors"
           >
             START IN ONBOARDING →
           </button>
