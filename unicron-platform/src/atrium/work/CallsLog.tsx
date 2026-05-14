@@ -166,7 +166,7 @@ function VoiceBadge() {
 
 // ─── Bottom status bar ────────────────────────────────────────────────────────
 
-type UploadStage =
+export type UploadStage =
   | { state: 'uploading' }
   | { state: 'processing'; ledgerId: string; notionUrl: string | null }
   | {
@@ -179,7 +179,7 @@ type UploadStage =
     }
   | { state: 'error'; message: string };
 
-function UploadStatusBar({ stage, onDismiss }: { stage: UploadStage; onDismiss: () => void }) {
+export function UploadStatusBar({ stage, onDismiss }: { stage: UploadStage; onDismiss: () => void }) {
   let label: string;
   let detail: string | null = null;
   let tone: 'progress' | 'done' | 'error' = 'progress';
@@ -266,7 +266,7 @@ function UploadStatusBar({ stage, onDismiss }: { stage: UploadStage; onDismiss: 
 //
 // Uses an effect on stage to manage polling + auto-dismiss timers.
 
-function useUploadDriver(onAnyChange: () => void) {
+export function useUploadDriver(onAnyChange: () => void) {
   const [stage, setStage] = useState<UploadStage | null>(null);
 
   const dismiss = useCallback(() => setStage(null), []);
@@ -407,12 +407,11 @@ export function CallsLog() {
     writePersistedFilter(participantFilter);
   }, [participantFilter]);
 
-  // Sprint 8 F9: open the modal when the topbar phone-icon button dispatches.
-  useEffect(() => {
-    const handler = () => setUploadOpen(true);
-    window.addEventListener('atrium:open-upload-call', handler);
-    return () => window.removeEventListener('atrium:open-upload-call', handler);
-  }, []);
+  // Sprint 8 F9 fix (2026-05-14): the topbar phone-icon button now mounts its
+  // own modal in AtriumLayout so it can overlay any tab without first
+  // navigating away. The prior 'atrium:open-upload-call' window event handler
+  // lived here only because CallsLog already owned the modal — now lifted, the
+  // event listener is no longer needed.
 
   const calls = participantFilter === 'all'
     ? rawCalls

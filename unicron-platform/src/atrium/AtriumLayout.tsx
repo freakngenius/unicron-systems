@@ -8,6 +8,10 @@ import { useAuth } from '../lib/auth';
 import { QuickCapture } from './QuickCapture';
 import { AtriumIcon } from './icons';
 import { navigateAtrium } from './navigation';
+// Sprint 8 F9 fix (2026-05-14): the phone-icon Upload Call modal lives at the
+// layout level so it can overlay any tab — no navigation away.
+import { UploadCallModal } from './work/UploadCallModal';
+import { useUploadDriver, UploadStatusBar } from './work/CallsLog';
 
 export type AtriumTab =
   | 'now'
@@ -362,12 +366,22 @@ export function AtriumLayout({ activeTab, onTabChange, children, onOpenSettings 
     setNewSinceLastVisit(0);
   }, []);
 
+  // Sprint 8 F9 fix (2026-05-14): the phone-icon now opens a layout-level
+  // modal so the operator can upload a call from any tab without losing their
+  // current view. Reuses the same useUploadDriver pipeline that CallsLog runs
+  // for its in-tab Upload button — two independent instances are fine because
+  // each drives its own stage state.
+  const [uploadCallOpen, setUploadCallOpen] = useState(false);
+  const {
+    stage: uploadCallStage,
+    startUpload: startUploadCall,
+    dismiss: dismissUploadCall,
+  } = useUploadDriver(() => {
+    // Layout-level upload doesn't own a list to refresh; CallsLog (if mounted)
+    // will pick up the new row through its own data fetch on next mount/poll.
+  });
   const openUploadCallModal = useCallback(() => {
-    // Navigate to Work > Calls and dispatch an event CallsLog listens for to
-    // open its UploadCallModal. Keeps the modal mount-state inside the work
-    // sub-view (it already owns the upload pipeline + status bar).
-    navigateAtrium({ tab: 'work', subTab: 'calls' });
-    window.dispatchEvent(new CustomEvent('atrium:open-upload-call'));
+    setUploadCallOpen(true);
   }, []);
 
   useEffect(() => {
@@ -750,6 +764,23 @@ export function AtriumLayout({ activeTab, onTabChange, children, onOpenSettings 
 
       {/* ⌘K palette */}
       <CmdKPalette open={cmdkOpen} onClose={() => setCmdkOpen(false)} />
+
+      {/* Sprint 8 F9 fix: Upload Call modal lives at the layout level so the
+          topbar phone-icon overlays the current tab instead of navigating
+          away. The same UploadCallModal component is also mounted inside
+          CallsLog for the in-tab Upload button — independent state, no
+          conflict. */}
+      <UploadCallModal
+        open={uploadCallOpen}
+        onClose={() => setUploadCallOpen(false)}
+        onSubmit={(payload) => {
+          setUploadCallOpen(false);
+          void startUploadCall(payload);
+        }}
+      />
+      {uploadCallStage && (
+        <UploadStatusBar stage={uploadCallStage} onDismiss={dismissUploadCall} />
+      )}
 
       {/* Toast */}
       {toast && (
