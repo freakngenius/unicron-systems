@@ -92,16 +92,19 @@ import { agentCron } from './generated-agent-cron.js';
 
 export const analystNightlyCron = inngest.createFunction(
   { id: 'analyst-nightly', name: 'Analyst Nightly Cron', retries: 1 },
-  // Usefulness pass 2026-05-12: shifted to 05:00 ET so the digest is ready
-  // before the working day starts on the east coast.
-  { cron: agentCron('Analyst', 'TZ=America/New_York 0 5 * * *') },
+  // Sprint 8 F3 (2026-05-13): cron retimed to 05:00 America/Los_Angeles per
+  // spec (Kyle is in CA; brief should be ready when he starts the day on PT).
+  // Spec also adds a morning brief markdown file written to the vault.
+  { cron: agentCron('Analyst', 'TZ=America/Los_Angeles 0 5 * * *') },
   async ({ step }) => {
-    const { decayTick, dailyDigest, driftFlagScan, analystWikiSync } = await import('./analyst.js');
+    const { decayTick, dailyDigest, driftFlagScan, analystWikiSync, writeMorningBrief } = await import('./analyst.js');
     const decayResult = await step.run('decay-tick', () => decayTick());
     await step.run('daily-digest', () => dailyDigest());
     await step.run('drift-flag-scan', () => driftFlagScan());
     // Sprint 6 Stream C: regenerate whats-connected.md from live Supabase data
     await step.run('wiki-sync', () => analystWikiSync());
+    // Sprint 8 F3: emit per-day morning brief markdown into vault/Memory/analyst/
+    await step.run('morning-brief', () => writeMorningBrief());
     return { status: 'ok', ...decayResult };
   }
 );
