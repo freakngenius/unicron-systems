@@ -26,6 +26,7 @@ import {
   draftOutreach,
   type IterationIntent,
 } from '@/lib/chat/outreach-drafter';
+import { fetchRepresentativeSites } from '@/lib/cross-pollination/site-enrichment';
 import {
   summarizeHubSpotForChat,
   type HubSpotChatContext,
@@ -272,11 +273,18 @@ interface Hydrated {
     match_layer: string;
     match_confidence: number;
     matched_field: string;
+    matched_value_raw: string | null;
     primary_branch_name: string | null;
     branch_count: number;
     active_site_count: number;
     most_recent_site_date: string | null;
     national_account: boolean;
+    representative_sites: Array<{
+      site_name: string;
+      city: string | null;
+      state: string | null;
+      customer_name_raw: string;
+    }> | null;
   }>;
   // Gate 22 — HubSpot integration state for the current user (NOT the
   // org). Always scoped to userEmail in the loader so the chat never
@@ -419,7 +427,7 @@ async function hydrateContext(snapshot: ChatContextSnapshot, userId: string): Pr
     const { data } = await admin
       .from('lead_cross_pollination')
       .select(
-        'customer_canonical, match_layer, match_confidence, matched_field, primary_branch_name, branch_count, active_site_count, most_recent_site_date, national_account',
+        'customer_canonical, match_layer, match_confidence, matched_field, matched_value_raw, primary_branch_name, branch_count, active_site_count, most_recent_site_date, national_account',
       )
       .eq('lead_id', project.id)
       .order('most_recent_site_date', { ascending: false, nullsFirst: false })
@@ -429,6 +437,7 @@ async function hydrateContext(snapshot: ChatContextSnapshot, userId: string): Pr
       match_layer: string;
       match_confidence: number | string;
       matched_field: string;
+      matched_value_raw: string | null;
       primary_branch_name: string | null;
       branch_count: number | null;
       active_site_count: number | null;
@@ -439,12 +448,28 @@ async function hydrateContext(snapshot: ChatContextSnapshot, userId: string): Pr
       match_layer: r.match_layer,
       match_confidence: typeof r.match_confidence === 'string' ? parseFloat(r.match_confidence) : r.match_confidence,
       matched_field: r.matched_field,
+      matched_value_raw: r.matched_value_raw,
       primary_branch_name: r.primary_branch_name,
       branch_count: r.branch_count ?? 0,
       active_site_count: r.active_site_count ?? 0,
       most_recent_site_date: r.most_recent_site_date,
       national_account: r.national_account ?? false,
+      representative_sites: null as Hydrated['crossPollination'][number]['representative_sites'],
     }));
+
+    // Enrich each match with up to 3 representative past Zedcor jobsites
+    // so the Drafter prompt can name a specific site by name in the
+    // warm-intro opening (makes it feel personable, not corporate).
+    if (crossPollination.length > 0) {
+      const sitesMap = await fetchRepresentativeSites(
+        admin,
+        crossPollination.map((m) => m.customer_canonical),
+      );
+      for (const m of crossPollination) {
+        const sites = sitesMap.get(m.customer_canonical.toLowerCase());
+        if (sites && sites.length > 0) m.representative_sites = sites;
+      }
+    }
   }
 
   const hubspot = await loadHubSpotForUser(userId);
