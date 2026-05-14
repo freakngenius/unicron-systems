@@ -553,12 +553,14 @@ export const calendarPullRun = inngest.createFunction(
 
 /**
  * Lightweight 3-hour refresh that augments today's slack_daily_digest with
- * in-progress takeaways since the last full scan. Cron times below match the
- * spec (08/11/14/17/20/23 America/New_York).
+ * in-progress takeaways since the last full scan. Sprint 8 F7 (2026-05-13)
+ * retimed cron to America/Los_Angeles 0 6,9,12,15,18,21 per spec — six rolls
+ * spanning 06:00–21:00 PT daily, replacing the prior 08/11/14/17/20/23 ET
+ * cadence from PR #379.
  */
 export const atriumIncrementalRefreshCron = inngest.createFunction(
   { id: 'atrium-incremental-refresh', name: 'Atrium Incremental Refresh', retries: 1 },
-  { cron: 'TZ=America/New_York 0 8,11,14,17,20,23 * * *' },
+  { cron: 'TZ=America/Los_Angeles 0 6,9,12,15,18,21 * * *' },
   async ({ step }) => {
     const { runIncrementalRefresh } = await import('./atrium-incremental-refresh.js');
     return step.run('atrium-incremental-refresh', () => runIncrementalRefresh());
