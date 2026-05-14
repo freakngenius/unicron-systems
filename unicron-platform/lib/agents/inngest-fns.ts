@@ -570,3 +570,21 @@ export const atriumIncrementalRefreshRun = inngest.createFunction(
     return step.run('atrium-incremental-refresh', () => runIncrementalRefresh());
   },
 );
+
+// ---------------------------------------------------------------------------
+// Janitor — Sprint 7.5 reification
+// ---------------------------------------------------------------------------
+
+/**
+ * Sweeps stale state across the platform and flags maintenance issues.
+ * NEVER auto-rotates secrets — flagging only. Triggerable by event or HTTP.
+ */
+export const janitorSweepRun = inngest.createFunction(
+  { id: 'janitor-sweep-run', name: 'Janitor Sweep Run', retries: 1 },
+  { event: 'janitor/sweep.run' },
+  async ({ event, step }) => {
+    const { janitorSweep } = await import('./janitor.js');
+    const forDate = (event.data as { for_date?: string } | undefined)?.for_date;
+    return step.run('janitor-sweep', () => janitorSweep({ forDate }));
+  },
+);
