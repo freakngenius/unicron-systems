@@ -25,6 +25,7 @@ import { QuickCapture } from './QuickCapture';
 import { AtriumIcon } from './icons';
 import { SlackDigest } from './now/SlackDigest';
 import { FileUploadBlock } from './now/FileUploadBlock';
+import { NowSkillsRecommendations } from './library/skills/NowSkillsRecommendations';
 import { navigateAtrium, openAtriumSettings } from './navigation';
 // Pass 2 (R1): AttentionScorer cut — was hand-rolled scoring across mixed
 // sources. TopOfMind now wires to ns_top_of_mind_for_dri RPC (real data).
@@ -2638,6 +2639,13 @@ export function Now({ name }: Props) {
                 </button>
               </div>
             </div>
+
+            {/* Sprint 9 Stream C: contextual Skill recommendations from
+                /api/skills/search against the operator's current Now state. */}
+            <NowSkillsRecommendations
+              teamMemberId={teamMemberId}
+              onToast={showToast}
+            />
 
             {/* Skills library (existing SkillsSurface) */}
             <SkillsSurface onOpenQuickCapture={() => setCaptureOpen(true)} />

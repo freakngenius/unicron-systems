@@ -1,0 +1,446 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`NowSkillsRecommendations snapshots > renders a single-result card 1`] = `
+<section
+  aria-label="Recommended skills"
+  class="bg-bg-card border border-border-default rounded-xl overflow-hidden"
+  data-testid="now-skills-recommendations"
+>
+  <header
+    class="px-4 py-3 border-b border-border-subtle flex items-baseline justify-between"
+  >
+    <div>
+      <h2
+        class="mono text-[13px] font-semibold text-text-primary"
+      >
+        Recommended skills
+      </h2>
+      <p
+        class="mono text-[10.5px] text-text-secondary mt-0.5"
+      >
+        Pulled from your action items, today's ledger, and active customers.
+      </p>
+    </div>
+    <span
+      class="mono text-[10px] uppercase tracking-wider text-text-secondary bg-bg-raised px-2 py-0.5 rounded"
+    >
+      1 / 3
+    </span>
+  </header>
+  <div
+    class="px-4 py-3 flex flex-col gap-2"
+  >
+    <div
+      class="group block w-full text-left rounded-xl border transition-colors p-2.5 border-border-default bg-bg-card hover:border-border-hover"
+      data-testid="skill-card-s0"
+    >
+      <div
+        class="flex items-start gap-2.5"
+      >
+        <span
+          aria-label="Authored by Human"
+          class="mono inline-flex w-5 h-5 rounded-md flex-shrink-0 items-center justify-center text-[10px] font-semibold text-text-secondary bg-bg-raised border border-border-subtle"
+          title="Human"
+        >
+          H
+        </span>
+        <div
+          class="flex-1 min-w-0"
+        >
+          <div
+            class="flex items-center gap-2 flex-wrap"
+          >
+            <span
+              class="mono text-[13px] font-semibold text-text-primary truncate"
+            >
+              seeded_skill_0
+            </span>
+            <span
+              class="mono text-[10px] uppercase tracking-wider text-text-secondary bg-bg-raised px-1.5 py-0.5 rounded"
+            >
+              v
+              1
+            </span>
+          </div>
+          <div
+            class="mono text-text-secondary leading-snug mt-1 text-[11px] line-clamp-2"
+          >
+            Generate the weekly digest for Zedcor across procurement and ops.
+          </div>
+          <div
+            class="flex items-center gap-2 flex-wrap mt-2 mono text-[10.5px] text-text-secondary"
+          >
+            <span
+              class="bg-bg-raised px-1.5 py-0.5 rounded uppercase tracking-wider text-[9px]"
+            >
+              productivity
+            </span>
+            <span
+              aria-label="Lifecycle: approved"
+              class="mono text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded"
+              style="background: rgba(31, 138, 91, 0.1); color: rgb(31, 138, 91);"
+            >
+              approved
+            </span>
+            <span
+              aria-label="12 total runs, 11 succeeded"
+            >
+              12
+               runs
+               · 92%
+            </span>
+            <span
+              aria-label="Decays in 5mo"
+            >
+              decays 
+              in 5mo
+            </span>
+          </div>
+        </div>
+        <div
+          class="flex-shrink-0"
+        >
+          <button
+            aria-label="Invoke seeded_skill_0"
+            class="mono text-[10.5px] font-semibold uppercase tracking-wider px-2.5 py-1 rounded text-white disabled:opacity-40 disabled:cursor-not-allowed"
+            data-testid="now-skills-invoke-s0"
+            style="background: rgb(96, 129, 190);"
+            type="button"
+          >
+            Run
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+`;
+
+exports[`NowSkillsRecommendations snapshots > renders the 0-result empty state 1`] = `
+<section
+  aria-label="Recommended skills"
+  class="bg-bg-card border border-border-default rounded-xl overflow-hidden"
+  data-testid="now-skills-recommendations"
+>
+  <header
+    class="px-4 py-3 border-b border-border-subtle flex items-baseline justify-between"
+  >
+    <div>
+      <h2
+        class="mono text-[13px] font-semibold text-text-primary"
+      >
+        Recommended skills
+      </h2>
+      <p
+        class="mono text-[10.5px] text-text-secondary mt-0.5"
+      >
+        Pulled from your action items, today's ledger, and active customers.
+      </p>
+    </div>
+    <span
+      class="mono text-[10px] uppercase tracking-wider text-text-secondary bg-bg-raised px-2 py-0.5 rounded"
+    >
+      0 / 3
+    </span>
+  </header>
+  <div
+    class="px-4 py-3 flex flex-col gap-2"
+  >
+    <div
+      class="bg-bg-card border border-border-default rounded-xl px-4 py-6 text-center"
+      data-testid="skills-list-empty-empty"
+    >
+      <p
+        class="mono text-[12px] font-medium text-text-primary"
+      >
+        No Skill matched the current Now state.
+      </p>
+      <p
+        class="mono text-[10.5px] text-text-secondary mt-1.5"
+      >
+        Capture an action item or log a customer touch to surface ideas.
+      </p>
+    </div>
+  </div>
+</section>
+`;
+
+exports[`NowSkillsRecommendations snapshots > renders three-result cards 1`] = `
+<section
+  aria-label="Recommended skills"
+  class="bg-bg-card border border-border-default rounded-xl overflow-hidden"
+  data-testid="now-skills-recommendations"
+>
+  <header
+    class="px-4 py-3 border-b border-border-subtle flex items-baseline justify-between"
+  >
+    <div>
+      <h2
+        class="mono text-[13px] font-semibold text-text-primary"
+      >
+        Recommended skills
+      </h2>
+      <p
+        class="mono text-[10.5px] text-text-secondary mt-0.5"
+      >
+        Pulled from your action items, today's ledger, and active customers.
+      </p>
+    </div>
+    <span
+      class="mono text-[10px] uppercase tracking-wider text-text-secondary bg-bg-raised px-2 py-0.5 rounded"
+    >
+      3 / 3
+    </span>
+  </header>
+  <div
+    class="px-4 py-3 flex flex-col gap-2"
+  >
+    <div
+      class="group block w-full text-left rounded-xl border transition-colors p-2.5 border-border-default bg-bg-card hover:border-border-hover"
+      data-testid="skill-card-s0"
+    >
+      <div
+        class="flex items-start gap-2.5"
+      >
+        <span
+          aria-label="Authored by Human"
+          class="mono inline-flex w-5 h-5 rounded-md flex-shrink-0 items-center justify-center text-[10px] font-semibold text-text-secondary bg-bg-raised border border-border-subtle"
+          title="Human"
+        >
+          H
+        </span>
+        <div
+          class="flex-1 min-w-0"
+        >
+          <div
+            class="flex items-center gap-2 flex-wrap"
+          >
+            <span
+              class="mono text-[13px] font-semibold text-text-primary truncate"
+            >
+              seeded_skill_0
+            </span>
+            <span
+              class="mono text-[10px] uppercase tracking-wider text-text-secondary bg-bg-raised px-1.5 py-0.5 rounded"
+            >
+              v
+              1
+            </span>
+          </div>
+          <div
+            class="mono text-text-secondary leading-snug mt-1 text-[11px] line-clamp-2"
+          >
+            Generate the weekly digest for Zedcor across procurement and ops.
+          </div>
+          <div
+            class="flex items-center gap-2 flex-wrap mt-2 mono text-[10.5px] text-text-secondary"
+          >
+            <span
+              class="bg-bg-raised px-1.5 py-0.5 rounded uppercase tracking-wider text-[9px]"
+            >
+              productivity
+            </span>
+            <span
+              aria-label="Lifecycle: approved"
+              class="mono text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded"
+              style="background: rgba(31, 138, 91, 0.1); color: rgb(31, 138, 91);"
+            >
+              approved
+            </span>
+            <span
+              aria-label="12 total runs, 11 succeeded"
+            >
+              12
+               runs
+               · 92%
+            </span>
+            <span
+              aria-label="Decays in 5mo"
+            >
+              decays 
+              in 5mo
+            </span>
+          </div>
+        </div>
+        <div
+          class="flex-shrink-0"
+        >
+          <button
+            aria-label="Invoke seeded_skill_0"
+            class="mono text-[10.5px] font-semibold uppercase tracking-wider px-2.5 py-1 rounded text-white disabled:opacity-40 disabled:cursor-not-allowed"
+            data-testid="now-skills-invoke-s0"
+            style="background: rgb(96, 129, 190);"
+            type="button"
+          >
+            Run
+          </button>
+        </div>
+      </div>
+    </div>
+    <div
+      class="group block w-full text-left rounded-xl border transition-colors p-2.5 border-border-default bg-bg-card hover:border-border-hover"
+      data-testid="skill-card-s1"
+    >
+      <div
+        class="flex items-start gap-2.5"
+      >
+        <span
+          aria-label="Authored by Human"
+          class="mono inline-flex w-5 h-5 rounded-md flex-shrink-0 items-center justify-center text-[10px] font-semibold text-text-secondary bg-bg-raised border border-border-subtle"
+          title="Human"
+        >
+          H
+        </span>
+        <div
+          class="flex-1 min-w-0"
+        >
+          <div
+            class="flex items-center gap-2 flex-wrap"
+          >
+            <span
+              class="mono text-[13px] font-semibold text-text-primary truncate"
+            >
+              seeded_skill_1
+            </span>
+            <span
+              class="mono text-[10px] uppercase tracking-wider text-text-secondary bg-bg-raised px-1.5 py-0.5 rounded"
+            >
+              v
+              1
+            </span>
+          </div>
+          <div
+            class="mono text-text-secondary leading-snug mt-1 text-[11px] line-clamp-2"
+          >
+            Generate the weekly digest for Zedcor across procurement and ops.
+          </div>
+          <div
+            class="flex items-center gap-2 flex-wrap mt-2 mono text-[10.5px] text-text-secondary"
+          >
+            <span
+              class="bg-bg-raised px-1.5 py-0.5 rounded uppercase tracking-wider text-[9px]"
+            >
+              productivity
+            </span>
+            <span
+              aria-label="Lifecycle: approved"
+              class="mono text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded"
+              style="background: rgba(31, 138, 91, 0.1); color: rgb(31, 138, 91);"
+            >
+              approved
+            </span>
+            <span
+              aria-label="12 total runs, 11 succeeded"
+            >
+              12
+               runs
+               · 92%
+            </span>
+            <span
+              aria-label="Decays in 5mo"
+            >
+              decays 
+              in 5mo
+            </span>
+          </div>
+        </div>
+        <div
+          class="flex-shrink-0"
+        >
+          <button
+            aria-label="Invoke seeded_skill_1"
+            class="mono text-[10.5px] font-semibold uppercase tracking-wider px-2.5 py-1 rounded text-white disabled:opacity-40 disabled:cursor-not-allowed"
+            data-testid="now-skills-invoke-s1"
+            style="background: rgb(96, 129, 190);"
+            type="button"
+          >
+            Run
+          </button>
+        </div>
+      </div>
+    </div>
+    <div
+      class="group block w-full text-left rounded-xl border transition-colors p-2.5 border-border-default bg-bg-card hover:border-border-hover"
+      data-testid="skill-card-s2"
+    >
+      <div
+        class="flex items-start gap-2.5"
+      >
+        <span
+          aria-label="Authored by Human"
+          class="mono inline-flex w-5 h-5 rounded-md flex-shrink-0 items-center justify-center text-[10px] font-semibold text-text-secondary bg-bg-raised border border-border-subtle"
+          title="Human"
+        >
+          H
+        </span>
+        <div
+          class="flex-1 min-w-0"
+        >
+          <div
+            class="flex items-center gap-2 flex-wrap"
+          >
+            <span
+              class="mono text-[13px] font-semibold text-text-primary truncate"
+            >
+              seeded_skill_2
+            </span>
+            <span
+              class="mono text-[10px] uppercase tracking-wider text-text-secondary bg-bg-raised px-1.5 py-0.5 rounded"
+            >
+              v
+              1
+            </span>
+          </div>
+          <div
+            class="mono text-text-secondary leading-snug mt-1 text-[11px] line-clamp-2"
+          >
+            Generate the weekly digest for Zedcor across procurement and ops.
+          </div>
+          <div
+            class="flex items-center gap-2 flex-wrap mt-2 mono text-[10.5px] text-text-secondary"
+          >
+            <span
+              class="bg-bg-raised px-1.5 py-0.5 rounded uppercase tracking-wider text-[9px]"
+            >
+              productivity
+            </span>
+            <span
+              aria-label="Lifecycle: approved"
+              class="mono text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded"
+              style="background: rgba(31, 138, 91, 0.1); color: rgb(31, 138, 91);"
+            >
+              approved
+            </span>
+            <span
+              aria-label="12 total runs, 11 succeeded"
+            >
+              12
+               runs
+               · 92%
+            </span>
+            <span
+              aria-label="Decays in 5mo"
+            >
+              decays 
+              in 5mo
+            </span>
+          </div>
+        </div>
+        <div
+          class="flex-shrink-0"
+        >
+          <button
+            aria-label="Invoke seeded_skill_2"
+            class="mono text-[10.5px] font-semibold uppercase tracking-wider px-2.5 py-1 rounded text-white disabled:opacity-40 disabled:cursor-not-allowed"
+            data-testid="now-skills-invoke-s2"
+            style="background: rgb(96, 129, 190);"
+            type="button"
+          >
+            Run
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+`;
