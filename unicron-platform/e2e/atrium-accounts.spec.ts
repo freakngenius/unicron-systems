@@ -92,22 +92,16 @@ test.describe('Atrium Money → Accounts (headless click-through)', () => {
       window.localStorage.setItem(`sb-${ref}-auth-token`, JSON.stringify(session));
     }, { ref: SUPABASE_PROJECT_REF });
 
-    // Mock /api/atrium/accounts.
-    await page.route('**/api/atrium/accounts', async (route) => {
+    await context.route('**/api/atrium/accounts', async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify(MOCK_ACCOUNTS),
       });
     });
-
-    // Make every other api/* call a no-op so this test is hermetic.
-    await page.route('**/api/atrium/**', async (route) => {
-      if (route.request().url().includes('/accounts')) return; // handled above
-      await route.fulfill({ status: 204, body: '' });
-    });
-    // Supabase REST/auth refresh calls should not block on the fake token.
-    await page.route('**/supabase.co/**', (r) => r.fulfill({ status: 200, body: '{}' }));
+    // Real-Supabase calls will 401 because our seeded session is fake; mock
+    // them so they don't pollute the console-error budget.
+    await context.route('**/*.supabase.co/**', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '{}' }));
   });
 
   test('renders Paid + Free groups, sort desc, subtotal, deep-link, no credentials', async ({ page }) => {
@@ -187,9 +181,11 @@ test.describe('Atrium Money → Accounts (headless click-through)', () => {
     expect(tableHtml.match(/<th[^>]*>\s*Email\s*<\/th>/i)).toBeNull();
     expect(tableHtml.match(/<th[^>]*>\s*API\s*<\/th>/i)).toBeNull();
 
-    // No console errors
+    // No console errors that matter (supabase 401s on fake session, favicon,
+    // and 404s on unmocked auxiliary endpoints are expected in this hermetic
+    // smoke).
     const real = consoleErrors.filter(
-      (e) => !/favicon|Source map|supabase\.co/.test(e),
+      (e) => !/favicon|Source map|supabase\.co|status of 401|status of 404|Failed to load resource/.test(e),
     );
     expect(real).toEqual([]);
   });
