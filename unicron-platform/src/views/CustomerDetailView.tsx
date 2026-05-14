@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { getOrgHealth } from '../lib/customersClient';
 import type { CustomerOrg, OrgHealthRollup } from '../lib/contracts/customers';
 import { HealthMetricCard } from '../components/HealthMetricCard';
 import { MiniSparkline } from '../components/MiniSparkline';
+import { ArchitectHistoryTab } from './ArchitectHistoryTab';
 import {
   OPEN_PATHFINDER_ENABLED,
   STATUS_LABEL,
@@ -15,9 +16,12 @@ interface Props {
   onBack: () => void;
 }
 
+type DetailTab = 'overview' | 'architect_history';
+
 export function CustomerDetailView({ org, onBack }: Props) {
   const [health, setHealth] = useState<OrgHealthRollup | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<DetailTab>('overview');
 
   useEffect(() => {
     let cancelled = false;
@@ -96,7 +100,31 @@ export function CustomerDetailView({ org, onBack }: Props) {
         )}
       </header>
 
-      {error ? (
+      <nav
+        data-testid="customer-detail-tabs"
+        role="tablist"
+        aria-label="Customer detail sections"
+        className="flex items-center gap-1 border-b border-border-default mb-6"
+      >
+        <TabButton
+          tabId="overview"
+          active={activeTab === 'overview'}
+          onClick={() => setActiveTab('overview')}
+        >
+          OVERVIEW
+        </TabButton>
+        <TabButton
+          tabId="architect_history"
+          active={activeTab === 'architect_history'}
+          onClick={() => setActiveTab('architect_history')}
+        >
+          ARCHITECT HISTORY
+        </TabButton>
+      </nav>
+
+      {activeTab === 'architect_history' ? (
+        <ArchitectHistoryTab orgSlug={org.slug} />
+      ) : error ? (
         <p data-testid="customer-detail-error" className="mono text-[11px] uppercase tracking-[0.18em] text-rose-400">
           {error}
         </p>
@@ -252,6 +280,37 @@ function SparklineCard({
       </div>
       <MiniSparkline data={data} stroke={stroke} fill={fill} ariaLabel={label} />
     </div>
+  );
+}
+
+function TabButton({
+  tabId,
+  active,
+  onClick,
+  children,
+}: {
+  tabId: string;
+  active: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={active}
+      data-testid={`customer-detail-tab-${tabId}`}
+      data-active={active ? 'true' : 'false'}
+      onClick={onClick}
+      className={[
+        'mono text-[10px] uppercase tracking-[0.18em] px-3 py-2 transition-colors border-b-2',
+        active
+          ? 'text-text-primary border-text-primary'
+          : 'text-text-primary/50 border-transparent hover:text-text-primary/80',
+      ].join(' ')}
+    >
+      {children}
+    </button>
   );
 }
 
