@@ -44,6 +44,7 @@ import {
   trendScoutFnRun,
   researcherBriefRun,
   pipelineOperatorFnRun,
+  pipeHunterFnRun,
 } from '../lib/agents/inngest-fns.js';
 
 // Disable Vercel's automatic JSON body parsing — inngest/node reads the raw stream.
@@ -104,5 +105,7 @@ export default serve({
     researcherBriefRun,
     // Pipeline Operator (Sprint 7.5 reification — 2026-05-13)
     pipelineOperatorFnRun,
+    // Pipe Hunter (Sprint 7.5 reification — 2026-05-13)
+    pipeHunterFnRun,
   ],
 });

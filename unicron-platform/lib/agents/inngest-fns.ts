@@ -659,3 +659,17 @@ export const pipelineOperatorFnRun = inngest.createFunction(
     return step.run('pipeline-operator', () => pipelineOperatorRun({ forDate }));
   },
 );
+
+// ---------------------------------------------------------------------------
+// Pipe Hunter — Sprint 7.5 reification
+// ---------------------------------------------------------------------------
+
+export const pipeHunterFnRun = inngest.createFunction(
+  { id: 'pipe-hunter-run', name: 'Pipe Hunter Run', retries: 1 },
+  { event: 'pipe-hunter/run' },
+  async ({ event, step }) => {
+    const { pipeHunterRun } = await import('./pipe-hunter.js');
+    const forDate = (event.data as { for_date?: string } | undefined)?.for_date;
+    return step.run('pipe-hunter', () => pipeHunterRun({ forDate }));
+  },
+);
