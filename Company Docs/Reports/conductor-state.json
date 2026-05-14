@@ -1,6 +1,22 @@
 {
   "current_sprint": 6,
   "last_completed_sprint": 5,
+  "sprint_7_5_phase_2_completion": {
+    "completed_at": "2026-05-14T02:40:18Z",
+    "final_audit_log_id": "5fc759c0-3862-4d8f-a753-9c60eadef993",
+    "parent_kanban_card": "35f785c6-7e72-81a7-bd8e-f465d352dd66",
+    "child_cards": [
+      { "agent": "Janitor",           "id": "360785c6-7e72-8106-9d0b-de7fc83fe7f9", "url": "https://www.notion.so/360785c67e7281069d0bde7fc83fe7f9", "pr": 401, "audit_log_id": "476421f6-2c49-4644-abe8-d77e8e8e49c0" },
+      { "agent": "Curator",           "id": "360785c6-7e72-81b5-aa17-c686648ca6a0", "url": "https://www.notion.so/360785c67e7281b5aa17c686648ca6a0", "pr": 403, "audit_log_id": "ccae0f07-7c9f-4af1-a806-71dccdf57ba9" },
+      { "agent": "Boundary",          "id": "360785c6-7e72-816d-996b-fdf4f00be9c5", "url": "https://www.notion.so/360785c67e72816d996bfdf4f00be9c5", "pr": 405, "audit_log_id": "a90c3d72-24e5-468d-a8cb-6fa8988bfe3f" },
+      { "agent": "Trend Scout",       "id": "360785c6-7e72-8138-a534-d5730877ed73", "url": "https://www.notion.so/360785c67e728138a534d5730877ed73", "pr": 406, "audit_log_id": "837b1f63-891b-4b08-ba5f-40d21354a325" },
+      { "agent": "Researcher",        "id": "360785c6-7e72-818b-9634-c5d2abcf0e88", "url": "https://www.notion.so/360785c67e72818b9634c5d2abcf0e88", "pr": 407, "audit_log_id": "524875fc-5a03-49af-810c-508ddba26c02" },
+      { "agent": "Pipeline Operator", "id": "360785c6-7e72-8178-871c-dd5035c32c46", "url": "https://www.notion.so/360785c67e728178871cdd5035c32c46", "pr": 409, "audit_log_id": "4737a30f-3ce6-4f16-957e-61abf59fe244" },
+      { "agent": "Pipe Hunter",       "id": "360785c6-7e72-81d1-8e03-c631bafa2266", "url": "https://www.notion.so/360785c67e7281d18e03c631bafa2266", "pr": 410, "audit_log_id": "716f0c02-8034-4a94-9421-78a849561769" },
+      { "symptom": "Symptom 1 (Analyst digest)", "id": "360785c6-7e72-8181-9aa4-d39ff7efe900", "url": "https://www.notion.so/360785c67e7281819aa4d39ff7efe900", "prs": [397, 399], "audit_log_id": "673ff975-a74c-47da-80bf-56abf14ee61e" },
+      { "symptom": "Symptom 2 (Call upload fan-out)", "id": "360785c6-7e72-8183-82ff-d86e7b6d6304", "url": "https://www.notion.so/360785c67e72818382ffd86e7b6d6304", "prs": [396, 399], "audit_log_id": "41a760ad-5e1b-4a53-85b4-a1b354f3802b" }
+    ]
+  },
   "last_completed_at": "2026-05-10T06:31:09Z",
   "active_sprint_status": "deployed",
   "sprint_5_status": "verified",
@@ -477,5 +493,43 @@
       "workaround": "Failures exist on origin/main (bad2d61) before Sprint 4 branches. Not introduced by any Sprint 4 stream.",
       "impact": "Vercel Pathfinder builds may show warnings; functional correctness unaffected"
     }
-  ]
+  ],
+  "sprint_8_started_at": "2026-05-13T00:00:00Z",
+  "sprint_8_audit_log_id": "b3754392-c88b-43e0-ae86-6b0688abdc4d",
+  "sprint_8_note": "Atrium Usefulness Pass. All 9 features shipped with own PR. PR #379 (merged 2026-05-12) shipped F2 + F8 to spec; Sprint 8 added 7 fresh PRs (#398, #400, #402, #404, #408, #411, #412) for the gaps. Parent stays In Process pending Kyle merge of the 7 fresh PRs; Verified is human-only.",
+  "sprint_8_kanban": {
+    "sprint_card_id": "360785c6-7e72-8158-aba4-f9fe474d058a",
+    "sprint_card_status": "In Process",
+    "child_cards": {
+      "F1": { "id": "360785c6-7e72-8124-9a51-c05516e77ee2", "title": "F1 — File Uploads", "status": "Review", "pr": "https://github.com/freakngenius/unicron-systems/pull/408", "sha": "ab44b65", "migration_applied": "20260513_uploads_bucket" },
+      "F2": { "id": "360785c6-7e72-818f-9ad5-fe2d1516db08", "title": "F2 — Decisions unification", "status": "Deployed", "pr": "https://github.com/freakngenius/unicron-systems/pull/379" },
+      "F3": { "id": "360785c6-7e72-8177-900b-f37a7fe32d85", "title": "F3 — 5AM PT cron + vault morning.md", "status": "Review", "pr": "https://github.com/freakngenius/unicron-systems/pull/398", "sha": "09ba746" },
+      "F4": { "id": "360785c6-7e72-8135-8888-fe88c94748b4", "title": "F4 — /settings/connections route", "status": "Review", "pr": "https://github.com/freakngenius/unicron-systems/pull/411", "sha": "88e78db", "migration_applied": "20260513_connections_route" },
+      "F5": { "id": "360785c6-7e72-814f-acea-e31e54c0fad7", "title": "F5 — action_items.completed + auto-completion", "status": "Review", "pr": "https://github.com/freakngenius/unicron-systems/pull/402", "sha": "0d24c67", "migration_applied": "20260513_action_items_completed" },
+      "F6": { "id": "360785c6-7e72-8171-88d3-d5b756e102fc", "title": "F6 — preferred_channels filter", "status": "Review", "pr": "https://github.com/freakngenius/unicron-systems/pull/404", "sha": "a65d5b8", "migration_applied": "20260513_preferred_channels_rpcs" },
+      "F7": { "id": "360785c6-7e72-8152-b8ae-fad14e3b1d6b", "title": "F7 — 3hr cron PT + pulse vault", "status": "Review", "pr": "https://github.com/freakngenius/unicron-systems/pull/400", "sha": "71aebf4" },
+      "F8": { "id": "360785c6-7e72-8198-84c0-e9eb9c37cb7e", "title": "F8 — Activity Feed verify", "status": "Deployed", "pr": "https://github.com/freakngenius/unicron-systems/pull/379" },
+      "F9": { "id": "360785c6-7e72-8112-88d6-ee0b148af8b6", "title": "F9 — Top-bar rewrite + phone-icon", "status": "Review", "pr": "https://github.com/freakngenius/unicron-systems/pull/412", "sha": "8616bad" }
+    },
+    "sprint_8_summary": {
+      "shipped": 9,
+      "hard_halts": 0,
+      "fresh_prs": [
+        "https://github.com/freakngenius/unicron-systems/pull/398",
+        "https://github.com/freakngenius/unicron-systems/pull/400",
+        "https://github.com/freakngenius/unicron-systems/pull/402",
+        "https://github.com/freakngenius/unicron-systems/pull/404",
+        "https://github.com/freakngenius/unicron-systems/pull/408",
+        "https://github.com/freakngenius/unicron-systems/pull/411",
+        "https://github.com/freakngenius/unicron-systems/pull/412"
+      ],
+      "verified_existing": ["#379 covers F2 + F8"],
+      "migrations_applied_live": [
+        "20260513_action_items_completed",
+        "20260513_preferred_channels_rpcs",
+        "20260513_uploads_bucket",
+        "20260513_connections_route"
+      ]
+    }
+  }
 }

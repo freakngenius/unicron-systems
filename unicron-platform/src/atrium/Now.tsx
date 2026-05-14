@@ -848,7 +848,10 @@ function AnalystVaultDigest({ date }: { date: string }) {
     setLoading(true);
     setContent(null);
 
-    const url = `https://raw.githubusercontent.com/freakngenius/unicron-knowledge/main/wiki/memory/analyst/${date}.md`;
+    // Sprint 7.5 Symptom 1 follow-up: route through server-side proxy so the
+    // private vault repo is readable. The proxy uses GITHUB_VAULT_TOKEN; the
+    // public raw.githubusercontent.com URL 404s for anon traffic.
+    const url = `/api/atrium/vault-read?path=${encodeURIComponent(`wiki/memory/analyst/${date}.md`)}`;
     fetch(url)
       .then((res) => {
         if (!res.ok) throw new Error(`${res.status}`);
