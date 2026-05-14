@@ -533,7 +533,9 @@ function ActionItemCard({ item }: { item: ActionItemRow }) {
     setDone(true); // optimistic
     try {
       const { patchActionItem } = await import('../../lib/actionItemsClient');
-      await patchActionItem(item.id, { closed: true, status: 'done' });
+      // Sprint 8 F5: flip the explicit completion columns alongside status.
+      // completed_by defaults to 'atrium-ui' server-side when not supplied.
+      await patchActionItem(item.id, { completed: true, status: 'done' });
     } catch (e2) {
       setDone(false);
       setErr(e2 instanceof Error ? e2.message : 'failed');

@@ -27,6 +27,9 @@ export interface ActionItemPatch {
   status?: 'open' | 'in_progress' | 'done' | 'blocked' | 'broken_off';
   deferred_to?: string;
   closed?: boolean;
+  // Sprint 8 F5: explicit completion. UI checkbox toggle path.
+  completed?: boolean;
+  completed_by?: string;
 }
 
 export interface ActionItemPatched {
@@ -35,6 +38,9 @@ export interface ActionItemPatched {
   status: string;
   dri: string | null;
   updated_at: string;
+  completed?: boolean;
+  completed_at?: string | null;
+  completed_by?: string | null;
 }
 
 /**
