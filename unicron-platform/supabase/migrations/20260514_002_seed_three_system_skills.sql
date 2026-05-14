@@ -38,9 +38,9 @@
 --      unique strings to enable a deterministic sed pass:
 --
 --        sed -i '' \
---          -e "s/9aaa0000-0000-0000-0000-000000000001/<REAL-ID-1>/" \
---          -e "s/9aaa0000-0000-0000-0000-000000000002/<REAL-ID-2>/" \
---          -e "s/9aaa0000-0000-0000-0000-000000000003/<REAL-ID-3>/" \
+--          -e "s/dc483fc5-a5c9-467d-a440-dbbce519f8a0/<REAL-ID-1>/" \
+--          -e "s/3e6b0a27-06a7-4095-8a75-ab9ee3193412/<REAL-ID-2>/" \
+--          -e "s/350a40f9-f738-4766-b124-ae33d96ca069/<REAL-ID-3>/" \
 --          20260514_002_seed_three_system_skills.sql
 --
 --   3. Applies via Supabase MCP apply_migration with the patched file.
@@ -168,7 +168,7 @@ Return: { posted: bool, slack_ts: string|null, email_message_ids: string[], ledg
   '7715cb75-8192-42c5-8eff-6fe77dd2f62a'::uuid,  -- Kyle Kesterson
   '7715cb75-8192-42c5-8eff-6fe77dd2f62a'::uuid,
   now(),
-  '9aaa0000-0000-0000-0000-000000000001'::uuid,  -- PLACEHOLDER: conductor patches before apply
+  'dc483fc5-a5c9-467d-a440-dbbce519f8a0'::uuid,  -- PLACEHOLDER: conductor patches before apply
   '[]'::jsonb,
   NULL  -- system Skill, not tenant-scoped
 )
@@ -297,7 +297,7 @@ REFUSAL CASES
   '7715cb75-8192-42c5-8eff-6fe77dd2f62a'::uuid,
   '7715cb75-8192-42c5-8eff-6fe77dd2f62a'::uuid,
   now(),
-  '9aaa0000-0000-0000-0000-000000000002'::uuid,  -- PLACEHOLDER: conductor patches before apply
+  '3e6b0a27-06a7-4095-8a75-ab9ee3193412'::uuid,  -- PLACEHOLDER: conductor patches before apply
   '[]'::jsonb,
   NULL
 )
@@ -421,7 +421,7 @@ REFUSAL CASES
   '7715cb75-8192-42c5-8eff-6fe77dd2f62a'::uuid,
   '7715cb75-8192-42c5-8eff-6fe77dd2f62a'::uuid,
   now(),
-  '9aaa0000-0000-0000-0000-000000000003'::uuid,  -- PLACEHOLDER: conductor patches before apply
+  '350a40f9-f738-4766-b124-ae33d96ca069'::uuid,  -- PLACEHOLDER: conductor patches before apply
   '[]'::jsonb,
   NULL
 )
