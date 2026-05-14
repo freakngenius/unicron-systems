@@ -112,7 +112,7 @@ INSERT INTO nervous_system.skills (
 VALUES (
   'run_zedcor_weekly_digest',
   'Generate the weekly Zedcor account digest: pipeline movement, open action items, scored leads delta, fresh signals, blockers needing Kyle/Keenan attention. Posts to #zedcor-internal and emails the digest summary to Kyle.',
-  'customer-success',
+  'operations',
   'scheduled',
   '[
     {"name":"week_ending","type":"date","required":false,"description":"ISO date for the end of the week to summarize. Defaults to today (PT)."},
