@@ -407,6 +407,13 @@ export function CallsLog() {
     writePersistedFilter(participantFilter);
   }, [participantFilter]);
 
+  // Sprint 8 F9: open the modal when the topbar phone-icon button dispatches.
+  useEffect(() => {
+    const handler = () => setUploadOpen(true);
+    window.addEventListener('atrium:open-upload-call', handler);
+    return () => window.removeEventListener('atrium:open-upload-call', handler);
+  }, []);
+
   const calls = participantFilter === 'all'
     ? rawCalls
     : rawCalls.filter((row) => getParticipantList(row).includes(participantFilter));
