@@ -588,3 +588,17 @@ export const janitorSweepRun = inngest.createFunction(
     return step.run('janitor-sweep', () => janitorSweep({ forDate }));
   },
 );
+
+// ---------------------------------------------------------------------------
+// Curator — Sprint 7.5 reification
+// ---------------------------------------------------------------------------
+
+export const curatorSweepRun = inngest.createFunction(
+  { id: 'curator-sweep-run', name: 'Curator Sweep Run', retries: 1 },
+  { event: 'curator/sweep.run' },
+  async ({ event, step }) => {
+    const { curatorSweep } = await import('./curator.js');
+    const forDate = (event.data as { for_date?: string } | undefined)?.for_date;
+    return step.run('curator-sweep', () => curatorSweep({ forDate }));
+  },
+);
