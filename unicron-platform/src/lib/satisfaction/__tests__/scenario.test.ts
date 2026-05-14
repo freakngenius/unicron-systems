@@ -152,6 +152,42 @@ describe('parseScenario — irreversible priority preserves tighter threshold', 
   });
 });
 
+const BLOCK_LIST = `---
+type: scenario
+surface: skills-procedural-memory
+status: draft
+priority: production-gate
+created: 2026-05-14
+last_validated: null
+satisfaction_threshold: 0.85
+ttl_days: permanent
+related_specs:
+  - Company Docs/Specs/SPEC - Nervous System Addendum 5 (Procedural Memory Layer).md
+  - Company Docs/Specs/SPEC - Nervous System Addendum 4 (Scenarios + Satisfaction + DTU).md
+---
+
+# Block list scenario
+
+## Expected behavior
+Parser accepts YAML block-style lists for related_specs.
+`;
+
+describe('parseScenario — YAML block-list related_specs', () => {
+  const scenario = parseScenario(BLOCK_LIST, '/vault/wiki/scenarios/procedural-memory/block.md');
+
+  it('parses block-style related_specs into a string array', () => {
+    expect(scenario.frontmatter.related_specs).toEqual([
+      'Company Docs/Specs/SPEC - Nervous System Addendum 5 (Procedural Memory Layer).md',
+      'Company Docs/Specs/SPEC - Nervous System Addendum 4 (Scenarios + Satisfaction + DTU).md',
+    ]);
+  });
+
+  it('still parses scalar fields around the block list', () => {
+    expect(scenario.frontmatter.satisfaction_threshold).toBe(0.85);
+    expect(scenario.frontmatter.ttl_days).toBe('permanent');
+  });
+});
+
 describe('parseScenario — error cases', () => {
   it('throws when frontmatter delimiter is missing', () => {
     expect(() => parseScenario('# no frontmatter here', '/x.md')).toThrow(ScenarioParseError);
