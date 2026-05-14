@@ -188,91 +188,116 @@ export function ArchitectThinking({ buyerPain, onApprove }: Props) {
     // On success, the parent navigates away — no need to clear local state.
   };
 
+  // SPEC v2 layout (Company Docs/Metacron/SPEC - Architect Canvas Flowchart.md
+  // "UI Layout v2"):
+  //   - LEFT 1/3 = text (BusinessSummaryPanel + decomposition stream)
+  //   - RIGHT 2/3 = canvas flowchart
+  //   - Both panes full-height, edge-attached (no floating-card margins)
+  //   - Left pane scrolls internally on overflow; right is the canvas viewport
+  //   - "ARCHITECT · THINKING ..." label is a loading state only — gone once
+  //     the decomposition completes (`done`)
+  const showThinkingLabel = !done && !editing;
+
   return (
-    <div className="w-full max-w-[1180px] px-6 grid grid-cols-1 lg:grid-cols-[3fr_2fr] gap-10 items-start py-12">
-      <div className="flex flex-col">
-        <div className="relative w-full h-[520px]">
-          <ArchitectCanvas
-            architecture={response?.architecture ?? null}
-            loadingLabel={
-              error
-                ? 'Architect · decomposition failed'
-                : !response
-                ? 'Architect · decomposing'
-                : undefined
-            }
+    <div
+      data-testid="architect-thinking-v2"
+      className="grid grid-cols-[1fr_2fr] w-full h-[calc(100vh-56px)] bg-bg-base"
+    >
+      {/* LEFT PANE — text, internal scroll on overflow */}
+      <div
+        data-testid="architect-thinking-text-pane"
+        className="h-full overflow-y-auto border-r border-border-default bg-bg-card"
+      >
+        <div className="flex flex-col gap-6 px-6 py-6">
+          <BusinessSummaryPanel
+            summary={summaryToRender}
+            customerName={customerDisplayName}
+            onEdit={handleSummaryEdit}
+            status={summaryStatus}
+            errorMessage={summaryErrorMessage}
           />
-        </div>
-        <div className="mt-6 mono text-[11px] uppercase tracking-[0.22em] text-accent-gold flex items-center gap-1">
-          <span>{editing ? 'ARCHITECT · EDITING' : 'ARCHITECT · THINKING'}</span>
-          {!editing && <Ellipsis />}
+
+          <div className="bg-bg-card border border-border-default rounded-lg p-5">
+            <div
+              data-testid="architect-thinking-label"
+              className="mono text-[11px] uppercase tracking-[0.22em] text-accent-gold mb-4 flex items-center gap-1"
+            >
+              <span>
+                {editing
+                  ? 'ARCHITECT · EDIT ARCHITECTURE'
+                  : done
+                  ? 'ARCHITECT · DECOMPOSITION'
+                  : 'ARCHITECT · DECOMPOSING'}
+              </span>
+              {showThinkingLabel && <Ellipsis />}
+            </div>
+
+            {error && (
+              <div className="mono text-[11px] text-accent-magenta border border-accent-magenta/40 rounded-md p-3 mb-3">
+                architect error: {error}
+              </div>
+            )}
+
+            {editing && response ? (
+              <ArchitectureEditor
+                architecture={response.architecture}
+                onApply={handleApply}
+                onCancel={() => setEditing(false)}
+              />
+            ) : (
+              <>
+                <pre className="mono text-[12px] leading-[1.65] text-text-primary whitespace-pre-wrap">
+                  {lines.slice(0, revealed).map((line, i) => (
+                    <Line key={i} text={line} />
+                  ))}
+                  {!done && !error && (
+                    <span className="inline-block w-[6px] h-[12px] bg-accent-gold align-baseline animate-pulseDot" />
+                  )}
+                </pre>
+
+                <div className="flex gap-3 mt-6 flex-wrap">
+                  <button
+                    type="button"
+                    disabled={!done}
+                    onClick={handleApprove}
+                    className={[
+                      'bg-accent-primary text-white mono text-[12px] tracking-[0.12em] uppercase py-3 px-5 rounded-md transition-all',
+                      done ? 'hover:bg-accent-primary/90' : 'opacity-40 cursor-not-allowed',
+                    ].join(' ')}
+                  >
+                    APPROVE & DEPLOY
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!response}
+                    onClick={() => setEditing(true)}
+                    className={[
+                      'border border-border-default text-text-primary mono text-[12px] tracking-[0.12em] uppercase py-3 px-5 rounded-md transition-colors',
+                      response ? 'hover:border-border-hover' : 'opacity-40 cursor-not-allowed',
+                    ].join(' ')}
+                  >
+                    EDIT ARCHITECTURE
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
-      <div className="flex flex-col gap-6">
-        <BusinessSummaryPanel
-          summary={summaryToRender}
-          customerName={customerDisplayName}
-          onEdit={handleSummaryEdit}
-          status={summaryStatus}
-          errorMessage={summaryErrorMessage}
+      {/* RIGHT PANE — full-height canvas */}
+      <div data-testid="architect-thinking-canvas-pane" className="h-full w-full relative">
+        <ArchitectCanvas
+          architecture={response?.architecture ?? null}
+          loadingLabel={
+            error
+              ? 'Architect · decomposition failed'
+              : !response
+              ? 'Architect · decomposing'
+              : undefined
+          }
+          edgeAttached
         />
-
-        <div className="bg-bg-card border border-border-default rounded-lg p-6">
-        <div className="mono text-[11px] uppercase tracking-[0.22em] text-accent-gold mb-4">
-          {editing ? 'ARCHITECT · EDIT ARCHITECTURE' : 'ARCHITECT · DECOMPOSING'}
-        </div>
-
-        {error && (
-          <div className="mono text-[11px] text-accent-magenta border border-accent-magenta/40 rounded-md p-3 mb-3">
-            architect error: {error}
-          </div>
-        )}
-
-        {editing && response ? (
-          <ArchitectureEditor
-            architecture={response.architecture}
-            onApply={handleApply}
-            onCancel={() => setEditing(false)}
-          />
-        ) : (
-          <>
-            <pre className="mono text-[12px] leading-[1.65] text-text-primary whitespace-pre-wrap min-h-[420px]">
-              {lines.slice(0, revealed).map((line, i) => (
-                <Line key={i} text={line} />
-              ))}
-              {!done && !error && (
-                <span className="inline-block w-[6px] h-[12px] bg-accent-gold align-baseline animate-pulseDot" />
-              )}
-            </pre>
-
-            <div className="flex gap-3 mt-6">
-              <button
-                type="button"
-                disabled={!done}
-                onClick={handleApprove}
-                className={[
-                  'bg-accent-primary text-white mono text-[12px] tracking-[0.12em] uppercase py-3 px-5 rounded-md transition-all',
-                  done ? 'hover:bg-accent-primary/90' : 'opacity-40 cursor-not-allowed',
-                ].join(' ')}
-              >
-                APPROVE & DEPLOY
-              </button>
-              <button
-                type="button"
-                disabled={!response}
-                onClick={() => setEditing(true)}
-                className={[
-                  'border border-border-default text-text-primary mono text-[12px] tracking-[0.12em] uppercase py-3 px-5 rounded-md transition-colors',
-                  response ? 'hover:border-border-hover' : 'opacity-40 cursor-not-allowed',
-                ].join(' ')}
-              >
-                EDIT ARCHITECTURE
-              </button>
-            </div>
-          </>
-        )}
-        </div>
       </div>
 
       {pending ? (
