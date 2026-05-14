@@ -26,6 +26,31 @@ export function Onboarding({ onOpenLive, onCustomerCreated }: Props) {
   const [createdOrg, setCreatedOrg] = useState<CustomerOrg | null>(null);
   const { deploy, resetToUnconfigured } = useSystem();
 
+  // The `thinking` state renders its own full-viewport edge-attached layout
+  // (left text pane + right canvas), so it must NOT be wrapped in the centering
+  // flex container that the other states use.
+  if (state === 'thinking') {
+    return (
+      <ArchitectThinking
+        buyerPain={prompt}
+        onApprove={async (config, meta: ApproveMeta) => {
+          // Apply the architecture so BuildingCluster can derive its
+          // scripted timeline (data sources, agents) from real config.
+          deploy(config);
+          // Persist the new customer org. Throws SlugConflictError on
+          // collision; ArchitectThinking surfaces the message in the modal.
+          const org = await createCustomerOrg({
+            name: meta.name,
+            slug: meta.slug,
+            architecture: meta.architecture,
+          });
+          setCreatedOrg(org);
+          setState('building');
+        }}
+      />
+    );
+  }
+
   return (
     <div className="min-h-[calc(100vh-56px)] flex items-center justify-center">
       {state === 'define' && (
@@ -35,25 +60,6 @@ export function Onboarding({ onOpenLive, onCustomerCreated }: Props) {
             // Going into thinking — keep config unconfigured so visualizer renders empty.
             resetToUnconfigured();
             window.setTimeout(() => setState('thinking'), 1200);
-          }}
-        />
-      )}
-      {state === 'thinking' && (
-        <ArchitectThinking
-          buyerPain={prompt}
-          onApprove={async (config, meta: ApproveMeta) => {
-            // Apply the architecture so BuildingCluster can derive its
-            // scripted timeline (data sources, agents) from real config.
-            deploy(config);
-            // Persist the new customer org. Throws SlugConflictError on
-            // collision; ArchitectThinking surfaces the message in the modal.
-            const org = await createCustomerOrg({
-              name: meta.name,
-              slug: meta.slug,
-              architecture: meta.architecture,
-            });
-            setCreatedOrg(org);
-            setState('building');
           }}
         />
       )}

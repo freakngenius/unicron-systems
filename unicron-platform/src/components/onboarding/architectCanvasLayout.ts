@@ -21,9 +21,14 @@ export type ArchitectNodeData = {
   detail: ArchitectNodeDetail;
 };
 
-const ROW_GAP_Y = 130;
-const COL_GAP_X = 220;
-const ROW_TOP_Y = 40;
+// Spacing — SPEC v2 increase. Side-by-side nodes inside a layer used to overlap
+// at 220px gap (rectangle nodes are min-width 160px and can render ~180-200px
+// once a sublabel wraps). Bump horizontal gap so the widest plausible rect
+// leaves clear daylight to its neighbor, and bump the vertical gap so edge
+// bends stay legible and the dashboard circle doesn't crowd the layer above.
+const ROW_GAP_Y = 200;
+const COL_GAP_X = 320;
+const ROW_TOP_Y = 60;
 
 function spreadX(count: number): number[] {
   if (count <= 0) return [];

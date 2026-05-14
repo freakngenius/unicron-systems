@@ -36,6 +36,12 @@ type Props = {
   architecture: DecompositionArchitecture | null;
   /** Optional placeholder shown when the architecture has not yet streamed in. */
   loadingLabel?: string;
+  /**
+   * When true the canvas drops its rounded border + radius so it can be
+   * flush-attached to the edge of a layout pane (SPEC v2). When omitted the
+   * canvas renders as a standalone card with a v3 border (back-compat).
+   */
+  edgeAttached?: boolean;
 };
 
 const nodeTypes: NodeTypes = {
@@ -44,7 +50,7 @@ const nodeTypes: NodeTypes = {
   dashboard: DashboardNode,
 };
 
-export function ArchitectCanvas({ architecture, loadingLabel }: Props) {
+export function ArchitectCanvas({ architecture, loadingLabel, edgeAttached }: Props) {
   const { nodes, edges } = useMemo(() => {
     if (!architecture) return { nodes: [], edges: [] };
     return buildArchitectGraph(architecture);
@@ -65,11 +71,11 @@ export function ArchitectCanvas({ architecture, loadingLabel }: Props) {
       style={{
         width: '100%',
         height: '100%',
-        minHeight: 420,
+        minHeight: edgeAttached ? 0 : 420,
         position: 'relative',
         background: 'var(--v3-bg-soft)',
-        border: '1px solid var(--v3-line)',
-        borderRadius: 12,
+        border: edgeAttached ? 'none' : '1px solid var(--v3-line)',
+        borderRadius: edgeAttached ? 0 : 12,
         overflow: 'hidden',
       }}
     >
