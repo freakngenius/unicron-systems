@@ -10,6 +10,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { getSupabase } from '../lib/supabase';
+import { SettingsConnections } from './SettingsConnections';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -323,6 +324,10 @@ export function Settings({ memberId, onClose }: SettingsProps) {
       <Section title="Connections">
         <ConnectionsBlock memberId={memberId} />
       </Section>
+
+      {/* Sprint 8 F4: /settings/connections — 5 OAuth integrations from
+          nervous_system.connected_services where category='integration'. */}
+      <SettingsConnections />
 
       {/* Email + Push */}
       <Section title="Email & push">
