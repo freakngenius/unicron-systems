@@ -111,6 +111,23 @@ export interface CrossPollinationContext {
   active_site_count: number;
   most_recent_site_date: string | null;
   national_account: boolean;
+  /** The raw text on the lead that triggered the match (e.g.
+   *  "BIG-D CONSTRUCTION CORP" pulled from raw_payload.prime_contractor).
+   *  Used by the prompt to bridge the lead -> existing-customer narrative:
+   *  "the prime on your project, Big-D, is one of ours." Optional —
+   *  legacy callers that don't fetch this field pass null. */
+  matched_value_raw?: string | null;
+  /** Top-N representative jobsites Zedcor has secured for this customer,
+   *  pulled from `zedcor_customer_sites` (most-recent active first, cap
+   *  3). The prompt instructs the model to name ONE of these by name in
+   *  the email opening alongside a specific project detail on the lead.
+   *  Empty / undefined falls back to the generic warm-intro template. */
+  representative_sites?: Array<{
+    site_name: string;
+    city: string | null;
+    state: string | null;
+    customer_name_raw: string;
+  }> | null;
 }
 
 export interface OutreachBundle {
@@ -419,19 +436,33 @@ export function buildOutreachUserPrompt(args: DraftOutreachArgs): string {
   // open with the relationship reference. The check here is "engine
   // confirmed match," not the looser warmCustomer hint above — both can
   // populate, but the engine block is the canonical source.
+  //
+  // When representative_sites is populated (sourced from
+  // pathfinder.zedcor_customer_sites via fetchRepresentativeSites), the
+  // prompt asks the model to NAME a specific past jobsite by name in
+  // the email opening. That's what makes the warm intro feel personable
+  // instead of corporate ("we've already worked together on <site>" vs
+  // "we have an existing relationship with your contractor").
   if (crossPollination && crossPollination.length > 0) {
     const top = crossPollination[0];
-    const customerName = titleCaseCustomer(top.customer_canonical);
+    // Prefer the display name from a representative site (un-canonicalized
+    // capitalization). Falls back to the title-cased canonical when no
+    // sites enriched the row.
+    const customerName =
+      top.representative_sites?.[0]?.customer_name_raw ?? titleCaseCustomer(top.customer_canonical);
     const branchPhrase = top.primary_branch_name
       ? `${top.primary_branch_name} branch`
       : 'an existing branch';
     lines.push('');
-    lines.push('RELATIONSHIP CONTEXT (use this — Zedcor already serves this entity)');
+    lines.push('RELATIONSHIP CONTEXT (engine-confirmed warm intro path — use this)');
     lines.push(`matched customer: ${customerName}`);
-    lines.push(`match strength: ${top.match_layer} (confidence ${top.match_confidence.toFixed(2)})`);
     lines.push(`matched field on this lead: ${top.matched_field}`);
+    if (top.matched_value_raw) {
+      lines.push(`raw value matched on the lead: "${top.matched_value_raw}"`);
+    }
+    lines.push(`match strength: ${top.match_layer} (confidence ${top.match_confidence.toFixed(2)})`);
     lines.push(
-      `current Zedcor footprint: ${top.active_site_count} active site${top.active_site_count === 1 ? '' : 's'} across ${top.branch_count} branch${top.branch_count === 1 ? '' : 'es'}`,
+      `Zedcor footprint with this customer: ${top.active_site_count} active site${top.active_site_count === 1 ? '' : 's'} across ${top.branch_count} branch${top.branch_count === 1 ? '' : 'es'}`,
     );
     lines.push(`primary servicing branch: ${branchPhrase}`);
     if (top.most_recent_site_date) {
@@ -439,6 +470,14 @@ export function buildOutreachUserPrompt(args: DraftOutreachArgs): string {
     }
     if (top.national_account) {
       lines.push('national account — coordinate with HQ on outreach.');
+    }
+    if (top.representative_sites && top.representative_sites.length > 0) {
+      lines.push('past Zedcor jobsites for this customer (pick ONE to reference):');
+      for (const s of top.representative_sites) {
+        const loc =
+          s.city && s.state ? ` (${s.city}, ${s.state})` : s.state ? ` (${s.state})` : '';
+        lines.push(`  - ${s.site_name}${loc}`);
+      }
     }
     if (crossPollination.length > 1) {
       const others = crossPollination
@@ -451,11 +490,36 @@ export function buildOutreachUserPrompt(args: DraftOutreachArgs): string {
       lines.push(`additional matches: ${others}`);
     }
     lines.push('');
+    lines.push('WARM-INTRO WEAVE INSTRUCTIONS:');
     lines.push(
-      'Email opening sentence MUST reference this existing relationship explicitly. Example shape (do not copy verbatim, adapt to the project): "I see your team is working on <project detail>. Zedcor has been supporting <matched customer> at <primary branch> on multiple sites — that overlap is the reason for the note." Then transition to the why-now and the 20-minute call CTA.',
+      '1. The email opening MUST do TWO things in one or two sentences: (a) reference a specific detail of the prospect\'s project (title, value, RFP window, the matched raw value above), and (b) reference the existing Zedcor relationship in a personable way.',
+    );
+    if (top.representative_sites && top.representative_sites.length > 0) {
+      lines.push(
+        '2. When naming the past relationship, NAME ONE of the representative jobsites above by name. The city/state grounds the claim and makes it feel personal instead of corporate.',
+      );
+    } else {
+      lines.push(
+        '2. Reference the matched customer + the primary servicing branch. Don\'t fabricate a site name — only generic "your team" / "the same crew" phrasing if no specific site is in the data block.',
+      );
+    }
+    if (top.matched_field === 'prime_contractor' || top.matched_field === 'parent_company') {
+      lines.push(
+        `3. The match is on the PRIME / parent company. Phrase the bridge as "the prime on your project, ${customerName}, is one of ours" or equivalent — the prospect is the OWNER on this lead; the matched customer is their CONTRACTOR. Keep that relationship straight.`,
+      );
+    } else {
+      lines.push(
+        `3. The match is on the OWNER directly. The prospect IS the existing customer in this case. Phrase as "we\'ve already covered your team\'s <past site>" — direct continuity, not contractor bridge.`,
+      );
+    }
+    lines.push(
+      '4. Tone is "we\'ve worked together before, so I\'m reaching out specifically, not blasting a list." Personable but not chummy. No marketing voice. No "exciting opportunity" or "circling back."',
     );
     lines.push(
-      'Do NOT describe the relationship as a brand-new partnership; the customer is already active. Stay specific to what the structured data shows. Do NOT name additional sites, dollar values, or contacts that are not in the context above.',
+      '5. Do NOT invent people\'s names, dollar values for past sites, or jobsites that are not in the RELATIONSHIP CONTEXT block above. The hallucination check will flag any unknown corporate name.',
+    );
+    lines.push(
+      '6. LinkedIn DM and voicemail also get a one-clause relationship reference (lighter touch — name-drop the matched customer + a representative site once, then pivot to the prospect\'s project + CTA).',
     );
   } else {
     lines.push('');

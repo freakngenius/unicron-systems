@@ -29,6 +29,7 @@ import {
   type OutreachContact,
   type OutreachDraftInsertRow,
 } from '@/lib/outreach';
+import { fetchRepresentativeSites } from '@/lib/cross-pollination/site-enrichment';
 import { inngest } from '@/lib/inngest/client';
 import type { Branch, Customer, Project } from '@/lib/types';
 
@@ -200,23 +201,43 @@ async function fetchCrossPollContext(
     }
   )
     .select(
-      'customer_canonical, match_layer, match_confidence, matched_field, primary_branch_name, branch_count, active_site_count, most_recent_site_date, national_account',
+      'customer_canonical, match_layer, match_confidence, matched_field, matched_value_raw, primary_branch_name, branch_count, active_site_count, most_recent_site_date, national_account',
     )
     .eq('lead_id', projectId)
     .order('most_recent_site_date', { ascending: false, nullsFirst: false })
     .limit(3);
   if (error || !data) return [];
-  return (data as CrossPollMatchRow[]).map((r) => ({
+
+  const matches: CrossPollinationContext[] = (data as CrossPollMatchRow[]).map((r) => ({
     customer_canonical: r.customer_canonical,
     match_layer: r.match_layer,
     match_confidence: typeof r.match_confidence === 'string' ? parseFloat(r.match_confidence) : r.match_confidence,
     matched_field: r.matched_field,
+    matched_value_raw: r.matched_value_raw ?? null,
     primary_branch_name: r.primary_branch_name ?? null,
     branch_count: r.branch_count ?? 0,
     active_site_count: r.active_site_count ?? 0,
     most_recent_site_date: r.most_recent_site_date ?? null,
     national_account: r.national_account ?? false,
+    representative_sites: null,
   }));
+
+  // Enrich with representative jobsite details from zedcor_customer_sites
+  // so the Drafter prompt can name a specific past site by name in the
+  // warm-intro opening. Failure is non-fatal — prompt falls back to the
+  // generic relationship template.
+  if (matches.length > 0) {
+    const sitesMap = await fetchRepresentativeSites(
+      admin,
+      matches.map((m) => m.customer_canonical),
+    );
+    for (const m of matches) {
+      const sites = sitesMap.get(m.customer_canonical.toLowerCase());
+      if (sites && sites.length > 0) m.representative_sites = sites;
+    }
+  }
+
+  return matches;
 }
 
 interface CrossPollMatchRow {
@@ -224,6 +245,7 @@ interface CrossPollMatchRow {
   match_layer: string;
   match_confidence: number | string;
   matched_field: string;
+  matched_value_raw: string | null;
   primary_branch_name: string | null;
   branch_count: number | null;
   active_site_count: number | null;
@@ -457,12 +479,25 @@ export async function GET(req: Request) {
     // Demo Polish § 5.3 — pull cross-pollination matches so the drafter
     // can open with the relationship reference when one exists.
     const crossPollination = await fetchCrossPollContext(admin, project.id);
-    // Allow the drafter to name the matched customers without tripping
-    // the hallucination guard (the engine has confirmed Zedcor already
-    // works with them).
+    // Allow the drafter to name the matched customers, the raw matched
+    // value on the lead, AND the representative jobsite names without
+    // tripping the hallucination guard. The engine + sites table have
+    // already confirmed Zedcor works with these entities, so naming them
+    // verbatim is the entire point of the warm-intro weave.
     const allowedNamesForLead = [
       ...allowedCustomerNames,
-      ...crossPollination.map((m) => m.customer_canonical),
+      ...crossPollination.flatMap((m) => {
+        const arr: string[] = [m.customer_canonical];
+        if (m.matched_value_raw) arr.push(m.matched_value_raw);
+        if (m.representative_sites) {
+          for (const s of m.representative_sites) {
+            arr.push(s.site_name);
+            arr.push(s.customer_name_raw);
+            if (s.city) arr.push(s.city);
+          }
+        }
+        return arr;
+      }),
     ];
 
     const stepStart = Date.now();

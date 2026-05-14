@@ -75,6 +75,19 @@ export interface CrossPollinationDraftContext {
   active_site_count: number;
   most_recent_site_date: string | null;
   national_account: boolean;
+  /** Raw matched value (e.g. "BIG-D CONSTRUCTION CORP" from prime_contractor).
+   *  Optional — legacy callers pass null. See lib/outreach.ts for the
+   *  canonical definition. */
+  matched_value_raw?: string | null;
+  /** Top-N past Zedcor jobsites for this customer, from zedcor_customer_sites.
+   *  Drafter picks ONE to name in the email opening to make the warm intro
+   *  feel personable instead of corporate. */
+  representative_sites?: Array<{
+    site_name: string;
+    city: string | null;
+    state: string | null;
+    customer_name_raw: string;
+  }> | null;
 }
 
 export interface DraftInput {
@@ -282,25 +295,42 @@ function userPrompt(input: DraftInput, retryReasons: string[]): string {
     blocks.push(`USER ADDITIONAL INSTRUCTION: ${input.userInstruction}`);
   }
   // Demo Polish § 5.3 — relationship-context block (chat path).
+  // Mirrors lib/outreach.ts buildOutreachUserPrompt; when
+  // representative_sites is populated, instruct the model to NAME a
+  // specific past Zedcor jobsite to make the warm intro feel personable.
   if (input.crossPollination && input.crossPollination.length > 0) {
     const top = input.crossPollination[0];
-    const customerName = top.customer_canonical
-      .split(/\s+/)
-      .map((w) => (w.length === 0 ? w : w[0].toUpperCase() + w.slice(1)))
-      .join(' ');
+    const customerName =
+      top.representative_sites?.[0]?.customer_name_raw ??
+      top.customer_canonical
+        .split(/\s+/)
+        .map((w) => (w.length === 0 ? w : w[0].toUpperCase() + w.slice(1)))
+        .join(' ');
     const branchPhrase = top.primary_branch_name
       ? `${top.primary_branch_name} branch`
       : 'an existing branch';
     const lines = [
-      'RELATIONSHIP CONTEXT (engine-confirmed; use this to open the email):',
+      'RELATIONSHIP CONTEXT (engine-confirmed warm intro path — use this):',
       `- matched customer: ${customerName}`,
-      `- match: ${top.match_layer} (confidence ${top.match_confidence.toFixed(2)})`,
       `- matched field on this lead: ${top.matched_field}`,
-      `- footprint: ${top.active_site_count} active site${top.active_site_count === 1 ? '' : 's'} across ${top.branch_count} branch${top.branch_count === 1 ? '' : 'es'}`,
-      `- primary servicing branch: ${branchPhrase}`,
     ];
+    if (top.matched_value_raw) {
+      lines.push(`- raw value matched on the lead: "${top.matched_value_raw}"`);
+    }
+    lines.push(
+      `- match: ${top.match_layer} (confidence ${top.match_confidence.toFixed(2)})`,
+      `- footprint with this customer: ${top.active_site_count} active site${top.active_site_count === 1 ? '' : 's'} across ${top.branch_count} branch${top.branch_count === 1 ? '' : 'es'}`,
+      `- primary servicing branch: ${branchPhrase}`,
+    );
     if (top.most_recent_site_date) lines.push(`- most recent site activity: ${top.most_recent_site_date}`);
     if (top.national_account) lines.push('- national account: coordinate with HQ');
+    if (top.representative_sites && top.representative_sites.length > 0) {
+      lines.push('- past Zedcor jobsites for this customer (pick ONE to reference):');
+      for (const s of top.representative_sites) {
+        const loc = s.city && s.state ? ` (${s.city}, ${s.state})` : s.state ? ` (${s.state})` : '';
+        lines.push(`    - ${s.site_name}${loc}`);
+      }
+    }
     if (input.crossPollination.length > 1) {
       const others = input.crossPollination
         .slice(1)
@@ -309,7 +339,37 @@ function userPrompt(input: DraftInput, retryReasons: string[]): string {
       lines.push(`- additional matches: ${others}`);
     }
     lines.push('');
-    lines.push('Open the email with a sentence that names the matched customer + servicing branch, e.g. "I see your team is working on <project detail>. Zedcor has been supporting <matched customer> at <primary branch> on multiple sites." Then transition to the why-now and the 20-minute call CTA. Do NOT invent any sites, contacts, or contract values not in the data above.');
+    lines.push('WARM-INTRO WEAVE INSTRUCTIONS:');
+    lines.push(
+      '1. The email opening MUST reference a specific detail of the prospect\'s project AND the existing Zedcor relationship in one or two sentences.',
+    );
+    if (top.representative_sites && top.representative_sites.length > 0) {
+      lines.push(
+        '2. NAME ONE of the representative jobsites above by name. The city/state grounds the claim and makes the touch feel personable, not corporate.',
+      );
+    } else {
+      lines.push(
+        '2. Reference the matched customer + primary branch. Do not fabricate a site name.',
+      );
+    }
+    if (top.matched_field === 'prime_contractor' || top.matched_field === 'parent_company') {
+      lines.push(
+        `3. The match is on the prime/parent contractor. Phrase the bridge as "the prime on your project, ${customerName}, is one of ours" — the prospect is the OWNER on this lead; the matched customer is their CONTRACTOR. Keep the roles straight.`,
+      );
+    } else {
+      lines.push(
+        '3. The match is on the OWNER directly. Phrase as direct continuity — "we\'ve already covered your team\'s <site>" — not contractor bridge.',
+      );
+    }
+    lines.push(
+      '4. Tone: "we\'ve worked together before, so I\'m reaching out specifically." Personable, not chummy. No marketing voice.',
+    );
+    lines.push(
+      '5. Do NOT invent people, dollar values, or jobsites that are not in the RELATIONSHIP CONTEXT block. The hallucination check will flag unknown corporate names.',
+    );
+    lines.push(
+      '6. LinkedIn DM and voicemail get a lighter relationship touch — name-drop the matched customer + one site once, then pivot to the prospect\'s project + CTA.',
+    );
     blocks.push(lines.join('\n'));
   }
   if (input.previousDraft && input.intent !== 'fresh') {
@@ -420,6 +480,17 @@ function buildAllowedNames(input: DraftInput): Set<string> {
     for (const m of input.crossPollination) {
       names.push(...m.customer_canonical.split(/\s+/));
       if (m.primary_branch_name) names.push(...m.primary_branch_name.split(/\s+/));
+      if (m.matched_value_raw) names.push(...m.matched_value_raw.split(/\s+/));
+      // Representative jobsite names + their customer display name need to
+      // pass the hallucination guard so the drafter can name the past site
+      // verbatim in the warm-intro opening.
+      if (m.representative_sites) {
+        for (const s of m.representative_sites) {
+          if (s.site_name) names.push(...s.site_name.split(/\s+/));
+          if (s.customer_name_raw) names.push(...s.customer_name_raw.split(/\s+/));
+          if (s.city) names.push(...s.city.split(/\s+/));
+        }
+      }
     }
   }
   // Common geographies and stage labels Zedcor mentions.

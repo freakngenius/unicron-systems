@@ -462,7 +462,62 @@ describe('buildOutreachUserPrompt', () => {
     expect(prompt).toContain('exact');
     expect(prompt).toContain('Jacksonville branch');
     expect(prompt).toContain('2 active sites');
-    expect(prompt).toContain('Email opening sentence MUST reference this existing relationship');
+    // New warm-intro prompt structure (no representative_sites in this
+    // test fixture, so the prompt falls through to the no-site phrasing).
+    expect(prompt).toContain('WARM-INTRO WEAVE INSTRUCTIONS');
+    expect(prompt).toContain('The email opening MUST do TWO things');
+    expect(prompt).toContain('the prime on your project, Brasfield Gorrie, is one of ours');
+  });
+
+  it('names a specific past jobsite when representative_sites is populated', () => {
+    const prompt = buildOutreachUserPrompt({
+      project: {
+        id: 'P4b',
+        title: 'GSA award to Big-D',
+        summary: null,
+        project_value: 5_000_000,
+        project_stage: null,
+        distance_miles: 12,
+        rationale: null,
+        outreach_hook: null,
+        lat: null,
+        lon: null,
+        raw_payload: null,
+        warm_for_customer_id: null,
+        nearest_branch_id: null,
+      },
+      branch: { id: 'PHX', name: 'Phoenix', code: 'PHX', region: 'AZ' },
+      warmCustomer: null,
+      contact: { name: null, title: null, contact: null },
+      crossPollination: [
+        {
+          customer_canonical: 'big-d construction',
+          match_layer: 'exact',
+          match_confidence: 1.0,
+          matched_field: 'prime_contractor',
+          matched_value_raw: 'BIG-D CONSTRUCTION CORP',
+          primary_branch_name: 'Phoenix',
+          branch_count: 1,
+          active_site_count: 1,
+          most_recent_site_date: '2026-05-02',
+          national_account: false,
+          representative_sites: [
+            {
+              site_name: 'Marbella Ranch - 7725 N El Mirage Rd, Glendale AZ 85307',
+              city: 'Glendale',
+              state: 'AZ',
+              customer_name_raw: 'Big-D Construction',
+            },
+          ],
+        },
+      ],
+    });
+    expect(prompt).toContain('matched customer: Big-D Construction');
+    expect(prompt).toContain('past Zedcor jobsites for this customer');
+    expect(prompt).toContain('Marbella Ranch');
+    expect(prompt).toContain('Glendale, AZ');
+    expect(prompt).toContain('raw value matched on the lead: "BIG-D CONSTRUCTION CORP"');
+    expect(prompt).toContain('NAME ONE of the representative jobsites');
   });
 
   it('falls back to cold-lead language when crossPollination is empty/null', () => {
