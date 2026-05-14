@@ -27,6 +27,14 @@ export interface IngestResult {
   notion_url: string;
   ledger_id: string | null;
   ledger_error: string | null;
+  /**
+   * Bug 1 of the Atrium blockers goal (2026-05-13): every successful ledger
+   * insert creates a `nervous_system.call_processing_jobs` row in 'queued'
+   * status. The UI polls this job (status: queued → processing → complete/failed)
+   * instead of inferring 'done' from audit_log. NULL when the ledger insert
+   * failed (no parent row to attach a job to).
+   */
+  processing_job_id: string | null;
 }
 
 function makeServiceSupabase() {
@@ -65,7 +73,26 @@ export async function ingestCallTranscript(
     notion_url: notion.notion_url,
     ledger_id: (ledgerId as string | null) ?? null,
     ledger_error: ledgerErr?.message ?? null,
+    processing_job_id: null,
   };
+
+  // Bug 1: create a processing job row BEFORE firing Inngest so the UI has
+  // something to poll. We only do this when the ledger insert succeeded —
+  // the table has a FK to nervous_system.ledger(id).
+  if (!ledgerErr && result.ledger_id) {
+    try {
+      const { data: jobId, error: jobErr } = await sb.rpc('ns_create_call_processing_job', {
+        p_call_id: result.ledger_id,
+      });
+      if (jobErr) {
+        console.warn('[calls-ingest] ns_create_call_processing_job failed:', jobErr.message);
+      } else if (typeof jobId === 'string') {
+        result.processing_job_id = jobId;
+      }
+    } catch (err) {
+      console.warn('[calls-ingest] ns_create_call_processing_job threw:', err instanceof Error ? err.message : err);
+    }
+  }
 
   // Fire downstream event for C6 action-item extraction. Best-effort: a send
   // failure (no INNGEST_EVENT_KEY, etc.) must not break ingestion. The Inngest
@@ -84,10 +111,14 @@ export async function ingestCallTranscript(
           transcript_text:     [payload.summary_notes, payload.transcript].filter(Boolean).join('\n\n').slice(0, 50000),
           source:              payload.source ?? 'manual_upload',
           uploaded_by:         uploadedBy,
+          processing_job_id:   result.processing_job_id,
         },
       });
     } catch (err) {
       // Non-fatal — log to console for observability but don't error the call.
+      // If the job was created but the event never reached Inngest, the job
+      // sticks at 'queued' and the UI surfaces a clear timeout instead of
+      // spinning forever with no signal.
       console.warn('[calls-ingest] inngest.send failed:', err instanceof Error ? err.message : err);
     }
   }

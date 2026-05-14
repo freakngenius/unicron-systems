@@ -191,11 +191,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return;
     }
 
+    // Bug 1 of the Atrium blockers goal (2026-05-13): return immediately with
+    // a job id; the long-running call-process-and-route skill runs in Inngest.
     res.status(200).json({
       ok: true,
-      notion_page_id: notion.notion_page_id,
-      notion_url:     notion.notion_url,
-      ledger_id:      ledgerId,
+      notion_page_id:     notion.notion_page_id,
+      notion_url:         notion.notion_url,
+      ledger_id:          ledgerId,
+      processing_job_id:  result.processing_job_id,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'upload failed';
