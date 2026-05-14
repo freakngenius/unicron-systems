@@ -197,6 +197,25 @@ export function SlackDigest({ date: dateProp }: SlackDigestProps = {}) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
+  // Sprint 8 F6 — per-team-member channel preference filter. Reads from
+  // nervous_system.team_members.config.preferred_channels via the
+  // ns_get_my_preferred_channels RPC. When non-empty, restricts the rendered
+  // channel list to that subset (with a "Show all" override).
+  const [preferredChannelIds, setPreferredChannelIds] = useState<string[]>([]);
+  const [showAllPreferred, setShowAllPreferred] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const sb = getSupabase();
+      const auth = await sb.auth.getUser();
+      const memberId = auth.data.user?.id;
+      if (!memberId) return;
+      const { data } = await sb.rpc('ns_get_my_preferred_channels', { p_member_id: memberId });
+      if (cancelled) return;
+      if (Array.isArray(data)) setPreferredChannelIds(data as string[]);
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -239,9 +258,15 @@ export function SlackDigest({ date: dateProp }: SlackDigestProps = {}) {
   const [showAllChannels, setShowAllChannels] = useState(false);
 
   const channelActivity = useMemo(() => {
-    if (showAllChannels) return allChannelActivity;
-    return allChannelActivity.filter((c) => (c.message_count ?? 0) > 0 || c.topics.length > 0);
-  }, [allChannelActivity, showAllChannels]);
+    const base = showAllChannels
+      ? allChannelActivity
+      : allChannelActivity.filter((c) => (c.message_count ?? 0) > 0 || c.topics.length > 0);
+    // Sprint 8 F6 — final pass: restrict to preferred channels when the
+    // operator has selected any AND has not toggled "show all" off.
+    if (preferredChannelIds.length === 0 || showAllPreferred) return base;
+    const allowed = new Set(preferredChannelIds);
+    return base.filter((c) => allowed.has(c.channel_id));
+  }, [allChannelActivity, showAllChannels, preferredChannelIds, showAllPreferred]);
 
   const sortedChannelActivity = useMemo(() => {
     return [...channelActivity].sort((a, b) => {
@@ -403,6 +428,14 @@ export function SlackDigest({ date: dateProp }: SlackDigestProps = {}) {
                   {showAllChannels ? 'Hide silent channels' : `Show all (${hiddenChannelCount} hidden)`}
                 </button>
               )}
+              {/* Sprint 8 F6 — preferred channel filter status + editor */}
+              <PreferredChannelsControl
+                preferred={preferredChannelIds}
+                onChange={setPreferredChannelIds}
+                allChannels={allChannelActivity}
+                showAll={showAllPreferred}
+                onToggleShowAll={() => setShowAllPreferred((v) => !v)}
+              />
             </DigestColumn>
           </div>
         )}
@@ -825,6 +858,110 @@ function ModalSection({ title, children }: { title: string; children: React.Reac
     <div className="mb-5">
       <div className="mono text-[9px] uppercase tracking-wide text-text-muted mb-2">{title}</div>
       {children}
+    </div>
+  );
+}
+
+// Sprint 8 F6 — inline preferred-channels editor.
+// Renders a status row + popover. The popover lists every channel observed in
+// today's digest payload and lets the operator toggle which channels should be
+// included in the per-team-member preferred filter. Persists to
+// nervous_system.team_members.config.preferred_channels via the
+// ns_set_my_preferred_channels RPC.
+function PreferredChannelsControl({
+  preferred,
+  onChange,
+  allChannels,
+  showAll,
+  onToggleShowAll,
+}: {
+  preferred: string[];
+  onChange: (next: string[]) => void;
+  allChannels: Array<{ channel_id: string; channelName: string | null }>;
+  showAll: boolean;
+  onToggleShowAll: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function persist(next: string[]) {
+    setSaving(true);
+    setErr(null);
+    try {
+      const sb = getSupabase();
+      const auth = await sb.auth.getUser();
+      const memberId = auth.data.user?.id;
+      if (!memberId) {
+        setErr('not signed in');
+        return;
+      }
+      const { error } = await sb.rpc('ns_set_my_preferred_channels', {
+        p_member_id: memberId,
+        p_channel_ids: next,
+      });
+      if (error) setErr(error.message);
+      else onChange(next);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const preferredSet = new Set(preferred);
+
+  return (
+    <div className="pt-2 mt-2 border-t border-border-subtle/40 flex flex-col gap-1.5">
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="mono text-[10px] text-text-muted">
+          {preferred.length === 0
+            ? 'No preferred channel filter'
+            : `Filtering to ${preferred.length} preferred channel${preferred.length === 1 ? '' : 's'}`}
+        </span>
+        <button
+          onClick={() => setOpen((v) => !v)}
+          className="mono text-[10px] text-text-secondary hover:text-text-primary underline-offset-2 hover:underline"
+        >
+          {open ? 'Done' : 'Edit'}
+        </button>
+        {preferred.length > 0 && (
+          <button
+            onClick={onToggleShowAll}
+            className="mono text-[10px] text-text-secondary hover:text-text-primary underline-offset-2 hover:underline"
+          >
+            {showAll ? 'Filter to preferred' : 'Show all channels'}
+          </button>
+        )}
+        {saving && <span className="mono text-[10px] text-text-muted">saving…</span>}
+        {err && <span className="mono text-[10px] text-[#c44]">{err}</span>}
+      </div>
+      {open && (
+        <div className="border border-border-subtle rounded-md px-2 py-1.5 flex flex-col gap-1 max-h-56 overflow-auto">
+          {allChannels.length === 0 && (
+            <span className="mono text-[10px] text-text-muted">No channels in today&apos;s digest yet.</span>
+          )}
+          {allChannels.map((c) => {
+            const checked = preferredSet.has(c.channel_id);
+            return (
+              <label key={c.channel_id} className="flex items-center gap-2 cursor-pointer hover:bg-bg-raised rounded px-1 py-0.5">
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={(e) => {
+                    const next = e.target.checked
+                      ? Array.from(new Set([...preferred, c.channel_id]))
+                      : preferred.filter((id) => id !== c.channel_id);
+                    void persist(next);
+                  }}
+                />
+                <span className="mono text-[11px] text-text-primary">
+                  #{c.channelName ?? c.channel_id}
+                </span>
+                <span className="mono text-[9px] text-text-muted">{c.channel_id}</span>
+              </label>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
