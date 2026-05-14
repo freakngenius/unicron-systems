@@ -585,7 +585,66 @@ END;
 $$;
 
 -- ---------------------------------------------------------------------------
--- 10. End of migration. No DROP, no destructive ALTER. Reversible via:
+-- 10. Search RPCs (consumed by /api/skills/search, Stream B).
+--     SECURITY INVOKER so RLS applies on the caller's session. Strict
+--     per-tenant scoping via p_customer_id: system rows (customer_id IS NULL)
+--     are always visible; tenant rows visible only when p_customer_id matches.
+-- ---------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION nervous_system.ns_skills_search_by_fts(
+  p_query        text,
+  p_customer_id  uuid,
+  p_limit        int DEFAULT 20
+) RETURNS TABLE(id uuid)
+LANGUAGE sql
+STABLE
+SECURITY INVOKER
+SET search_path = nervous_system, public
+AS $$
+  SELECT s.id
+  FROM nervous_system.skills s
+  WHERE s.fts @@ websearch_to_tsquery('english', p_query)
+    AND s.lifecycle_status = 'approved'
+    AND s.status <> 'deprecated'
+    AND (s.decay_at IS NULL OR s.decay_at > now())
+    AND (
+      s.customer_id IS NULL
+      OR (p_customer_id IS NOT NULL AND s.customer_id = p_customer_id)
+    )
+  ORDER BY ts_rank(s.fts, websearch_to_tsquery('english', p_query)) DESC
+  LIMIT GREATEST(p_limit, 1);
+$$;
+
+CREATE OR REPLACE FUNCTION nervous_system.ns_skills_search_by_vector(
+  p_query_embedding  vector(1536),
+  p_customer_id      uuid,
+  p_limit            int DEFAULT 20
+) RETURNS TABLE(id uuid)
+LANGUAGE sql
+STABLE
+SECURITY INVOKER
+SET search_path = nervous_system, public
+AS $$
+  SELECT s.id
+  FROM nervous_system.skills s
+  WHERE s.embedding IS NOT NULL
+    AND s.lifecycle_status = 'approved'
+    AND s.status <> 'deprecated'
+    AND (s.decay_at IS NULL OR s.decay_at > now())
+    AND (
+      s.customer_id IS NULL
+      OR (p_customer_id IS NOT NULL AND s.customer_id = p_customer_id)
+    )
+  ORDER BY s.embedding <=> p_query_embedding ASC
+  LIMIT GREATEST(p_limit, 1);
+$$;
+
+GRANT EXECUTE ON FUNCTION nervous_system.ns_skills_search_by_fts(text, uuid, int) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION nervous_system.ns_skills_search_by_vector(vector(1536), uuid, int) TO authenticated, service_role;
+
+-- ---------------------------------------------------------------------------
+-- 11. End of migration. No DROP, no destructive ALTER. Reversible via:
+--      DROP FUNCTION nervous_system.ns_skills_search_by_fts(text, uuid, int);
+--      DROP FUNCTION nervous_system.ns_skills_search_by_vector(vector(1536), uuid, int);
 --      ALTER TABLE nervous_system.skills DROP COLUMN <each added column>;
 --      DROP TABLE nervous_system.proposed_skills;
 --      DROP TABLE nervous_system.skill_invocations;

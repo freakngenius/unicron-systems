@@ -144,3 +144,26 @@ SELECT 'V13 taboo_check_id_null' AS check_name, count(*) AS null_rows
 FROM nervous_system.skills
 WHERE taboo_check_id IS NULL;
 -- expect: null_rows = 38
+
+-- ---------------------------------------------------------------------------
+-- V14. Search RPCs present (Section 10: consumed by Stream B /api/skills/search)
+-- ---------------------------------------------------------------------------
+SELECT 'V14 search_rpcs' AS check_name, p.proname, pg_get_function_identity_arguments(p.oid) AS args
+FROM pg_proc p
+JOIN pg_namespace n ON n.oid = p.pronamespace
+WHERE n.nspname = 'nervous_system'
+  AND p.proname IN ('ns_skills_search_by_fts', 'ns_skills_search_by_vector')
+ORDER BY p.proname;
+-- expect: two rows
+--   ns_skills_search_by_fts(p_query text, p_customer_id uuid, p_limit integer)
+--   ns_skills_search_by_vector(p_query_embedding vector, p_customer_id uuid, p_limit integer)
+
+-- ---------------------------------------------------------------------------
+-- V15. Search RPC smoke: FTS finds at least one seeded skill on a generic query.
+-- (Embedding RPC smoke is deferred to post-Stream-D run when seed embeddings
+-- exist; this is fine because pre-existing rows have embedding=NULL and the
+-- vector RPC correctly excludes them.)
+-- ---------------------------------------------------------------------------
+SELECT 'V15 fts_rpc_smoke' AS check_name, count(*) AS hits
+FROM nervous_system.ns_skills_search_by_fts('skill', NULL, 20);
+-- expect: hits >= 1 (any seeded skill whose name or description contains 'skill').
