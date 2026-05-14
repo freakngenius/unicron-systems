@@ -678,3 +678,28 @@ export const pipeHunterFnRun = inngest.createFunction(
     return step.run('pipe-hunter', () => pipeHunterRun({ forDate }));
   },
 );
+
+// ---------------------------------------------------------------------------
+// Sprint 8 F5 — Action-item auto-completion
+// Hourly scan: substring-match recent ledger rows against open action_items
+// and auto-check items when the overlap clears the conservative threshold.
+// Manual override path: same DB columns, completed_by != 'auto:*'.
+// ---------------------------------------------------------------------------
+export const actionItemsAutoCompleteCron = inngest.createFunction(
+  { id: 'action-items-auto-complete', name: 'Action Items Auto-Complete', retries: 1 },
+  { cron: 'TZ=America/Los_Angeles 30 * * * *' }, // every hour at :30 PT
+  async ({ step }) => {
+    const { autoCompleteActionItems } = await import('./action-items-auto-complete.js');
+    return step.run('action-items-auto-complete', () => autoCompleteActionItems());
+  },
+);
+
+export const actionItemsAutoCompleteRun = inngest.createFunction(
+  { id: 'action-items-auto-complete-run', name: 'Action Items Auto-Complete Run', retries: 1 },
+  { event: 'atrium/action-items-auto-complete.run' },
+  async ({ step, event }) => {
+    const { autoCompleteActionItems } = await import('./action-items-auto-complete.js');
+    const data = (event.data ?? {}) as { lookback_hours?: number };
+    return step.run('action-items-auto-complete', () => autoCompleteActionItems(data));
+  },
+);

@@ -28,6 +28,12 @@ interface PatchBody {
   status?: 'open' | 'in_progress' | 'done' | 'blocked' | 'broken_off';
   deferred_to?: string;
   closed?: boolean;
+  // Sprint 8 F5: explicit completion tracking. `completed=true` from the UI
+  // checkbox flips the new columns; `completed=false` un-checks. `completed_by`
+  // is the team_member.id (or email) that performed the action — defaults to
+  // 'atrium-ui' when the caller doesn't supply one.
+  completed?: boolean;
+  completed_by?: string;
 }
 
 const VALID_STATUSES = new Set([
@@ -124,7 +130,7 @@ export async function PATCH(
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
-  const { dri, status, deferred_to, closed } = body;
+  const { dri, status, deferred_to, closed, completed, completed_by } = body;
   if (status !== undefined && !VALID_STATUSES.has(status)) {
     return NextResponse.json(
       { error: `Invalid status: ${status}` },
@@ -148,6 +154,19 @@ export async function PATCH(
   if (closed) {
     patch['status'] = 'done';
     patch['closed_at'] = new Date().toISOString();
+  }
+  // Sprint 8 F5: explicit completion columns. Toggling the checkbox in the
+  // Atrium UI flips these directly; the auto-completion cron also uses this
+  // path with completed_by='auto:<ledger_id>'.
+  if (completed === true) {
+    patch['completed'] = true;
+    patch['completed_at'] = new Date().toISOString();
+    patch['completed_by'] = completed_by ?? 'atrium-ui';
+    patch['status'] = 'done';
+  } else if (completed === false) {
+    patch['completed'] = false;
+    patch['completed_at'] = null;
+    patch['completed_by'] = null;
   }
 
   // 4. Taboo check — describe the action in plain English for matching
@@ -179,7 +198,7 @@ export async function PATCH(
     .from('action_items')
     .update({ ...patch, updated_at: new Date().toISOString() })
     .eq('id', id)
-    .select('id, title, status, dri, updated_at')
+    .select('id, title, status, dri, updated_at, completed, completed_at, completed_by')
     .single();
 
   if (updateErr) {
