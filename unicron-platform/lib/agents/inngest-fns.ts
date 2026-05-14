@@ -602,3 +602,17 @@ export const curatorSweepRun = inngest.createFunction(
     return step.run('curator-sweep', () => curatorSweep({ forDate }));
   },
 );
+
+// ---------------------------------------------------------------------------
+// Boundary — Sprint 7.5 reification
+// ---------------------------------------------------------------------------
+
+export const boundarySweepRun = inngest.createFunction(
+  { id: 'boundary-sweep-run', name: 'Boundary Sweep Run', retries: 1 },
+  { event: 'boundary/sweep.run' },
+  async ({ event, step }) => {
+    const { boundarySweep } = await import('./boundary.js');
+    const data = (event.data as { for_date?: string; window_days?: number } | undefined) ?? {};
+    return step.run('boundary-sweep', () => boundarySweep(data));
+  },
+);

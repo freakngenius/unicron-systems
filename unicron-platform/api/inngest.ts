@@ -40,6 +40,7 @@ import {
   atriumIncrementalRefreshRun,
   janitorSweepRun,
   curatorSweepRun,
+  boundarySweepRun,
 } from '../lib/agents/inngest-fns.js';
 
 // Disable Vercel's automatic JSON body parsing — inngest/node reads the raw stream.
@@ -92,5 +93,7 @@ export default serve({
     janitorSweepRun,
     // Curator (Sprint 7.5 reification — 2026-05-13)
     curatorSweepRun,
+    // Boundary (Sprint 7.5 reification — 2026-05-13)
+    boundarySweepRun,
   ],
 });
