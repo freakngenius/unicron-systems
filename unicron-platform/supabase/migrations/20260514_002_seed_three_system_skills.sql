@@ -10,7 +10,7 @@
 --
 -- Lookup at apply time (2026-05-14): none of the three names exist in
 -- nervous_system.skills, so this file INSERTs full rows and the
--- ON CONFLICT (name) DO UPDATE branch is the idempotent re-apply path.
+-- ON CONFLICT (name, version) WHERE customer_id IS NULL DO UPDATE branch is the idempotent re-apply path.
 --
 -- This migration MUST sort lexically AFTER Stream A's
 -- 20260514_000_procedural_memory_layer.sql (Addendum 5 §2), because it
@@ -172,7 +172,7 @@ Return: { posted: bool, slack_ts: string|null, email_message_ids: string[], ledg
   '[]'::jsonb,
   NULL  -- system Skill, not tenant-scoped
 )
-ON CONFLICT (name) DO UPDATE SET
+ON CONFLICT (name, version) WHERE customer_id IS NULL DO UPDATE SET
   description        = EXCLUDED.description,
   domain             = EXCLUDED.domain,
   type               = EXCLUDED.type,
@@ -301,7 +301,7 @@ REFUSAL CASES
   '[]'::jsonb,
   NULL
 )
-ON CONFLICT (name) DO UPDATE SET
+ON CONFLICT (name, version) WHERE customer_id IS NULL DO UPDATE SET
   description        = EXCLUDED.description,
   domain             = EXCLUDED.domain,
   type               = EXCLUDED.type,
@@ -425,7 +425,7 @@ REFUSAL CASES
   '[]'::jsonb,
   NULL
 )
-ON CONFLICT (name) DO UPDATE SET
+ON CONFLICT (name, version) WHERE customer_id IS NULL DO UPDATE SET
   description        = EXCLUDED.description,
   domain             = EXCLUDED.domain,
   type               = EXCLUDED.type,

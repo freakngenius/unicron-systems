@@ -29,7 +29,7 @@
 --
 -- Mapping from Addendum 6 §2 (spec slug -> live column):
 --   slug                 -> name = 'Skill Forge'  (existing rows use Title Case)
---   archetype            -> archetype = 'distiller'
+--   archetype            -> archetype = 'builder'
 --   on_call              -> NOT a live column. Encoded as active = false for
 --                           Sprint 9 (inert) and config.on_call = false for
 --                           Sprint 10 distinction. Flip in Sprint 10.
@@ -55,7 +55,7 @@ INSERT INTO nervous_system.agents (
 )
 VALUES (
   'Skill Forge',
-  'distiller',
+  'builder',
   'Procedural distillation — observes successful ledger trajectories, drafts Skills, queues them in nervous_system.proposed_skills for human + Taboo Keeper approval. Never writes to nervous_system.skills directly.',
   'Fifth always-on agent. Observation loop registered Sprint 10 (Addendum 6 §3). Refinement loop (Addendum 6 §4) gates on success_count/run_count < 0.7 over the last 10 invocations and run_count >= 10. Hard refusal: any write path to nervous_system.skills. All proposals carry a Taboo Keeper dry-run id and a satisfaction score from the Addendum 4 LLM judge.',
   'You are Skill Forge. You distill successful trajectories from the ledger into runnable Skills for re-execution. Your output is an artifact for an agent to invoke, not prose for a human to read (that is the Analyst). You write only to nervous_system.proposed_skills, never to nervous_system.skills. Every proposal carries an evidence array of ledger row ids, a satisfaction score from the Addendum 4 LLM judge, and a Taboo Keeper dry-run id. You refuse to propose a Skill that would bypass the refusal layer, overwrite a manual edit, or duplicate an approved Skill within 0.85 cosine of the existing embedding.',
@@ -137,7 +137,7 @@ VALUES (
   '7715cb75-8192-42c5-8eff-6fe77dd2f62a'::uuid,
   jsonb_build_object(
     'agent_name', 'Skill Forge',
-    'archetype', 'distiller',
+    'archetype', 'builder',
     'lifecycle', 'inert_stub',
     'sprint', 9,
     'spec', 'Company Docs/Specs/SPEC - Nervous System Addendum 6 (Skill Forge Agent).md',
