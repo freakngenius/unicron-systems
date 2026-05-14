@@ -1,6 +1,7 @@
 {
-  "current_sprint": 6,
-  "last_completed_sprint": 5,
+  "current_sprint": 9,
+  "last_completed_sprint": 8,
+  "_top_level_fields_note": "current_sprint, last_completed_sprint, last_completed_at, active_sprint_status reconciled 2026-05-14 per Company Docs/Reports/conductor-completion-pms-2026-05-14.md non-critical issue #2. Semantic: 'completed' = 'Deployed closeout'. Verified column promotion is human-only and is tracked per-sprint via sprint_<N>_status='verified'. As of this reconciliation: Sprint 5 is the only sprint past the Verified gate; Sprints 6, 7, 7.5 phase 2, 8, and 9 are all Deployed pending human Verified promotion. Sprint 9 (Procedural Memory & Skill Forge — PMS Phase 0+A-D) shipped 2026-05-14; parent kanban 360785c6-7e72-81a6-ab08-e44b6746e2a5.",
   "sprint_7_5_phase_2_completion": {
     "completed_at": "2026-05-14T02:40:18Z",
     "final_audit_log_id": "5fc759c0-3862-4d8f-a753-9c60eadef993",
@@ -17,7 +18,7 @@
       { "symptom": "Symptom 2 (Call upload fan-out)", "id": "360785c6-7e72-8183-82ff-d86e7b6d6304", "url": "https://www.notion.so/360785c67e72818382ffd86e7b6d6304", "prs": [396, 399], "audit_log_id": "41a760ad-5e1b-4a53-85b4-a1b354f3802b" }
     ]
   },
-  "last_completed_at": "2026-05-10T06:31:09Z",
+  "last_completed_at": "2026-05-14T19:52:44Z",
   "active_sprint_status": "deployed",
   "sprint_5_status": "verified",
   "sprint_5_verified_at": "2026-05-10T06:31:09Z",
