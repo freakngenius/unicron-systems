@@ -116,16 +116,30 @@ function splitFrontmatter(raw: string, filePath: string): { frontmatter: string;
 // ---------------------------------------------------------------------------
 //
 // We intentionally do not pull a YAML dependency. Scenario frontmatter is
-// deliberately simple per §2.3 — string scalars, numbers, and one-line bracket
-// arrays. A small purpose-built parser keeps the surface area tight.
+// deliberately simple per §2.3 — string scalars, numbers, one-line bracket
+// arrays, and block-style lists (`key:` followed by indented `- item` lines).
+// A small purpose-built parser keeps the surface area tight.
 
 function parseFrontmatter(text: string, filePath: string): ScenarioFrontmatter {
   const raw: Record<string, unknown> = {};
   const lines = text.split('\n');
 
-  for (let i = 0; i < lines.length; i++) {
+  let i = 0;
+  while (i < lines.length) {
     const line = lines[i];
-    if (line.trim() === '' || line.trim().startsWith('#')) continue;
+    if (line.trim() === '' || line.trim().startsWith('#')) {
+      i++;
+      continue;
+    }
+
+    // Block list continuation lines (`  - foo`) only appear after a key with
+    // an empty value; if we hit one here, the upstream parser failed.
+    if (/^\s+-\s/.test(line)) {
+      throw new ScenarioParseError(
+        `unexpected list item without preceding key: "${line}"`,
+        filePath,
+      );
+    }
 
     const colonIdx = line.indexOf(':');
     if (colonIdx === -1) {
@@ -134,7 +148,39 @@ function parseFrontmatter(text: string, filePath: string): ScenarioFrontmatter {
     const key = line.slice(0, colonIdx).trim();
     const valueRaw = stripInlineComment(line.slice(colonIdx + 1)).trim();
 
+    if (valueRaw === '') {
+      // Empty inline value — look ahead for a block list (`  - item` lines).
+      const items: string[] = [];
+      let j = i + 1;
+      while (j < lines.length) {
+        const next = lines[j];
+        if (next.trim() === '' || next.trim().startsWith('#')) {
+          j++;
+          continue;
+        }
+        const m = /^(\s+)-\s+(.*)$/.exec(next);
+        if (!m) break;
+        items.push(stripInlineComment(m[2]).trim());
+        j++;
+      }
+      if (items.length > 0) {
+        raw[key] = items.map((item) => {
+          const parsed = parseScalarOrList(item);
+          // Block list items are typically bare strings; preserve the raw text
+          // when the scalar parser would have returned an empty string for it.
+          return parsed === '' ? item : parsed;
+        });
+        i = j;
+        continue;
+      }
+      // No list items followed — fall through and record the empty value.
+      raw[key] = '';
+      i++;
+      continue;
+    }
+
     raw[key] = parseScalarOrList(valueRaw);
+    i++;
   }
 
   // Validate required fields.
