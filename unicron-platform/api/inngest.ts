@@ -47,6 +47,8 @@ import {
   pipeHunterFnRun,
   actionItemsAutoCompleteCron,
   actionItemsAutoCompleteRun,
+  skillsDecaySweepCron,
+  skillsDecaySweepRun,
 } from '../lib/agents/inngest-fns.js';
 
 // Disable Vercel's automatic JSON body parsing — inngest/node reads the raw stream.
@@ -112,5 +114,8 @@ export default serve({
     // Action-item auto-completion (Sprint 8 F5)
     actionItemsAutoCompleteCron,
     actionItemsAutoCompleteRun,
+    // Skills procedural-memory decay sweep (Sprint 9 Stream A — Addendum 5 §6)
+    skillsDecaySweepCron,
+    skillsDecaySweepRun,
   ],
 });

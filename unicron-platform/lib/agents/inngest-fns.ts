@@ -703,3 +703,30 @@ export const actionItemsAutoCompleteRun = inngest.createFunction(
     return step.run('action-items-auto-complete', () => autoCompleteActionItems(data));
   },
 );
+
+// ---------------------------------------------------------------------------
+// Sprint 9 Stream A — Skills procedural-memory decay sweep.
+//
+// Runs nightly at 03:00 PT, two hours ahead of the Analyst nightly cron
+// (05:00 PT) so the morning brief reads a settled procedural-memory state.
+// Per Addendum 5 §6: retires approved Skills whose last_run_at / decay_at
+// is past the per-tenant (90d) or system (180d) threshold.
+// ---------------------------------------------------------------------------
+
+export const skillsDecaySweepCron = inngest.createFunction(
+  { id: 'skills-decay-sweep', name: 'Skills Decay Sweep Cron', retries: 1 },
+  { cron: 'TZ=America/Los_Angeles 0 3 * * *' },
+  async ({ step }) => {
+    const { skillsDecaySweep } = await import('./skills-decay-sweep.js');
+    return step.run('skills-decay-sweep', () => skillsDecaySweep());
+  }
+);
+
+export const skillsDecaySweepRun = inngest.createFunction(
+  { id: 'skills-decay-sweep-run', name: 'Skills Decay Sweep Run', retries: 1 },
+  { event: 'skills/decay-sweep.run' },
+  async ({ step }) => {
+    const { skillsDecaySweep } = await import('./skills-decay-sweep.js');
+    return step.run('skills-decay-sweep', () => skillsDecaySweep());
+  }
+);
