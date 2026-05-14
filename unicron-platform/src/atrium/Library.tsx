@@ -7,12 +7,14 @@ import { useState, useEffect } from 'react';
 import { LibraryWiki } from './LibraryWiki';
 import { LibraryRepo } from './LibraryRepo';
 import { LibraryTemplates } from './LibraryTemplates';
+import { LibrarySkills } from './library/skills/LibrarySkills';
 import { getSupabase } from '../lib/supabase';
 
 const LIBRARY_TABS = [
   { id: 'wiki',      label: 'Wiki' },
   { id: 'repo',      label: 'Repo' },
   { id: 'templates', label: 'Templates' },
+  { id: 'skills',    label: 'Skills' },
 ] as const;
 
 type LibraryTab = (typeof LIBRARY_TABS)[number]['id'];
@@ -140,6 +142,7 @@ export function Library() {
         {active === 'templates' && (
           <LibraryTemplates onNavigateToRepo={navigateToRepo} />
         )}
+        {active === 'skills' && <LibrarySkills />}
       </div>
     </div>
   );
