@@ -645,3 +645,17 @@ export const researcherBriefRun = inngest.createFunction(
     return step.run('researcher-brief', () => researcherBrief({ topic: data.topic!, forDate: data.for_date }));
   },
 );
+
+// ---------------------------------------------------------------------------
+// Pipeline Operator — Sprint 7.5 reification
+// ---------------------------------------------------------------------------
+
+export const pipelineOperatorFnRun = inngest.createFunction(
+  { id: 'pipeline-operator-run', name: 'Pipeline Operator Run', retries: 1 },
+  { event: 'pipeline-operator/run' },
+  async ({ event, step }) => {
+    const { pipelineOperatorRun } = await import('./pipeline-operator.js');
+    const forDate = (event.data as { for_date?: string } | undefined)?.for_date;
+    return step.run('pipeline-operator', () => pipelineOperatorRun({ forDate }));
+  },
+);
