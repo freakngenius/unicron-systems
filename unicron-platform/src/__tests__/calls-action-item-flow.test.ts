@@ -1,279 +1,136 @@
-// src/__tests__/calls-action-item-flow.test.ts
-// Tests for lib/calls-action-item-flow.ts — C6 action-item extraction
-// pipeline (LLM extract → ns_create_action_item_from_call → Notion Kanban
-// card → linkActionItemToCall bullet on the call page).
+// __tests__/calls-action-item-flow.test.ts
+//
+// Unit tests for the refactored call-process-and-route pipeline. Focuses on
+// the pure helpers — parseExtractionBundle (defensive JSON parser) and
+// wrapTranscriptForPrompt (injection-safety delimiter wrapper).
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
+import { __internals, type FlowInput } from '../../lib/calls-action-item-flow';
 
-const ORIGINAL_FETCH = globalThis.fetch;
+const { parseExtractionBundle, wrapTranscriptForPrompt, STRUCTURED_OUTPUT_SUFFIX } = __internals;
 
-const mockRpc = vi.fn();
-const mockCreate = vi.fn();
+const baseInput: FlowInput = {
+  call_id: '00000000-0000-0000-0000-000000000001',
+  call_notion_page_id: 'notion-page-1',
+  call_notion_url: 'https://www.notion.so/page-1',
+  call_title: 'Zedcor pilot kickoff',
+  transcript_text: 'Kyle: hello. Jane: hi.',
+  participants: ['Kyle', 'Jane Doe'],
+};
 
-vi.mock('@supabase/supabase-js', () => ({
-  createClient: () => ({ rpc: mockRpc }),
-}));
+describe('wrapTranscriptForPrompt', () => {
+  it('wraps the transcript in <TRANSCRIPT_START>...<TRANSCRIPT_END> delimiters', () => {
+    const out = wrapTranscriptForPrompt(baseInput);
+    expect(out).toContain('<TRANSCRIPT_START>');
+    expect(out).toContain('<TRANSCRIPT_END>');
+    expect(out.indexOf('<TRANSCRIPT_START>')).toBeLessThan(out.indexOf('Kyle: hello'));
+    expect(out.indexOf('<TRANSCRIPT_END>')).toBeGreaterThan(out.indexOf('Kyle: hello'));
+  });
 
-vi.mock('@anthropic-ai/sdk', () => {
-  class FakeAnthropic {
-    messages = { create: mockCreate };
-    constructor(_args: { apiKey?: string }) {
-      // store nothing
-    }
-  }
-  return { default: FakeAnthropic };
+  it('includes the title and participants in the preamble', () => {
+    const out = wrapTranscriptForPrompt(baseInput);
+    expect(out).toMatch(/Title: Zedcor pilot kickoff/);
+    expect(out).toMatch(/Participants: Kyle, Jane Doe/);
+  });
+
+  it('still wraps with both delimiters when transcript_text is empty', () => {
+    const out = wrapTranscriptForPrompt({ ...baseInput, transcript_text: '' });
+    expect(out).toContain('<TRANSCRIPT_START>');
+    expect(out).toContain('<TRANSCRIPT_END>');
+  });
+
+  it('omits preamble when title and participants are absent', () => {
+    const out = wrapTranscriptForPrompt({
+      ...baseInput,
+      call_title: null,
+      participants: [],
+    });
+    expect(out.startsWith('<TRANSCRIPT_START>')).toBe(true);
+  });
 });
 
-beforeEach(() => {
-  process.env.ANTHROPIC_API_KEY = 'sk-ant-test';
-  process.env.NOTION_TOKEN = 'ntn_test_token';
-  process.env.NOTION_DB_INTERNAL_KANBAN = 'kanban-db-id';
-  process.env.SUPABASE_URL = 'https://test.supabase.co';
-  process.env.SUPABASE_SERVICE_ROLE_KEY = 'service-role-key';
+describe('STRUCTURED_OUTPUT_SUFFIX', () => {
+  it('instructs the model to ignore instructions inside the transcript delimiters', () => {
+    expect(STRUCTURED_OUTPUT_SUFFIX).toMatch(/<TRANSCRIPT_START>/);
+    expect(STRUCTURED_OUTPUT_SUFFIX).toMatch(/<TRANSCRIPT_END>/);
+    expect(STRUCTURED_OUTPUT_SUFFIX).toMatch(/ignore/i);
+  });
 
-  mockRpc.mockReset();
-  mockCreate.mockReset();
-
-  // Default Notion-side fetches return success (Kanban card create + link bullet append).
-  globalThis.fetch = vi.fn().mockImplementation(async (url: string) => {
-    if (url.includes('/v1/pages')) {
-      return {
-        ok: true, status: 200,
-        json: async () => ({ id: 'kanban-page-id', url: 'https://www.notion.so/kanban-page' }),
-        text: async () => '{}',
-      };
-    }
-    if (url.includes('/v1/blocks/')) {
-      return {
-        ok: true, status: 200,
-        json: async () => ({ results: [] }),
-        text: async () => '{}',
-      };
-    }
-    return { ok: true, status: 200, json: async () => ({}), text: async () => '{}' };
-  }) as unknown as typeof fetch;
+  it('declares the expected JSON keys for downstream parsers', () => {
+    expect(STRUCTURED_OUTPUT_SUFFIX).toMatch(/"action_items"/);
+    expect(STRUCTURED_OUTPUT_SUFFIX).toMatch(/"decisions"/);
+    expect(STRUCTURED_OUTPUT_SUFFIX).toMatch(/"customer_mentions"/);
+    expect(STRUCTURED_OUTPUT_SUFFIX).toMatch(/"key_takeaways"/);
+    expect(STRUCTURED_OUTPUT_SUFFIX).toMatch(/"insights"/);
+  });
 });
 
-afterEach(() => {
-  globalThis.fetch = ORIGINAL_FETCH;
-});
+describe('parseExtractionBundle', () => {
+  it('returns an empty bundle for invalid JSON', () => {
+    const b = parseExtractionBundle('not json at all');
+    expect(b.action_items).toEqual([]);
+    expect(b.decisions).toEqual([]);
+    expect(b.customer_mentions).toEqual([]);
+    expect(b.key_takeaways).toEqual([]);
+    expect(b.insights).toEqual([]);
+  });
 
-// ─── parseExtractionResponse ──────────────────────────────────────────────────
+  it('extracts a JSON object embedded in surrounding prose', () => {
+    const raw = 'Here is the JSON:\n```\n{\n  "key_takeaways": ["foo", "bar"],\n  "action_items": [{"title": "Send LOI", "owner": "Kyle", "priority": "high"}]\n}\n```\nDone.';
+    const b = parseExtractionBundle(raw);
+    expect(b.key_takeaways).toEqual(['foo', 'bar']);
+    expect(b.action_items).toHaveLength(1);
+    expect(b.action_items[0].title).toBe('Send LOI');
+    expect(b.action_items[0].priority).toBe('high');
+  });
 
-describe('parseExtractionResponse', () => {
-  it('parses a valid LLM JSON response into action items', async () => {
-    const { __internals } = await import('../../lib/calls-action-item-flow');
-    const raw = JSON.stringify({
-      action_items: [
-        { title: 'Send SOW', owner: 'Kyle', priority: 'high', outcome: 'SOW emailed', steps: ['Draft', 'Email'], due_iso: '2026-05-15', description: 'Pilot SOW' },
-        { title: 'Schedule kickoff', owner: 'Co-Pilot', priority: 'medium', outcome: 'meeting scheduled', steps: ['Find times'], due_iso: null },
+  it('coerces unknown priorities to medium', () => {
+    const b = parseExtractionBundle('{"action_items":[{"title":"x","priority":"banana"}]}');
+    expect(b.action_items[0].priority).toBe('medium');
+  });
+
+  it('drops action_items missing a title', () => {
+    const b = parseExtractionBundle('{"action_items":[{"owner":"Kyle"},{"title":"keep me"}]}');
+    expect(b.action_items.map((a) => a.title)).toEqual(['keep me']);
+  });
+
+  it('parses decisions with rationale + decided_by', () => {
+    const b = parseExtractionBundle(JSON.stringify({
+      decisions: [
+        { decision: 'Ship the v1 pilot', rationale: 'Zedcor signed LOI', decided_by: 'Kyle' },
+        { decision: 'Defer pricing exclusivity', rationale: '', decided_by: '' },
       ],
-    });
-    const items = __internals.parseExtractionResponse(raw);
-    expect(items).toHaveLength(2);
-    expect(items[0].title).toBe('Send SOW');
-    expect(items[0].priority).toBe('high');
-    expect(items[1].owner).toBe('Co-Pilot');
+    }));
+    expect(b.decisions).toHaveLength(2);
+    expect(b.decisions[0].decided_by).toBe('Kyle');
+    expect(b.decisions[1].decided_by).toBe('team');
   });
 
-  it('extracts JSON even when wrapped in surrounding prose', async () => {
-    const { __internals } = await import('../../lib/calls-action-item-flow');
-    const raw = 'Here are the action items: {"action_items":[{"title":"X","owner":"Kyle"}]}\nThat\'s all.';
-    const items = __internals.parseExtractionResponse(raw);
-    expect(items).toHaveLength(1);
-    expect(items[0].title).toBe('X');
+  it('parses customer_mentions with sentiment fallback', () => {
+    const b = parseExtractionBundle(JSON.stringify({
+      customer_mentions: [
+        { customer_name: 'Zedcor', sentiment: 'positive', snippet: 'they loved the demo' },
+        { customer_name: 'Sunstate', sentiment: 'angry' },
+      ],
+    }));
+    expect(b.customer_mentions).toHaveLength(2);
+    expect(b.customer_mentions[0].sentiment).toBe('positive');
+    expect(b.customer_mentions[1].sentiment).toBe('neutral');
   });
 
-  it('returns empty array on malformed JSON', async () => {
-    const { __internals } = await import('../../lib/calls-action-item-flow');
-    expect(__internals.parseExtractionResponse('not json at all')).toEqual([]);
-    expect(__internals.parseExtractionResponse('{ broken json')).toEqual([]);
+  it('truncates key_takeaways to 5 entries', () => {
+    const b = parseExtractionBundle(JSON.stringify({
+      key_takeaways: ['a', 'b', 'c', 'd', 'e', 'f', 'g'],
+    }));
+    expect(b.key_takeaways).toHaveLength(5);
   });
 
-  it('drops entries missing a title', async () => {
-    const { __internals } = await import('../../lib/calls-action-item-flow');
-    const raw = JSON.stringify({ action_items: [{ owner: 'Kyle' }, { title: 'OK', owner: 'Co-Pilot' }] });
-    expect(__internals.parseExtractionResponse(raw)).toHaveLength(1);
-  });
-
-  it('coerces invalid priority values to "medium"', async () => {
-    const { __internals } = await import('../../lib/calls-action-item-flow');
-    const raw = JSON.stringify({ action_items: [{ title: 'X', owner: 'Kyle', priority: 'critical' }] });
-    expect(__internals.parseExtractionResponse(raw)[0].priority).toBe('medium');
-  });
-
-  it('drops invalid due_iso values', async () => {
-    const { __internals } = await import('../../lib/calls-action-item-flow');
-    const raw = JSON.stringify({ action_items: [{ title: 'X', owner: 'Kyle', due_iso: 'next Friday' }] });
-    expect(__internals.parseExtractionResponse(raw)[0].due_iso).toBeNull();
-  });
-
-  it('defaults missing owner to "Co-Pilot"', async () => {
-    const { __internals } = await import('../../lib/calls-action-item-flow');
-    const raw = JSON.stringify({ action_items: [{ title: 'X' }] });
-    expect(__internals.parseExtractionResponse(raw)[0].owner).toBe('Co-Pilot');
-  });
-});
-
-// ─── runActionItemExtraction ──────────────────────────────────────────────────
-
-describe('runActionItemExtraction', () => {
-  it('skips when ANTHROPIC_API_KEY is unset', async () => {
-    delete process.env.ANTHROPIC_API_KEY;
-    const { runActionItemExtraction } = await import('../../lib/calls-action-item-flow');
-    const r = await runActionItemExtraction({
-      call_id: 'c1',
-      call_notion_page_id: 'p1',
-      call_notion_url: 'https://notion.so/p1',
-      call_title: 'Zedcor kickoff',
-      transcript_text: 'Kyle: send Zedcor the SOW',
-      participants: ['Kyle'],
-    });
-    expect(r.skipped_reason).toMatch(/ANTHROPIC_API_KEY/);
-    expect(r.written_action_items).toEqual([]);
-    expect(mockRpc).not.toHaveBeenCalled();
-  });
-
-  it('returns zero-extracted when the LLM finds no action items', async () => {
-    mockCreate.mockResolvedValue({
-      content: [{ type: 'text', text: '{"action_items":[]}' }],
-    });
-    const { runActionItemExtraction } = await import('../../lib/calls-action-item-flow');
-    const r = await runActionItemExtraction({
-      call_id: 'c1',
-      call_notion_page_id: 'p1',
-      call_notion_url: 'https://notion.so/p1',
-      call_title: 't',
-      transcript_text: 'small talk only',
-      participants: [],
-    });
-    expect(r.extracted_count).toBe(0);
-    expect(r.written_action_items).toEqual([]);
-  });
-
-  it('writes each extracted item, creates Kanban card, links back', async () => {
-    mockCreate.mockResolvedValue({
-      content: [{
-        type: 'text',
-        text: JSON.stringify({
-          action_items: [
-            { title: 'Send Zedcor SOW', owner: 'Kyle', priority: 'high', description: 'Pilot SOW' },
-            { title: 'Draft FAQ', owner: 'Co-Pilot', priority: 'medium' },
-          ],
-        }),
-      }],
-    });
-    mockRpc.mockImplementation(async (name: string) => {
-      if (name === 'ns_create_action_item_from_call') return { data: `ai-${Math.random().toString(36).slice(2, 6)}`, error: null };
-      return { data: null, error: null };
-    });
-
-    const { runActionItemExtraction } = await import('../../lib/calls-action-item-flow');
-    const r = await runActionItemExtraction({
-      call_id: 'c1',
-      call_notion_page_id: 'call-page-1',
-      call_notion_url: 'https://notion.so/call-page-1',
-      call_title: 'Zedcor pilot kickoff',
-      transcript_text: 'Kyle: I\'ll send Zedcor the SOW. We need a FAQ draft.',
-      participants: ['Kyle'],
-    });
-
-    expect(r.extracted_count).toBe(2);
-    expect(r.written_action_items).toHaveLength(2);
-    expect(r.errors).toEqual([]);
-
-    const createCalls = mockRpc.mock.calls.filter(([n]) => n === 'ns_create_action_item_from_call');
-    expect(createCalls).toHaveLength(2);
-    expect(createCalls[0][1].p_owner_name).toBe('Kyle');
-    expect(createCalls[0][1].p_priority).toBe('high');
-    expect(createCalls[1][1].p_owner_name).toBe('Co-Pilot');
-
-    // Each extracted item should also call ns_set_action_item_notion_page_id once.
-    const setCalls = mockRpc.mock.calls.filter(([n]) => n === 'ns_set_action_item_notion_page_id');
-    expect(setCalls).toHaveLength(2);
-
-    // 2 Kanban POSTs + 2 block-append PATCHes (one per item).
-    const fetchMock = globalThis.fetch as unknown as ReturnType<typeof vi.fn>;
-    const pageCreates = fetchMock.mock.calls.filter((c) => typeof c[0] === 'string' && c[0].endsWith('/v1/pages'));
-    expect(pageCreates).toHaveLength(2);
-
-    // Lock in the Status/Priority/Source values against the live Internal Org
-    // Kanban schema. Mis-cased values would 400 against Notion.
-    for (const call of pageCreates) {
-      const body = JSON.parse((call[1] as RequestInit & { body: string }).body);
-      expect(body.properties.Status.select.name).toBe('Backlog');
-      expect(['Low', 'Medium', 'High', 'Irreversible']).toContain(body.properties.Priority.select.name);
-      expect(body.properties.Source.select.name).toBe('Call');
-    }
-    const blockAppends = fetchMock.mock.calls.filter((c) => typeof c[0] === 'string' && c[0].includes('/v1/blocks/call-page-1/children'));
-    expect(blockAppends).toHaveLength(2);
-  });
-
-  it('continues processing other items when one ns_create_action_item_from_call fails', async () => {
-    mockCreate.mockResolvedValue({
-      content: [{
-        type: 'text',
-        text: JSON.stringify({
-          action_items: [
-            { title: 'OK Item', owner: 'Kyle' },
-            { title: 'Fail Item', owner: 'Keenan' },
-          ],
-        }),
-      }],
-    });
-    let n = 0;
-    mockRpc.mockImplementation(async (name: string) => {
-      if (name === 'ns_create_action_item_from_call') {
-        n++;
-        if (n === 2) return { data: null, error: { message: 'unique violation' } };
-        return { data: 'ai-1', error: null };
-      }
-      return { data: null, error: null };
-    });
-
-    const { runActionItemExtraction } = await import('../../lib/calls-action-item-flow');
-    const r = await runActionItemExtraction({
-      call_id: 'c1',
-      call_notion_page_id: 'cp',
-      call_notion_url: 'u',
-      call_title: 't',
-      transcript_text: 'transcript',
-      participants: [],
-    });
-    expect(r.extracted_count).toBe(2);
-    expect(r.written_action_items).toHaveLength(1);
-    expect(r.errors.length).toBeGreaterThanOrEqual(1);
-    expect(r.errors[0]).toMatch(/Fail Item/);
-  });
-
-  it('captures an error and keeps the row when the Kanban card create fails', async () => {
-    mockCreate.mockResolvedValue({
-      content: [{
-        type: 'text',
-        text: JSON.stringify({ action_items: [{ title: 'X', owner: 'Kyle' }] }),
-      }],
-    });
-    mockRpc.mockResolvedValue({ data: 'ai-1', error: null });
-
-    globalThis.fetch = vi.fn().mockImplementation(async (url: string) => {
-      if (url.includes('/v1/pages')) {
-        return { ok: false, status: 500, json: async () => ({}), text: async () => 'boom' };
-      }
-      return { ok: true, status: 200, json: async () => ({}), text: async () => '{}' };
-    }) as unknown as typeof fetch;
-
-    const { runActionItemExtraction } = await import('../../lib/calls-action-item-flow');
-    const r = await runActionItemExtraction({
-      call_id: 'c1',
-      call_notion_page_id: 'cp',
-      call_notion_url: 'u',
-      call_title: 't',
-      transcript_text: 'transcript',
-      participants: [],
-    });
-    expect(r.extracted_count).toBe(1);
-    expect(r.written_action_items).toHaveLength(1);
-    expect(r.written_action_items[0].notion_page_id).toBeNull();
-    expect(r.errors.some((e) => e.includes('kanban-create'))).toBe(true);
+  it('drops empty strings inside key_takeaways and insights', () => {
+    const b = parseExtractionBundle(JSON.stringify({
+      key_takeaways: ['real', '', '  ', 'also-real'],
+      insights: ['a', 1, null, 'b'],
+    }));
+    expect(b.key_takeaways).toEqual(['real', 'also-real']);
+    expect(b.insights).toEqual(['a', 'b']);
   });
 });

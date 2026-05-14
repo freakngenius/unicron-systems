@@ -138,10 +138,12 @@ function useTeamMembers(): TeamMember[] {
     let cancelled = false;
     getSupabase()
       .rpc('ns_list_team_members')
-      .then(({ data }) => {
-        if (!cancelled) setMembers((data as TeamMember[] | null) ?? []);
-      })
-      .catch(() => { /* leave empty */ });
+      .then(
+        ({ data }) => {
+          if (!cancelled) setMembers((data as TeamMember[] | null) ?? []);
+        },
+        () => { /* leave empty */ },
+      );
     return () => { cancelled = true; };
   }, []);
   return members;

@@ -60,8 +60,10 @@ export function UploadCallModal({ open, onClose, onSubmit }: UploadCallModalProp
     if (!open) return;
     getSupabase()
       .rpc('ns_list_team_members')
-      .then(({ data }) => setMembers((data as TeamMember[] | null) ?? []))
-      .catch(() => { /* leave empty — user can still type externals */ });
+      .then(
+        ({ data }) => setMembers((data as TeamMember[] | null) ?? []),
+        () => { /* leave empty — user can still type externals */ },
+      );
   }, [open]);
 
   // Form reset on modal close. queueMicrotask defers the setState calls so
