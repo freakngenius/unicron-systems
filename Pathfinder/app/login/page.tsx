@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { sendMagicLink } from './actions';
 
 export default function LoginPage() {
@@ -8,13 +8,25 @@ export default function LoginPage() {
   const [sent, setSent] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  // Captured from the URL so we can propagate the operator's intended target
+  // through the magic-link round-trip. Same-origin paths only; the server
+  // re-validates via safeNext() before encoding it into the redirect.
+  const [next, setNext] = useState<string | undefined>(undefined);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const candidate = new URLSearchParams(window.location.search).get('next');
+    if (candidate && candidate.startsWith('/') && !candidate.startsWith('//')) {
+      setNext(candidate);
+    }
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!email) return;
     setLoading(true);
     setError('');
-    const result = await sendMagicLink(email);
+    const result = await sendMagicLink(email, next);
     if (result.error) {
       setError(result.error);
     } else {
