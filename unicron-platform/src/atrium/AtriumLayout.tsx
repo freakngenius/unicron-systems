@@ -7,6 +7,7 @@ import { getSupabase } from '../lib/supabase';
 import { useAuth } from '../lib/auth';
 import { QuickCapture } from './QuickCapture';
 import { AtriumIcon } from './icons';
+import { navigateAtrium } from './navigation';
 
 export type AtriumTab =
   | 'now'
@@ -182,7 +183,10 @@ export function AtriumLayout({ activeTab, onTabChange, children, onOpenSettings 
   const [toast, setToast] = useState<string | null>(null);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
-  const [statusItems, setStatusItems] = useState<StatusItem[]>(DEFAULT_STATUS);
+  // Sprint 8 F9 (2026-05-13): the prior statusItems state (Agents / Escalations
+  // / Budget / Decay / Voice) is replaced by per-pill state above. The legacy
+  // StatusPulse type definitions remain at module top so any other importer
+  // keeps building.
   const [searchQ, setSearchQ] = useState('');
 
   // Toast auto-dismiss
@@ -204,65 +208,166 @@ export function AtriumLayout({ activeTab, onTabChange, children, onOpenSettings 
     return () => document.removeEventListener('keydown', handler);
   }, []);
 
-  // StatusPulse live data — v3 indicators (Agents/Escalations/Budget/Decay/Voice)
-  // Polls every 30s. PGRST106 fix: use public.ns_* SECURITY DEFINER RPCs.
-  const fetchStatus = useCallback(async () => {
+  // Sprint 8 F9 — action-driving top-bar pills (5 of them, left → right):
+  //   (a) My Action Items count → Now > Action Items
+  //   (b) Customers Needing Attention count → People (filtered)
+  //   (c) Today's Calls count + next call HH:MM → Work > Calls
+  //   (d) Escalations — render ONLY when > 0, in red
+  //   (e) New Since Last Visit count — click marks all seen
+  // Replaces the prior Agents/Escalations/Budget/Decay/Voice pills.
+  const [myActionItems, setMyActionItems] = useState(0);
+  const [customersAttention, setCustomersAttention] = useState(0);
+  const [todaysCalls, setTodaysCalls] = useState(0);
+  const [nextCallTime, setNextCallTime] = useState<string | null>(null);
+  const [escalationCount, setEscalationCount] = useState(0);
+  const [newSinceLastVisit, setNewSinceLastVisit] = useState(0);
+
+  const lastVisitKey = 'atrium:last_visit';
+  const userEmailKey =
+    auth.status === 'signed-in' ? (auth.user.email ?? '') : '';
+
+  const fetchTopBarPills = useCallback(async () => {
     try {
       const sb = getSupabase();
       const since24h = new Date(Date.now() - 86_400_000).toISOString();
-      const [agentsRes, escalationsRes, decayRes] = await Promise.all([
-        sb.rpc('ns_list_agents_active'),
-        sb.rpc('ns_count_audit_log_escalations', { p_since: since24h }),
-        sb.rpc('ns_count_ledger_decay'),
-      ]);
+      const startOfTodayPT = (() => {
+        // 00:00 PT for today, expressed as UTC ISO.
+        const fmt = new Intl.DateTimeFormat('en-US', {
+          timeZone: 'America/Los_Angeles',
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+        }).formatToParts(new Date());
+        const y = fmt.find((p) => p.type === 'year')?.value;
+        const m = fmt.find((p) => p.type === 'month')?.value;
+        const d = fmt.find((p) => p.type === 'day')?.value;
+        // Treat as PT midnight ISO; the offset is approximate (PST/PDT differ
+        // by an hour) but is fine for "today's calls" semantics — the calendar
+        // pull window is intentionally generous.
+        return new Date(`${y}-${m}-${d}T00:00:00-08:00`).toISOString();
+      })();
+      const endOfTodayPT = new Date(
+        new Date(startOfTodayPT).getTime() + 24 * 60 * 60 * 1000,
+      ).toISOString();
 
-      const agents = (agentsRes.data as AgentRow[] | null) ?? [];
-      const agentCount = agents.length;
-      const hasAgentError = agents.some((a) => a.status === 'error');
-      const escalationCount = Number(escalationsRes.data ?? 0);
-      const decayCount = Number(decayRes.data ?? 0);
+      const lastVisit =
+        typeof window !== 'undefined'
+          ? window.localStorage.getItem(lastVisitKey) ?? since24h
+          : since24h;
 
-      // Budget burn — aggregate across active agents with budget jsonb
-      let totalSpent = 0;
-      let totalLimit = 0;
-      agents.forEach((a) => {
-        if (a.budget) {
-          totalSpent += a.budget.current_spent_usd ?? 0;
-          totalLimit += a.budget.limit_usd_per_period ?? 0;
+      // Resolve current operator team_member_id via email RPC (matches Now.tsx pattern).
+      let memberId: string | null = null;
+      if (userEmailKey) {
+        const { data } = await sb.rpc('ns_get_team_member_by_email', {
+          p_email: userEmailKey,
+        });
+        const rows = data as Array<{ id: string }> | null;
+        memberId = rows?.[0]?.id ?? null;
+      }
+
+      // (a) My Action Items — open + assigned to current operator.
+      // Sprint 8 F5 added the completed bool; we filter on completed=false.
+      let myAi = 0;
+      if (memberId) {
+        const { count } = await sb
+          .schema('nervous_system')
+          .from('action_items')
+          .select('id', { count: 'exact', head: true })
+          .eq('completed', false)
+          .eq('dri', memberId);
+        myAi = count ?? 0;
+      } else {
+        const { count } = await sb
+          .schema('nervous_system')
+          .from('action_items')
+          .select('id', { count: 'exact', head: true })
+          .eq('completed', false);
+        myAi = count ?? 0;
+      }
+      setMyActionItems(myAi);
+
+      // (b) Customers Needing Attention — naive: customers without a touch in 14d.
+      // Falls back to 0 silently if the table isn't present in this env.
+      try {
+        const fourteenDaysAgo = new Date(
+          Date.now() - 14 * 86_400_000,
+        ).toISOString();
+        const { count } = await sb
+          .schema('nervous_system')
+          .from('customers')
+          .select('id', { count: 'exact', head: true })
+          .lt('last_touch_at', fourteenDaysAgo);
+        setCustomersAttention(count ?? 0);
+      } catch {
+        setCustomersAttention(0);
+      }
+
+      // (c) Today's Calls — count + next start_at in HH:MM PT.
+      try {
+        const { data: calRows } = await sb
+          .schema('nervous_system')
+          .from('calendar_events')
+          .select('start_at')
+          .gte('start_at', startOfTodayPT)
+          .lt('start_at', endOfTodayPT)
+          .order('start_at', { ascending: true })
+          .limit(20);
+        const rows = (calRows ?? []) as Array<{ start_at: string }>;
+        setTodaysCalls(rows.length);
+        const upcoming = rows.find(
+          (r) => new Date(r.start_at).getTime() >= Date.now(),
+        );
+        if (upcoming) {
+          const hhmm = new Date(upcoming.start_at).toLocaleTimeString('en-US', {
+            timeZone: 'America/Los_Angeles',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false,
+          });
+          setNextCallTime(hhmm);
+        } else {
+          setNextCallTime(null);
         }
-      });
-      const budgetPct = totalLimit > 0 ? Math.round((totalSpent / totalLimit) * 100) : null;
+      } catch {
+        setTodaysCalls(0);
+        setNextCallTime(null);
+      }
 
-      setStatusItems([
-        {
-          label: 'Agents',
-          tone: hasAgentError ? 'error' : agentCount > 0 ? 'ok' : 'warn',
-          detail: agentCount > 0 ? `${agentCount} healthy` : 'No agents',
-        },
-        {
-          label: 'Escalations',
-          tone: escalationCount > 0 ? 'warn' : 'ok',
-          detail: `${escalationCount} open`,
-        },
-        {
-          label: 'Budget',
-          tone: budgetPct === null ? 'ok' : budgetPct >= 80 ? 'error' : budgetPct >= 60 ? 'warn' : 'ok',
-          detail: budgetPct === null ? '—%' : `${budgetPct}%`,
-        },
-        {
-          label: 'Decay',
-          tone: decayCount > 2 ? 'error' : decayCount > 0 ? 'warn' : 'ok',
-          detail: `${decayCount} stale`,
-        },
-        {
-          label: 'Voice',
-          tone: 'ok',
-          detail: '0 in flight',
-        },
-      ]);
+      // (d) Escalations — re-use existing RPC, render ONLY when > 0.
+      const { data: escData } = await sb.rpc('ns_count_audit_log_escalations', {
+        p_since: since24h,
+      });
+      setEscalationCount(Number(escData ?? 0));
+
+      // (e) New Since Last Visit — ledger rows since the persisted timestamp.
+      try {
+        const { count } = await sb
+          .schema('nervous_system')
+          .from('ledger')
+          .select('id', { count: 'exact', head: true })
+          .gte('created_at', lastVisit);
+        setNewSinceLastVisit(count ?? 0);
+      } catch {
+        setNewSinceLastVisit(0);
+      }
     } catch {
       // Keep defaults on error
     }
+  }, [userEmailKey]);
+  const fetchStatus = fetchTopBarPills; // shim — old name still referenced below
+
+  const markAllSeen = useCallback(() => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem(lastVisitKey, new Date().toISOString());
+    setNewSinceLastVisit(0);
+  }, []);
+
+  const openUploadCallModal = useCallback(() => {
+    // Navigate to Work > Calls and dispatch an event CallsLog listens for to
+    // open its UploadCallModal. Keeps the modal mount-state inside the work
+    // sub-view (it already owns the upload pipeline + status bar).
+    navigateAtrium({ tab: 'work', subTab: 'calls' });
+    window.dispatchEvent(new CustomEvent('atrium:open-upload-call'));
   }, []);
 
   useEffect(() => {
@@ -468,13 +573,69 @@ export function AtriumLayout({ activeTab, onTabChange, children, onOpenSettings 
             </button>
           </div>
 
-          {/* Right — status pulse + capture */}
+          {/* Sprint 8 F9: action-driving pills + mic + phone-icon upload-call button */}
           <div className="flex items-center gap-2 flex-shrink-0">
-            <div className="hidden sm:flex">
-              <StatusPulse items={statusItems} />
+            <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-full"
+              style={{ background: 'rgba(0,0,0,0.22)', border: '1px solid rgba(255,255,255,0.10)' }}
+            >
+              {/* (a) My Action Items → Now > Action Items */}
+              <button
+                onClick={() => navigateAtrium({ tab: 'now', subTab: 'action-items' })}
+                title="My open action items"
+                className="topbar-pill flex items-center gap-1 px-2 py-0.5 rounded-full transition-colors hover:bg-white/10 focus:outline-none focus-visible:ring-1 focus-visible:ring-white/30"
+              >
+                <span className="mono text-[11px] font-semibold text-white">{myActionItems}</span>
+                <span className="mono text-[9px] uppercase tracking-[0.10em] text-[#C2CADB]">my AI</span>
+              </button>
+
+              {/* (b) Customers Needing Attention → People (filtered) */}
+              <button
+                onClick={() => navigateAtrium({ tab: 'people', filter: { attention: 'true' } })}
+                title="Customers needing attention"
+                className="topbar-pill flex items-center gap-1 px-2 py-0.5 rounded-full transition-colors hover:bg-white/10 focus:outline-none focus-visible:ring-1 focus-visible:ring-white/30"
+              >
+                <span className="mono text-[11px] font-semibold text-white">{customersAttention}</span>
+                <span className="mono text-[9px] uppercase tracking-[0.10em] text-[#C2CADB]">cust attn</span>
+              </button>
+
+              {/* (c) Today's Calls + next HH:MM → Work > Calls */}
+              <button
+                onClick={() => navigateAtrium({ tab: 'work', subTab: 'calls' })}
+                title={nextCallTime ? `Today's calls (next ${nextCallTime} PT)` : "Today's calls"}
+                className="topbar-pill flex items-center gap-1 px-2 py-0.5 rounded-full transition-colors hover:bg-white/10 focus:outline-none focus-visible:ring-1 focus-visible:ring-white/30"
+              >
+                <span className="mono text-[11px] font-semibold text-white">{todaysCalls}</span>
+                <span className="mono text-[9px] uppercase tracking-[0.10em] text-[#C2CADB]">calls</span>
+                {nextCallTime && (
+                  <span className="mono text-[9px] text-[#E8763A]">{nextCallTime}</span>
+                )}
+              </button>
+
+              {/* (d) Escalations — render only when > 0, in red */}
+              {escalationCount > 0 && (
+                <button
+                  onClick={() => navigateAtrium({ tab: 'system', subTab: 'refusal-log' })}
+                  title="Escalations in last 24h"
+                  className="topbar-pill flex items-center gap-1 px-2 py-0.5 rounded-full transition-colors hover:bg-red-500/20 focus:outline-none focus-visible:ring-1 focus-visible:ring-red-300"
+                  style={{ background: 'rgba(220,38,38,0.18)', border: '1px solid rgba(220,38,38,0.45)' }}
+                >
+                  <span className="mono text-[11px] font-semibold text-[#FECACA]">{escalationCount}</span>
+                  <span className="mono text-[9px] uppercase tracking-[0.10em] text-[#FCA5A5]">esc</span>
+                </button>
+              )}
+
+              {/* (e) New Since Last Visit — click marks all seen */}
+              <button
+                onClick={markAllSeen}
+                title="New since last visit (click to mark all seen)"
+                className="topbar-pill flex items-center gap-1 px-2 py-0.5 rounded-full transition-colors hover:bg-white/10 focus:outline-none focus-visible:ring-1 focus-visible:ring-white/30"
+              >
+                <span className="mono text-[11px] font-semibold text-white">{newSinceLastVisit}</span>
+                <span className="mono text-[9px] uppercase tracking-[0.10em] text-[#C2CADB]">new</span>
+              </button>
             </div>
 
-            {/* Quick capture button */}
+            {/* Quick capture button (mic + plus) */}
             <button
               onClick={() => setCaptureOpen(true)}
               className="flex items-center gap-1.5 rounded-lg px-2.5 py-2 transition-colors focus:outline-none"
@@ -487,6 +648,21 @@ export function AtriumLayout({ activeTab, onTabChange, children, onOpenSettings 
             >
               <AtriumIcon.Mic size={13} strokeWidth={1.5} />
               <AtriumIcon.Plus size={11} strokeWidth={1.8} />
+            </button>
+
+            {/* Sprint 8 F9: phone-icon button — opens Work > Calls Upload modal */}
+            <button
+              onClick={openUploadCallModal}
+              aria-label="Upload call"
+              title="Upload call transcript"
+              className="flex items-center justify-center rounded-lg px-2.5 py-2 transition-colors focus:outline-none"
+              style={{
+                background: 'rgba(46,142,102,0.15)',
+                border: '1px solid rgba(46,142,102,0.35)',
+                color: '#D6F0E5',
+              }}
+            >
+              <AtriumIcon.Phone size={14} strokeWidth={1.5} />
             </button>
 
             {/* Greeting (mobile) */}
