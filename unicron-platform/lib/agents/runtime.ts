@@ -59,15 +59,23 @@ export async function loadAgentMemory(agentName: string): Promise<string> {
 /**
  * Append an entry to the agent's daily log in the vault.
  * Creates the file if it does not yet exist; appends with a divider if it does.
+ *
+ * `forDate` (YYYY-MM-DD) explicitly names the date the entry is *for*. When
+ * the analyst's nightly cron fires on day D and aggregates day D-1, it should
+ * pass forDate=D-1 so the digest lives at .../analyst/<D-1>.md, matching what
+ * the UI looks up when an operator selects "yesterday". Omit forDate to keep
+ * the legacy behavior (path uses the server's current UTC date).
  */
 export async function writeAgentMemory(
   agentName: string,
-  entry: string
-): Promise<void> {
+  entry: string,
+  forDate?: string,
+): Promise<{ path: string; status: number }> {
   const today = new Date().toISOString().split('T')[0];
+  const pathDate = forDate ?? today;
   const token = process.env.GITHUB_VAULT_TOKEN!;
   const repo = 'freakngenius/unicron-knowledge';
-  const path = `wiki/memory/${agentName}/${today}.md`;
+  const path = `wiki/memory/${agentName}/${pathDate}.md`;
 
   // Fetch current file to get SHA and existing content
   const getRes = await fetch(
@@ -86,10 +94,10 @@ export async function writeAgentMemory(
 
   const newContent = currentContent
     ? `${currentContent}\n\n---\n\n${entry}`
-    : `---\ntype: memory\nagent: ${agentName}\ndate: ${today}\n---\n\n${entry}`;
+    : `---\ntype: memory\nagent: ${agentName}\ndate: ${pathDate}\n---\n\n${entry}`;
 
   const body: Record<string, unknown> = {
-    message: `memory(${agentName}): daily log ${today}`,
+    message: `memory(${agentName}): daily log ${pathDate}`,
     content: Buffer.from(newContent).toString('base64'),
     committer: { name: 'Unicron Agent', email: 'agent@unicron.systems' },
   };
@@ -111,6 +119,7 @@ export async function writeAgentMemory(
     const detail = await putRes.text();
     console.error(`[runtime] writeAgentMemory failed for ${agentName}: ${putRes.status} — ${detail}`);
   }
+  return { path, status: putRes.status };
 }
 
 // ---------------------------------------------------------------------------
