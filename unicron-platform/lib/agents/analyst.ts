@@ -224,12 +224,16 @@ interface ActionItemRow {
   created_at: string;
 }
 
-export async function dailyDigest(): Promise<void> {
+export async function dailyDigest(opts: { forDate?: string } = {}): Promise<{ forDate: string; vaultPath: string; vaultStatus: number; events: number; actionItems: number }> {
   const now = new Date();
   const todayStr = now.toISOString().split('T')[0];
   const yesterday = new Date(now);
   yesterday.setDate(now.getDate() - 1);
-  const yesterdayStr = yesterday.toISOString().split('T')[0];
+  const yesterdayStr = opts.forDate ?? yesterday.toISOString().split('T')[0];
+  const nextDay = new Date(`${yesterdayStr}T00:00:00Z`);
+  nextDay.setUTCDate(nextDay.getUTCDate() + 1);
+  const nextDayStr = nextDay.toISOString().split('T')[0];
+  void todayStr;
 
   console.log(`[analyst] dailyDigest: aggregating ${yesterdayStr}`);
 
@@ -239,7 +243,7 @@ export async function dailyDigest(): Promise<void> {
     .from('ledger')
     .select('id, source_type, content_summary, created_at')
     .gte('created_at', `${yesterdayStr}T00:00:00Z`)
-    .lt('created_at', `${todayStr}T00:00:00Z`)
+    .lt('created_at', `${nextDayStr}T00:00:00Z`)
     .order('created_at', { ascending: true });
 
   if (eventsErr) console.error('[analyst] dailyDigest ledger error:', eventsErr.message);
@@ -250,7 +254,7 @@ export async function dailyDigest(): Promise<void> {
     .from('action_items')
     .select('id, title, status, priority, due_at, created_at')
     .gte('created_at', `${yesterdayStr}T00:00:00Z`)
-    .lt('created_at', `${todayStr}T00:00:00Z`)
+    .lt('created_at', `${nextDayStr}T00:00:00Z`)
     .order('priority', { ascending: true });
 
   if (aiErr) console.error('[analyst] dailyDigest action_items error:', aiErr.message);
@@ -291,8 +295,9 @@ ${aiSummary}
 
 _Generated at ${now.toISOString()}_`;
 
-  // Write to vault (daily log via writeAgentMemory, path: wiki/memory/analyst/YYYY-MM-DD.md)
-  await writeAgentMemory('analyst', narrativeMd);
+  // Write to vault at wiki/memory/analyst/<yesterdayStr>.md so the UI date
+  // selector for "yesterday" finds the file at the matching path.
+  const vaultResult = await writeAgentMemory('analyst', narrativeMd, yesterdayStr);
 
   // Post short version to Slack feed channel
   const feedChannelId = process.env.SLACK_FEED_CHANNEL_ID;
@@ -305,6 +310,13 @@ _Generated at ${now.toISOString()}_`;
   }
 
   console.log('[analyst] dailyDigest done');
+  return {
+    forDate: yesterdayStr,
+    vaultPath: vaultResult.path,
+    vaultStatus: vaultResult.status,
+    events: eventRows.length,
+    actionItems: aiRows.length,
+  };
 }
 
 // ---------------------------------------------------------------------------
