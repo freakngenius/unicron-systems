@@ -24,6 +24,7 @@ import { useAuth } from '../lib/auth';
 import { QuickCapture } from './QuickCapture';
 import { AtriumIcon } from './icons';
 import { SlackDigest } from './now/SlackDigest';
+import { FileUploadBlock } from './now/FileUploadBlock';
 import { navigateAtrium, openAtriumSettings } from './navigation';
 // Pass 2 (R1): AttentionScorer cut — was hand-rolled scoring across mixed
 // sources. TopOfMind now wires to ns_top_of_mind_for_dri RPC (real data).
@@ -2712,6 +2713,11 @@ export function Now({ name }: Props) {
 
       {/* Digest sub-tab — full width, date picker + 2-col sections */}
       {nowTab === 'digest' && <DigestTab />}
+      </div>
+
+      {/* ─── Sprint 8 F1: File Upload block ─── */}
+      <div className="mt-4">
+        <FileUploadBlock teamMemberId={teamMemberId} />
       </div>
 
       {/* ─── Modals ─── */}
