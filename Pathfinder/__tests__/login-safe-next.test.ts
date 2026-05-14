@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { safeNext } from '../app/login/actions';
+import { safeNext } from '../app/login/safe-next';
 
 describe('safeNext — magic-link redirect sanitizer (seam #6)', () => {
   it('returns "/" when next is undefined', () => {
