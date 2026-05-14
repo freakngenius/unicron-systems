@@ -113,4 +113,20 @@ describe('CustomerDetailView · status badge + gated Open Pathfinder button', ()
       expect(screen.getByTestId('customer-detail-health')).toBeInTheDocument(),
     );
   });
+
+  // Regression: fresh post-Approve&Deploy CustomerOrg may land here before the
+  // server-side row is fully shaped — display_name can be undefined at runtime
+  // even though the TS contract says required. Prior behavior:
+  //   Uncaught TypeError: Cannot read properties of undefined (reading 'toUpperCase')
+  // and the whole tree white-screened. Guard at line 42.
+  it('does not crash when org.display_name is undefined; falls back to "CUSTOMER"', async () => {
+    const orgWithoutName = {
+      ...baseOrg('setting_up'),
+      display_name: undefined as unknown as string,
+    };
+    render(<CustomerDetailView org={orgWithoutName} onBack={() => {}} />);
+    const el = await screen.findByTestId('customer-detail-open-pathfinder');
+    expect(el.textContent).toContain('OPEN PATHFINDER FOR CUSTOMER');
+    expect(el.textContent).toContain('→');
+  });
 });

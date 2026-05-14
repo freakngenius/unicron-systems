@@ -39,7 +39,7 @@ export function CustomerDetailView({ org, onBack }: Props) {
 
   const openEnabled = OPEN_PATHFINDER_ENABLED.has(org.status);
   const disabledReason = openPathfinderDisabledReason(org.status);
-  const openLabel = `OPEN PATHFINDER FOR ${org.display_name.toUpperCase()} →`;
+  const openLabel = `OPEN PATHFINDER FOR ${(org.display_name ?? 'CUSTOMER').toUpperCase()} →`;
 
   return (
     <div className="px-6 py-8">
