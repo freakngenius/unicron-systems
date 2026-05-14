@@ -61,7 +61,7 @@ export function SystemDeployed({ onOpenLive, sourcesConnected }: Props) {
       <button
         type="button"
         onClick={onOpenLive}
-        className="bg-white text-bg-base mono text-[12px] tracking-[0.12em] uppercase py-3 px-6 rounded-md hover:bg-text-primary transition-colors"
+        className="bg-accent-primary text-white mono text-[12px] tracking-[0.12em] uppercase py-3 px-6 rounded-md hover:bg-accent-primary/90 transition-colors"
       >
         OPEN LIVE SYSTEM →
       </button>

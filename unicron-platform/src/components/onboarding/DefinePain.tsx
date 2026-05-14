@@ -65,8 +65,8 @@ export function DefinePain({ onSubmit }: Props) {
           disabled={!canSubmit}
           aria-disabled={!canSubmit}
           className={[
-            'bg-white text-bg-base mono text-[12px] tracking-[0.12em] uppercase py-3 px-6 rounded-md transition-colors',
-            canSubmit ? 'hover:bg-text-primary' : 'opacity-40 cursor-not-allowed',
+            'bg-accent-primary text-white mono text-[12px] tracking-[0.12em] uppercase py-3 px-6 rounded-md transition-colors',
+            canSubmit ? 'hover:bg-accent-primary/90' : 'opacity-40 cursor-not-allowed',
           ].join(' ')}
         >
           LET ARCHITECT DESIGN IT →

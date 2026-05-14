@@ -59,10 +59,15 @@ export function CustomersView({ onSelect }: Props) {
                 className="w-full text-left flex flex-col gap-3 border border-border-default rounded-md bg-bg-panel p-4 hover:border-accent-gold/60 transition-colors"
               >
                 <div className="flex items-baseline justify-between gap-2">
-                  <span className="mono text-[13px] text-text-primary truncate">
-                    {org.display_name}
+                  <span
+                    className="mono text-[13px] text-text-primary truncate"
+                    data-testid="customer-card-name"
+                  >
+                    {org.display_name || `Customer ${org.id.slice(0, 8)}`}
                   </span>
                   <span
+                    data-testid="customer-card-status"
+                    data-status={org.status}
                     className={[
                       'mono text-[10px] uppercase tracking-[0.18em] border rounded-md px-2 py-0.5',
                       STATUS_TONE[org.status],
@@ -72,7 +77,7 @@ export function CustomersView({ onSelect }: Props) {
                   </span>
                 </div>
                 <span className="mono text-[10px] uppercase tracking-[0.18em] text-text-primary/40">
-                  {org.id} · onboarded {org.onboarded_at?.slice(0, 10) ?? '—'}
+                  onboarded {org.onboarded_at?.slice(0, 10) ?? '—'}
                 </span>
                 {org.primary_contact_email ? (
                   <span className="mono text-[10px] text-text-primary/40 truncate">

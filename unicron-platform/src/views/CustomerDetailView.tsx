@@ -53,12 +53,12 @@ export function CustomerDetailView({ org, onBack }: Props) {
           >
             ← CUSTOMERS
           </button>
-          <h1 className="mono text-[16px] tracking-wide text-text-primary">
-            {org.display_name}
+          <h1
+            className="mono text-[16px] tracking-wide text-text-primary"
+            data-testid="customer-detail-name"
+          >
+            {org.display_name || `Customer ${org.id.slice(0, 8)}`}
           </h1>
-          <span className="mono text-[11px] uppercase tracking-[0.18em] text-text-primary/40">
-            {org.id}
-          </span>
           <span
             data-testid="customer-detail-status-badge"
             data-status={org.status}
@@ -180,12 +180,28 @@ export function CustomerDetailView({ org, onBack }: Props) {
             {/* Active sources */}
             <section className="flex flex-col gap-2 border border-border-default rounded-md bg-bg-panel p-4">
               <span className="mono text-[10px] uppercase tracking-[0.18em] text-text-primary/50">
-                ACTIVE SOURCES ({health.active_sources.length})
+                SOURCES ({health.active_sources.length} live{org.architecture?.data_sources_proposed?.length ? ` · ${org.architecture.data_sources_proposed.length} declared` : ''})
               </span>
               {health.active_sources.length === 0 ? (
-                <p className="mono text-[11px] uppercase tracking-[0.18em] text-text-primary/30">
-                  no sources enabled
-                </p>
+                org.architecture?.data_sources_proposed?.length ? (
+                  <ul className="flex flex-col gap-1.5" data-testid="customer-detail-pending-sources">
+                    {org.architecture.data_sources_proposed.map((s, i) => (
+                      <li
+                        key={`pending-${i}`}
+                        className="flex flex-col gap-0.5 border border-amber-400/40 rounded-md px-2 py-1.5"
+                      >
+                        <span className="mono text-[11px] text-text-primary truncate">{s.type}</span>
+                        <span className="mono text-[10px] uppercase tracking-[0.18em] text-amber-400">
+                          ONBOARDING · {s.jurisdictions.join(', ') || 'tier-2 queue'}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="mono text-[11px] uppercase tracking-[0.18em] text-text-primary/30">
+                    no sources enabled
+                  </p>
+                )
               ) : (
                 <ul className="flex flex-col gap-1.5" data-testid="customer-detail-sources">
                   {health.active_sources.map((s) => (

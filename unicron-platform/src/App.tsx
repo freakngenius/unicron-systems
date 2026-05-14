@@ -77,7 +77,9 @@ function MetacronShell({ embedded = false }: MetacronShellProps) {
           onGoToOnboarding={() => setTab('onboarding')}
         />
       )}
-      {tab === 'inbox' && <ArchitectInbox />}
+      {tab === 'inbox' && (
+        <ArchitectInbox onStartNewDecomposition={() => setTab('onboarding')} />
+      )}
       {tab === 'agents' && <AgentsView />}
       {tab === 'customers' && (
         customerSelected ? (

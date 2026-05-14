@@ -80,7 +80,7 @@ export function SignInGate({ children }: Props) {
             <button
               type="submit"
               disabled={submitting || !email}
-              className="w-full bg-white text-bg-base mono text-[12px] tracking-[0.12em] uppercase py-3 px-5 rounded-md hover:bg-text-primary transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              className="w-full bg-accent-primary text-white mono text-[12px] tracking-[0.12em] uppercase py-3 px-5 rounded-md hover:bg-accent-primary/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {submitting ? 'sending…' : 'send magic link →'}
             </button>

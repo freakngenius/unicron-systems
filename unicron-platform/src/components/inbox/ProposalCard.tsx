@@ -86,7 +86,7 @@ export function ProposalCard({ proposal, onApprove, onDismiss }: Props) {
         <button
           type="button"
           onClick={approve}
-          className="bg-white text-bg-base mono text-[12px] tracking-[0.12em] uppercase py-2.5 px-4 rounded-md hover:bg-text-primary transition-colors"
+          className="bg-accent-primary text-white mono text-[12px] tracking-[0.12em] uppercase py-2.5 px-4 rounded-md hover:bg-accent-primary/90 transition-colors"
         >
           APPROVE
         </button>
