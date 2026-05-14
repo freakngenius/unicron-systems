@@ -616,3 +616,17 @@ export const boundarySweepRun = inngest.createFunction(
     return step.run('boundary-sweep', () => boundarySweep(data));
   },
 );
+
+// ---------------------------------------------------------------------------
+// Trend Scout — Sprint 7.5 reification
+// ---------------------------------------------------------------------------
+
+export const trendScoutFnRun = inngest.createFunction(
+  { id: 'trend-scout-run', name: 'Trend Scout Run', retries: 1 },
+  { event: 'trend-scout/run' },
+  async ({ event, step }) => {
+    const { trendScoutRun } = await import('./trend-scout.js');
+    const forDate = (event.data as { for_date?: string } | undefined)?.for_date;
+    return step.run('trend-scout', () => trendScoutRun({ forDate }));
+  },
+);
