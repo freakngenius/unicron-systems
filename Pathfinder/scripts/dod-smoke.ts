@@ -54,14 +54,13 @@ interface SmokeContext {
     slug: string;
     name: string;
     id?: string;
-    viaApi?: boolean;
   };
   endpoints: {
     pathfinder: string;
     metacron: string;
   };
   operatorEmail: string;
-  unicronApiKey: string | null;
+  unicronApiKey: string;
   startedAt: string;
   results: Result[];
 }
@@ -155,11 +154,10 @@ async function step1(ctx: SmokeContext): Promise<Omit<Result, 'step' | 'name' | 
 }
 
 /** Step 2 — Persist via Approve & Deploy → pathfinder.organizations status=setting_up.
- *  Goes through the canonical POST /pathfinder/api/organizations endpoint when
- *  UNICRON_INGEST_API_KEY is available — that path emits the Inngest org.created
- *  event needed for step 3. Falls back to direct service-role insert (no Inngest
- *  emit) when the key is missing, so the harness still runs in environments
- *  without the API key.
+ *  Always goes through POST /pathfinder/api/organizations — the same path the
+ *  operator's Approve & Deploy uses. That route emits `pathfinder/org.created`
+ *  on success, which step 3 then asserts. UNICRON_INGEST_API_KEY is required
+ *  in env; the harness fails fast at startup if it's missing.
  */
 async function step2(ctx: SmokeContext): Promise<Omit<Result, 'step' | 'name' | 'latency_ms'>> {
   const blueprintStub = {
@@ -177,81 +175,86 @@ async function step2(ctx: SmokeContext): Promise<Omit<Result, 'step' | 'name' | 
     customer_org_id: ctx.testorg.slug,
     architecture: blueprintStub,
   };
-  if (ctx.unicronApiKey) {
-    const url = `${ctx.endpoints.pathfinder}/pathfinder/api/organizations`;
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', 'x-unicron-api-key': ctx.unicronApiKey },
-      body: JSON.stringify(payload),
-    });
-    const bodyText = await res.text();
-    if (!res.ok) {
-      return { status: 'fail', error: `POST ${url} ${res.status}: ${bodyText.slice(0, 200)}` };
-    }
-    let data: { id?: string; slug?: string; status?: string } = {};
-    try { data = JSON.parse(bodyText); } catch { /* fall through */ }
-    if (!data.id) return { status: 'fail', error: 'POST response missing id', details: { body: bodyText.slice(0, 200) } };
-    ctx.testorg.id = data.id;
-    ctx.testorg.viaApi = true;
-    return { status: 'pass', details: { id: data.id, slug: data.slug, status: data.status, via: 'POST /pathfinder/api/organizations' } };
+  const url = `${ctx.endpoints.pathfinder}/pathfinder/api/organizations`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-unicron-api-key': ctx.unicronApiKey },
+    body: JSON.stringify(payload),
+  });
+  const bodyText = await res.text();
+  if (!res.ok) {
+    return { status: 'fail', error: `POST ${url} ${res.status}: ${bodyText.slice(0, 200)}` };
   }
-  // Fallback: direct insert (Inngest org.created will NOT emit; step 3 will block).
-  const { data, error } = await ctx.supabaseService
-    .schema('pathfinder')
-    .from('organizations')
-    .insert({
-      slug: ctx.testorg.slug,
-      name: ctx.testorg.name,
-      customer_org_id: ctx.testorg.slug,
-      status: 'setting_up',
-      architecture: blueprintStub,
-    })
-    .select('id, slug, status, architecture')
-    .single();
-  if (error) return { status: 'fail', error: error.message };
-  ctx.testorg.id = data.id as string;
-  ctx.testorg.viaApi = false;
+  let data: { id?: string; slug?: string; status?: string } = {};
+  try { data = JSON.parse(bodyText); } catch { /* fall through */ }
+  if (!data.id) return { status: 'fail', error: 'POST response missing id', details: { body: bodyText.slice(0, 200) } };
+  ctx.testorg.id = data.id;
   return {
     status: 'pass',
-    details: { id: data.id, slug: data.slug, status: data.status, via: 'direct insert (UNICRON_INGEST_API_KEY missing)' },
+    details: { id: data.id, slug: data.slug, status: data.status, http_status: res.status, via: 'POST /pathfinder/api/organizations' },
   };
 }
 
-/** Step 3 — Inngest org.created event fires automatically. */
+/** Step 3 — Inngest `pathfinder/org.created` event fires and the orgCreated
+ *  function flips `pathfinder.organizations.status` from `setting_up` to
+ *  `first_run` (Phase 2E slice 2, lib/inngest/functions/org-created.ts:76).
+ *  Polls the org row's status + status_changed_at and considers the step
+ *  passed once the transition is observed. Up to 30s of polling — Inngest
+ *  step execution is normally sub-second but production cold-starts can add
+ *  a few seconds; agent_runs from later cron pickups are also accepted as
+ *  proof the event landed somewhere on the pipeline.
+ */
 async function step3(ctx: SmokeContext): Promise<Omit<Result, 'step' | 'name' | 'latency_ms'>> {
   const orgId = ctx.testorg.id;
   if (!orgId) return { status: 'blocked', details: { reason: 'step 2 did not produce org id' } };
-  if (!ctx.testorg.viaApi) {
-    return {
-      status: 'blocked',
-      details: { reason: 'step 2 used direct insert; Inngest org.created emit is wired to POST /api/organizations only. Set UNICRON_INGEST_API_KEY to exercise this path.' },
-    };
-  }
-  // Poll up to 15s for agent_runs to appear or status to advance.
-  const deadline = Date.now() + 15000;
+  const deadline = Date.now() + 30000;
+  let lastStatus: string | undefined;
+  let lastChangedAt: string | undefined;
   while (Date.now() < deadline) {
-    const { data: runs } = await ctx.supabaseService
-      .schema('pathfinder')
-      .from('agent_runs')
-      .select('id, agent_name, started_at')
-      .eq('organization_id', orgId)
-      .limit(5);
-    if (runs && runs.length > 0) {
-      return { status: 'pass', details: { agent_runs_count: runs.length, sample_agents: runs.map(r => (r as { agent_name: string }).agent_name) } };
-    }
-    const { data: org } = await ctx.supabaseService
+    const { data: org, error } = await ctx.supabaseService
       .schema('pathfinder')
       .from('organizations')
-      .select('status')
+      .select('status, status_changed_at')
       .eq('id', orgId)
       .single();
-    const s = (org as { status: string } | null)?.status;
-    if (s && s !== 'setting_up') {
-      return { status: 'pass', details: { org_status: s, note: 'status advanced past setting_up — Inngest path fired' } };
+    if (error) return { status: 'fail', error: error.message };
+    const row = org as { status: string; status_changed_at: string | null };
+    lastStatus = row.status;
+    lastChangedAt = row.status_changed_at ?? undefined;
+    if (row.status === 'first_run') {
+      return {
+        status: 'pass',
+        details: {
+          transition: 'setting_up → first_run',
+          org_status: row.status,
+          status_changed_at: row.status_changed_at,
+          source: 'orgCreated Inngest function',
+        },
+      };
+    }
+    // Accept downstream statuses too — if the org has already advanced past
+    // first_run by the time we polled (e.g. cron picked it up), the Inngest
+    // path was clearly exercised.
+    if (row.status === 'ranking' || row.status === 'ready_to_view' || row.status === 'build_out_complete') {
+      return {
+        status: 'pass',
+        details: {
+          org_status: row.status,
+          status_changed_at: row.status_changed_at,
+          note: 'org advanced past first_run — Inngest path fired and pipeline progressed',
+        },
+      };
     }
     await new Promise(r => setTimeout(r, 2500));
   }
-  return { status: 'blocked', details: { reason: 'no agent_runs and org status still setting_up after 15s — Inngest path not advancing' } };
+  return {
+    status: 'blocked',
+    details: {
+      org_status: lastStatus,
+      status_changed_at: lastChangedAt,
+      reason: 'orgCreated did not flip status to first_run within 30s — Inngest event may not have fired, function may have errored, or production Inngest is lagging',
+    },
+  };
 }
 
 /** Step 4 — ingestOrgFunction runs each adapter; status → first_run. */
@@ -489,6 +492,11 @@ async function main(): Promise<void> {
 
   const ts = Date.now();
   const slug = `testcorp-${ts}`;
+  const unicronApiKey = process.env.UNICRON_INGEST_API_KEY;
+  if (!unicronApiKey) {
+    console.error('Missing UNICRON_INGEST_API_KEY in .env.local — required for step 2 (POST /api/organizations).');
+    process.exit(1);
+  }
   const ctx: SmokeContext = {
     supabaseService: createClient(url, serviceKey, { auth: { persistSession: false } }),
     supabaseAnon: createClient(url, anonKey, { auth: { persistSession: false } }),
@@ -501,7 +509,7 @@ async function main(): Promise<void> {
       metacron: process.env.DOD_METACRON_BASE ?? 'https://www.unicron.systems',
     },
     operatorEmail: process.env.DOD_OPERATOR_EMAIL ?? 'kyle@demystified.ai',
-    unicronApiKey: process.env.UNICRON_INGEST_API_KEY ?? null,
+    unicronApiKey,
     startedAt: new Date().toISOString(),
     results: [],
   };
@@ -509,7 +517,7 @@ async function main(): Promise<void> {
   console.log(`\nDoD synthetic smoke — TestCorp ${ctx.testorg.slug}\n`);
   console.log(`  pathfinder: ${ctx.endpoints.pathfinder}`);
   console.log(`  metacron:   ${ctx.endpoints.metacron}`);
-  console.log(`  api key:    ${ctx.unicronApiKey ? 'present (step 2 will POST through API)' : 'absent (step 2 falls back to direct insert; step 3 will block)'}\n`);
+  console.log(`  api key:    present — step 2 POSTs through /api/organizations; step 3 asserts Inngest org.created → first_run\n`);
 
   const steps: Array<[number, string, (c: SmokeContext) => Promise<Omit<Result, 'step' | 'name' | 'latency_ms'>>]> = [
     [1, 'Architect plan emits business_summary + decomposition + ui_plan', step1],
