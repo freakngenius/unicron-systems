@@ -111,8 +111,7 @@ export default function Page() {
         <span className="glass-grit" aria-hidden="true" />
         <div className="pane-brand fade-in d1">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img className="mark" src="/landing/logo.png" alt="Unicron logo" />
-          <div className="name">Unicron</div>
+          <img className="mark" src="/landing/unicron-systems-logo.png" alt="Unicron Systems" />
         </div>
 
         <div className="pane-spacer" />
@@ -577,21 +576,15 @@ html, body {
 .pane-brand {
   display: flex;
   align-items: center;
-  gap: 14px;
 }
+/* Combined hex-mark + UNICRON SYSTEMS wordmark lockup (378×138, ~2.74:1).
+   Height-driven so the wordmark height matches the mark; width auto-fits. */
 .pane-brand .mark {
-  width: 50px;
-  height: auto;
+  height: 42px;
+  width: auto;
   flex: 0 0 auto;
   display: block;
   filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.25));
-}
-.pane-brand .name {
-  font-family: 'Instrument Serif', serif;
-  font-style: italic;
-  font-size: 22px;
-  color: #ffffff;
-  letter-spacing: 0.005em;
 }
 
 .pane-spacer { flex: 1; }
