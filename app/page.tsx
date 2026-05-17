@@ -97,10 +97,15 @@ export default function Page() {
       {/* Layer 1: background image */}
       <div className="bg" aria-hidden="true" />
 
-      {/* Layer 2: arm (fingertip anchored to organism core bottom-left) */}
+      {/* Layer 2: arm (fingertip anchored to organism core bottom-left).
+          arm-v2.png is a re-processed silhouette — solid dark ink
+          wherever there was any stroke + alpha boosted 3x. The original
+          arm.png had only 2.6% fully-opaque pixels which made it
+          invisible on the cool-grey backdrop regardless of blend-mode
+          tuning. Same pose + dimensions, just visible. */}
       <div className="arm-anchor" aria-hidden="true">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/landing/arm.png" alt="" />
+        <img src="/landing/arm-v2.png" alt="" />
       </div>
 
       {/* Layer 3: organism canvas */}
@@ -334,13 +339,10 @@ html, body {
   width: 960px;
   transform: translate(-98.3%, -0.5%);
   transform-origin: 100% 0%;
-  /* The asset is RGBA with the negative space already alpha=0 — using
-     plain compositing lets the strokes read clearly. mix-blend-mode:
-     multiply at 0.68 produced only ~30 luma of darkening against the
-     cool grey background, which was visually imperceptible behind the
-     canvas overlay. Light contrast bump keeps the strokes crisp. */
+  /* arm-v2.png is a pre-darkened solid silhouette — no blend-mode or
+     filter gymnastics required. opacity 0.85 lets a hint of bg through
+     so the arm reads as embedded rather than pasted on. */
   opacity: 0.85;
-  filter: contrast(1.1);
 }
 @media (max-width: 900px) {
   /* On mobile the JS still sets --organism-cx / --organism-cy; only the
