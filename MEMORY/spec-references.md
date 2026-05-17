@@ -982,3 +982,24 @@ Operator setup: `MEMORY/operator-todos/2026-05-03-teams-user-setup.md` — Micro
 **Implements:** Inngest serve registration of `verifyBuildOut`. Additive only — existing function list intact.
 **Last verified against spec:** 2026-05-13.
 **Drift:** none.
+
+---
+
+## v8 Landing Page (unicron.systems root)
+
+**State:** PR #439 open on `feat/landing-v8-redesign`. Replaces the "Under Construction" splash with the Claude Design v8 hero (left-side frosted glass pane + canvas organism + 5-field demo modal). The signup pipeline shifts from `{name, email}` to `{companyName, role, firstName, lastName, email}`, capturing all five fields in both Supabase (`public.email_signups`, dedupe by email) and Notion (new "Landing Page Sign Ups" DB `08e5bc8cd90c487cbca0d450f3a32773`, replacing the old "Inbound Email Signups - v1" DB `4695026f01aa435da3a225325d620369` via the `NOTION_DATABASE_ID` env var on the unicron-systems Vercel project).
+
+#### supabase/migrations/20260517120000_email_signups_capture_fields.sql
+**Implements:** v8 landing five-field capture. Adds `first_name`, `last_name`, `role`, `company` (all `text`, nullable) to `public.email_signups`; drops the NOT NULL constraint on the legacy `name` column. Preserves the email UNIQUE constraint as the dedupe gate. Existing 18 rows unaffected.
+**Last verified against spec:** 2026-05-17. Applied via Supabase MCP `apply_migration` on project `anfihcusvekpovcchpoh` and confirmed via `information_schema.columns`: `name` is now nullable; four new nullable text columns present.
+**Drift:** none.
+
+#### lib/db.types.ts
+**Implements:** Generated Supabase type-table contract for the `email_signups` row/insert/update shapes. Updated to match the post-migration schema — `name` is now `string | null`, and `first_name`, `last_name`, `role`, `company` are added as `string | null` on Row/Insert/Update. All other tables in the file are unchanged.
+**Last verified against spec:** 2026-05-17.
+**Drift:** none (mirror of live schema).
+
+#### app/api/signup/route.ts
+**Implements:** v8 landing capture endpoint. Accepts `{companyName, role, firstName, lastName, email}` (all required, email regex-validated), inserts to Supabase `email_signups` with the four new columns (and legacy `name` left NULL), then best-effort mirrors to Notion with property names matching the new DB schema (`Company Name` title, `Role` rich_text, `First Name` rich_text, `Last Name` rich_text, `Email Address` email). On unique-email collision returns 409; on validation failure returns 400; on Supabase failure returns 500 with a generic message (internals not leaked). Notion mirror failures are logged but do not fail the request — Supabase is the durable record.
+**Last verified against spec:** 2026-05-17. Local smoke via `next start` + curl: empty body → 400, bad email → 400, invalid JSON → 400, valid payload with fake Supabase env → 500 generic.
+**Drift:** none.
