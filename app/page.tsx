@@ -337,12 +337,13 @@ html, body {
   position: absolute;
   display: block;
   width: 960px;
+  height: 447px; /* DEBUG: force height in case naturalSize doesn't compute */
   transform: translate(-98.3%, -0.5%);
   transform-origin: 100% 0%;
-  /* arm-v2.png is a pre-darkened solid silhouette — no blend-mode or
-     filter gymnastics required. opacity 0.85 lets a hint of bg through
-     so the arm reads as embedded rather than pasted on. */
   opacity: 0.85;
+  /* DEBUG STRIPE — temporary so we can see WHERE the arm bbox lives */
+  outline: 4px solid #ff0066;
+  background: rgba(255, 0, 102, 0.18);
 }
 @media (max-width: 900px) {
   /* On mobile the JS still sets --organism-cx / --organism-cy; only the
