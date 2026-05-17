@@ -97,10 +97,15 @@ export default function Page() {
       {/* Layer 1: background image */}
       <div className="bg" aria-hidden="true" />
 
-      {/* Layer 2: arm (fingertip anchored to organism core bottom-left) */}
+      {/* Layer 2: arm (fingertip anchored to organism core bottom-left).
+          arm-v2.png is a re-processed silhouette — solid dark ink
+          wherever there was any stroke + alpha boosted 3x. The original
+          arm.png had only 2.6% fully-opaque pixels which made it
+          invisible on the cool-grey backdrop regardless of blend-mode
+          tuning. Same pose + dimensions, just visible. */}
       <div className="arm-anchor" aria-hidden="true">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/landing/arm.png" alt="" />
+        <img src="/landing/arm-v2.png" alt="" />
       </div>
 
       {/* Layer 3: organism canvas */}
@@ -334,15 +339,10 @@ html, body {
   width: 960px;
   transform: translate(-98.3%, -0.5%);
   transform-origin: 100% 0%;
-  /* The asset is RGBA — most pixels are alpha=0, only the brush-and-ink
-     strokes carry the silhouette. Earlier attempt (mix-blend-mode:
-     multiply / opacity 0.68 / contrast 1.05) was visually imperceptible
-     against the cool grey backdrop. Cranking opacity to 1.0 and adding
-     a strong contrast + darken filter to make the strokes read. If this
-     proves too heavy on the design intent we can dial back, but first
-     priority is "the arm is actually visible." */
-  opacity: 1;
-  filter: contrast(1.5) brightness(0.7) saturate(1.3);
+  /* arm-v2.png is a pre-darkened solid silhouette — no blend-mode or
+     filter gymnastics required. opacity 0.85 lets a hint of bg through
+     so the arm reads as embedded rather than pasted on. */
+  opacity: 0.85;
 }
 @media (max-width: 900px) {
   /* On mobile the JS still sets --organism-cx / --organism-cy; only the
