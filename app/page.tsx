@@ -98,14 +98,12 @@ export default function Page() {
       <div className="bg" aria-hidden="true" />
 
       {/* Layer 2: arm (fingertip anchored to organism core bottom-left).
-          arm-v2.png is a re-processed silhouette — solid dark ink
-          wherever there was any stroke + alpha boosted 3x. The original
-          arm.png had only 2.6% fully-opaque pixels which made it
-          invisible on the cool-grey backdrop regardless of blend-mode
-          tuning. Same pose + dimensions, just visible. */}
+          arm2.png is the un-darkened brand asset (2419×1201, blue-grey
+          ink wash). Sized + positioned so the forearm bleeds past the
+          bottom-left of the viewport, matching the Claude Design mockup. */}
       <div className="arm-anchor" aria-hidden="true">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/landing/arm-v2.png" alt="" />
+        <img src="/landing/arm2.png" alt="" />
       </div>
 
       {/* Layer 3: organism canvas */}
@@ -322,14 +320,17 @@ html, body {
 
 /* Arm (layer 2). Anchored to the canvas core hex — the organism JS
    updates --organism-cx / --organism-cy on every resize so the fingertip
-   tracks the core regardless of desktop/mobile reflow. */
+   tracks the core regardless of desktop/mobile reflow.
+   z-index: 5 puts the arm ABOVE the hero pane (z:4) so the forearm
+   visibly crosses over the lower portion of the pane and bleeds off the
+   bottom-left of the viewport, matching the Claude Design mockup. */
 .arm-anchor {
   position: fixed;
   left: var(--organism-cx, 68vw);
   top:  var(--organism-cy, 50vh);
   margin-left: -40px;
   margin-top: 16px;
-  z-index: 1;
+  z-index: 5;
   pointer-events: none;
   width: 0; height: 0;
 }
@@ -340,26 +341,31 @@ html, body {
      clamps this img to the parent .arm-anchor width — and the parent is
      intentionally 0x0 so the fingertip can anchor at a precise point.
      Override max-width so the explicit width below actually wins.
-     aspect-ratio reserves the height up front so layout never depends on
-     the image natural-size timing. */
+     aspect-ratio matches arm2.png (2419 × 1201) so the box reserves
+     height up front and never collapses while the image loads. */
   max-width: none;
-  width: 960px;
-  aspect-ratio: 2106 / 982;
-  transform: translate(-98.3%, -0.5%);
+  width: 1300px;
+  aspect-ratio: 2419 / 1201;
+  /* arm2.png's fingertip pixel measured at (99.75%, 2.33%) of image dims
+     (Python+PIL scan of opaque alpha). Translating by the negative of
+     those percentages lands the fingertip exactly at the .arm-anchor
+     position — then the margin offsets nudge it relative to the core hex. */
+  transform: translate(-99.75%, -2.33%);
   transform-origin: 100% 0%;
-  /* arm-v2.png is a pre-darkened solid silhouette — no blend-mode or
-     filter gymnastics required. opacity 0.85 lets a hint of bg through
-     so the arm reads as embedded rather than pasted on. */
-  opacity: 0.85;
+  /* arm2.png is a brush-and-ink-wash silhouette with natural blue-grey
+     tone — opacity 0.78 keeps it integrated with the cool grey backdrop
+     without over-darkening. */
+  opacity: 0.78;
 }
 @media (max-width: 900px) {
-  /* On mobile the JS still sets --organism-cx / --organism-cy; only the
-     fingertip-to-anchor offsets + image scale change. */
+  /* On mobile: tighter fingertip-to-core gap + smaller arm so the hand
+     reads as a whole shape on a small viewport instead of just a sliver
+     of finger far from the hex. */
   .arm-anchor {
-    margin-left: -60px;
-    margin-top: 32px;
+    margin-left: -18px;
+    margin-top: 10px;
   }
-  .arm-anchor img { width: clamp(700px, 130vw, 1400px); }
+  .arm-anchor img { width: clamp(360px, 105vw, 720px); }
 }
 
 /* Canvas */
