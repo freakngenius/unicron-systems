@@ -57,9 +57,36 @@ export type Database = {
         ]
       }
       email_signups: {
-        Row: { created_at: string; email: string; id: string; name: string }
-        Insert: { created_at?: string; email: string; id?: string; name: string }
-        Update: { created_at?: string; email?: string; id?: string; name?: string }
+        Row: {
+          company: string | null
+          created_at: string
+          email: string
+          first_name: string | null
+          id: string
+          last_name: string | null
+          name: string | null
+          role: string | null
+        }
+        Insert: {
+          company?: string | null
+          created_at?: string
+          email: string
+          first_name?: string | null
+          id?: string
+          last_name?: string | null
+          name?: string | null
+          role?: string | null
+        }
+        Update: {
+          company?: string | null
+          created_at?: string
+          email?: string
+          first_name?: string | null
+          id?: string
+          last_name?: string | null
+          name?: string | null
+          role?: string | null
+        }
         Relationships: []
       }
       flock_outputs: {
