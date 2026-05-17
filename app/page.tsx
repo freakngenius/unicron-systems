@@ -605,7 +605,6 @@ html, body {
   width: auto;
   flex: 0 0 auto;
   display: block;
-  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.25));
 }
 
 .pane-spacer { flex: 1; }
