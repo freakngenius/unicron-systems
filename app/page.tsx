@@ -334,9 +334,13 @@ html, body {
   width: 960px;
   transform: translate(-98.3%, -0.5%);
   transform-origin: 100% 0%;
-  opacity: 0.68;
-  mix-blend-mode: multiply;
-  filter: contrast(1.05);
+  /* The asset is RGBA with the negative space already alpha=0 — using
+     plain compositing lets the strokes read clearly. mix-blend-mode:
+     multiply at 0.68 produced only ~30 luma of darkening against the
+     cool grey background, which was visually imperceptible behind the
+     canvas overlay. Light contrast bump keeps the strokes crisp. */
+  opacity: 0.85;
+  filter: contrast(1.1);
 }
 @media (max-width: 900px) {
   /* On mobile the JS still sets --organism-cx / --organism-cy; only the
