@@ -334,13 +334,15 @@ html, body {
   width: 960px;
   transform: translate(-98.3%, -0.5%);
   transform-origin: 100% 0%;
-  /* The asset is RGBA with the negative space already alpha=0 — using
-     plain compositing lets the strokes read clearly. mix-blend-mode:
-     multiply at 0.68 produced only ~30 luma of darkening against the
-     cool grey background, which was visually imperceptible behind the
-     canvas overlay. Light contrast bump keeps the strokes crisp. */
-  opacity: 0.85;
-  filter: contrast(1.1);
+  /* The asset is RGBA — most pixels are alpha=0, only the brush-and-ink
+     strokes carry the silhouette. Earlier attempt (mix-blend-mode:
+     multiply / opacity 0.68 / contrast 1.05) was visually imperceptible
+     against the cool grey backdrop. Cranking opacity to 1.0 and adding
+     a strong contrast + darken filter to make the strokes read. If this
+     proves too heavy on the design intent we can dial back, but first
+     priority is "the arm is actually visible." */
+  opacity: 1;
+  filter: contrast(1.5) brightness(0.7) saturate(1.3);
 }
 @media (max-width: 900px) {
   /* On mobile the JS still sets --organism-cx / --organism-cy; only the
