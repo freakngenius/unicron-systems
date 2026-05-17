@@ -315,12 +315,13 @@ html, body {
     #b8c0c6;
 }
 
-/* Arm (layer 2). Anchor: bottom-left of the canvas core hex
-   (W*0.68, H*0.5 desktop, W*0.5, H*0.42 mobile). */
+/* Arm (layer 2). Anchored to the canvas core hex — the organism JS
+   updates --organism-cx / --organism-cy on every resize so the fingertip
+   tracks the core regardless of desktop/mobile reflow. */
 .arm-anchor {
   position: fixed;
-  left: 68vw;
-  top: 50vh;
+  left: var(--organism-cx, 68vw);
+  top:  var(--organism-cy, 50vh);
   margin-left: -40px;
   margin-top: 16px;
   z-index: 1;
@@ -338,9 +339,9 @@ html, body {
   filter: contrast(1.05);
 }
 @media (max-width: 900px) {
+  /* On mobile the JS still sets --organism-cx / --organism-cy; only the
+     fingertip-to-anchor offsets + image scale change. */
   .arm-anchor {
-    left: 50vw;
-    top: 42vh;
     margin-left: -60px;
     margin-top: 32px;
   }
@@ -747,7 +748,10 @@ html, body {
     border-bottom: 1px solid rgba(255, 255, 255, 0.18);
   }
   .pane-spacer { display: none; }
-  .pane-hero { gap: 20px; }
+  /* Padding between the brand lockup and the eyebrow on mobile — the
+     desktop layout relies on pane-spacer's flex:1 for this gap; with the
+     spacer hidden on mobile, give pane-hero an explicit margin-top. */
+  .pane-hero { gap: 20px; margin-top: 32px; }
   .pane-hero .head { font-size: clamp(38px, 9vw, 60px); }
   .pane-hero .sub { font-size: clamp(15px, 3.5vw, 20px); }
   .pane-hero .eyebrow { font-size: clamp(16px, 4vw, 22px); }
