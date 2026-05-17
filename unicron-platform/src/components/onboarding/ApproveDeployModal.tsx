@@ -4,6 +4,12 @@ import { slugify, validateSlug } from '../../lib/customersClient';
 type Props = {
   /** Sensible default name derived from the buyer-pain prompt. */
   defaultName: string;
+  /**
+   * Explicit default slug — overrides the auto-derived slug-from-name. Used
+   * when the operator has already committed a slug in CustomerIntakeModal
+   * (which may differ from slugify(defaultName) if they edited it).
+   */
+  defaultSlug?: string;
   /** Slugs already taken — used to fail the operator fast on collision. */
   existingSlugs: string[];
   /** True while the parent is mid-persist (POST in flight). */
@@ -37,6 +43,7 @@ export function deriveDefaultName(buyerPain: string): string {
 
 export function ApproveDeployModal({
   defaultName,
+  defaultSlug,
   existingSlugs,
   submitting,
   serverError,
@@ -45,8 +52,10 @@ export function ApproveDeployModal({
   onNameChange,
 }: Props) {
   const [name, setName] = useState(defaultName);
-  const [slug, setSlug] = useState(slugify(defaultName));
-  const [slugTouched, setSlugTouched] = useState(false);
+  const [slug, setSlug] = useState(defaultSlug ?? slugify(defaultName));
+  // If the parent provided an explicit slug, treat it as already-touched so
+  // the auto-derive-from-name effect does not clobber it on first keystroke.
+  const [slugTouched, setSlugTouched] = useState(defaultSlug !== undefined);
   const nameRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {

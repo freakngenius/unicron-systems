@@ -265,10 +265,28 @@ export type ArchitectApiError = {
 // follow-up migration PR adapts each component to the canonical types.
 // New code should not import from this section.
 
+/**
+ * Customer intake captured up-front by CustomerIntakeModal before the
+ * Architect decomposition LLM call is dispatched. Stamped onto
+ * architect_sessions.input_payload.customer_intake by the decompose-proxy
+ * once Stream D returns the session_id.
+ */
+export type CustomerIntakePayload = {
+  name: string;
+  slug: string;
+  contact_name: string;
+};
+
 /** @deprecated use DecompositionApiRequest. Maps `buyerPain` → `buyer_pain_prompt`. */
 export type DecompositionRequest = {
   /** Buyer-pain free-text from the operator (Onboarding step 1). */
   buyerPain: string;
+  /**
+   * Optional intake fields collected before decomposition. When provided,
+   * the proxy stamps them onto architect_sessions.input_payload.customer_intake
+   * after Stream D returns the session_id.
+   */
+  customerIntake?: CustomerIntakePayload;
 };
 
 /** @deprecated UI-only line shape; Stream D ships `reasoning: string[]` instead. */
