@@ -336,7 +336,15 @@ html, body {
 .arm-anchor img {
   position: absolute;
   display: block;
+  /* Tailwind base reset applies img max-width 100 percent globally, which
+     clamps this img to the parent .arm-anchor width — and the parent is
+     intentionally 0x0 so the fingertip can anchor at a precise point.
+     Override max-width so the explicit width below actually wins.
+     aspect-ratio reserves the height up front so layout never depends on
+     the image natural-size timing. */
+  max-width: none;
   width: 960px;
+  aspect-ratio: 2106 / 982;
   transform: translate(-98.3%, -0.5%);
   transform-origin: 100% 0%;
   /* arm-v2.png is a pre-darkened solid silhouette — no blend-mode or
