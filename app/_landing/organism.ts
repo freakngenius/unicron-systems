@@ -86,7 +86,20 @@ export function startOrganism({ canvas, feedInner }: Opts): () => void {
     ctx!.setTransform(DPR, 0, 0, DPR, 0, 0);
     const isMobile = W < 900;
     CX = isMobile ? W * 0.5 : W * 0.68;
-    CY = isMobile ? H * 0.42 : H * 0.5;
+    if (isMobile) {
+      // Mobile: glass pane reflows to a full-width top bar; center the
+      // organism in the space between the pane bottom and the viewport
+      // bottom so it isn't hidden behind the pane.
+      const pane = document.querySelector(".hero-pane");
+      const paneBottom = pane ? pane.getBoundingClientRect().bottom : H * 0.4;
+      CY = (paneBottom + H) / 2;
+    } else {
+      CY = H * 0.5;
+    }
+    // Expose the organism center as CSS vars so the arm anchor can track
+    // the core hex without duplicating positioning logic in CSS.
+    document.documentElement.style.setProperty("--organism-cx", `${CX}px`);
+    document.documentElement.style.setProperty("--organism-cy", `${CY}px`);
     buildOrganism();
     initHex();
     initEdgeParticles();
