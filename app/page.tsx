@@ -321,16 +321,16 @@ html, body {
 /* Arm (layer 2). Anchored to the canvas core hex — the organism JS
    updates --organism-cx / --organism-cy on every resize so the fingertip
    tracks the core regardless of desktop/mobile reflow.
-   z-index: 5 puts the arm ABOVE the hero pane (z:4) so the forearm
-   visibly crosses over the lower portion of the pane and bleeds off the
-   bottom-left of the viewport, matching the Claude Design mockup. */
+   z-index: 1 keeps the arm UNDER the hero pane (z:4) so where they
+   overlap (lower-left of the viewport), the arm reads as frosted /
+   blurred through the glass, matching the Claude Design mockup. */
 .arm-anchor {
   position: fixed;
   left: var(--organism-cx, 68vw);
   top:  var(--organism-cy, 50vh);
   margin-left: -40px;
   margin-top: 16px;
-  z-index: 5;
+  z-index: 1;
   pointer-events: none;
   width: 0; height: 0;
 }
