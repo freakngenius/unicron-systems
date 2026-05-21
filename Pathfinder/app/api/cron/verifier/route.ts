@@ -27,6 +27,14 @@ import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { nearestBranch, scoreProject, SCORE_TOLERANCE as SCORE_TOLERANCE_FALLBACK } from '@/lib/scoring';
 import { fetchActiveScoringConfig } from '@/lib/scoring-config-server';
+// Funder onboarding Stage 6 — non-Zedcor verifier dispatch.
+// Reads architecture thresholds and runs Funder-specific checks for any
+// project with a non-Zedcor organization_id. Zedcor projects (and any
+// row without organization_id) fall through to the existing 5-check
+// Zedcor-shaped flow below.
+import { loadOrgArchitecture } from '@/lib/agents/loadOrgArchitecture';
+import { verifyFunderProject } from '@/lib/agents/verifier/funderChecks';
+import type { OrgArchitecture } from '@/lib/types/architecture';
 import { inngest } from '@/lib/inngest/client';
 import { checkOwnerAnchors, SAFE_RATIONALE_PLACEHOLDER } from '@/lib/verifier-owner-check';
 import type { Branch, Customer, Project } from '@/lib/types';
@@ -439,10 +447,46 @@ async function verifyOneProject(args: {
    *  GET handler. Passed in so a /settings edit takes effect on the very
    *  next cycle without a redeploy. */
   scoreTolerance: number;
+  /** Funder onboarding Stage 6 — pre-resolved org architectures keyed by
+   *  organization_id. Lets the per-project dispatch read thresholds +
+   *  branding without re-fetching per project. Cycle-local cache built
+   *  at the top of the handler. */
+  orgArchitectures?: Map<string, { slug: string; architecture: OrgArchitecture }>;
+  zedcorOrgId?: string | null;
 }): Promise<ProjectVerdict> {
-  const { admin, project, branches, customers, scoreTolerance } = args;
+  const { admin, project, branches, customers, scoreTolerance, orgArchitectures, zedcorOrgId } = args;
   const failures: string[] = [];
   const project_id = project.id;
+
+  // ---- Funder onboarding Stage 6 — non-Zedcor branch ----
+  // Run Funder-shaped checks for any project whose organization_id is
+  // present AND is not Zedcor. Reads architecture.scoring.thresholds
+  // instead of fetchActiveScoringConfig (Zedcor's path).
+  const projectOrgId = project.organization_id ?? null;
+  if (projectOrgId && zedcorOrgId && projectOrgId !== zedcorOrgId && orgArchitectures) {
+    const orgEntry = orgArchitectures.get(projectOrgId);
+    if (orgEntry) {
+      const verdict = verifyFunderProject({ project, architecture: orgEntry.architecture });
+      await writeLog(admin, 'check_rationale', {
+        message: `funder verify · ${project_id} · ${orgEntry.slug} · ${verdict.verified ? 'pass' : 'fail'} · threshold=${verdict.verified_threshold_0_100}/100`,
+        project_id,
+        organization_id: projectOrgId,
+        kernel: 'funder',
+        checks: verdict.checks,
+        verified_threshold_0_100: verdict.verified_threshold_0_100,
+      });
+      return {
+        project_id,
+        verified: verdict.verified,
+        verifier_pass_count: (project.verifier_pass_count ?? 0) + 1,
+        verifier_notes: verdict.notes,
+        failures: verdict.failures,
+        null_coordinate: false,
+        primary_failure: verdict.failures[0] ?? null,
+        rewritten_rationale: null,
+      };
+    }
+  }
 
   const recomputed_branch = recomputeNearestBranchId(project, branches);
   const null_coordinate = recomputed_branch === null;
@@ -866,6 +910,33 @@ export async function GET(req: Request) {
   const scoringConfig = await fetchActiveScoringConfig();
   const SCORE_TOLERANCE = scoringConfig.score_tolerance ?? SCORE_TOLERANCE_FALLBACK;
 
+  // Funder onboarding Stage 6 — pre-resolve org architectures for any
+  // non-Zedcor projects in the queue, plus look up Zedcor's id so the
+  // per-project dispatch can route. Cached for the cycle.
+  const adminAny = admin as unknown as { from: (t: string) => any };
+  const zedcorLookup = await adminAny
+    .from('organizations')
+    .select('id')
+    .eq('slug', 'zedcor')
+    .maybeSingle();
+  const zedcorOrgId: string | null = zedcorLookup.data?.id ?? null;
+  const orgArchitectures = new Map<string, { slug: string; architecture: OrgArchitecture }>();
+  const distinctOrgIds = Array.from(
+    new Set(queue.map((p) => p.organization_id).filter((id): id is string => id != null && id !== zedcorOrgId)),
+  );
+  for (const orgId of distinctOrgIds) {
+    try {
+      const loaded = await loadOrgArchitecture(orgId);
+      orgArchitectures.set(orgId, { slug: loaded.org.slug, architecture: loaded.architecture });
+    } catch (err) {
+      await writeLog(admin, 'error', {
+        message: `verifier: loadOrgArchitecture failed for ${orgId} · ${(err as Error).message}`,
+        reason: 'org_load_failed',
+        organization_id: orgId,
+      });
+    }
+  }
+
   // 6. Per-project loop
   const cycleStart = Date.now();
   const stats: CycleStats = {
@@ -900,7 +971,15 @@ export async function GET(req: Request) {
 
     let verdict: ProjectVerdict;
     try {
-      verdict = await verifyOneProject({ admin, project, branches, customers, scoreTolerance: SCORE_TOLERANCE });
+      verdict = await verifyOneProject({
+        admin,
+        project,
+        branches,
+        customers,
+        scoreTolerance: SCORE_TOLERANCE,
+        orgArchitectures,
+        zedcorOrgId,
+      });
     } catch (err) {
       // Unexpected error during checks. Log + continue.
       await writeLog(admin, 'error', {
