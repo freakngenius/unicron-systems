@@ -26,6 +26,62 @@ interface ActionItem {
   notion_url: string | null;
 }
 
+// Atrium audit fix item #16 — calendar stub replaced with live calendar_events
+// query. Data is pulled hourly by calendar-pull-hourly cron; this hook reads
+// today's events for the selected member. If Google OAuth credentials are
+// missing on the platform, the cron silently no-ops and we surface a clear
+// 'no events' state rather than the deferred-to-Sprint-6 string.
+interface CalendarEvent {
+  id: string;
+  team_member_id: string;
+  start_at: string;
+  end_at: string | null;
+  title: string;
+  location: string | null;
+  attendees: string[] | null;
+  source: string | null;
+}
+
+function useTodayCalendar(memberId: string): {
+  events: CalendarEvent[];
+  loading: boolean;
+  error: string | null;
+} {
+  const [events, setEvents] = useState<CalendarEvent[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const startOfDay = new Date();
+        startOfDay.setHours(0, 0, 0, 0);
+        const endOfDay = new Date(startOfDay);
+        endOfDay.setDate(endOfDay.getDate() + 1);
+        const { data, error: err } = await getSupabase()
+          .schema('nervous_system')
+          .from('calendar_events')
+          .select('id, team_member_id, start_at, end_at, title, location, attendees, source')
+          .eq('team_member_id', memberId)
+          .gte('start_at', startOfDay.toISOString())
+          .lt('start_at', endOfDay.toISOString())
+          .order('start_at', { ascending: true });
+        if (cancelled) return;
+        if (err) throw err;
+        setEvents((data as CalendarEvent[] | null) ?? []);
+      } catch (e) {
+        if (!cancelled) setError(e instanceof Error ? e.message : 'Failed to load calendar');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [memberId]);
+  return { events, loading, error };
+}
+
 // ─── Priority weights for capacity heatmap ────────────────────────────────────
 
 const PRIORITY_WEIGHT: Record<string, number> = {
@@ -74,6 +130,7 @@ function MemberDetail({
   const [actions, setActions] = useState<ActionItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const calendar = useTodayCalendar(member.id);
 
   useEffect(() => {
     let cancelled = false;
@@ -186,17 +243,78 @@ function MemberDetail({
             </div>
           </section>
 
-          {/* Calendar stub */}
+          {/* Calendar — live from nervous_system.calendar_events (Atrium audit fix #16) */}
           <section>
-            <SectionLabel>Calendar · Today</SectionLabel>
-            <div style={{
-              padding: '14px 16px',
-              background: 'var(--bg-surface)', border: '1px solid var(--border-faint)',
-              borderRadius: 'var(--r-md)',
-              fontSize: 'var(--text-xs)', color: 'var(--text-md)',
-            }}>
-              Calendar not connected — integration deferred to Sprint 6.
-            </div>
+            <SectionLabel>Calendar · Today ({calendar.events.length})</SectionLabel>
+            {calendar.loading ? (
+              <div style={{
+                padding: '14px 16px',
+                background: 'var(--bg-surface)', border: '1px solid var(--border-faint)',
+                borderRadius: 'var(--r-md)',
+                fontSize: 'var(--text-xs)', color: 'var(--text-md)',
+              }}>
+                Loading today's calendar…
+              </div>
+            ) : calendar.error ? (
+              <div style={{
+                padding: '14px 16px',
+                background: 'var(--bg-surface)', border: '1px solid rgba(221,98,98,0.25)',
+                borderRadius: 'var(--r-md)',
+                fontSize: 'var(--text-xs)', color: 'var(--err)',
+              }}>
+                {calendar.error}
+              </div>
+            ) : calendar.events.length === 0 ? (
+              <div style={{
+                padding: '14px 16px',
+                background: 'var(--bg-surface)', border: '1px solid var(--border-faint)',
+                borderRadius: 'var(--r-md)',
+                fontSize: 'var(--text-xs)', color: 'var(--text-md)',
+              }}>
+                No events scheduled today. (If you expected events, confirm
+                Google Calendar OAuth is connected; calendar-pull-hourly cron
+                runs every hour at :00.)
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {calendar.events.map((evt) => {
+                  const start = new Date(evt.start_at);
+                  const end = evt.end_at ? new Date(evt.end_at) : null;
+                  const fmtTime = (d: Date) =>
+                    d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+                  return (
+                    <div
+                      key={evt.id}
+                      style={{
+                        padding: '10px 14px',
+                        background: 'var(--bg-surface)',
+                        border: '1px solid var(--border-faint)',
+                        borderRadius: 'var(--r-md)',
+                        display: 'flex', flexDirection: 'column', gap: 3,
+                      }}
+                    >
+                      <div style={{
+                        display: 'flex', justifyContent: 'space-between', gap: 8,
+                        fontSize: 'var(--text-xs)', color: 'var(--text-hi)',
+                        fontWeight: 500,
+                      }}>
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {evt.title}
+                        </span>
+                        <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-md)', whiteSpace: 'nowrap' }}>
+                          {fmtTime(start)}{end ? `–${fmtTime(end)}` : ''}
+                        </span>
+                      </div>
+                      {evt.location && (
+                        <div style={{ fontSize: 'var(--text-2xs)', color: 'var(--text-lo)' }}>
+                          {evt.location}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </section>
 
           {/* Open DRIs */}

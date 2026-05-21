@@ -57,6 +57,51 @@ function useBurnFromServices(): { monthly: number | null; services: number | nul
   return s;
 }
 
+// ─── Net MRR (Stripe) ─────────────────────────────────────────────────────────
+// Atrium audit fix item #15 — was hardcoded $0 "Pre-revenue · Zedcor pilot in
+// flight". Now fetches /api/atrium/stripe-mrr (shipped in BROKEN tier item 5).
+// If STRIPE_SECRET_KEY is unset, the endpoint returns configured:false and the
+// card falls back to the "Pre-revenue" sublabel so the visual contract holds.
+
+type MrrState =
+  | { phase: 'loading' }
+  | { phase: 'unconfigured' }
+  | { phase: 'live'; mrr_usd: number; arr_usd: number }
+  | { phase: 'error'; message: string };
+
+function useNetMrr(): MrrState {
+  const [s, setS] = useState<MrrState>({ phase: 'loading' });
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/atrium/stripe-mrr');
+        const json = (await res.json()) as Record<string, unknown>;
+        if (cancelled) return;
+        if (res.status === 503 && json.configured === false) {
+          setS({ phase: 'unconfigured' });
+        } else if (res.ok && json.configured === true) {
+          setS({
+            phase: 'live',
+            mrr_usd: Number(json.mrr_usd ?? 0),
+            arr_usd: Number(json.arr_usd ?? 0),
+          });
+        } else {
+          setS({
+            phase: 'error',
+            message: typeof json.error === 'string' ? json.error : `HTTP ${res.status}`,
+          });
+        }
+      } catch (err) {
+        if (cancelled) return;
+        setS({ phase: 'error', message: err instanceof Error ? err.message : String(err) });
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+  return s;
+}
+
 function fmtUsd(n: number | null, compact = true): string {
   if (n === null) return '—';
   if (!compact) return `$${n.toLocaleString()}`;
@@ -84,6 +129,21 @@ function MetricCard({ label, value, sublabel, accent }: {
 export function Money() {
   const [active, setActive] = useState<MoneyTab>('accounts');
   const burn = useBurnFromServices();
+  const mrr = useNetMrr();
+
+  // Resolve Net MRR card props per Stripe state. Audit fix #15.
+  let mrrValue = '$0';
+  let mrrSublabel: string = 'Pre-revenue · Zedcor pilot in flight';
+  if (mrr.phase === 'live') {
+    mrrValue = fmtUsd(mrr.mrr_usd);
+    mrrSublabel = mrr.arr_usd > 0
+      ? `ARR ${fmtUsd(mrr.arr_usd)} · Stripe live`
+      : 'Stripe connected · no active subscriptions';
+  } else if (mrr.phase === 'loading') {
+    mrrSublabel = 'Checking Stripe…';
+  } else if (mrr.phase === 'error') {
+    mrrSublabel = `Stripe error: ${mrr.message}`;
+  }
 
   return (
     <div className="w-full">
@@ -99,8 +159,9 @@ export function Money() {
         <CashOnHandCard />
         <MetricCard
           label="Net MRR"
-          value="$0"
-          sublabel="Pre-revenue · Zedcor pilot in flight"
+          value={mrrValue}
+          sublabel={mrrSublabel}
+          accent={mrr.phase === 'live' && mrr.mrr_usd > 0 ? '#2E8E66' : undefined}
         />
         <MetricCard
           label="Burn (30d, services)"

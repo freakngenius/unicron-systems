@@ -130,13 +130,49 @@ export function QuickCapture({ open, onClose, onToast, teamMemberId }: Props) {
         reader.onerror = reject;
         reader.readAsDataURL(audioBlob);
       });
+
+      // Atrium audit fix item #17 — call /api/atrium/voice-transcribe before
+      // we ship the audio to /api/ingest. Whisper-backed; falls back gracefully
+      // to the original "transcription pending" raw_content when the endpoint
+      // returns 503 (OPENAI_API_KEY not set in Vercel env).
+      let transcriptText: string | null = null;
+      let transcribedAt: string | null = null;
+      try {
+        const tRes = await fetch('/api/atrium/voice-transcribe', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ base64, mime_type: audioBlob.type, filename: 'capture.webm' }),
+        });
+        const tJson = (await tRes.json()) as Record<string, unknown>;
+        if (tRes.ok && tJson.configured === true && typeof tJson.text === 'string' && tJson.text.length > 0) {
+          transcriptText = tJson.text;
+          transcribedAt = (typeof tJson.fetched_at === 'string' ? tJson.fetched_at : new Date().toISOString());
+        }
+        // 503 / non-2xx / configured:false → leave transcriptText null, fall through.
+      } catch {
+        // Network error transcribing — keep going; we still want to capture the audio.
+      }
+
       await postIngest({
         source_type: 'voice_memo',
-        raw_content: '[Voice memo — transcription pending]',
-        evidence: { type: 'audio', base64, mime_type: audioBlob.type },
+        raw_content: transcriptText ?? '[Voice memo — transcription pending]',
+        evidence: {
+          type: 'audio',
+          base64,
+          mime_type: audioBlob.type,
+          // Preserve transcription provenance alongside the audio reference so
+          // downstream skills can prefer the live transcript when present.
+          transcript: transcriptText,
+          transcribed_at: transcribedAt,
+          transcribed_by: transcriptText ? 'openai:whisper-1' : null,
+        },
         captured_by: { type: 'human', id: teamMemberId ?? userId },
       });
-      onToast('Captured. The Orchestrator will route it.');
+      onToast(
+        transcriptText
+          ? 'Captured and transcribed. The Orchestrator will route it.'
+          : 'Captured. Transcription pending (OPENAI_API_KEY not set yet).',
+      );
       resetState();
       onClose();
     } catch (e) {
@@ -309,14 +345,18 @@ export function QuickCapture({ open, onClose, onToast, teamMemberId }: Props) {
           {/* Voice tab */}
           {tab === 'voice' && (
             <div className="space-y-4">
-              {/* Sprint 4 banner */}
-              <div className="bg-bg-raised border border-[#C28A1F]/30 rounded-lg px-4 py-3">
-                <div className="mono text-[10px] uppercase tracking-[0.16em] text-[#C28A1F] mb-1">
-                  Sprint 4 Feature
+              {/* Atrium audit fix #17 — banner updated. Live Whisper-backed
+                  transcription ships via /api/atrium/voice-transcribe; if
+                  OPENAI_API_KEY isn't set in Vercel env yet, capture still
+                  succeeds with the raw audio and the orchestrator routes it.*/}
+              <div className="bg-bg-raised border border-status-blue/30 rounded-lg px-4 py-3">
+                <div className="mono text-[10px] uppercase tracking-[0.16em] text-status-blue mb-1">
+                  Voice memo
                 </div>
                 <div className="mono text-[11px] text-text-secondary">
-                  Voice transcription arrives in Sprint 4. Your recording is captured and stored —
-                  transcription will be applied retroactively.
+                  Voice memos are transcribed via OpenAI Whisper on capture (set
+                  OPENAI_API_KEY to enable). Audio is also stored as evidence
+                  so downstream skills can re-process if transcription failed.
                 </div>
               </div>
 
