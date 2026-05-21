@@ -1003,3 +1003,125 @@ Operator setup: `MEMORY/operator-todos/2026-05-03-teams-user-setup.md` — Micro
 **Implements:** v8 landing capture endpoint. Accepts `{companyName, role, firstName, lastName, email}` (all required, email regex-validated), inserts to Supabase `email_signups` with the four new columns (and legacy `name` left NULL), then best-effort mirrors to Notion with property names matching the new DB schema (`Company Name` title, `Role` rich_text, `First Name` rich_text, `Last Name` rich_text, `Email Address` email). On unique-email collision returns 409; on validation failure returns 400; on Supabase failure returns 500 with a generic message (internals not leaked). Notion mirror failures are logged but do not fail the request — Supabase is the durable record.
 **Last verified against spec:** 2026-05-17. Local smoke via `next start` + curl: empty body → 400, bad email → 400, invalid JSON → 400, valid payload with fake Supabase env → 500 generic.
 **Drift:** none.
+
+---
+
+## Funder Onboarding — PR #448 (Pathfinder organization #3)
+
+**State:** PR #448 open on `funder-onboarding`, head `1cb9435`. Autonomous build covering Stages 1-10 of `Pathfinder/Pathfinder-Funder-Build-Spec.md`. Pre-merge regression PASS on local build/typecheck/test 2026-05-21; do-not-touch Zedcor paths (`lib/scoring.ts`, `lib/zedcor/**`, `app/zedcor/**`) untouched. Spec doc: `Pathfinder/Pathfinder-Funder-Build-Spec.md`. Plan: `Pathfinder/docs/PLAN-funder-onboarding.md`. Report: `Pathfinder/docs/REPORT-funder-onboarding.md`.
+
+### Stage 3 — Source adapters (new id-keyed registry)
+
+#### Pathfinder/lib/adapters/sources/types.ts
+**Implements:** Build-Spec §4 Stage 3 — `SourceAdapter` contract (id, fetch, normalize, emit) for the new id-keyed registry consumed by the per-org ingest subscriber. Parallel to the kind-keyed `lib/adapters/types.ts` (Socrata/REST/RSS/etc.) which continues to serve Source Onboarder's code-gen flow; both registries coexist additively.
+**Last verified against spec:** 2026-05-21.
+**Drift:** **minor, additive.** Second registry instead of folding into the kind-keyed one — documented in file header. Justified because Funder adapters are hand-written per-source modules (heterogeneous endpoints, source-specific normalize logic).
+
+#### Pathfinder/lib/adapters/sources/index.ts
+**Implements:** Build-Spec §4 Stage 3 — id-keyed `SOURCE_ADAPTERS` registry. Dispatch surface consumed by `lib/inngest/functions/ingest-org-requested.ts`. Coexists with the kind-keyed `ADAPTERS` registry in `lib/adapters/index.ts`.
+**Last verified against spec:** 2026-05-21.
+**Drift:** none.
+
+#### Pathfinder/lib/adapters/sources/propublica-nonprofit-explorer.ts
+**Implements:** Build-Spec §4 Stage 3 — priority 1 source. Endpoint `https://projects.propublica.org/nonprofits/api/v2/search.json`, no auth, page-paginated (first page per cycle; incremental discovery via `posted_date` ordering).
+**Last verified against spec:** 2026-05-21.
+**Drift:** none. Live ingest verification deferred to post-merge follow-up (one of the 7 adapters flagged 404/500 in the live test; see follow-up branch `funder-followups`).
+
+#### Pathfinder/lib/adapters/sources/irs-exempt-org-filings.ts
+**Implements:** Build-Spec §4 Stage 3 — priority 2 source. IRS Business Master File (BMF) monthly per-state CSV bulk pulls (no realtime JSON API), canonical determination-letter dataset.
+**Last verified against spec:** 2026-05-21.
+**Drift:** **minor, justified.** Bulk CSV instead of JSON-per-record because IRS publishes only the bulk feed. Live ingest verification deferred to `funder-followups`.
+
+#### Pathfinder/lib/adapters/sources/ea-forum-rss.ts
+**Implements:** Build-Spec §4 Stage 3 — priority 3 source. EA Forum frontpage Atom feed at `https://forum.effectivealtruism.org/feed.xml?view=community-top`, throttled at ~60 req/min by upstream.
+**Last verified against spec:** 2026-05-21.
+**Drift:** none.
+
+#### Pathfinder/lib/adapters/sources/philanthropy-trade-press-rss.ts
+**Implements:** Build-Spec §4 Stage 3 — priority 4 source. RSS aggregator across Chronicle of Philanthropy, Inside Philanthropy, Philanthropy News Digest (operator-extensible feed list). One event per entry.
+**Last verified against spec:** 2026-05-21.
+**Drift:** none in code; Chronicle feed flagged 404 in live test, slated for adapter-config fix in `funder-followups`.
+
+#### Pathfinder/lib/adapters/sources/accelerator-cohort-pages.ts
+**Implements:** Build-Spec §4 Stage 3 — priority 5 source. Per-accelerator HTML scraping (YC, ARC Prize, Astera, Schmidt Futures). Ships as `tier-2-human-assist` per Build-Spec §4 Stage 3 guidance for unstable scraping sources.
+**Last verified against spec:** 2026-05-21.
+**Drift:** **major, justified.** Tier-2 fallback registration instead of automated extraction — Build-Spec explicitly authorizes this for unstable HTML sources.
+
+#### Pathfinder/lib/adapters/sources/business-license-issuances.ts
+**Implements:** Build-Spec §4 Stage 3 — priority 6 source. Aggregates over operator-configured list of city/state open-data portals (mostly Socrata-backed business-license issuance datasets, no national feed).
+**Last verified against spec:** 2026-05-21.
+**Drift:** none.
+
+#### Pathfinder/lib/adapters/sources/funder-990-filings.ts
+**Implements:** Build-Spec §4 Stage 3 — priority 5 source per Build-Spec §2 resolved default 6 (treated as enrichment context, not a timely trigger; 990 data runs 12-18 months behind live grant flow).
+**Last verified against spec:** 2026-05-21.
+**Drift:** none.
+
+### Stage 3 — Inngest subscriber
+
+#### Pathfinder/lib/inngest/functions/ingest-org-requested.ts
+**Implements:** Build-Spec §4 Stage 3 — `pathfinder/org.ingest_requested` subscriber. Runs the org's configured source adapters from the id-keyed `SOURCE_ADAPTERS` registry per dispatch from `ingestAllOrgsCron` (every 4h). Org-scoped writes to `pathfinder.projects`, dedupe vs existing rows, one `agent_runs` row per cycle.
+**Last verified against spec:** 2026-05-21.
+**Drift:** **minor, additive.** New subscriber instead of folding Funder sources into Zedcor-shaped `lib/ingestor.ts` `runIngestorCycle()` — documented in file header. Justified to preserve Zedcor regression gate.
+
+### Stage 4 — Qualifier + Enrichment
+
+#### Pathfinder/lib/agents/funder/qualifier.ts
+**Implements:** Build-Spec §4 Stage 4 — per-org L3 qualifier gating raw source events to genuine fundable-org signals. Two-mode: heuristic prefilter + Haiku classifier. Funder-shaped, parallel to Zedcor's inline classifier in `app/api/cron/ranker/route.ts` (Zedcor path untouched).
+**Last verified against spec:** 2026-05-21.
+**Drift:** none.
+
+#### Pathfinder/lib/agents/funder/enricher.ts
+**Implements:** Build-Spec §4 Stage 4 — Funder-shaped enricher emitting org canonical name, legal form (501c3 / PBC / LLC-mission-lock / fiscally-sponsored), founder list, raise stage. Parallel to platform `lib/agents/enricher.ts` (which is Zedcor-shaped buyer-org context).
+**Last verified against spec:** 2026-05-21.
+**Drift:** none in code. **Not yet wired into the pipeline as of PR #448** — exists + unit-tested; wiring is a follow-up on `funder-followups`.
+
+#### Pathfinder/lib/agents/funder/adjacency.ts
+**Implements:** Build-Spec §4 Stage 4 — founder talent-graph adjacency mapper. Parallel to platform `lib/agents/adjacency.ts` (Zedcor cross-pollination model). For each candidate org: prior affiliations of founders, peer organizations sharing founders/board members, accelerator-cohort siblings.
+**Last verified against spec:** 2026-05-21.
+**Drift:** none in code. **Not yet wired into the pipeline as of PR #448** — exists + unit-tested; wiring is a follow-up on `funder-followups`.
+
+#### Pathfinder/lib/agents/funder/geo.ts
+**Implements:** Build-Spec §4 Stage 4 — deterministic hub assignment over the architecture's `lead_unit.schema.geo_hub` enum (sf-bay, nyc, dc-metro, boston, london, remote, other). No branches, no coverage radius, no haversine — fundamentally different from Zedcor's geo model.
+**Last verified against spec:** 2026-05-21.
+**Drift:** none.
+
+### Stage 5 — Ranker
+
+#### Pathfinder/lib/agents/ranker/genericRationale.ts
+**Implements:** Build-Spec §4 Stage 5 — closes the non-Zedcor Sonnet-rationale gap. Pre-PR #448, non-Zedcor projects routed by `app/api/cron/ranker/route.ts:768-845` received a hand-built debug string ("Scored by <display_name> weights ... no extractable features") instead of the Sonnet rationale + first-step prose Zedcor got. This module produces real rationale + first-step recommendation for Funder and also for Realberry (the other persisted non-Zedcor org).
+**Last verified against spec:** 2026-05-21.
+**Drift:** **expected.** Realberry rationales now change from debug string → real Sonnet prose — acknowledged in Build-Spec §4 Stage 5 acceptance ("Existing-customer regression gate passes (Zedcor and Realberry scores unchanged)" — scores unchanged, rationales improved).
+
+### Stage 6 — Verifier
+
+#### Pathfinder/lib/agents/verifier/funderChecks.ts
+**Implements:** Build-Spec §4 Stage 6 — Funder-shaped verifier checks: org exists in public record, founder bios corroborate, org is not already widely funded. Thresholds read from `architecture.scoring.thresholds`. Parallel to the platform verifier in `app/api/cron/verifier/route.ts` (5 Zedcor-shaped checks; branch-attribution + score-recompute produce false failures on Funder projects).
+**Last verified against spec:** 2026-05-21.
+**Drift:** none.
+
+### Stage 7 — Weekly Deal Memo
+
+#### Pathfinder/lib/agents/funder/dealMemo.ts
+**Implements:** Build-Spec §4 Stage 7 — Weekly Deal Memo composer. One-page email + downloadable PDF, opportunities grouped by `thesis_area`, each with 3-sentence org snapshot, founder bio (when available), thesis-fit rationale (ranker Sonnet output), first-step recommendation (`outreach_hook`). Resend delivery.
+**Last verified against spec:** 2026-05-21.
+**Drift:** none.
+
+### Stage 8 — Outreach + integrations
+
+#### Pathfinder/lib/agents/funder/outreachChannels.ts
+**Implements:** Build-Spec §4 Stage 8 — channel dispatch (cold email via Resend, one-line Slack alert, pre-filled HubSpot record fields) with env-gated graceful degradation. Returns `{ ok: false, reason: 'no_credentials' }` when env missing, mirroring the Perplexity-key pattern. Operators see drafts in DB / dashboard regardless of auto-post.
+**Last verified against spec:** 2026-05-21.
+**Drift:** none.
+
+#### Pathfinder/lib/agents/funder/outreachDrafter.ts
+**Implements:** Build-Spec §4 Stage 8 — produces three artifacts per verified opportunity: cold email body (Sonnet, voice from `architecture.outreach`), deterministic Slack one-liner, deterministic HubSpot field mapping. Biosecurity-flagged opportunities (`compliance_flag === 'biosecurity-review'`) receive no auto-draft (resolved default 2).
+**Last verified against spec:** 2026-05-21.
+**Drift:** none.
+
+### Cross-cutting
+
+#### Pathfinder/lib/lead-actions.ts
+**Implements:** SPEC - Pathfinder Hubspot Sync — canonical accept-flow library (`acceptLead`, `pushDealForLeadAction`, `applyHubspotStageEvent`, `recordLocalAction`). Modified in PR #448 to make HubSpot-deal push tolerate Funder-shaped projects (org-scoped pipeline + stage lookup) without changing the Zedcor path. Stable public interface kept per `docs/LEAD-ACTIONS-API.md` for P0-04 Slack-bot + P0-01 chat-panel consumers.
+**Last verified against spec:** 2026-05-21.
+**Drift:** none.
