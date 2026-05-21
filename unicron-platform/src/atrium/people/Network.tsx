@@ -310,8 +310,12 @@ export function Network() {
           {contacts.length} contacts
         </span>
         <div style={{ flex: 1 }} />
-        {/* Search */}
-        <div style={{ position: 'relative' }}>
+        {/* Search — Atrium audit fix item #10. Client-side filter is the right
+            default for the (small) contact list, but the input previously had
+            no backend escape hatch. Adding a "Search vault →" CTA that hands
+            off to the Library Repo vault-wide search when the user wants
+            results outside the loaded contacts. */}
+        <div style={{ position: 'relative', display: 'flex', gap: 8, alignItems: 'center' }}>
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -323,6 +327,33 @@ export function Network() {
               fontSize: 'var(--text-xs)', color: 'var(--text-hi)',
             }}
           />
+          {query.trim().length > 0 && (
+            <button
+              type="button"
+              onClick={() => {
+                try {
+                  window.dispatchEvent(new CustomEvent('atrium:navigate', {
+                    detail: { tab: 'library', subTab: 'repo', filter: { q: query.trim() } },
+                  }));
+                } catch {
+                  // non-browser env — ignore
+                }
+              }}
+              title="Hand off this query to the vault-wide repo search"
+              style={{
+                padding: '6px 10px',
+                background: 'transparent',
+                border: '1px solid var(--border-subtle)',
+                borderRadius: 'var(--r-md)',
+                fontSize: 'var(--text-xs)',
+                color: 'var(--text-hi)',
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              Search vault →
+            </button>
+          )}
         </div>
       </div>
 

@@ -353,6 +353,12 @@ export function CustomersPipeline() {
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [patchError, setPatchError] = useState<string | null>(null);
+  // Atrium audit fix item #11 — surface a retry path so failed drag-drops are
+  // not silently lost. Holds the last failed patch + an attempt counter so
+  // the button label can show "Retry · attempt N".
+  const [lastFailedPatch, setLastFailedPatch] = useState<{ id: string; target: Stage; previous: string | null } | null>(null);
+  const [retryAttempts, setRetryAttempts] = useState(0);
+  const [retrying, setRetrying] = useState(false);
 
   // Detect mobile (< 640px) via a simple media query
   const [isMobile, setIsMobile] = useState(() =>
@@ -398,12 +404,17 @@ export function CustomersPipeline() {
 
       try {
         await patchCustomerStatus(draggingId, targetStage);
+        // Patch succeeded — clear any retry state from earlier failures.
+        setLastFailedPatch(null);
+        setRetryAttempts(0);
       } catch (e) {
         // Rollback
         setCustomers((prev) =>
           prev.map((c) => (c.id === draggingId ? { ...c, status: customer.status } : c)),
         );
         setPatchError(e instanceof Error ? e.message : 'Failed to update status');
+        setLastFailedPatch({ id: draggingId, target: targetStage, previous: customer.status });
+        setRetryAttempts(0);
       }
     },
     [draggingId, customers],
@@ -479,14 +490,73 @@ export function CustomersPipeline() {
         ))}
       </div>
 
-      {/* Patch error banner */}
+      {/* Patch error banner — Atrium audit fix item #11. Was a silent error;
+          now exposes a Retry button with exponential backoff so failed drag-
+          drops aren't lost. */}
       {patchError && (
         <div style={{
           marginBottom: 12, padding: '8px 12px',
           background: 'var(--err-soft)', border: '1px solid rgba(221,98,98,0.25)',
           borderRadius: 'var(--r-md)', fontSize: 'var(--text-xs)', color: 'var(--err)',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
         }}>
-          {patchError}
+          <span style={{ flex: 1, minWidth: 0 }}>{patchError}</span>
+          {lastFailedPatch && !retrying && (
+            <button
+              type="button"
+              onClick={async () => {
+                if (!lastFailedPatch) return;
+                setRetrying(true);
+                // Exponential backoff: 300ms × 2^attempts (cap 4s)
+                const delay = Math.min(300 * Math.pow(2, retryAttempts), 4000);
+                await new Promise((r) => setTimeout(r, delay));
+                // Optimistic move again
+                setCustomers((prev) =>
+                  prev.map((c) =>
+                    c.id === lastFailedPatch.id
+                      ? { ...c, status: lastFailedPatch.target }
+                      : c,
+                  ),
+                );
+                try {
+                  await patchCustomerStatus(lastFailedPatch.id, lastFailedPatch.target);
+                  setPatchError(null);
+                  setLastFailedPatch(null);
+                  setRetryAttempts(0);
+                } catch (e) {
+                  // Roll back again
+                  setCustomers((prev) =>
+                    prev.map((c) =>
+                      c.id === lastFailedPatch.id
+                        ? { ...c, status: lastFailedPatch.previous }
+                        : c,
+                    ),
+                  );
+                  setPatchError(e instanceof Error ? e.message : 'Retry failed');
+                  setRetryAttempts((n) => n + 1);
+                } finally {
+                  setRetrying(false);
+                }
+              }}
+              style={{
+                padding: '4px 10px',
+                background: 'transparent',
+                border: '1px solid var(--err)',
+                color: 'var(--err)',
+                borderRadius: 'var(--r-sm)',
+                fontSize: 'var(--text-xs)',
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {retryAttempts > 0 ? `Retry · attempt ${retryAttempts + 1}` : 'Retry'}
+            </button>
+          )}
+          {retrying && (
+            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-md)', whiteSpace: 'nowrap' }}>
+              Retrying…
+            </span>
+          )}
         </div>
       )}
 
