@@ -338,8 +338,25 @@ function AnalyticsPanels() {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function Work() {
-  const [active, setActive] = useState<WorkTab>('items');
+export interface WorkProps {
+  /**
+   * Bug 2 of the Atrium blockers goal (2026-05-13): the active sub-tab is
+   * driven by the URL (e.g. /work/calls), not internal state, so a refresh
+   * keeps the operator on the right sub-tab and deep links work.
+   */
+  initialSubTab?: WorkTab;
+  initialCallDetailId?: string;
+  onSubTabChange?: (subTab: WorkTab, detailId?: string) => void;
+}
+
+export function Work({ initialSubTab = 'items', initialCallDetailId, onSubTabChange }: WorkProps = {}) {
+  const [active, setActiveInternal] = useState<WorkTab>(initialSubTab);
+  // Keep the local state in sync with URL-driven changes (back/forward).
+  useEffect(() => { setActiveInternal(initialSubTab); }, [initialSubTab]);
+  const setActive = (next: WorkTab) => {
+    setActiveInternal(next);
+    onSubTabChange?.(next, undefined);
+  };
   const m = useItemMetrics();
   const [collapsed, setCollapsed] = useFilterSidebarCollapsed();
   const [newItemOpen, setNewItemOpen] = useState(false);
@@ -445,7 +462,12 @@ export function Work() {
           <section role="tabpanel" aria-label={WORK_TABS.find((t) => t.id === active)?.label}>
             {active === 'items' && <ActionItems refreshSignal={itemsRefreshKey} />}
             {active === 'kanban' && <KanbanEmbeds />}
-            {active === 'calls' && <CallsLog />}
+            {active === 'calls' && (
+              <CallsLog
+                initialDetailCallId={initialCallDetailId}
+                onDetailChange={(id) => onSubTabChange?.('calls', id)}
+              />
+            )}
             {active === 'decisions' && <DecisionsTimeline />}
             {active === 'sprints' && <SprintsView />}
             {active === 'refusals' && <RefusalsTriage />}
