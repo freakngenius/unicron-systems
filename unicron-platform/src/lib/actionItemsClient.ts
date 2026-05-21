@@ -1,15 +1,19 @@
 // actionItemsClient.ts — Sprint 4 Stream D
 //
-// Client stub for PATCH /api/atrium/action-items/:id
+// Client for PATCH /api/atrium/action-items/:id
 //
-// The endpoint lives in the Pathfinder Next.js project (not here — unicron-
-// platform is a Vite app with no server-side API routes). It is deployed at:
+// The endpoint lives in the Pathfinder Next.js project (unicron-platform is a
+// Vite app with no server-side API routes). It is deployed at:
 //   https://pathfinder-ashy.vercel.app/api/atrium/action-items/:id
 // and is proxied through unicron.systems/pathfinder/* at runtime.
 //
-// TODO (Pathfinder-side follow-up): implement
-//   Pathfinder/app/api/atrium/action-items/[id]/route.ts
-// The implementation skeleton is already committed in the same PR for reference.
+// Implementation: Pathfinder/app/api/atrium/action-items/[id]/route.ts.
+// Atrium audit fix item #8 (2026-05-21): the prior "TODO (Pathfinder-side
+// follow-up): implement" comment was stale — the route is shipped and supports
+// dri/status/deferred_to/closed AND the Sprint-8-F5 `completed` + `completed_by`
+// columns required by the Slack-digest action-item checkbox in SlackDigest.tsx.
+// Verified directly against Pathfinder/app/api/atrium/action-items/[id]/route.ts
+// in 2026-05-21 audit-fix pass.
 //
 // Auth: the PATCH endpoint checks the `x-unicron-api-key` header against the
 // UNICRON_INTERNAL_API_KEY secret stored in Vercel. The value must be set in
