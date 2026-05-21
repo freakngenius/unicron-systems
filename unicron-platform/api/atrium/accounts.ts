@@ -123,10 +123,16 @@ function extract(page: NotionPage): AccountRow {
 }
 
 function isPaid(row: AccountRow): boolean {
+  // Paid AND active. A row counts as paid only when it has a positive
+  // subscription, is not flagged as Free, AND is not currently Paused or
+  // Canceled. Null status is treated as Active (Notion default) so existing
+  // rows without an explicit status keep behaving as paid.
   return (
     typeof row.subscription_usd === 'number' &&
     row.subscription_usd > 0 &&
-    row.account_type !== 'Free'
+    row.account_type !== 'Free' &&
+    row.status !== 'Paused' &&
+    row.status !== 'Canceled'
   );
 }
 

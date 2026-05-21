@@ -1,25 +1,12 @@
-// Money.tsx — S5b restores Cash on hand via nervous_system.cash_balance.
-// Manual entry path (default). Plaid integration ships as a skeleton at
-// /api/atrium/plaid/sync until credentials land.
+// Money.tsx — Burn metric + Expenses sub-tab roll up from the Notion Accounts
+// database (`/api/atrium/accounts`). Same source as the Accounts sub-tab, so
+// Burn, the "N connected services" subtitle, the Expenses list, and the
+// Accounts paid section are guaranteed consistent.
 //
-// Original Pass 2 (R4) note retained:
-//
-// SLOT MATRIX (Pass 2 R4):
-//  - Cash on hand · status: CUT · no bank integration / cash table.
-//  - Runway months · status: CUT · depends on cash on hand (cut).
-//  - 12-month runway projection chart · status: CUT (lived inside Runway
-//    subcomponent, not the shell — Bug Fix card stands until cash lands).
-//  - Net MRR · status: real · literal $0 with "Pre-revenue · Zedcor pilot
-//    in flight" label until Stripe Connect wires revenue.
-//  - Burn (30d) · status: real · ns_money_burn_from_services — sum of
-//    connected_services.monthly_cost_usd. The accurate operational burn
-//    proxy until expense_tracking ships.
-//  - Sub-tabs: Runway / Revenue / Expenses / Cost spikes / Accounts — kept
-//    as-is. Runway sub-tab content cut to a "Requires bank integration"
-//    empty state (the 12-month chart card belongs there).
+// nervous_system.connected_services is superseded by this rollup (kept around
+// pending an archival follow-up; not deleted).
 
 import { useState, useEffect } from 'react';
-import { getSupabase } from '../lib/supabase';
 import { Accounts } from './money/Accounts';
 import { Revenue } from './money/Revenue';
 import { Expenses } from './money/Expenses';
@@ -37,6 +24,11 @@ const MONEY_TABS = [
 type MoneyTab = (typeof MONEY_TABS)[number]['id'];
 
 // ─── Burn metric (real) ──────────────────────────────────────────────────────
+//
+// Reads /api/atrium/accounts (Notion Accounts DB mirror). Burn =
+// paid_monthly_equivalent_usd (paid+active rows, Yearly normalized ÷ 12).
+// Services count = number of paid+active rows. Same source as the Accounts
+// sub-tab and the Expenses sub-tab.
 
 function useBurnFromServices(): { monthly: number | null; services: number | null } {
   const [s, setS] = useState<{ monthly: number | null; services: number | null }>({
@@ -44,12 +36,20 @@ function useBurnFromServices(): { monthly: number | null; services: number | nul
   });
   useEffect(() => {
     let cancelled = false;
-    getSupabase()
-      .rpc('ns_money_burn_from_services')
-      .then(({ data }) => {
+    fetch('/api/atrium/accounts')
+      .then(async (res) => {
+        if (!res.ok) return;
+        const json = (await res.json()) as {
+          paid?: Array<unknown>;
+          paid_monthly_equivalent_usd?: number;
+        };
         if (cancelled) return;
-        const row = (data as Array<{ monthly_burn_usd: number; services_count: number }> | null)?.[0];
-        if (row) setS({ monthly: Number(row.monthly_burn_usd), services: Number(row.services_count) });
+        if (typeof json.paid_monthly_equivalent_usd === 'number') {
+          setS({
+            monthly: json.paid_monthly_equivalent_usd,
+            services: Array.isArray(json.paid) ? json.paid.length : null,
+          });
+        }
       })
       .catch(() => {/* leave nulls */});
     return () => { cancelled = true; };
