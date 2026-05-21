@@ -25,6 +25,9 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { loadOrgArchitecture } from '@/lib/agents/loadOrgArchitecture';
 import { SOURCE_ADAPTERS } from '@/lib/adapters/sources';
 import type { SourceEvent } from '@/lib/adapters/sources';
+// Funder onboarding Stage 4 — qualifier gate before insert.
+import { qualifyForFunder } from '@/lib/agents/funder/qualifier';
+import { assignHub } from '@/lib/agents/funder/geo';
 
 type StepCtx = {
   run: <T>(name: string, fn: () => Promise<T>) => Promise<T>;
@@ -147,6 +150,32 @@ export const ingestOrgRequested = inngest.createFunction(
         sourceResult.fetched = events.length;
         if (events.length === 0) return sourceResult;
 
+        // Stage 4: qualifier gate before persistence. Drop events the
+        // qualifier rejects so we don't pay downstream Sonnet costs for
+        // noise. Qualified events also carry inferred_thesis +
+        // compliance_flag into raw_payload for the ranker + outreach.
+        const qualifiedEvents = events.filter((e) => {
+          const q = qualifyForFunder({
+            source_event_id: e.source_event_id,
+            source: sourceRef.id,
+            title: e.title,
+            summary: e.summary,
+            raw_payload: e.raw_payload,
+            architecture,
+          });
+          if (q.qualified) {
+            const hub = assignHub({ city: e.city, state: e.state, country: e.country });
+            (e.raw_payload as Record<string, unknown>).funder_qualifier_reason = q.reason;
+            (e.raw_payload as Record<string, unknown>).funder_inferred_thesis = q.inferred_thesis ?? null;
+            (e.raw_payload as Record<string, unknown>).funder_compliance_flag = q.compliance_flag ?? null;
+            (e.raw_payload as Record<string, unknown>).funder_geo_hub = hub;
+          }
+          return q.qualified;
+        });
+        if (qualifiedEvents.length === 0) {
+          return sourceResult;
+        }
+
         // De-dup against existing projects by source_event_id stored in
         // raw_payload.source_event_id (the projects.id column is the
         // adapter's source_event_id directly, matching the inline
@@ -159,11 +188,11 @@ export const ingestOrgRequested = inngest.createFunction(
             insert: (rows: Record<string, unknown>[]) => Promise<{ error: { message: string } | null }>;
           };
         };
-        const ids = events.map((e) => e.source_event_id);
+        const ids = qualifiedEvents.map((e) => e.source_event_id);
         const { data: existing } = await admin.from('projects').select('id').in('id', ids);
         const existingSet = new Set((existing ?? []).map((r) => r.id));
-        const fresh = events.filter((e) => !existingSet.has(e.source_event_id));
-        sourceResult.deduped = events.length - fresh.length;
+        const fresh = qualifiedEvents.filter((e) => !existingSet.has(e.source_event_id));
+        sourceResult.deduped = qualifiedEvents.length - fresh.length;
         if (fresh.length === 0) return sourceResult;
 
         const rows = fresh.map((e) => ({
