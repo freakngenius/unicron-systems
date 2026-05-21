@@ -37,6 +37,10 @@ import { scoreProject } from '@/lib/scoring';
 // using their architecture's scoring.weights. See
 // docs/PLAN-phase2c-slice2-org-aware-ranker.md.
 import { scoreGenericProject } from '@/lib/agents/ranker/genericScorer';
+// Funder onboarding Stage 5 — closes the generic-org Sonnet rationale gap.
+// Used by the non-Zedcor branch below; Zedcor's existing generateRationale
+// path is unchanged.
+import { generateGenericRationale } from '@/lib/agents/ranker/genericRationale';
 import { loadOrgArchitecture } from '@/lib/agents/loadOrgArchitecture';
 import { inngest } from '@/lib/inngest/client';
 import type { Branch, Customer, Project } from '@/lib/types';
@@ -794,22 +798,37 @@ export async function GET(req: Request) {
         architecture,
       );
 
-      // Slice 2 ships scoring dispatch only. Sonnet-driven org-flavored
-      // rationale + outreach hook is a follow-up slice; for now the
-      // rationale documents the scorer + the per-feature components so
-      // operators can see how the score was derived in the UI. Realberry
-      // (the only non-Zedcor org with a persisted row) has 0 projects
-      // in production today, so prompt quality is not the blocker for
-      // this slice — scoring dispatch is.
-      const componentLines = Object.entries(scoreResult.components)
-        .map(([k, v]) => `${k}=${v.toFixed(2)}`)
-        .join(' · ');
-      const rationale = `Scored by ${architecture.branding.display_name} weights (Phase 2C slice 2 generic scorer). ${componentLines || 'no extractable features'}.`;
+      // Funder onboarding Stage 5 — generic-org Sonnet rationale.
+      // Replaces the prior debug string that Phase 2C slice 2 emitted as a
+      // placeholder. The new path produces real Sonnet rationale + a
+      // first-step recommendation grounded in the architecture (vocabulary,
+      // business_summary, outreach voice). Also serves Realberry — the
+      // rationale change there is expected and not a regression
+      // (see Pathfinder/docs/REPORT-funder-onboarding.md §Stage 5).
+      const rationaleRes = await generateGenericRationale({
+        project: {
+          id: project.id,
+          title: project.title,
+          summary: project.summary,
+          source: project.source,
+          raw_payload: project.raw_payload,
+          project_value: project.project_value,
+          project_stage: project.project_stage,
+          posted_date: project.posted_date,
+        },
+        architecture,
+        scoreComponents: scoreResult.components,
+        scoreComposite: scoreResult.score,
+      });
+      const rationale =
+        rationaleRes.rationale ||
+        `Scored ${scoreResult.score}/100 against ${architecture.branding.display_name} weights.`;
+      const outreach_hook = rationaleRes.first_step || null;
 
       const writeFields: RankerWriteFields = {
         score: scoreResult.score,
         rationale,
-        outreach_hook: null,
+        outreach_hook,
         nearest_branch_id: null,
         distance_miles: null,
         warm_for_customer_id: null,
@@ -820,6 +839,22 @@ export async function GET(req: Request) {
         rejected_at: null,
         geo_unknown: project.lat == null || project.lon == null,
       };
+      // Log the Sonnet call for telemetry (matches the model_route event
+      // Zedcor's path emits below). Funder rationale latency tracks here.
+      if (rationaleRes.latency_ms > 0) {
+        await writeLog(
+          admin,
+          'rationale_generate',
+          {
+            message: `generic rationale · ${project.id} · ${orgName} · ${rationaleRes.latency_ms}ms${rationaleRes.reason ? ` (${rationaleRes.reason})` : ''}`,
+            project_id: project.id,
+            organization_id: projectOrgId,
+            org_name: orgName,
+            reason: rationaleRes.reason ?? null,
+          },
+          { model_used: 'claude-sonnet-4-5', latency_ms: rationaleRes.latency_ms },
+        );
+      }
       const w = await persistProject(admin, project.id, writeFields);
       if (!w.ok) {
         await writeLog(admin, 'error', {
