@@ -38,8 +38,12 @@ function useBoardCounts(): BoardCounts {
   useEffect(() => {
     let cancelled = false;
     const sb = getSupabase();
-    // SLOT: Board counts · STATUS: real (customers, team) / null (network, hiring
-    // until ns_count_network_contacts + ns_count_hiring_candidates ship).
+    // Atrium audit fix #21 — the audit flagged ns_count_network_contacts +
+    // ns_count_hiring_candidates as SYNTHETIC (hardcoded null) because the
+    // prior comment said they were "until ... ship." Verified against the
+    // live DB on 2026-05-21: both RPCs exist (counts come from
+    // nervous_system.network_contacts and nervous_system.hiring_candidates
+    // tables). Stop suppressing the real values.
     Promise.all([
       sb.rpc('ns_count_customers'),
       sb.rpc('ns_count_team_members'),
