@@ -26,28 +26,115 @@ const STAGE_WEIGHT: Record<string, number> = {
   Expansion: 1.0,
 };
 
-// ── Stripe stub ───────────────────────────────────────────────────────────────
+// ── Stripe MRR card ───────────────────────────────────────────────────────────
+// Atrium audit fix item #5: replace the alert() stub with a real fetch against
+// /api/atrium/stripe-mrr. The endpoint returns configured:false until
+// STRIPE_SECRET_KEY is set, at which point the card renders live MRR/ARR.
+
+type StripeState =
+  | { phase: 'loading' }
+  | { phase: 'unconfigured'; message: string }
+  | { phase: 'live'; mrr_usd: number; arr_usd: number; active_subscriptions: number; fetched_at: string }
+  | { phase: 'error'; message: string };
+
+function fmtUsd(n: number): string {
+  return '$' + n.toLocaleString(undefined, { maximumFractionDigits: 0 });
+}
 
 function StripeStub() {
+  const [state, setState] = useState<StripeState>({ phase: 'loading' });
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/atrium/stripe-mrr');
+        const json = (await res.json()) as Record<string, unknown>;
+        if (cancelled) return;
+        if (res.status === 503 && json.configured === false) {
+          setState({
+            phase: 'unconfigured',
+            message: typeof json.message === 'string' ? json.message : 'Stripe not configured.',
+          });
+        } else if (res.ok && json.configured === true) {
+          setState({
+            phase: 'live',
+            mrr_usd: Number(json.mrr_usd ?? 0),
+            arr_usd: Number(json.arr_usd ?? 0),
+            active_subscriptions: Number(json.active_subscriptions ?? 0),
+            fetched_at: String(json.fetched_at ?? ''),
+          });
+        } else {
+          setState({
+            phase: 'error',
+            message: typeof json.error === 'string' ? json.error : `HTTP ${res.status}`,
+          });
+        }
+      } catch (err) {
+        if (cancelled) return;
+        setState({ phase: 'error', message: err instanceof Error ? err.message : String(err) });
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  if (state.phase === 'live') {
+    return (
+      <div className="bg-bg-card border border-border-default rounded-xl p-6 flex items-center justify-between gap-6 flex-wrap">
+        <div className="flex items-baseline gap-6">
+          <div>
+            <div className="mono text-[10px] uppercase tracking-[0.14em] text-text-muted mb-1">MRR</div>
+            <div className="mono text-[20px] font-semibold text-status-green tabular-nums">
+              {fmtUsd(state.mrr_usd)}
+            </div>
+          </div>
+          <div>
+            <div className="mono text-[10px] uppercase tracking-[0.14em] text-text-muted mb-1">ARR</div>
+            <div className="mono text-[18px] font-semibold text-text-primary tabular-nums">
+              {fmtUsd(state.arr_usd)}
+            </div>
+          </div>
+          <div>
+            <div className="mono text-[10px] uppercase tracking-[0.14em] text-text-muted mb-1">
+              Active subs
+            </div>
+            <div className="mono text-[18px] font-semibold text-text-primary tabular-nums">
+              {state.active_subscriptions}
+            </div>
+          </div>
+        </div>
+        <div className="mono text-[10px] text-text-muted">
+          From Stripe · fetched {new Date(state.fetched_at).toLocaleTimeString()}
+        </div>
+      </div>
+    );
+  }
+
+  // unconfigured | loading | error all share the same CTA card layout
+  const subtitle =
+    state.phase === 'loading'
+      ? 'Checking Stripe connection…'
+      : state.phase === 'error'
+        ? `Stripe call failed: ${state.message}`
+        : 'No revenue connector configured yet — pre-revenue, pilot in flight.';
+
   return (
     <div className="bg-bg-card border border-border-default rounded-xl p-6 flex items-center justify-between gap-6 flex-wrap">
       <div>
-        <div className="mono text-[14px] font-semibold text-text-primary mb-1.5">
-          Revenue
-        </div>
-        <div className="mono text-[12px] text-text-secondary">
-          No revenue connector configured yet — pre-revenue, pilot in flight.
-        </div>
+        <div className="mono text-[14px] font-semibold text-text-primary mb-1.5">Revenue</div>
+        <div className="mono text-[12px] text-text-secondary">{subtitle}</div>
         <div className="mono text-[11px] text-text-muted mt-1">
-          Connect Stripe to auto-pull MRR, ARR, and churn data.
+          Set STRIPE_SECRET_KEY in Vercel env to auto-pull MRR / ARR / active subscriptions.
         </div>
       </div>
-      <button
-        className="mono text-[11px] uppercase tracking-[0.12em] px-4 py-2.5 bg-accent-orange text-white rounded-lg hover:bg-[#D4652E] transition-colors shrink-0"
-        onClick={() => alert('Stripe connection — add STRIPE_SECRET_KEY to environment and deploy /api/atrium/stripe-mrr endpoint.')}
+      <a
+        href="https://dashboard.stripe.com/apikeys"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="mono text-[11px] uppercase tracking-[0.12em] px-4 py-2.5 bg-accent-orange text-white rounded-lg hover:bg-[#D4652E] transition-colors shrink-0 no-underline"
       >
-        Connect Stripe
-      </button>
+        Get Stripe key ↗
+      </a>
     </div>
   );
 }

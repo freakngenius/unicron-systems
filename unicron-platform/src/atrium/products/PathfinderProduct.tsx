@@ -372,10 +372,10 @@ export function PathfinderProduct() {
           <div className="bg-bg-card border border-border-default rounded-xl overflow-hidden">
             <div className="px-4 py-3 border-b border-border-default flex items-center justify-between">
               <span className="mono text-[9px] uppercase tracking-[0.18em] text-text-muted">
-                unicron-knowledge/wiki/products/pathfinder/kpis.md
+                unicron-knowledge/wiki/architecture/products/pathfinder/kpis.md
               </span>
               <a
-                href="https://github.com/freakngenius/unicron-knowledge/blob/main/wiki/products/pathfinder/kpis.md"
+                href="https://github.com/freakngenius/unicron-knowledge/blob/main/wiki/architecture/products/pathfinder/kpis.md"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="mono text-[10px] text-status-blue hover:underline"
