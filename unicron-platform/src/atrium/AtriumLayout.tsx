@@ -88,32 +88,189 @@ function StatusPulse({ items }: { items: StatusItem[] }) {
 }
 
 // ─── CmdK palette ─────────────────────────────────────────────────────────────
+// 2026-05-21 atrium-realtime-audit item #19: GROUPS used to be hardcoded mock
+// strings. Now backed by live data via useCmdkItems() — action items, calls,
+// wiki pages, and skills — wired to navigateAtrium for jump-to behaviour.
+
+interface CmdkItem { label: string; onSelect: () => void }
+interface CmdkGroup { label: string; items: CmdkItem[] }
+
+interface ActionItemLite { id: string; title: string; status: string }
+interface CallLite       { id: string; content_summary: string | null; created_at: string }
+interface WikiPageLite   { slug: string; title: string }
+interface SkillLite      { id: string; name: string }
+
+// Module-level cache so we don't refetch on every palette open within a
+// session. Cleared on full page reload.
+let cmdkCache: { groups: CmdkGroup[]; ts: number } | null = null;
+
+function formatCallDate(iso: string): string {
+  try {
+    return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  } catch {
+    return '';
+  }
+}
+
+function useCmdkItems(open: boolean): { groups: CmdkGroup[]; loading: boolean } {
+  const [groups, setGroups] = useState<CmdkGroup[]>(() => cmdkCache?.groups ?? []);
+  const [loading, setLoading] = useState<boolean>(() => cmdkCache === null);
+  const loadedRef = useRef<boolean>(cmdkCache !== null);
+
+  useEffect(() => {
+    if (!open) return;
+    if (loadedRef.current) return;
+    loadedRef.current = true;
+
+    let cancelled = false;
+    setLoading(true);
+
+    const sb = getSupabase();
+
+    const actionItemsP: Promise<CmdkGroup> = sb
+      .rpc('ns_list_action_items', { p_limit: 30 })
+      .then(({ data, error }) => {
+        if (error) throw error;
+        const rows = (data as ActionItemLite[] | null) ?? [];
+        const open = rows
+          .filter((r) => r.status !== 'done' && r.status !== 'broken_off')
+          .slice(0, 8);
+        return {
+          label: 'Action items',
+          items: open.map((r) => ({
+            label: r.title,
+            onSelect: () =>
+              navigateAtrium({ tab: 'work', subTab: 'items', filter: { id: r.id } }),
+          })),
+        };
+      });
+
+    const callsP: Promise<CmdkGroup> = sb
+      .rpc('ns_list_ledger_calls', { p_search: null, p_limit: 5 })
+      .then(({ data, error }) => {
+        if (error) throw error;
+        const rows = (data as CallLite[] | null) ?? [];
+        return {
+          label: 'Calls',
+          items: rows.map((r) => {
+            const summary = (r.content_summary ?? '').trim();
+            const title = summary.length > 0
+              ? (summary.length > 64 ? `${summary.slice(0, 61)}…` : summary)
+              : 'Untitled call';
+            const date = formatCallDate(r.created_at);
+            return {
+              label: date ? `${title} — ${date}` : title,
+              onSelect: () =>
+                navigateAtrium({ tab: 'work', subTab: 'calls', filter: { id: r.id } }),
+            };
+          }),
+        };
+      });
+
+    const wikiP: Promise<CmdkGroup> = fetch('/api/atrium/wiki')
+      .then((r) => {
+        if (!r.ok) throw new Error(`wiki ${r.status}`);
+        return r.json() as Promise<{ pages?: WikiPageLite[] }>;
+      })
+      .then((body) => {
+        const pages = (body.pages ?? [])
+          .filter((p) => !p.slug.startsWith('_'))
+          .slice(0, 5);
+        return {
+          label: 'Wiki pages',
+          items: pages.map((p) => ({
+            label: p.title || p.slug,
+            onSelect: () =>
+              navigateAtrium({ tab: 'library', subTab: 'wiki', filter: { slug: p.slug } }),
+          })),
+        };
+      });
+
+    const skillsP: Promise<CmdkGroup> = fetch('/api/atrium/skills')
+      .then((r) => {
+        if (!r.ok) throw new Error(`skills ${r.status}`);
+        return r.json() as Promise<SkillLite[] | { error: string }>;
+      })
+      .then((body) => {
+        if (!Array.isArray(body)) throw new Error('skills payload not array');
+        const rows = body.slice(0, 6);
+        return {
+          label: 'Skills',
+          items: rows.map((s) => ({
+            label: s.name,
+            onSelect: () =>
+              navigateAtrium({ tab: 'now', subTab: 'skills', filter: { id: s.id } }),
+          })),
+        };
+      });
+
+    void Promise.allSettled([actionItemsP, callsP, wikiP, skillsP]).then((results) => {
+      if (cancelled) return;
+      const next: CmdkGroup[] = [];
+      for (const r of results) {
+        if (r.status === 'fulfilled' && r.value.items.length > 0) next.push(r.value);
+      }
+      cmdkCache = { groups: next, ts: Date.now() };
+      setGroups(next);
+      setLoading(false);
+    });
+
+    return () => { cancelled = true; };
+  }, [open]);
+
+  return { groups, loading };
+}
 
 function CmdKPalette({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [q, setQ] = useState('');
+  const [activeIdx, setActiveIdx] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  const { groups, loading } = useCmdkItems(open);
 
   useEffect(() => {
-    if (open) { setQ(''); setTimeout(() => inputRef.current?.focus(), 50); }
+    if (open) { setQ(''); setActiveIdx(0); setTimeout(() => inputRef.current?.focus(), 50); }
   }, [open]);
 
+  // Reset selection when query changes
+  useEffect(() => { setActiveIdx(0); }, [q]);
+
+  // Filter groups by query (operates on the live label, not mock strings)
+  const filteredGroups: CmdkGroup[] = groups
+    .map((g) => ({
+      ...g,
+      items: q
+        ? g.items.filter((i) => i.label.toLowerCase().includes(q.toLowerCase()))
+        : g.items,
+    }))
+    .filter((g) => g.items.length > 0);
+
+  // Flatten for keyboard navigation
+  const flat: CmdkItem[] = filteredGroups.flatMap((g) => g.items);
+
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    const handler = (e: KeyboardEvent) => {
+      if (!open) return;
+      if (e.key === 'Escape') { onClose(); return; }
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setActiveIdx((i) => (flat.length === 0 ? 0 : (i + 1) % flat.length));
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setActiveIdx((i) => (flat.length === 0 ? 0 : (i - 1 + flat.length) % flat.length));
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        const target = flat[activeIdx];
+        if (target) { target.onSelect(); onClose(); }
+      }
+    };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
-  }, [onClose]);
+  }, [open, onClose, flat, activeIdx]);
 
   if (!open) return null;
 
-  const GROUPS = [
-    { label: 'Action items', items: ['Reply to Zenith Labs proposal', 'Send Q2 forecast to board'] },
-    { label: 'Calls', items: ['Zedcor discovery call — May 6', 'HCFCD procurement review — May 8'] },
-    { label: 'Vault', items: ['Pathfinder pricing model v3', 'Internal Nervous System SPEC'] },
-    { label: 'Skills', items: ['Run · Daily digest', 'Run · Customer health sweep'] },
-  ].map(g => ({
-    ...g,
-    items: q ? g.items.filter(i => i.toLowerCase().includes(q.toLowerCase())) : g.items,
-  })).filter(g => g.items.length);
+  // Build (group, item, flatIdx) tuples so we can highlight the active row.
+  let runningIdx = 0;
 
   return (
     <div
@@ -134,17 +291,27 @@ function CmdKPalette({ open, onClose }: { open: boolean; onClose: () => void }) 
           <span className="text-[9px] text-text-muted bg-bg-raised px-1.5 py-0.5 rounded font-mono">esc</span>
         </div>
         <div className="max-h-[380px] overflow-y-auto py-1">
-          {GROUPS.length === 0 ? (
+          {loading && filteredGroups.length === 0 ? (
+            <div className="py-8 text-center text-[11px] text-text-muted">Loading recent items…</div>
+          ) : filteredGroups.length === 0 ? (
             <div className="py-8 text-center text-[11px] text-text-muted">No matches</div>
-          ) : GROUPS.map((g, gi) => (
+          ) : filteredGroups.map((g, gi) => (
             <div key={gi}>
               <div className="px-4 py-2 text-[9px] uppercase tracking-[0.18em] text-text-muted">{g.label}</div>
-              {g.items.map((item, ii) => (
-                <button key={ii} onClick={onClose}
-                  className="w-full flex items-center gap-3 px-4 py-2 hover:bg-bg-raised transition-colors text-left text-[12px] text-text-primary">
-                  {item}
-                </button>
-              ))}
+              {g.items.map((item, ii) => {
+                const myIdx = runningIdx++;
+                const isActive = myIdx === activeIdx;
+                return (
+                  <button
+                    key={ii}
+                    onMouseEnter={() => setActiveIdx(myIdx)}
+                    onClick={() => { item.onSelect(); onClose(); }}
+                    className={`w-full flex items-center gap-3 px-4 py-2 transition-colors text-left text-[12px] text-text-primary ${isActive ? 'bg-bg-raised' : 'hover:bg-bg-raised'}`}
+                  >
+                    {item.label}
+                  </button>
+                );
+              })}
             </div>
           ))}
         </div>

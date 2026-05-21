@@ -57,11 +57,12 @@ export default async function handler(
   // Run queries in parallel. Each is wrapped so a missing table returns safe fallback.
   const [tenantsResult, agentRunsResult, projectsResult, xpollResult, draftsResult] =
     await Promise.allSettled([
-      // Tenants
+      // Tenants — Atrium audit fix #20: include `status` so the UI can render
+      // the actual customer state instead of the hardcoded "Active" pill.
       sb
         .schema('pathfinder')
         .from('customers')
-        .select('id, name, monthly_value, customer_since')
+        .select('id, name, monthly_value, customer_since, status')
         .order('name')
         .limit(50),
 
