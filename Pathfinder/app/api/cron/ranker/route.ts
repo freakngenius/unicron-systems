@@ -29,7 +29,7 @@
 import { NextResponse } from 'next/server';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
-import { closeAgentRun, openAgentRun } from '@/lib/agent-runs';
+import { closeAgentRun, openAgentRun, getPlatformOrgId } from '@/lib/agent-runs';
 import { supabaseAdmin } from '@/lib/supabase';
 import { scoreProject } from '@/lib/scoring';
 // Phase 2C slice 2 — org-aware dispatch. Zedcor projects continue down
@@ -118,6 +118,11 @@ interface LogRow {
   latency_ms: number | null;
   model_used: string | null;
   ts?: string;
+  // Phase 2A completion (migration 20260511_phase2a_completion_org_id_rls.sql)
+  // added NOT NULL on agent_log.organization_id. Cron telemetry is
+  // platform-scoped (Zedcor) unless event_data carries a per-project
+  // organization_id, which writeLog passes through.
+  organization_id: string;
 }
 
 type Admin = ReturnType<typeof supabaseAdmin>;
@@ -128,12 +133,24 @@ async function writeLog(
   event_data: Record<string, unknown>,
   opts: { latency_ms?: number; model_used?: string } = {},
 ): Promise<void> {
+  // Prefer event_data.organization_id (per-project events set this) over
+  // the platform fallback (Zedcor). Telemetry stays attributable to the
+  // org actually involved when known.
+  const eventOrgId = typeof event_data.organization_id === 'string' ? event_data.organization_id : null;
+  const platformOrgId = eventOrgId ? null : await getPlatformOrgId();
+  const orgId = eventOrgId ?? platformOrgId;
+  if (!orgId) {
+    // Without an organization_id the insert would 23502. Skip — telemetry
+    // is fail-open by design and dropping a log row beats 500ing the cycle.
+    return;
+  }
   const row: LogRow = {
     agent_name: 'ranker',
     event_type,
     event_data,
     latency_ms: opts.latency_ms ?? null,
     model_used: opts.model_used ?? null,
+    organization_id: orgId,
   };
   // Loose typing matches the verifier route — generated types lag the
   // ranker columns until the next schema regen.
@@ -621,7 +638,16 @@ export async function GET(req: Request) {
     records_new: number;
     status: 'running' | 'success' | 'failed';
     error_message: string | null;
+    // Phase 2A completion (migration 20260511_phase2a_completion_org_id_rls.sql)
+    // added NOT NULL on this column. Ranker cycles span multiple orgs
+    // (Zedcor + non-Zedcor per Phase 2C slice 2 dispatch); the cycle-level
+    // run row is attributed to Zedcor as the canonical platform org.
+    organization_id: string;
   };
+  const platformOrgId = await getPlatformOrgId();
+  if (!platformOrgId) {
+    return NextResponse.json({ error: 'platform org (zedcor) not resolvable for agent_runs attribution' }, { status: 500 });
+  }
   const runRowPayload: AgentRunInsert = {
     agent_name: 'ranker',
     started_at: now.toISOString(),
@@ -630,6 +656,7 @@ export async function GET(req: Request) {
     records_new: 0,
     status: 'running',
     error_message: null,
+    organization_id: platformOrgId,
   };
   const runInsertRes = await (
     admin.from('agent_runs') as unknown as {

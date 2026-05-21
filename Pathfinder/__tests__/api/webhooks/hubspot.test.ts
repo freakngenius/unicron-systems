@@ -66,6 +66,10 @@ describe.runIf(haveCreds)('POST /api/webhooks/hubspot', () => {
     });
 
     // Synthetic project + lead_action with the known HubSpot deal id.
+    // Zedcor's organization_id is required on every projects /
+    // lead_actions insert since the Phase 2A completion migration made
+    // organization_id NOT NULL on both tables.
+    const ZEDCOR_ORG_ID = '6cd87740-7c72-4337-ac79-316a54242eef';
     await admin.from('projects').insert({
       id: PROJECT_ID,
       source: 'usaspending',
@@ -80,6 +84,7 @@ describe.runIf(haveCreds)('POST /api/webhooks/hubspot', () => {
       raw_payload: {},
       rationale: 'webhook test rationale',
       score: 70,
+      organization_id: ZEDCOR_ORG_ID,
     });
 
     await admin.from('lead_actions').insert({

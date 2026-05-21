@@ -38,6 +38,12 @@ interface AgentRunInsert {
   records_new: number;
   status: 'running' | 'success' | 'failed' | 'empty_queue';
   error_message: string | null;
+  // Phase 2A completion (migration 20260511_phase2a_completion_org_id_rls.sql)
+  // added NOT NULL on this column. Every agent_runs insert must supply it.
+  // Platform-level heartbeats (cron telemetry without per-project context)
+  // attribute to Zedcor as the canonical "platform" org — matches the
+  // pre-migration backfill and preserves dashboard continuity.
+  organization_id: string;
 }
 
 interface AgentRunUpdate {
@@ -48,10 +54,63 @@ interface AgentRunUpdate {
   error_message?: string | null;
 }
 
+// Cached Zedcor org id lookup. Used by every openAgentRun call as the
+// fallback attribution when the caller doesn't pass an explicit
+// organizationId. Module-scope cache because the value never changes.
+let _platformOrgIdCache: string | null = null;
+async function resolvePlatformOrgId(): Promise<string | null> {
+  if (_platformOrgIdCache) return _platformOrgIdCache;
+  try {
+    const admin = supabaseAdmin();
+    const res = await (
+      admin.from('organizations') as unknown as {
+        select: (cols: string) => {
+          eq: (col: string, val: string) => {
+            maybeSingle: () => Promise<{ data: { id: string } | null; error: unknown }>;
+          };
+        };
+      }
+    )
+      .select('id')
+      .eq('slug', 'zedcor')
+      .maybeSingle();
+    _platformOrgIdCache = res.data?.id ?? null;
+    return _platformOrgIdCache;
+  } catch {
+    return null;
+  }
+}
+
+/** Test seam — clear the platform-org cache between vitest runs that
+ *  swap the supabase client. Production code does not call this. */
+export function __resetPlatformOrgIdCacheForTests(): void {
+  _platformOrgIdCache = null;
+}
+
+/** Resolve the platform "default" organization_id (Zedcor) for telemetry
+ *  inserts that have no per-project context — e.g. agent_log rows from
+ *  empty-queue heartbeats. Module-cached after first call. Returns null
+ *  when Zedcor is unresolvable; callers should tolerate that. */
+export async function getPlatformOrgId(): Promise<string | null> {
+  return resolvePlatformOrgId();
+}
+
 /** Insert a `running` agent_runs row. Returns the row id, or null if the
- *  insert failed — callers MUST tolerate null (fail-open contract). */
-export async function openAgentRun(agentName: AgentName): Promise<OpenedRun> {
+ *  insert failed — callers MUST tolerate null (fail-open contract).
+ *  Pass `opts.organizationId` to attribute the run to a specific org; if
+ *  omitted, the row is attributed to Zedcor (the canonical platform org). */
+export async function openAgentRun(
+  agentName: AgentName,
+  opts?: { organizationId?: string | null },
+): Promise<OpenedRun> {
   const startedAt = new Date();
+  const orgId = opts?.organizationId ?? (await resolvePlatformOrgId());
+  if (!orgId) {
+    // No platform org id resolvable → fail-open with id=null. Without
+    // an organization_id the insert would 23502 and we'd return null
+    // anyway; skipping the round-trip is cheaper.
+    return { id: null, startedAt };
+  }
   const payload: AgentRunInsert = {
     agent_name: agentName,
     started_at: startedAt.toISOString(),
@@ -60,6 +119,7 @@ export async function openAgentRun(agentName: AgentName): Promise<OpenedRun> {
     records_new: 0,
     status: 'running',
     error_message: null,
+    organization_id: orgId,
   };
   try {
     const admin = supabaseAdmin();

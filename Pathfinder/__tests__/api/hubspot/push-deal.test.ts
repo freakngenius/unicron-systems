@@ -41,7 +41,11 @@ describe.runIf(haveCreds)('POST /api/hubspot/push-deal', () => {
       auth: { persistSession: false, autoRefreshToken: false },
     });
 
-    // Insert a synthetic project the route's lib will read.
+    // Insert a synthetic project the route's lib will read. Zedcor's
+    // organization_id is required since the Phase 2A completion migration
+    // made organization_id NOT NULL on projects + lead_actions; the
+    // route's acceptLead() reads this org_id and propagates it.
+    const ZEDCOR_ORG_ID = '6cd87740-7c72-4337-ac79-316a54242eef';
     await admin.from('projects').insert({
       id: PROJECT_ID,
       source: 'usaspending',
@@ -60,6 +64,7 @@ describe.runIf(haveCreds)('POST /api/hubspot/push-deal', () => {
       distance_miles: null,
       outreach_hook: 'Test outreach hook.',
       warm_for_customer_id: null,
+      organization_id: ZEDCOR_ORG_ID,
     });
   });
 

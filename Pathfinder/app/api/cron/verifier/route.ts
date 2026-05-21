@@ -35,6 +35,9 @@ import { fetchActiveScoringConfig } from '@/lib/scoring-config-server';
 import { loadOrgArchitecture } from '@/lib/agents/loadOrgArchitecture';
 import { verifyFunderProject } from '@/lib/agents/verifier/funderChecks';
 import type { OrgArchitecture } from '@/lib/types/architecture';
+// Platform org id (Zedcor) for telemetry attribution on agent_runs / agent_log.
+// Phase 2A completion made organization_id NOT NULL on those tables.
+import { getPlatformOrgId } from '@/lib/agent-runs';
 import { inngest } from '@/lib/inngest/client';
 import { checkOwnerAnchors, SAFE_RATIONALE_PLACEHOLDER } from '@/lib/verifier-owner-check';
 import type { Branch, Customer, Project } from '@/lib/types';
@@ -114,19 +117,30 @@ async function writeLog(
   event_data: Record<string, unknown>,
   opts: { latency_ms?: number; model_used?: string } = {},
 ): Promise<void> {
-  const row: LogRow = {
+  // agent_log.organization_id is NOT NULL post Phase 2A completion. Prefer
+  // event_data.organization_id when the caller set it (per-project events
+  // carry the project's org); fall back to Zedcor as the platform default.
+  const eventOrgId = typeof event_data.organization_id === 'string' ? event_data.organization_id : null;
+  const platformOrgId = eventOrgId ? null : await getPlatformOrgId();
+  const orgId = eventOrgId ?? platformOrgId;
+  if (!orgId) {
+    // Telemetry is fail-open — dropping a log row beats 500ing the cycle.
+    return;
+  }
+  const row: LogRow & { organization_id: string } = {
     agent_name: 'verifier',
     event_type,
     event_data,
     latency_ms: opts.latency_ms ?? null,
     model_used: opts.model_used ?? null,
+    organization_id: orgId,
   };
   // The .insert() return shape is loosely typed in this codebase to dodge the
   // generated-types lag (verifier columns post-date the type regen). Mirror
   // the pattern from app/api/refresh/route.ts.
   await (
     admin.from('agent_log') as unknown as {
-      insert: (rows: LogRow) => Promise<{ error: { message: string } | null }>;
+      insert: (rows: typeof row) => Promise<{ error: { message: string } | null }>;
     }
   ).insert(row);
 }
@@ -847,7 +861,16 @@ export async function GET(req: Request) {
     records_new: number;
     status: 'running' | 'success' | 'failed';
     error_message: string | null;
+    // Phase 2A completion (migration 20260511_phase2a_completion_org_id_rls.sql)
+    // added NOT NULL on this column. Verifier cycles process multiple orgs
+    // in a single run; the cycle-level row is attributed to Zedcor as the
+    // canonical platform org.
+    organization_id: string;
   };
+  const platformOrgId = await getPlatformOrgId();
+  if (!platformOrgId) {
+    return NextResponse.json({ error: 'platform org (zedcor) not resolvable for agent_runs attribution' }, { status: 500 });
+  }
   const runRowPayload: AgentRunInsert = {
     agent_name: 'verifier',
     started_at: now.toISOString(),
@@ -856,6 +879,7 @@ export async function GET(req: Request) {
     records_new: 0,
     status: 'running',
     error_message: null,
+    organization_id: platformOrgId,
   };
   const runInsertRes = await (
     admin.from('agent_runs') as unknown as {
@@ -911,30 +935,39 @@ export async function GET(req: Request) {
   const SCORE_TOLERANCE = scoringConfig.score_tolerance ?? SCORE_TOLERANCE_FALLBACK;
 
   // Funder onboarding Stage 6 — pre-resolve org architectures for any
-  // non-Zedcor projects in the queue, plus look up Zedcor's id so the
-  // per-project dispatch can route. Cached for the cycle.
-  const adminAny = admin as unknown as { from: (t: string) => any };
-  const zedcorLookup = await adminAny
-    .from('organizations')
-    .select('id')
-    .eq('slug', 'zedcor')
-    .maybeSingle();
-  const zedcorOrgId: string | null = zedcorLookup.data?.id ?? null;
+  // non-Zedcor projects in the queue. Cached for the cycle. Defensively
+  // wrapped: any failure of the lookup or per-org loadOrgArchitecture
+  // must NOT 500 the cycle — Funder-shaped projects whose architecture
+  // doesn't resolve fall back to the generic verifier flow.
+  // zedcorOrgId reuses the platform-org resolution done above (Zedcor is
+  // the canonical platform org) — no second supabase round-trip needed.
+  const zedcorOrgId: string | null = platformOrgId;
   const orgArchitectures = new Map<string, { slug: string; architecture: OrgArchitecture }>();
-  const distinctOrgIds = Array.from(
-    new Set(queue.map((p) => p.organization_id).filter((id): id is string => id != null && id !== zedcorOrgId)),
-  );
-  for (const orgId of distinctOrgIds) {
-    try {
-      const loaded = await loadOrgArchitecture(orgId);
-      orgArchitectures.set(orgId, { slug: loaded.org.slug, architecture: loaded.architecture });
-    } catch (err) {
-      await writeLog(admin, 'error', {
-        message: `verifier: loadOrgArchitecture failed for ${orgId} · ${(err as Error).message}`,
-        reason: 'org_load_failed',
-        organization_id: orgId,
-      });
+  try {
+    const distinctOrgIds = Array.from(
+      new Set(queue.map((p) => p.organization_id).filter((id): id is string => id != null && id !== zedcorOrgId)),
+    );
+    for (const orgId of distinctOrgIds) {
+      try {
+        const loaded = await loadOrgArchitecture(orgId);
+        orgArchitectures.set(orgId, { slug: loaded.org.slug, architecture: loaded.architecture });
+      } catch (err) {
+        await writeLog(admin, 'error', {
+          message: `verifier: loadOrgArchitecture failed for ${orgId} · ${(err as Error).message}`,
+          reason: 'org_load_failed',
+          organization_id: orgId,
+        });
+      }
     }
+  } catch (err) {
+    // Total failure of the org-resolution block must not 500 the cycle.
+    // Log + continue; non-Zedcor projects with unresolved architecture
+    // simply skip the funder verifier dispatch and behave as if they
+    // were Zedcor (the existing fall-through).
+    await writeLog(admin, 'error', {
+      message: `verifier: org architecture pre-resolution failed · ${(err as Error).message}`,
+      reason: 'org_preresolution_failed',
+    });
   }
 
   // 6. Per-project loop

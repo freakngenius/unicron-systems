@@ -41,6 +41,34 @@ function admin() {
   return _admin;
 }
 
+// Phase 2A completion (migration 20260511_phase2a_completion_org_id_rls.sql)
+// made organization_id NOT NULL on lead_actions and agent_log. lead_actions
+// is per-project, so we read the project's org_id at write time. Audit
+// rows are platform-scoped — use the Zedcor fallback.
+import { getPlatformOrgId } from './agent-runs';
+
+async function resolveOrgForProject(projectId: string): Promise<string | null> {
+  try {
+    const sb = admin() as unknown as {
+      from: (t: string) => {
+        select: (cols: string) => {
+          eq: (col: string, val: string) => {
+            maybeSingle: () => Promise<{ data: { organization_id: string | null } | null; error: unknown }>;
+          };
+        };
+      };
+    };
+    const res = await sb
+      .from('projects')
+      .select('organization_id')
+      .eq('id', projectId)
+      .maybeSingle();
+    return res.data?.organization_id ?? null;
+  } catch {
+    return null;
+  }
+}
+
 // ────────────────────────────────────────────────────────────────────────
 // Audit log helper (agent_name='hubspot-sync' per spec hard rule)
 // ────────────────────────────────────────────────────────────────────────
@@ -54,10 +82,18 @@ async function audit(eventType: string, data: AuditPayload): Promise<void> {
     };
   };
   try {
+    // agent_log.organization_id is NOT NULL. Prefer the project's org
+    // when the audit payload includes a project_id; otherwise fall back
+    // to Zedcor as the platform default.
+    const projectId = typeof data.project_id === 'string' ? data.project_id : null;
+    const orgId =
+      (projectId ? await resolveOrgForProject(projectId) : null) ?? (await getPlatformOrgId());
+    if (!orgId) return; // best-effort: skip the log row when no org resolvable.
     await sb.from('agent_log').insert({
       agent_name: 'hubspot-sync',
       event_type: eventType,
       event_data: data,
+      organization_id: orgId,
     });
   } catch {
     // Audit best-effort; do not fail the caller because logging failed.
