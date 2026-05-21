@@ -8,6 +8,6 @@
     { "path": "/pathfinder/api/cron/slack-alerts", "schedule": "*/10 * * * *" },
     { "path": "/pathfinder/api/cron/cost-alert", "schedule": "0 13 * * *" },
     { "path": "/pathfinder/api/cron/connector-token-refresh", "schedule": "0 7 * * *" },
-    { "path": "/pathfinder/api/cron/funder-weekly-memo", "schedule": "0 14 * * MON" }
+    { "path": "/pathfinder/api/cron/funder-weekly-memo", "schedule": "0 14 * * 1" }
   ]
 }
