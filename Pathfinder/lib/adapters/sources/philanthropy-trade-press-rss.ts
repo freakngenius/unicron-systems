@@ -3,21 +3,23 @@
 // Philanthropy trade-press RSS aggregator — Funder onboarding Stage 3.
 //
 // Pulls a configurable list of philanthropy-vertical RSS feeds and emits
-// one event per entry. The feed list is intentionally short by default
-// (Chronicle of Philanthropy, Inside Philanthropy, Philanthropy News
-// Digest); operator can extend via the source config.
+// one event per entry. Default feeds are Chronicle of Philanthropy and
+// Inside Philanthropy. Philanthropy News Digest was retired from defaults
+// 2026-05-22 — Candid (PND's parent) migrated /news/rss.xml to /blogs/
+// and stopped publishing an RSS endpoint; operator can re-add if a working
+// URL emerges.
 //
 // Status: 'registered'. Each feed failure is logged but does not fail the
 // whole adapter — the aggregator returns whatever feeds responded.
 //
 // Spec: Pathfinder/Pathfinder-Funder-Build-Spec.md §4 Stage 3.
+// Live-verified 2026-05-22.
 
 import type { SourceAdapter, SourcePollOptions, SourceEvent } from './types';
 
 const DEFAULT_FEEDS: Array<{ name: string; url: string }> = [
-  { name: 'Chronicle of Philanthropy', url: 'https://www.philanthropy.com/section/news/137/feed' },
-  { name: 'Inside Philanthropy', url: 'https://www.insidephilanthropy.com/home?format=rss' },
-  { name: 'Philanthropy News Digest', url: 'https://philanthropynewsdigest.org/news/rss.xml' },
+  { name: 'Chronicle of Philanthropy', url: 'https://www.philanthropy.com/feed/' },
+  { name: 'Inside Philanthropy', url: 'https://www.insidephilanthropy.com/feed' },
 ];
 
 function extractTag(item: string, tag: string): string | null {
@@ -47,7 +49,7 @@ function parseItems(xml: string): Array<Record<string, string | null>> {
 export const philanthropyTradePressRssAdapter: SourceAdapter = {
   id: 'custom-philanthropy-trade-press-rss',
   type: 'registered',
-  description: 'Aggregator over philanthropy trade-press RSS feeds (Chronicle of Philanthropy, Inside Philanthropy, PND).',
+  description: 'Aggregator over philanthropy trade-press RSS feeds (Chronicle of Philanthropy, Inside Philanthropy). PND was retired 2026-05-22 — Candid stopped publishing RSS.',
 
   async poll(opts: SourcePollOptions): Promise<SourceEvent[]> {
     const fetchImpl = opts.fetch ?? globalThis.fetch;

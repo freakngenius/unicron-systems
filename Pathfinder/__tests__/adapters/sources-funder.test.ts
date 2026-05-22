@@ -162,29 +162,65 @@ describe('EA Forum RSS adapter', () => {
 });
 
 describe('IRS exempt-org filings adapter', () => {
-  it('filters out determinations outside the 3-year recency window', async () => {
+  // 2026-05-22 post-merge: IRS TEOS spot search (apps.irs.gov/app/eos/api/Search)
+  // is bot-gated and returns HTTP 403 to non-browser clients. Adapter switched
+  // to bulk BMF CSV mode; tests cover that path now. Empty config returns []
+  // and adapter type is 'pending'.
+
+  function csvFetch(csv: string): typeof fetch {
+    return (async () => ({
+      ok: true,
+      status: 200,
+      text: async () => csv,
+      json: async () => ({}),
+    } as Response)) as unknown as typeof fetch;
+  }
+
+  it('returns [] when bulk_url is not configured (pending mode)', async () => {
     const adapter = SOURCE_ADAPTERS['custom-irs-exempt-org-filings'];
-    const currentYear = new Date().getUTCFullYear();
-    const fetchImpl = mockFetchByUrl({
-      'https://apps.irs.gov/app/eos/api/Search': {
-        body: {
-          totalResults: 2,
-          searchResults: [
-            { EIN: '111111111', Name: 'Fresh Org', RulingYear: String(currentYear), RulingMonth: '6', StateAbbreviation: 'MA' },
-            { EIN: '222222222', Name: 'Old Org', RulingYear: String(currentYear - 10), RulingMonth: '1', StateAbbreviation: 'NV' },
-          ],
-        },
-      },
-    });
     const events = await adapter.poll({
       organizationId: 'org-1',
       organizationSlug: 'funder',
       architecture: FUNDER_ARCH,
-      fetch: fetchImpl,
+      fetch: csvFetch(''), // not called
     });
-    const eins = events.map((e) => (e.raw_payload as { EIN?: string }).EIN);
+    expect(events).toEqual([]);
+  });
+
+  it('parses BMF CSV rows and filters by 501(c)(3) subsection + recency', async () => {
+    const adapter = SOURCE_ADAPTERS['custom-irs-exempt-org-filings'];
+    const currentYear = new Date().getUTCFullYear();
+    // BMF column 8 is SUBSECTION (03 = 501(c)(3)); column 11 is RULING yyyymm.
+    // Build minimal CSV with header + three rows: fresh 501(c)(3), old 501(c)(3),
+    // fresh non-501(c)(3). Pad to 28 columns (NTEE_CD at col 26).
+    function row(ein: string, name: string, city: string, state: string, subsection: string, ruling: string, ntee: string): string {
+      const cols = new Array(28).fill('');
+      cols[0] = ein;
+      cols[1] = name;
+      cols[4] = city;
+      cols[5] = state;
+      cols[8] = subsection;
+      cols[11] = ruling;
+      cols[26] = ntee;
+      return cols.join(',');
+    }
+    const csv = [
+      'EIN,NAME,ICO,STREET,CITY,STATE,ZIP,GROUP,SUBSECTION,AFFILIATION,CLASSIFICATION,RULING,DEDUCTIBILITY,FOUNDATION,ACTIVITY,ORGANIZATION,STATUS,TAX_PERIOD,ASSET_CD,INCOME_CD,FILING_REQ_CD,PF_FILING_REQ_CD,ACCT_PD,ASSET_AMT,INCOME_AMT,REVENUE_AMT,NTEE_CD,SORT_NAME',
+      row('111111111', 'Fresh AI Safety Inc', 'Berkeley', 'CA', '03', `${currentYear}06`, 'V99'),
+      row('222222222', 'Old Foundation', 'Boston', 'MA', '03', `${currentYear - 10}01`, 'V20'),
+      row('333333333', 'Trade Group', 'NYC', 'NY', '06', `${currentYear}03`, 'W99'),
+    ].join('\n');
+    const events = await adapter.poll({
+      organizationId: 'org-1',
+      organizationSlug: 'funder',
+      architecture: FUNDER_ARCH,
+      fetch: csvFetch(csv),
+      config: { bulk_url: 'https://www.irs.gov/pub/irs-soi/eo1.csv' },
+    });
+    const eins = events.map((e) => (e.raw_payload as { ein?: string }).ein);
     expect(eins).toContain('111111111');
-    expect(eins).not.toContain('222222222');
+    expect(eins).not.toContain('222222222'); // outside 3-year recency window
+    expect(eins).not.toContain('333333333'); // not 501(c)(3)
   });
 });
 

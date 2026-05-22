@@ -242,4 +242,28 @@ export type PathfinderEvents = {
       transitioned_at: string;
     };
   };
+
+  /**
+   * A project passed the qualifier gate during ingest and was inserted
+   * into pathfinder.projects. Distinct from `signal.qualified` which is
+   * fired by the ranker AFTER scoring — `project.qualified` fires BEFORE
+   * the ranker sees the row.
+   *
+   * Subscribed by `funderEnrichAdjacency` (Funder-only, post-merge
+   * follow-up): runs the Funder enricher then the adjacency-mapper and
+   * merges results into the project's raw_payload so the next ranker
+   * cycle sees enriched data when it scores. Other orgs are skipped by
+   * the subscriber's slug filter (the event still fires; the function
+   * fast-exits).
+   */
+  'pathfinder/project.qualified': {
+    name: 'pathfinder/project.qualified';
+    data: {
+      project_id: string;
+      organization_id: string;
+      organization_slug: string;
+      source: string;
+      qualified_at: string;
+    };
+  };
 };

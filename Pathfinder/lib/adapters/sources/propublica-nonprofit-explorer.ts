@@ -8,19 +8,20 @@
 // per cycle and rely on posted_date ordering for incremental discovery).
 //
 // Query strategy: for Funder, we search by the architecture's thesis_area
-// taxonomy. Each thesis_area maps to a set of NTEE codes plus a free-text
-// query. Codes are chosen against ProPublica's documented NTEE list:
-//   ai-safety / ai-governance → V (research) + W (public affairs)
-//   biosecurity                → E (health) + V (research)
-//   longevity                  → E (health) + V (research)
-//   civic-infrastructure       → R (civil rights) + W (public affairs)
-//   epistemics                 → B (education) + V (research)
+// taxonomy via free-text + the c_code=3 (501(c)(3)) filter. We do not pass
+// `ntee[id]` — ProPublica's API rejects the NTEE letter codes (V, W, E, R,
+// B) with HTTP 500, and the numeric major-category buckets (1-10) are too
+// coarse to be useful (they collapse all "Public, Societal Benefit" into a
+// single bucket regardless of sub-code). Free-text matches the sub-name
+// + name index well enough; NTEE filtering at the qualifier stage is more
+// surgical.
 //
-// We also bias to organizations founded in the last 3 years using the
-// `c_code=03` (501(c)(3)) filter and a posted-date heuristic on the API's
-// "last filed return" timestamp.
+// We also bias to recently-founded orgs at the qualifier stage rather
+// than via the API (the v2 search response does not expose founded /
+// filing dates per row).
 //
 // Spec: Pathfinder/Pathfinder-Funder-Build-Spec.md §4 Stage 3.
+// Live-verified 2026-05-22 against https://projects.propublica.org/nonprofits/api/v2/.
 
 import type { SourceAdapter, SourcePollOptions, SourceEvent } from './types';
 
@@ -28,33 +29,32 @@ const ENDPOINT = 'https://projects.propublica.org/nonprofits/api/v2/search.json'
 
 interface ThesisQuery {
   q: string;
-  ntee_major?: string;
 }
 
 const THESIS_QUERIES: Record<string, ThesisQuery[]> = {
   'ai-safety': [
-    { q: 'AI safety alignment', ntee_major: 'V' },
-    { q: 'machine learning safety', ntee_major: 'V' },
+    { q: 'AI safety alignment' },
+    { q: 'machine learning safety' },
   ],
   'ai-governance': [
-    { q: 'AI policy governance', ntee_major: 'W' },
+    { q: 'AI policy governance' },
     { q: 'artificial intelligence policy' },
   ],
   biosecurity: [
-    { q: 'pandemic preparedness', ntee_major: 'E' },
-    { q: 'biosecurity', ntee_major: 'V' },
+    { q: 'pandemic preparedness' },
+    { q: 'biosecurity' },
   ],
   longevity: [
-    { q: 'aging research', ntee_major: 'E' },
-    { q: 'longevity', ntee_major: 'V' },
+    { q: 'aging research' },
+    { q: 'longevity' },
   ],
   'civic-infrastructure': [
-    { q: 'democracy infrastructure', ntee_major: 'R' },
-    { q: 'civic technology', ntee_major: 'W' },
+    { q: 'democracy infrastructure' },
+    { q: 'civic technology' },
   ],
   epistemics: [
-    { q: 'epistemics forecasting', ntee_major: 'V' },
-    { q: 'collective intelligence', ntee_major: 'B' },
+    { q: 'epistemics forecasting' },
+    { q: 'collective intelligence' },
   ],
 };
 
@@ -84,7 +84,6 @@ async function searchProPublica(
 ): Promise<ProPublicaSearchResponse['organizations']> {
   const url = new URL(ENDPOINT);
   url.searchParams.set('q', query.q);
-  if (query.ntee_major) url.searchParams.set('ntee[id]', query.ntee_major);
   url.searchParams.set('c_code[id]', '3'); // 501(c)(3) only
   const res = await fetchImpl(url.toString(), {
     headers: { Accept: 'application/json', 'User-Agent': 'Pathfinder/Funder (kyle@freakngenius.com)' },

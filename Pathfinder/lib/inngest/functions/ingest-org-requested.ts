@@ -218,6 +218,33 @@ export const ingestOrgRequested = inngest.createFunction(
           return sourceResult;
         }
         sourceResult.inserted = rows.length;
+
+        // Post-merge follow-up — emit pathfinder/project.qualified per
+        // inserted row so the Funder enrich+adjacency Inngest handler
+        // can run BEFORE the next ranker cycle picks the row up. Best-
+        // effort: a failed send logs in Inngest itself but does not
+        // fail the ingest (the row is already persisted; the next
+        // ranker cycle still picks it up, just without enrichment).
+        try {
+          await inngest.send(
+            rows.map((row) => ({
+              name: 'pathfinder/project.qualified',
+              data: {
+                project_id: row.id,
+                organization_id,
+                organization_slug: org.slug,
+                source: row.source,
+                qualified_at: new Date().toISOString(),
+              },
+            })),
+          );
+        } catch (err) {
+          // Surface in the per-source result so the agent_run logs reflect
+          // partial completion, but do not flip the row to failed.
+          sourceResult.error_message =
+            `inngest_emit_failed (non-fatal): ${err instanceof Error ? err.message : String(err)}`;
+        }
+
         return sourceResult;
       });
 
