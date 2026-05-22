@@ -1225,3 +1225,66 @@ OPTIONAL (route degrades gracefully when absent):
 - `ANTHROPIC_API_KEY`, `PERPLEXITY_API_KEY`, `UPSTASH_REDIS_REST_URL/TOKEN`, `HELICONE_API_KEY`, `AXIOM_TOKEN/DATASET`, `INNGEST_EVENT_KEY/SIGNING_KEY` — none touched at render time for `/[slug]/page.tsx`. They are consumed by the agent pipeline / cron / inngest paths, not the dashboard render. Absence does not 503 the dashboard.
 - `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` — used by leads detail / map components, not the `/[slug]` landing render. Absence yields a missing map widget elsewhere, not a 503.
 
+---
+
+## Internal Onboarding, Stage 4 (Source adapters)
+
+**State:** Branch `internal-source-adapters` off `internal-onboarding` at `3d5011e`. Six SourceAdapter modules for Internal (Pathfinder org #4), all additive in the source-id-keyed `SOURCE_ADAPTERS` registry Funder introduced. Two priority-1 adapters (sam-gov, usaspending) and one priority-2 adapter (construction-sales-job-postings) hit real endpoints; three priority-3/4 adapters (sos-business-registrations, state-contractor-licenses, trade-association-directories) ship as blocked-on-credentials scaffolds with the required env vars named in stderr at startup. The per-slug ingest dispatch and a qualifier scaffold land here as Stage 4 prerequisites; Stage 5 expands the qualifier.
+
+### Stage 4, Source adapters
+
+#### Pathfinder/lib/adapters/sources/index.ts
+**Implements:** PLAN Stage 4. Additively registers six Internal adapters in `SOURCE_ADAPTERS` alongside existing Zedcor/Funder entries. No re-key, no rewire.
+**Last verified against spec:** 2026-05-22. Funder regression suite (10 tests at `__tests__/adapters/sources-funder.test.ts`) passes unchanged.
+**Drift:** none.
+
+#### Pathfinder/lib/adapters/sources/_internal-shared.ts
+**Implements:** PLAN Stage 4. Internal-only shared helpers: NAICS construction-set predicate (236/237/238/532412), source-event normalization (`buildSourceEvent`), `blockedOnCredentials` returner that logs the missing env var name to stderr per the runner rule "Never fake data. Never silently skip."
+**Last verified against spec:** 2026-05-22. Used by all six Internal adapters; 13 unit tests at `__tests__/adapters/sources-internal.test.ts` cover the gate and normalization paths.
+**Drift:** none.
+
+#### Pathfinder/lib/adapters/sources/sam-gov-entity.ts
+**Implements:** Blueprint Section 8 + PLAN Stage 4. SAM Entity Management registration API, filtered to construction NAICS 236/237/238/532412. Auth via `SAM_GOV_API_KEY`. Returns `[]` with `blocked-on-credentials` log when key absent; the runner explicitly authorizes empty-return-with-log over silent-skip.
+**Last verified against spec:** 2026-05-22. Adapter unit test covers blocked-on-credentials path and fixture-based parse.
+**Drift:** none.
+
+#### Pathfinder/lib/adapters/sources/usaspending-recipients.ts
+**Implements:** Blueprint Section 8 + PLAN Stage 4. USASpending recipient/awardee search filtered to construction NAICS. No auth key; the endpoint is fully open.
+**Last verified against spec:** 2026-05-22. Fixture-based parse test passes.
+**Drift:** none.
+
+#### Pathfinder/lib/adapters/sources/construction-sales-job-postings.ts
+**Implements:** Blueprint Section 8 priority 2 + PLAN Stage 4. Keyless job-board RSS aggregator targeting construction-vertical companies hiring sales/BD roles. Paid Indeed/LinkedIn upgrade deferred per blueprint Section 10 decision 2.
+**Last verified against spec:** 2026-05-22. Unit test covers RSS parse + role-filter heuristic.
+**Drift:** none.
+
+#### Pathfinder/lib/adapters/sources/sos-business-registrations.ts
+**Implements:** Blueprint Section 8 + PLAN Stage 4. Scaffold returning `[]` with `blocked-on-credentials` log naming `SOCRATA_APP_TOKEN`. Activates per-state Socrata querying when the token is present.
+**Last verified against spec:** 2026-05-22. Blocked-on-credentials assertion in adapter test.
+**Drift:** none.
+
+#### Pathfinder/lib/adapters/sources/state-contractor-licenses.ts
+**Implements:** Blueprint Section 8 + PLAN Stage 4. Scaffold returning `[]` when no state portals configured. Logs the env-var names that would unblock each state (`CSLB_BULK_URL` / `TDLR_API_TOKEN` / `FL_DBPR_API_TOKEN`).
+**Last verified against spec:** 2026-05-22. Blocked-on-credentials assertion in adapter test.
+**Drift:** none.
+
+#### Pathfinder/lib/adapters/sources/trade-association-directories.ts
+**Implements:** Blueprint Section 8 + PLAN Stage 4. Scaffold for AGC/ABC/NECA/AED member directories. Returns `[]` with `blocked-on-credentials` log naming `AGC_DIRECTORY_TOKEN` / `ABC_DIRECTORY_TOKEN` / `NECA_DIRECTORY_TOKEN` / `AED_DIRECTORY_TOKEN`.
+**Last verified against spec:** 2026-05-22. Blocked-on-credentials assertion in adapter test.
+**Drift:** none.
+
+#### Pathfinder/lib/inngest/functions/ingest-org-requested.ts
+**Implements:** PLAN Stage 4. Additive `'internal'` entry in `SUBSCRIBER_OPT_IN_SLUGS` (line ~57), additive per-slug qualifier dispatch routing Internal events to `qualifyForInternal`. Funder branch byte-identical pre/post; Zedcor remains on the legacy ingestor. Also fixes a latent bug: passes `organization_id` on the `agent_runs` insert, which previously relied on a permissive RLS to drop the row when the NOT NULL constraint failed (silently empty telemetry for Funder too).
+**Last verified against spec:** 2026-05-22. Compile + lint clean; Funder regression test passes unchanged.
+**Drift:** none.
+
+#### Pathfinder/lib/agents/internal/qualifier.ts
+**Implements:** PLAN Stage 4 prerequisite (Stage 5 will expand). Trusts construction-NAICS + sales-motion filtering already performed at the adapter layer; passes events through unless explicit reject signals fire. Deeper qualifier logic lands in Stage 5.
+**Last verified against spec:** 2026-05-22. Compile + lint clean; tested via integration with the per-slug dispatch.
+**Drift:** Stage 5 will expand. Current Stage 4 acceptance is "qualifier scaffold exists and the inngest dispatch routes through it"; expansion is in scope for Stage 5.
+
+#### Pathfinder/scripts/run-internal-ingest-locally.ts
+**Implements:** PLAN Stage 4. Manual ingest trigger that invokes the inngest dispatch for Internal org id `2ff1197b-36f8-4210-aa11-65cf025ad83b` without waiting on a cron tick. Used for local verification.
+**Last verified against spec:** 2026-05-22. Compile + lint clean. Live ingest verification deferred to Stage 11 end-to-end run; the runner allows deferral when local dev cannot reach Inngest cloud.
+**Drift:** none.
+
