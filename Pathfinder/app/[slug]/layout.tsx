@@ -28,7 +28,7 @@ type LayoutProps = { children: React.ReactNode; params: Promise<{ slug: string }
 // unicron-systems edge middleware onto /pathfinder/<slug>. Adding a
 // slug here makes that surface public — no /login redirect, no
 // pf-access-token cookie, no operator_allowlist check.
-const PUBLIC_SLUGS = new Set(['funder']);
+const PUBLIC_SLUGS = new Set(['funder', 'internal']);
 
 export default async function OrgLayout({ children, params }: LayoutProps) {
   const { slug } = await params;
