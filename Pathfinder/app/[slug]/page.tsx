@@ -57,10 +57,15 @@ export default async function OrgPage({ params }: Props) {
   let leads: LeadLike[] = [];
   if (org?.id) {
     const projectsClient = supabaseAdmin() as unknown as { from: (t: string) => any };
+    // Stage 10 bug fix — the projects table scopes by `organization_id`,
+    // not `org_id`. The previous filter silently returned 0 rows for
+    // every non-Zedcor org (Funder, Realberry, Internal). All three
+    // are unblocked by this single fix; see Stage 10 §"pre-existing
+    // platform bug" in the worktree handoff.
     const { data: rows } = (await projectsClient
       .from('projects')
       .select('*')
-      .eq('org_id', org.id)
+      .eq('organization_id', org.id)
       .limit(5)) as { data: LeadLike[] | null; error: unknown };
     if (Array.isArray(rows)) leads = rows;
   }
