@@ -67,50 +67,72 @@ function relativeTime(iso: string): string {
 export default function ServicesHealth() {
   const [data, setData] = useState<HealthResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [errorCode, setErrorCode] = useState<number | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
+
+  const load = async (): Promise<void> => {
+    try {
+      const res = await fetch('/api/atrium/services-health', {
+        headers: { Accept: 'application/json' },
+      });
+      if (!res.ok) {
+        setErrorCode(res.status);
+        throw new Error(`HTTP ${res.status}`);
+      }
+      const body = (await res.json()) as HealthResponse;
+      setData(body);
+      setError(null);
+      setErrorCode(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
-
-    async function load(): Promise<void> {
-      try {
-        const res = await fetch('/api/atrium/services-health', {
-          headers: { Accept: 'application/json' },
-        });
-        if (!res.ok) {
-          throw new Error(`HTTP ${res.status}`);
-        }
-        const body = (await res.json()) as HealthResponse;
-        if (cancelled) return;
-        setData(body);
-        setError(null);
-      } catch (err) {
-        if (cancelled) return;
-        setError(err instanceof Error ? err.message : String(err));
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    }
-
-    void load();
-    const id = setInterval(() => { void load(); }, POLL_INTERVAL_MS);
+    void (async () => { if (!cancelled) await load(); })();
+    const id = setInterval(() => { if (!cancelled) void load(); }, POLL_INTERVAL_MS);
     return () => { cancelled = true; clearInterval(id); };
   }, []);
 
   return (
     <div className="space-y-4">
       {loading && data === null && (
-        <div className="bg-bg-card border border-border-default rounded-xl px-5 py-4 mono text-[11px] text-text-muted">
-          Pinging services…
+        <div
+          className="bg-bg-card border border-border-default rounded-xl px-5 py-4 mono text-[11px] text-text-muted"
+          role="status"
+          aria-label="Loading service health"
+        >
+          {/* Replaces inline "Pinging services…" string with a real skeleton grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {[0, 1, 2, 3, 4, 5].map((i) => (
+              <div key={i} className="h-16 bg-bg-raised rounded-lg animate-pulse" />
+            ))}
+          </div>
         </div>
       )}
 
       {error && data === null && (
         <div
-          className="bg-bg-card border rounded-xl px-5 py-4 mono text-[11px]"
+          role="alert"
+          className="bg-bg-card border rounded-xl px-5 py-4 mono text-[11px] flex items-center justify-between gap-3 flex-wrap"
           style={{ borderColor: '#E14B4B66', color: '#E14B4B' }}
         >
-          Failed to load service health: {error}
+          <div className="min-w-0 flex-1">
+            <div className="break-words">Failed to load service health: {error}</div>
+            {errorCode !== null && (
+              <div className="text-[10px] text-text-muted mt-1">code: {errorCode}</div>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => { setLoading(true); void load(); }}
+            className="mono text-[10px] underline underline-offset-2 hover:text-text-primary whitespace-nowrap"
+          >
+            Retry
+          </button>
         </div>
       )}
 
