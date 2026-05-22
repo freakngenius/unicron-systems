@@ -1178,3 +1178,50 @@ The 4 adapter files modified in this PR (`propublica-nonprofit-explorer.ts`, `ir
 **Implements:** Blueprint Section 9, Stage 2. Round-trip the Internal architecture JSON through `resolveArchitecture` and assert Internal-shaped values survive merge with `BASE_ARCHITECTURE`. 13 assertions cover vertical, lead unit, pipeline stages, scoring weights (6 keys summing to 1.0), thresholds (verified=0.65), sources (6 refs: 2 registered plus 4 pending), outreach, vocabulary, branding (`display_name = "Unicron Internal"`), ui_plan, business_summary, and base-fallback non-regression.
 **Last verified against spec:** 2026-05-21. 13/13 pass against `pnpm exec vitest run __tests__/agents/loadOrgArchitecture-internal.test.ts`.
 **Drift:** none.
+
+---
+
+## Internal Onboarding, Stage 3 (Vanity domain + host routing + auth)
+
+**State:** Branch `internal-host-routing` off `internal-onboarding` at `4b769ee`. Stage 3 of the autonomous Internal build per `Pathfinder/docs/PLAN-internal-onboarding.md`. Mirrors the Funder host-rewrite pattern (commit `b00f11f`) for `internal.unicron.systems` and re-uses the existing operator-allowlist gate at `Pathfinder/app/[slug]/layout.tsx`. No new auth fork; existing slug-generic gate already covers `/internal`.
+
+### Stage 3, Host routing + operator gate confirmation
+
+#### middleware.ts (workspace root, parent unicron-systems project)
+**Implements:** PLAN Stage 3 acceptance criterion 1 — `internal.unicron.systems` resolves to `/pathfinder/internal`. Strictly additive INTERNAL_HOST branch alongside the existing FUNDER_HOST branch. Bare host `/` rewrites to `${PATHFINDER_ORIGIN}/pathfinder/internal`; deep paths rewrite to `${PATHFINDER_ORIGIN}/pathfinder<path>`; existing `/pathfinder/*` paths pass through unchanged. Preserves query strings end-to-end. Mirrors the Funder branch shape exactly so the routing-precedent invariant from commit `b00f11f` (#460) holds for both hosts.
+**Last verified against spec:** 2026-05-22. 9/9 unit tests pass at `tests/unit/middleware.test.ts` (3 Funder regression + 6 Internal). Funder branch byte-identical pre/post; verified by reading the diff and by the 4 Funder regression cases (bare `/`, deep `/leads`, pass-through `/pathfinder/funder`, query-string preservation).
+**Drift:** none.
+
+#### Pathfinder/next.config.js
+**Implements:** PLAN Stage 3 — add `internal.unicron.systems` to `experimental.serverActions.allowedOrigins` so server actions issued from the Internal host do not trip the SSRF guard. Mirrors the Funder entry. Strictly additive (one host added to the list).
+**Last verified against spec:** 2026-05-22. `pnpm build` green; middleware bundle size 25.3 kB; no other changes.
+**Drift:** none.
+
+#### tests/unit/middleware.test.ts (workspace root)
+**Implements:** PLAN Stage 3 — guardrail tests asserting middleware host-rewrite shape for both Funder (regression) and Internal (this Stage). Reads `x-middleware-rewrite` off the `NextResponse.rewrite()` result. 9 assertions: 4 Funder regression (bare /, deep /leads, /pathfinder/funder pass-through, query-string preservation), 6 Internal (bare /, /settings, deep /leads/abc-123, /pathfinder/internal/leads pass-through, query-string preservation on deep paths, plus the bare-host case verifying `/pathfinder/internal` target).
+**Last verified against spec:** 2026-05-22. 9/9 pass via `npx vitest run tests/unit/middleware.test.ts`.
+**Drift:** none.
+
+#### Pathfinder/__tests__/api/internal-operator-gate.test.ts
+**Implements:** PLAN Stage 3 acceptance criterion 2 — operators in `operator_allowlist` see the dashboard; non-operators bounce to `/login?error=unauthorized`. Guardrail test: reads `Pathfinder/app/[slug]/layout.tsx` and asserts (a) no per-slug fork (no `slug === '...'` or `switch (slug)` branches), (b) every request checks `operator_allowlist`, (c) Supabase session is required before the allowlist check. If a future PR adds a per-slug fork, this test fails and the author must justify.
+**Last verified against spec:** 2026-05-22. 3/3 pass. Local dev verification (Pathfinder dev on `:3000`): unauthenticated `GET /pathfinder/internal` with basic-auth creds returns HTTP 307 to `/pathfinder/login`, confirming the layout's redirect path fires for the `internal` slug exactly as it does for the `funder` slug.
+**Drift:** none.
+
+#### Pathfinder/__tests__/metrics/internal-kpiQueries.test.ts
+**Implements:** PLAN Stage 3 — graceful degradation contract. Internal's `ui_plan.kpis` references 6 metric_ids: `verified_count_1d`, `active_motion_pct`, `avg_score`, `sources_live`, `count_by_category`, `verified_count`. Only `avg_score` and `sources_live` are mapped today (Funder Stage 9). The other 4 are unmapped; `getKpiValue` returns null for unmapped ids. The renderer (`Pathfinder/app/[slug]/page.tsx:73`) accepts null and never 503s. Stage 10 ships the missing four implementations. This test asserts the contract: every Internal metric_id either resolves or returns null; unmapped ones are null; shared ones (avg_score, sources_live) remain wired.
+**Last verified against spec:** 2026-05-22. 3/3 pass.
+**Drift:** none.
+
+### Env var enumeration (operator-render path for `/internal`)
+
+REQUIRED (route 500s without these):
+- `NEXT_PUBLIC_SUPABASE_URL` — `Pathfinder/app/[slug]/layout.tsx:39`, `lib/supabase.ts:24,58`. Used by both anon (auth.getUser) and admin (org + allowlist queries).
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY` — `Pathfinder/app/[slug]/layout.tsx:40`, `lib/supabase.ts:25`. Anon client for auth.getUser; layout explicitly redirects to `/login?error=misconfigured` when missing, NOT 500 — but downstream supabaseAdmin still throws if URL is missing.
+- `SUPABASE_SERVICE_ROLE_KEY` — `lib/supabase.ts:59`. Service-role for org + allowlist lookups; throws on missing.
+- `BASIC_AUTH_USER`, `BASIC_AUTH_PASS` — `Pathfinder/middleware.ts:78-79`. Pathfinder middleware basic-auth gate; in production, missing values return 503 ("Auth not configured"). Outside Stage 3's scope but documented since Internal requests transit this gate.
+
+OPTIONAL (route degrades gracefully when absent):
+- KPI metric implementations for `verified_count_1d`, `active_motion_pct`, `count_by_category`, `verified_count` — `getKpiValue` returns null; `KPIStrip` renders em-dash placeholders. No 503. Covered by `__tests__/metrics/internal-kpiQueries.test.ts`.
+- `ANTHROPIC_API_KEY`, `PERPLEXITY_API_KEY`, `UPSTASH_REDIS_REST_URL/TOKEN`, `HELICONE_API_KEY`, `AXIOM_TOKEN/DATASET`, `INNGEST_EVENT_KEY/SIGNING_KEY` — none touched at render time for `/[slug]/page.tsx`. They are consumed by the agent pipeline / cron / inngest paths, not the dashboard render. Absence does not 503 the dashboard.
+- `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` — used by leads detail / map components, not the `/[slug]` landing render. Absence yields a missing map widget elsewhere, not a 503.
+
