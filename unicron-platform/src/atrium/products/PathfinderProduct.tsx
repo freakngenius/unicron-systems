@@ -183,26 +183,46 @@ function EmptyTenantsState({ error }: { error?: string | null }) {
 export function PathfinderProduct() {
   const [stats, setStats] = useState<PathfinderStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [errCode, setErrCode] = useState<string | number | null>(null);
   const [kpiOpen, setKpiOpen] = useState(false);
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setErr(null);
+  // Atrium audit fix #12 — was a one-shot fetch on mount with no refresh path.
+  // Now exposes a manual refresh button + auto-polls every 30s so the dashboard
+  // stays current on long-open tabs without a hard reload.
+  const load = useCallback(async (opts?: { background?: boolean }) => {
+    const background = Boolean(opts?.background);
+    if (background) {
+      setRefreshing(true);
+    } else {
+      setLoading(true);
+    }
+    if (!background) setErr(null);
     try {
       const res = await fetch('/api/atrium/products/pathfinder');
       const json = (await res.json()) as PathfinderStats & { error?: string };
-      if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
+      if (!res.ok) {
+        setErrCode(res.status);
+        throw new Error(json.error ?? `HTTP ${res.status}`);
+      }
       setStats(json);
+      setErr(null);
+      setErrCode(null);
+      setLastUpdatedAt(new Date());
     } catch (e: unknown) {
       setErr(e instanceof Error ? e.message : String(e));
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   }, []);
 
   useEffect(() => {
     void load();
+    const id = setInterval(() => { void load({ background: true }); }, 30_000);
+    return () => clearInterval(id);
   }, [load]);
 
   if (loading) {
@@ -223,16 +243,46 @@ export function PathfinderProduct() {
 
       {/* ── Tenants ─────────────────────────────────────────────────────────── */}
       <section>
-        <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
           <div className="mono text-[10px] uppercase tracking-[0.18em] text-text-muted">
             Active Tenants
           </div>
-          {stats && (
-            <span className="mono text-[10px] text-text-muted">
-              {stats.tenants.length} tenant{stats.tenants.length !== 1 ? 's' : ''}
-            </span>
-          )}
+          <div className="flex items-center gap-3">
+            {stats && (
+              <span className="mono text-[10px] text-text-muted">
+                {stats.tenants.length} tenant{stats.tenants.length !== 1 ? 's' : ''}
+              </span>
+            )}
+            {lastUpdatedAt && (
+              <span className="mono text-[10px] text-text-muted" aria-live="polite">
+                Updated {lastUpdatedAt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={() => void load({ background: true })}
+              disabled={refreshing}
+              aria-label="Refresh Pathfinder dashboard"
+              className="mono text-[10px] uppercase tracking-[0.16em] px-2.5 py-1 rounded border border-border-default text-text-secondary hover:text-text-primary hover:border-border-strong disabled:opacity-50 transition-colors"
+            >
+              {refreshing ? 'Refreshing…' : 'Refresh'}
+            </button>
+          </div>
         </div>
+        {err && stats && (
+          <div role="alert" className="mb-3 rounded-md border border-[#E14B4B]/30 bg-[#E14B4B]/10 px-3 py-2 mono text-[11px] text-[#E14B4B] flex items-center justify-between gap-3">
+            <span className="break-words min-w-0 flex-1">
+              Refresh failed: {err}{errCode !== null ? ` (code: ${errCode})` : ''}
+            </span>
+            <button
+              type="button"
+              onClick={() => void load({ background: true })}
+              className="mono text-[10px] underline underline-offset-2 hover:text-text-primary whitespace-nowrap"
+            >
+              Retry
+            </button>
+          </div>
+        )}
 
         {err ? (
           <EmptyTenantsState error={err} />
