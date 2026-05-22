@@ -91,3 +91,59 @@ $ wc -l Pathfinder/Pathfinder-Internal-Blueprint.md
 Doc-only changes through `f6166e9`. No `lib/` files touched, so `MEMORY/spec-references.md` policy check does not apply. `pnpm-lock.yaml` not regenerated (no dep changes). Vercel branch deployment auto-builds from `internal-onboarding` push; status surfaced in Stage 2 verification.
 
 ---
+
+## Stage 2, Internal org record
+
+**Status:** complete (stage branch merged into `internal-onboarding`).
+**Stage branch:** `internal-org-record` (commits `7ac4af5`, `4603a62`, `e729289`).
+**Integration merge commit:** `c73108f merge(stage2): integrate Internal org record into integration branch` (no-ff merge from `internal-org-record`).
+**Push:** `5147493..c73108f internal-onboarding -> internal-onboarding`.
+**Kanban:** Stage 2 card moved to Deployed with append.
+
+### Live result
+
+```
+Internal org row in pathfinder.organizations:
+  id              = 2ff1197b-36f8-4210-aa11-65cf025ad83b
+  name            = Unicron Internal
+  slug            = internal
+  customer_org_id = unicron-internal
+  status          = setting_up           (at last poll, 353s after POST)
+  architecture    = (Pathfinder-Internal-Architecture.json verbatim)
+  vertical        = construction-vertical-b2b-prospecting
+  display_name    = Unicron Internal
+```
+
+### Auto-merge gate output
+
+```
+pnpm test:      Test Files  171 passed (171), Tests  1747 passed (1747)
+                (includes 13-assertion Internal round-trip test)
+pnpm typecheck: clean (tsc --noEmit, no output)
+pnpm lint:      No ESLint warnings or errors
+pnpm build:     Compiled successfully (Next 14.2.18, all routes generated)
+```
+
+### Files added
+
+- `Pathfinder/scripts/seed-internal-org.ts` (idempotent loader, mirrors `seed-funder-org.ts`; `--dry-run` and `--via-api` modes; slug-based idempotency)
+- `Pathfinder/__tests__/fixtures/internal-architecture.json` (verbatim copy of the canonical architecture JSON, per the Funder fixture convention)
+- `Pathfinder/__tests__/agents/loadOrgArchitecture-internal.test.ts` (13 assertions: vertical, lead unit, pipeline stages, scoring weights summing to 1.0, thresholds verified=0.65, 6 sources, outreach, vocabulary, branding, ui_plan, business_summary, base-fallback non-regression)
+- `MEMORY/spec-references.md` (3 new entries under "Internal Onboarding, Stage 2")
+
+No `lib/` files modified. No do-not-touch path modified.
+
+### Newly discovered forks
+
+1. **Seed script transport choice.** Blueprint did not specify whether the seed script should POST through the route or write direct to supabaseAdmin. Resolved by mirroring the Funder precedent: direct-supabase is the no-arg default; `--via-api` opt-in performs the live POST (used for the Stage 2 live run, so the Inngest event fires).
+
+### Unresolved follow-ups (logged for downstream stages, not blockers)
+
+1. **Inngest transition.** Sending `pathfinder/org.created` from local dev did not advance `setting_up` to `first_run` within 353s. Root cause per Stage 2 subagent: `lib/inngest/client.ts` dispatches to cloud Inngest, which then tries to invoke the registered handler at the production endpoint and cannot reach `localhost:3300`. **Resolution path:** Stage 3 brings the `internal-onboarding` branch live on Vercel; once Inngest cloud can hit the preview's `/api/inngest` endpoint, the transition should fire (or backfill via `checkReadyToViewCron`). The `orgCreated` handler is idempotent, so a later event reconciliation closes the gap. Stage 11 end-to-end run will reverify.
+2. **Worktree layout.** The Stage 2 worktree was created at `Pathfinder-worktrees/internal-onboarding/Pathfinder-worktrees/internal-org-record/` (nested) because the orchestrator was already cd'd into the integration worktree when running `git worktree add`. Functionally correct (git tracks worktrees via `.git/worktrees`), but cosmetically inconsistent with the convention "all worktrees under `Pathfinder-worktrees/`". For Stage 3+, create worktrees from the repo root path.
+3. **Out-of-scope MEMORY edit.** The Stage 2 subagent additionally applied the MEMORY update to the main working tree (`/Users/keka/Dropbox/Projects/Unicron Systems/MEMORY/spec-references.md`) instead of only its stage worktree. Orchestrator ported the change into the stage worktree and committed it there (`e729289`), then stashed the misplaced main-wd modification with name `stage2-subagent-overstep-spec-refs-2026-05-21`. Briefing for future stage subagents needs to underline that MEMORY/ lives at the repo root but each worktree has its own copy.
+
+### Regression check
+Stage 2 added only `scripts/`, `__tests__/`, and `MEMORY/` entries. No shared platform code modified. Cross-org regression check N/A; will be exercised by the build/typecheck/test gate of every subsequent stage and at Stage 11 end-to-end.
+
+---
