@@ -98,18 +98,46 @@ export function middleware(req: NextRequest) {
   }
   if (host === INTERNAL_HOST) {
     const { pathname, search } = req.nextUrl;
-    if (pathname === "/pathfinder" || pathname.startsWith("/pathfinder/")) {
+    // Strip Pathfinder basePath so all routing decisions below operate
+    // on the canonical app-relative path. Pathfinder's <Link href="/leads">
+    // renders as /pathfinder/leads in HTML because Next.js auto-prepends
+    // the basePath; on the internal host that needs to land on the
+    // org-scoped /pathfinder/internal/leads, not the global Zedcor
+    // /pathfinder/leads. Mirrors PR #464's Funder block exactly.
+    const stripped = pathname === "/pathfinder"
+      ? "/"
+      : pathname.startsWith("/pathfinder/")
+        ? pathname.slice("/pathfinder".length)
+        : pathname;
+
+    // Global (non-tenant) Pathfinder routes: API handlers + auth
+    // callback. These do NOT take an org slug. Preserve the original
+    // basePath so the Pathfinder app still resolves the route.
+    if (stripped.startsWith("/api/") || stripped.startsWith("/auth/")) {
       return NextResponse.rewrite(
-        new URL(`${PATHFINDER_ORIGIN}${pathname}${search}`),
+        new URL(`${PATHFINDER_ORIGIN}/pathfinder${stripped}${search}`),
       );
     }
-    if (pathname === "/") {
+
+    // Already explicitly scoped to /internal/* — pass through as
+    // /pathfinder/internal/* on the origin.
+    if (stripped === "/internal" || stripped.startsWith("/internal/")) {
+      return NextResponse.rewrite(
+        new URL(`${PATHFINDER_ORIGIN}/pathfinder${stripped}${search}`),
+      );
+    }
+
+    // Bare root → internal dashboard.
+    if (stripped === "/") {
       return NextResponse.rewrite(
         new URL(`${PATHFINDER_ORIGIN}/pathfinder/internal${search}`),
       );
     }
+
+    // Tenant-scope everything else: /leads, /pipeline, /leads/<id>,
+    // /settings (→ org-scoped not-found backstop), /onboarding/* (same).
     return NextResponse.rewrite(
-      new URL(`${PATHFINDER_ORIGIN}/pathfinder${pathname}${search}`),
+      new URL(`${PATHFINDER_ORIGIN}/pathfinder/internal${stripped}${search}`),
     );
   }
 
