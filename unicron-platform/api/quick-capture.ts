@@ -1,10 +1,22 @@
-// POST /api/ingest — server-side proxy from Atrium to Pathfinder's ingest endpoint.
+// POST /api/quick-capture — server-side proxy from Atrium to Pathfinder's ingest endpoint.
 //
-// Bug fix (2026-05-22): QuickCapture.tsx POSTs to /api/ingest, but
-// unicron-platform had no such route — Vite serves the SPA shell, so the
-// request 404'd silently. The Pathfinder ingest handler at
-// Pathfinder/app/api/ingest/route.ts is the real endpoint and accepts an
-// x-unicron-api-key header for cross-Vercel auth.
+// Bug fix (2026-05-22):
+//   Initial attempt landed as /api/ingest in PR #457 (commit c83a5aa6). That
+//   path resolved to a Vercel-level 404 on POST while OPTIONS/GET reached the
+//   function — confirmed via curl:
+//     OPTIONS /api/ingest → 204 (with our CORS headers)
+//     GET     /api/ingest → 405 (our handler returning method-not-allowed)
+//     POST    /api/ingest → 404 NOT_FOUND served by Vercel edge (text/plain,
+//                            x-vercel-cache: MISS, before reaching the function)
+//   /api/inngest POST routes fine in the same project, so the most likely
+//   cause is a stale routing entry for /api/ingest in this Vercel project.
+//   Renaming the endpoint sidesteps the conflict completely without depending
+//   on Vercel-side cleanup. QuickCapture.tsx is updated in the same commit
+//   to call /api/quick-capture.
+//
+// The Pathfinder ingest handler at Pathfinder/app/api/ingest/route.ts is
+// still the real downstream — this file just proxies to it with the
+// x-unicron-api-key header injected from server-side env.
 //
 // This proxy:
 //   1. Accepts the same JSON body QuickCapture sends.

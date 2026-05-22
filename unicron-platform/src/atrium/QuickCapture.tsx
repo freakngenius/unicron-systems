@@ -1,5 +1,5 @@
 // QuickCapture — modal/drawer for ad-hoc capture (text, photo, voice).
-// Posts to /api/ingest with source_type='manual' | 'voice_memo'.
+// Posts to /api/quick-capture (proxies to Pathfinder /api/ingest) with source_type='manual' | 'voice_memo'.
 // Sprint 2: text + photo functional; voice accepts recording but server
 // returns not_yet_implemented (transcription arrives Sprint 4).
 
@@ -21,7 +21,7 @@ async function postIngest(body: Record<string, unknown>, signal?: AbortSignal): 
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (INGEST_API_KEY) headers['x-unicron-api-key'] = INGEST_API_KEY;
 
-  const res = await fetch('/api/ingest', {
+  const res = await fetch('/api/quick-capture', {
     method: 'POST',
     headers,
     body: JSON.stringify(body),
@@ -132,7 +132,7 @@ export function QuickCapture({ open, onClose, onToast, teamMemberId }: Props) {
       });
 
       // Atrium audit fix item #17 — call /api/atrium/voice-transcribe before
-      // we ship the audio to /api/ingest. Whisper-backed; falls back gracefully
+      // we ship the audio to /api/quick-capture. Whisper-backed; falls back gracefully
       // to the original "transcription pending" raw_content when the endpoint
       // returns 503 (OPENAI_API_KEY not set in Vercel env).
       let transcriptText: string | null = null;
