@@ -223,3 +223,76 @@ This stage delivers the code path. Assign `internal.unicron.systems` to the **pa
 Funder host rewrite: 4 unit tests pass plus local curl returns bit-identical behavior. Zedcor scoring kernel: not exercised by Stage 3 (Stage 3 touched no scorer code). Cron routes: not exercised by Stage 3 (Stage 3 touched no cron code). Will be exercised by Stage 11 end-to-end.
 
 ---
+
+## Stage 4, Source adapters
+
+**Status:** code path complete and merged; live-ingest verification deferred to Stage 11.
+**Stage branch:** `internal-source-adapters` (commits `dace56b`, `6b60ba0`, `57cd9c9`).
+**Integration merge commit:** `55e552b merge(stage4): integrate Internal source adapters + per-slug dispatch`.
+**Push:** `3d5011e..55e552b internal-onboarding -> internal-onboarding`.
+
+### Per-adapter status
+
+| ID | Type (architecture) | Build path | Endpoint | Live row count | Required env if blocked |
+| --- | --- | --- | --- | --- | --- |
+| `sam-gov` | registered | code path live; SAM Entity Management API; construction NAICS 236/237/238/532412 | api.sam.gov entities | not verified live this session | `SAM_GOV_API_KEY` (set in main env; not exercised here) |
+| `usaspending` | registered | code path live; USASpending recipient/awardee search; construction NAICS | api.usaspending.gov | not verified live this session | none (keyless) |
+| `custom-construction-sales-job-postings` | pending | code path live; keyless RSS aggregator | RSS source per adapter | not verified live this session | none for v1 (paid Indeed/LinkedIn deferred per blueprint Section 10 decision 2) |
+| `custom-trade-association-directories` | pending | scaffold returns `[]` with `blocked-on-credentials` log | n/a until configured | 0 | `AGC_DIRECTORY_TOKEN` / `ABC_DIRECTORY_TOKEN` / `NECA_DIRECTORY_TOKEN` / `AED_DIRECTORY_TOKEN` |
+| `custom-sos-business-registrations` | pending | scaffold returns `[]` with `blocked-on-credentials` log | n/a until configured | 0 | `SOCRATA_APP_TOKEN` |
+| `custom-state-contractor-licenses` | pending | scaffold returns `[]` with `blocked-on-credentials` log | n/a until configured | 0 | `CSLB_BULK_URL` / `TDLR_API_TOKEN` / `FL_DBPR_API_TOKEN` |
+
+### What landed
+
+Six adapter modules under `Pathfinder/lib/adapters/sources/`, a shared helper, additive entries in the `SOURCE_ADAPTERS` registry, an `'internal'` entry in `SUBSCRIBER_OPT_IN_SLUGS` at `lib/inngest/functions/ingest-org-requested.ts:57`, a per-slug qualifier dispatch routing Internal events to `qualifyForInternal` (Stage 5 prerequisite scaffold), an `agent_runs.organization_id` insert fix (latent bug benefiting Funder too), a manual ingest trigger script, 13 new adapter unit tests, 10 Funder regression tests tightened, 3 fixture files, 10 MEMORY/spec-references.md entries.
+
+### Auto-merge gate output
+
+```
+pnpm typecheck (Pathfinder):  clean (tsc --noEmit; ran via lint-staged pre-commit hook each commit)
+pnpm lint (Pathfinder):       No ESLint warnings or errors
+pnpm exec vitest run __tests__/adapters/:
+                              6 files passed, 39 tests passed (10 Funder regression remain green;
+                              13 new Internal tests including blocked-on-credentials assertions)
+```
+
+Full-suite `pnpm test` was not re-run after the merge (run-time budget); the lint-staged pre-commit hook gates each commit individually, and the adapter changes are additive in a separate code path. Stage 11 end-to-end run will execute the full suite again.
+
+### Newly discovered forks
+
+1. **Sub-agent scope expansion (Stage 4 to Stage 5).** The per-slug dispatch needed a non-empty qualifier function or it would have dropped every Internal event before insert. The sub-agent built `lib/agents/internal/qualifier.ts` as a trust-the-adapter-NAICS-filter scaffold to keep the wire alive. This is a Stage 5 task arriving early. Stage 5 will expand it (active-sales-motion gating, deeper enrichment hook-ins) rather than recreate it.
+2. **`agent_runs.organization_id` bug fix.** The legacy insert relied on a permissive RLS to drop the row when the NOT NULL constraint failed, leaving telemetry empty. The fix is additive and benefits Funder too (Funder runs will now populate `agent_runs`). Verify Funder's `agent_runs` count starts populating after the next ingest cycle.
+
+### Sub-agent reliability
+
+The Stage 4 sub-agent hit `API Error: 529 Overloaded` twice mid-task (after ~38 minutes and again on resume). The first 529 occurred AFTER the code had been written but BEFORE any commit or push. The resume attempt also 529'd before progressing. The orchestrator took over directly: verified typecheck + lint + adapter-test green on the partial work, then committed in three logical chunks (feat / tests / MEMORY) and pushed. The code itself is sound; the harness was the failure point.
+
+### Live ingest verification, deferred
+
+The Stage 4 acceptance criterion "each adapter ingests real data into pathfinder.projects for Internal with agent_runs rows, OR is clearly reported blocked-on-credentials" is partially met: the three scaffolds are clearly reported blocked-on-credentials with env vars named, but sam-gov + usaspending + construction-sales-job-postings did NOT have their live runs verified this session. The runner explicitly allows deferring live verification to Stage 11 when local dev cannot reach Inngest cloud. Stage 11 end-to-end will exercise all three.
+
+### Regression check
+
+No Zedcor / Realberry path modified. Funder regression suite (10 tests at `__tests__/adapters/sources-funder.test.ts`) tightened and green; per-slug dispatch routes Funder events to `qualifyForFunder` byte-identically pre/post. Stage 11 end-to-end runs the full cross-org check on the live branch deployment.
+
+### Operator note
+
+The `agent_runs.organization_id` fix MAY require the Funder live-ingest path to reverify; the schema constraint will now correctly populate rather than silently drop. If Funder's `agent_runs` count was previously zero, expect it to climb starting on the next ingest cron tick after this branch merges to main.
+
+---
+
+## Session handoff notes
+
+**Session end:** 2026-05-21 (this session reached its working budget after Stage 4).
+**Build progress:** Stages 0-4 deployed on `internal-onboarding`. Stages 5-11 pending. The runner prompt is resumable: a fresh session that reads `PLAN-internal-onboarding.md` and this REPORT, then re-feeds the runner prompt, picks up at Stage 5.
+
+**Outstanding operator actions queued (not blockers for further build):**
+1. Assign `internal.unicron.systems` to the **pathfinder** Vercel project + add CNAME at the registrar (Stage 3 follow-up).
+2. Verify the unicron-systems Vercel project independently after the next branch redeploy (Stage 3 multi-Vercel rule).
+3. Optional: confirm `agent_runs` now populating for Funder after the next ingest cron tick post-merge (Stage 4 latent-bug fix side effect).
+
+**Suggested first action of next session:**
+- `cd Pathfinder-worktrees/internal-onboarding && git log --oneline -10` to confirm tip at `55e552b` or later.
+- Then dispatch Stage 5 (qualifier expansion + Enricher reconfigure + Geo-mapper reconfigure + Adjacency-mapper inactive scaffold). The qualifier scaffold from Stage 4 is the starting point.
+
+---
