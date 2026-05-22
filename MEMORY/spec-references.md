@@ -1288,3 +1288,87 @@ OPTIONAL (route degrades gracefully when absent):
 **Last verified against spec:** 2026-05-22. Compile + lint clean. Live ingest verification deferred to Stage 11 end-to-end run; the runner allows deferral when local dev cannot reach Inngest cloud.
 **Drift:** none.
 
+
+---
+
+## Internal onboarding Stages 5-10 (2026-05-22)
+
+#### Pathfinder/lib/agents/internal/qualifier.ts
+**Implements:** Blueprint §6 + PLAN Stage 5. Expanded with ambiguous-allow path (unknown source + construction keyword passes to verifier) and association_hint propagation from the trade-association adapter payload.
+**Last verified against spec:** 2026-05-22. 11 unit tests pass.
+**Drift:** none.
+
+#### Pathfinder/lib/agents/internal/enricher.ts
+**Implements:** Blueprint §7 + PLAN Stage 5. Sonar-driven enricher returning STRICT JSON: website, linkedin, employee_count, service_category (architecture enum-clamped), sales_motion, contacts[], associations[], brief. Same lib/llm/run substrate as Zedcor and Funder enrichers; pre-existing enrichers untouched.
+**Last verified against spec:** 2026-05-22. Parser-level tests pass; live Sonar integration covered by the Stage 5 inngest follow-on.
+**Drift:** none.
+
+#### Pathfinder/lib/agents/internal/geo.ts
+**Implements:** Blueprint §7 + PLAN Stage 5. Pure heuristic mapping to {hq_state, operating_states[]}. No branches, no haversine. Payload-first with title/summary text scanning as fallback.
+**Last verified against spec:** 2026-05-22. 7 unit tests pass.
+**Drift:** none.
+
+#### Pathfinder/lib/agents/internal/adjacency.ts
+**Implements:** Blueprint §10 decision 5 + PLAN Stage 5. Code-complete adjacency-mapper that is inert when UNICRON_INTERNAL_ADJACENCY_SEED_PATH is unset. Seed shape (unicron_customers, crm_contacts, trade_associations) documented inline.
+**Last verified against spec:** 2026-05-22. 4 unit tests pass including the inert-assertion when no seed is present.
+**Drift:** none. The Stage 5 acceptance was "code-complete and INACTIVE without the seed."
+
+#### Pathfinder/lib/inngest/functions/internal-enrich-geo-adjacency.ts
+**Implements:** Blueprint §7 + PLAN Stage 5. Subscribes to `pathfinder/project.qualified` and runs enricher + geo + adjacency for slug='internal' only. Funder events pass through unchanged into the Funder handler. Registered in app/api/inngest/route.ts.
+**Last verified against spec:** 2026-05-22. Typecheck + lint clean.
+**Drift:** none.
+
+#### Pathfinder/lib/agents/ranker/genericScorer.ts
+**Implements:** Architecture scoring.weights for Internal + Funder + Zedcor. Stage 6 ADDITIVELY adds five new extractors (sales_motion_strength, operational_footprint, federal_signal, project_driven_fit, association_presence) and reuses the existing `recency` extractor. All Funder + Zedcor extractors untouched.
+**Last verified against spec:** 2026-05-22. 15 unit tests pass; Funder ranker regression (11 tests) + qualifier/geo regression (14 tests) all pass.
+**Drift:** none.
+
+#### Pathfinder/lib/agents/ranker/genericRationale.ts
+**Implements:** Closes the generic-org Sonnet rationale gap. Stage 6 surfaces additional Internal raw_payload keys (internal_qualifier_reason, internal_enrichment, internal_geo, internal_adjacency, etc.) so Sonnet can quote them.
+**Last verified against spec:** 2026-05-22. Funder regression tests pass unchanged.
+**Drift:** none.
+
+#### Pathfinder/lib/agents/internal/verifier.ts
+**Implements:** Blueprint §8 + PLAN Stage 7. Four checks: company_exists, sales_motion_corroborated, footprint_present, score_above_threshold (threshold read from architecture.scoring.thresholds.verified × 100).
+**Last verified against spec:** 2026-05-22. 7 unit tests pass including architecture-driven threshold verification.
+**Drift:** none.
+
+#### Pathfinder/app/api/cron/verifier/route.ts
+**Implements:** PLAN Stage 7. The non-Zedcor branch now switches on orgEntry.slug. slug='internal' routes to verifyInternalProject; everything else non-Zedcor stays on verifyFunderProject. Zedcor's 5-check kernel path untouched.
+**Last verified against spec:** 2026-05-22. Typecheck + lint clean; Funder verifier regression covered by existing tests in __tests__/api/verifier-*.
+**Drift:** none.
+
+#### Pathfinder/lib/agents/internal/digest.ts
+**Implements:** Architecture business_summary + PLAN Stage 8. Composes the daily morning digest. Pure function — projects[] in, slack_text + slack_blocks + entries[] out.
+**Last verified against spec:** 2026-05-22. 5 unit tests pass.
+**Drift:** none.
+
+#### Pathfinder/app/api/cron/internal-digest/route.ts
+**Implements:** PLAN Stage 8. Vercel cron route. Looks up Internal org, pulls verified projects in the last 24h, posts to Slack via INTERNAL_SLACK_WEBHOOK_URL, and seeds deals at pipeline_stage='NEW' for each verified project (idempotent).
+**Last verified against spec:** 2026-05-22. Typecheck + lint clean. Live cron verification deferred to Stage 11.
+**Drift:** none.
+
+#### Pathfinder/vercel.json
+**Implements:** PLAN Stage 8. Appends `{ path: /pathfinder/api/cron/internal-digest, schedule: "0 13 * * 1,2,3,4,5" }`. Numeric day-of-week 1-5 (Mon-Fri) per CLAUDE.md rules.
+**Last verified against spec:** 2026-05-22.
+**Drift:** none.
+
+#### Pathfinder/lib/agents/internal/outreachDrafter.ts
+**Implements:** Architecture outreach + PLAN Stage 9. Three artifacts per verified company: cold email (Sonnet), LinkedIn message (Sonnet), internal HubSpot note (deterministic) + hubspot fields bag. Em-dash stripping enforced. Graceful no-api-key fallback for both Sonnet calls.
+**Last verified against spec:** 2026-05-22. 6 unit tests pass.
+**Drift:** none.
+
+#### Pathfinder/lib/agents/internal/hubspotNote.ts
+**Implements:** PLAN Stage 9. HubSpot writer. Gated on INTERNAL_HUBSPOT_API_KEY; missing key returns status='skipped:no_api_key' without throwing. Finds-or-creates company by name then attaches note via HubSpot association 190.
+**Last verified against spec:** 2026-05-22. Graceful-skip path covered by unit test.
+**Drift:** none.
+
+#### Pathfinder/lib/metrics/kpiQueries.ts
+**Implements:** Architecture ui_plan.kpis + PLAN Stage 10. Adds four Internal metric_id implementations: verified_count_1d, active_motion_pct, count_by_category, verified_count. avg_score and sources_live (Funder Stage 9) untouched. Stage 3 graceful-degradation contract preserved.
+**Last verified against spec:** 2026-05-22. 3 KPI-routing unit tests pass.
+**Drift:** none.
+
+#### Pathfinder/app/[slug]/page.tsx
+**Implements:** Stage 1 audit finding fix + PLAN Stage 10. Bug fix: `org_id` -> `organization_id` on the projects fetch. Unblocks every non-Zedcor slug page (Funder, Realberry, Internal). Regression guard: __tests__/api/slug-page-org-filter.test.ts greps source for the correct column name.
+**Last verified against spec:** 2026-05-22. 1 regression-guard test passes.
+**Drift:** none.

@@ -41,3 +41,8 @@ export { verifyBuildOut } from './verify-build-out';
 // subscriber that runs the Funder enricher + adjacency-mapper before the
 // next ranker cycle. Funder-only via slug filter inside the handler.
 export { funderEnrichAdjacency } from './funder-enrich-adjacency';
+// Internal onboarding Stage 5 — `pathfinder/project.qualified` subscriber
+// that runs the Internal enricher + geo + adjacency before the next
+// ranker cycle picks the project up. Internal-only via slug filter
+// inside the handler.
+export { internalEnrichGeoAdjacency } from './internal-enrich-geo-adjacency';

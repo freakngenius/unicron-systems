@@ -1,20 +1,24 @@
 // lib/agents/internal/qualifier.ts
 //
-// Internal onboarding Stage 5 (bootstrap qualifier).
+// Internal onboarding Stage 5 — qualifier for the construction-vertical
+// B2B prospecting pipeline.
 //
-// Stage 4 of the kickoff prompt requires real, org-scoped rows in
-// pathfinder.projects for sam-gov, usaspending, and construction-sales-
-// job-postings. The Internal subscriber path needs a qualifier (per the
-// ingest-org-requested flow at lines 157-174). The full thesis-keyword
-// Internal qualifier ships in Stage 6 (Plan §"Stage 6"); this module is
-// the Stage 5 boundary qualifier that lets adapter output reach the
-// projects table now, with hooks the Stage 6 module can extend.
+// Internal qualifier accepts raw company records and gates to genuine
+// active-sales-motion construction-vertical companies. Uses evidence
+// available on each record:
+//   - NAICS code (236/237/238/532412) for construction-vertical match
+//   - recent sales / BD job postings as a hiring-bd sales-motion signal
+//   - federal awardee + SAM registration as federal_signal sources
+//   - trade-association membership as association_presence signal
 //
-// Contract mirrors lib/agents/funder/qualifier.ts so the subscriber
-// switch dispatches by slug.
+// Ambiguous events are allowed through so the verifier can adjudicate
+// against public records (SAM, USASpending, license lookups). This
+// mirrors the Build-Brief decision: bias toward recall at the qualifier,
+// precision at the verifier. The qualifier never calls an LLM — it is
+// pure heuristics over the adapter payload.
 //
 // Spec: Pathfinder/Pathfinder-Internal-Blueprint.md §6.
-//       Pathfinder/docs/PLAN-internal-onboarding.md §"Stage 6".
+//       Pathfinder/docs/PLAN-internal-onboarding.md §"Stage 5".
 
 import type { OrgArchitecture } from '@/lib/types/architecture';
 import { isConstructionNaics, CONSTRUCTION_KEYWORDS } from '@/lib/adapters/sources/_internal-shared';
@@ -34,6 +38,9 @@ export interface InternalQualifierResult {
   inferred_service_category?: string | null;
   sales_motion_signal?: 'active-outbound' | 'hiring-bd' | 'inbound-only' | 'unknown' | null;
   federal_registration?: 'sam-registered' | 'federal-awardee' | 'both' | 'none' | null;
+  /** Association name lifted from the trade-association adapter payload, used
+   *  by the association_presence feature extractor at the ranker stage. */
+  association_hint?: string | null;
 }
 
 // Hard noise: residential-only signals, single-LLC holding companies,
@@ -124,10 +131,12 @@ export function qualifyForInternal(input: InternalQualifierInput): InternalQuali
   }
 
   if (input.source === 'custom-trade-association-directories') {
+    const payload = input.raw_payload as { association_name?: string };
     return {
       qualified: true,
       reason: 'source-trusted:trade-association',
       inferred_service_category: inferServiceCategory(text),
+      association_hint: payload.association_name ?? null,
     };
   }
 
@@ -139,6 +148,21 @@ export function qualifyForInternal(input: InternalQualifierInput): InternalQuali
     };
   }
 
-  // Default: drop unknown sources to keep downstream costs bounded.
+  // Ambiguous-allow path: when an unknown source carries a strong
+  // construction signal in the haystack, let it through so the verifier
+  // can decide. Bias toward recall — a noise event still gets dropped
+  // by the verifier's score-threshold gate before it reaches outreach.
+  const constructionHit = CONSTRUCTION_KEYWORDS.some((k) => text.includes(k));
+  if (constructionHit) {
+    return {
+      qualified: true,
+      reason: 'ambiguous_allow:construction-keyword',
+      inferred_service_category: inferServiceCategory(text),
+      sales_motion_signal: 'unknown',
+    };
+  }
+
+  // Default: drop unknown sources without a construction signal so
+  // downstream Sonnet costs stay bounded.
   return { qualified: false, reason: 'unknown_source_for_internal' };
 }

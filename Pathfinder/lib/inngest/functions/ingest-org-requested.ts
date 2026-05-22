@@ -183,6 +183,9 @@ export const ingestOrgRequested = inngest.createFunction(
               p.internal_inferred_service_category = q.inferred_service_category ?? null;
               p.internal_sales_motion_signal = q.sales_motion_signal ?? p.internal_sales_motion_signal ?? null;
               p.internal_federal_registration = q.federal_registration ?? p.internal_federal_registration ?? null;
+              if (q.association_hint) {
+                p.internal_association_hint = q.association_hint;
+              }
             }
             return q.qualified;
           }
