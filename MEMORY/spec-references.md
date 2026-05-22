@@ -1392,3 +1392,14 @@ OPTIONAL (route degrades gracefully when absent):
 #### Pathfinder/lib/metrics/kpiQueries.ts (modified)
 **Drift:** `actively_raising_count` extended to read both legacy `raw_payload.fundraising_stage` and enrichment-derived `raw_payload.funder_enrichment.fundraising_stage` so the KPI agrees with the verifier's data path. `sources_live` unchanged.
 **Last verified against spec:** 2026-05-22.
+
+---
+
+## Internal dashboard bug-fix bundle (fix/internal-dashboard-bundle)
+
+**State:** branch `fix/internal-dashboard-bundle` off `main`. Open PR for human review. Four defects reported live on `/pathfinder/internal`: dashboard scroll, Companies tab 404, sub-page back-link to `/pathfinder` (Zedcor), and dashboard / pipeline tile click landing on a Funder-shaped detail view that looks blank for Internal projects. Phase 0 verification ran `pnpm dev` locally and walked `/pathfinder/internal`, `/pathfinder/internal/leads`, `/pathfinder/internal/pipeline`, and `/pathfinder/internal/leads/<id>`: every route returns HTTP 200, every nav href is slug-prefixed (`/pathfinder/internal/...`), CSS allows scroll. Defects 1, 2, 3 against the live deploy are the prior PR #469 not yet rolled out on `pathfinder-ashy.vercel.app`. Defect 4 is a real product gap: the detail page renders Funder fields (Founders, raise stage) for Internal companies whose `raw_payload.internal_enrichment.*` has none of those keys.
+
+#### Pathfinder/lib/agents/internal/companyLeadView.ts
+**Implements:** Internal architecture (`Pathfinder-Internal-Architecture.json`) lead_unit.schema and `raw_payload.internal_enrichment` / `internal_geo` projection. Function `projectToCompanyLeadView(project)` returns a flat `CompanyLeadView` with company name, service category, sales motion, footprint (HQ + ops states), hq location, employee count, federal registration, associations, first step / warm intro, rationale, brief, citations, website, linkedin, and contact list. Falls back to qualifier-time signals (`internal_inferred_service_category`, `internal_sales_motion_signal`, `internal_federal_registration`, `internal_association_hint`) when enrichment has not filled in. Mirror of `lib/agents/funder/leadView.ts`. Drives the new `CompanyDetailContents` rendered inside `LeadDetailShell` at `app/[slug]/leads/[projectId]/page.tsx` when `architecture.lead_unit.name === 'company'`.
+**Last verified against spec:** 2026-05-22. `pnpm typecheck`, `pnpm lint`, `pnpm test` (1833 tests) all pass. Verified live by curling `/pathfinder/internal/leads/<id>` and inspecting the rendered section list (Recommended first step, Why this scored, Snapshot, Trade associations, Brief, Contact, Citations); Funder lead detail at `/pathfinder/funder/leads/<id>` still renders Founders / Brief / Snapshot inside the same shell.
+**Drift:** none (new file, additive).
