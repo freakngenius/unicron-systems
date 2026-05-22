@@ -19,9 +19,11 @@ import {
   coverageExpansionRun,
   ingestRouter,
   ingestAllOrgsCron,
+  ingestOrgRequested,
   verifyBuildOut,
   orgCreated,
   checkReadyToViewCron,
+  funderEnrichAdjacency,
 } from '@/lib/inngest/functions';
 
 export const { GET, POST, PUT } = serve({
@@ -49,6 +51,15 @@ export const { GET, POST, PUT } = serve({
     // this; registering them here unblocks the cascade through steps 4-6.
     orgCreated,
     checkReadyToViewCron,
+    // Funder Stage 3 — `pathfinder/org.ingest_requested` subscriber.
+    // Was exported but never wired into serve(); registering here so the
+    // Inngest cloud actually dispatches the per-org ingest cycle.
+    ingestOrgRequested,
+    // Funder onboarding post-merge follow-up — `pathfinder/project.qualified`
+    // subscriber that runs the Funder enricher + adjacency-mapper before
+    // the next ranker cycle picks up the row. Funder-only via slug filter
+    // inside the handler.
+    funderEnrichAdjacency,
   ],
 });
 

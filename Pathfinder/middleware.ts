@@ -18,6 +18,17 @@
 // `request.headers.get('x-forwarded-host')` + `x-forwarded-proto`, NOT
 // from `request.nextUrl` / `request.url` (those resolve to the Vercel
 // deploy hostname when reverse-proxied and would leak it to the browser).
+//
+// FUNDER HOST ROUTING (funder.unicron.systems → /pathfinder/funder):
+// Implemented in the parent unicron-systems project's next.config.mjs
+// (workspace root), not here. Pathfinder's basePath is enforced before
+// any local middleware or rewrite runs, so bare-path requests (/, /leads)
+// on the funder host never reach this middleware. The parent's host-based
+// rewrite re-targets funder.unicron.systems/* → pathfinder-ashy.vercel.app/
+// pathfinder/funder/* (root) or pathfinder-ashy.vercel.app/pathfinder/<path>
+// (deep link), preserving the basePath end-to-end. By the time a request
+// reaches this middleware it already carries /pathfinder/* and basic-auth
+// gates it normally.
 
 import { NextResponse, type NextRequest } from 'next/server';
 

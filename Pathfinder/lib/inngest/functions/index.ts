@@ -37,3 +37,7 @@ export { checkReadyToViewCron } from './check-ready-to-view-cron';
 // Build-Out Pass slices 3+5 — HTTP-verifies the /[slug] route after
 // ready_to_view and flips status to build_out_complete / build_out_failed.
 export { verifyBuildOut } from './verify-build-out';
+// Funder onboarding post-merge follow-up — `pathfinder/project.qualified`
+// subscriber that runs the Funder enricher + adjacency-mapper before the
+// next ranker cycle. Funder-only via slug filter inside the handler.
+export { funderEnrichAdjacency } from './funder-enrich-adjacency';

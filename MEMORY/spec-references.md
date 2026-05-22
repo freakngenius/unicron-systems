@@ -1125,3 +1125,33 @@ Operator setup: `MEMORY/operator-todos/2026-05-03-teams-user-setup.md` — Micro
 **Implements:** SPEC - Pathfinder Hubspot Sync — canonical accept-flow library (`acceptLead`, `pushDealForLeadAction`, `applyHubspotStageEvent`, `recordLocalAction`). Modified in PR #448 to make HubSpot-deal push tolerate Funder-shaped projects (org-scoped pipeline + stage lookup) without changing the Zedcor path. Stable public interface kept per `docs/LEAD-ACTIONS-API.md` for P0-04 Slack-bot + P0-01 chat-panel consumers.
 **Last verified against spec:** 2026-05-21.
 **Drift:** none.
+
+---
+
+## Funder Onboarding — Post-merge follow-ups (PR #449)
+
+**State:** PR #449 open on `funder-followups`, head `8a366d3`. Branched off `origin/main` post-merge of PR #448 (squash `a12b7cb`). Addresses §4 follow-up items 1 (adapter endpoints) and 5 (enricher + adjacency invocation) from `Pathfinder/docs/REPORT-funder-onboarding.md`. Plus host routing carried over from a parallel-session commit (`6471244`).
+
+The 4 adapter files modified in this PR (`propublica-nonprofit-explorer.ts`, `irs-exempt-org-filings.ts`, `philanthropy-trade-press-rss.ts`, `funder-990-filings.ts`) already have entries in the "Funder Onboarding — PR #448" section above. The fixes update the spec-mapping notes for live-verified endpoint paths; drift is documented in REPORT-funder-onboarding.md §7.1.
+
+### Pipeline wiring
+
+#### Pathfinder/lib/inngest/events.ts
+**Implements:** Build-Spec §4 Stage 4 — post-qualifier event surface. Adds `pathfinder/project.qualified` (distinct from the existing `pathfinder/signal.qualified` which fires after RANKING). The new event fires after the qualifier gate during ingest, BEFORE ranking, carrying `{ project_id, organization_id, organization_slug, source, qualified_at }`. Subscribed by `funderEnrichAdjacency`; other subscribers may join without contract churn.
+**Last verified against spec:** 2026-05-22.
+**Drift:** none.
+
+#### Pathfinder/lib/inngest/functions/ingest-org-requested.ts
+**Implements:** Build-Spec §4 Stage 3 + Stage 4 — post-insert `pathfinder/project.qualified` emit (PR #449 addition). After fresh rows persist, the subscriber fans out one event per project so the Funder enricher + adjacency-mapper can run before the next ranker cycle. Emit is best-effort: a failed send writes to the per-source result's `error_message` but does not flip the row to failed (the row is already persisted; the next ranker cycle still picks it up, just without enrichment).
+**Last verified against spec:** 2026-05-22.
+**Drift:** none (additive to PR #448 shape).
+
+#### Pathfinder/lib/inngest/functions/funder-enrich-adjacency.ts
+**Implements:** Build-Spec §4 Stage 4 + REPORT-funder-onboarding.md §4 follow-up #5 — `pathfinder/project.qualified` follow-on handler that runs the Funder enricher + adjacency-mapper BEFORE the next ranker cycle picks up the row. Slug-gated to `'funder'` so other orgs may share the event surface without enabling the Funder-shaped enricher. Idempotency gate on `raw_payload.funder_enrichment.enriched_at`. Graceful-empty on LLM-gateway failure so a missing env never blocks a row. Persists results into `projects.raw_payload` under `funder_enrichment` + `funder_adjacency` keys (no schema migration; the ranker, verifier, and deal memo already read from raw_payload for Funder-shaped signals).
+**Last verified against spec:** 2026-05-22. Live driven 2026-05-22 on Funder org `a91e88ef-be63-43d0-84f1-cc2fadf01467`: 6/6 enrich + 6/6 adjacency succeeded against Perplexity Sonar for top-ranked Funder projects, total cost ~$0.006.
+**Drift:** none.
+
+#### Pathfinder/lib/inngest/functions/index.ts
+**Implements:** Barrel export for the Inngest function set. Adds `funderEnrichAdjacency` (PR #449). Existing entries unchanged.
+**Last verified against spec:** 2026-05-22.
+**Drift:** none.

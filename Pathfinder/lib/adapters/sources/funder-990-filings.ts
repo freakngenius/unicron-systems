@@ -26,9 +26,12 @@ interface PeerFunder {
 
 const DEFAULT_PEER_FUNDERS: PeerFunder[] = [
   // A small starter set of AI/EA-adjacent peer funders; operator extends.
-  // EINs are public via ProPublica Nonprofit Explorer.
-  { ein: '454962108', name: 'Open Philanthropy Project Action Fund' },
-  { ein: '463254889', name: 'Effective Altruism Funds (CEA)' },
+  // EINs are public via ProPublica Nonprofit Explorer. Live-verified
+  // 2026-05-22 against https://projects.propublica.org/nonprofits/api/v2/
+  // (prior EINs 454962108 + 463254889 returned 404 — the parent entities
+  // renamed and re-registered under new EINs).
+  { ein: '810737472', name: 'Open Philanthropy' },
+  { ein: '471988398', name: 'Effective Ventures Foundation USA' },
 ];
 
 interface ProPublicaOrgFilingsResponse {
