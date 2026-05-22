@@ -34,6 +34,12 @@ const haveCreds = Boolean(url && serviceKey);
 const RUN_TAG = `_cron_ranker_test_${Date.now()}`;
 const HAPPY_PROJECT_ID = `${RUN_TAG}_happy`;
 const OVERLAP_PROJECT_ID = `${RUN_TAG}_overlap_blocked`;
+// Zedcor's organization_id on the live Supabase project. Required on
+// every insert into projects / agent_runs / agent_log / lead_actions
+// since the Phase 2A completion migration made organization_id NOT NULL
+// on those tables. Hardcoded because these integration tests already
+// target the live DB by design; this id is the canonical platform org.
+const ZEDCOR_ORG_ID = '6cd87740-7c72-4337-ac79-316a54242eef';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let admin: SupabaseClient<any, 'pathfinder', any>;
@@ -177,6 +183,7 @@ describe.runIf(haveCreds)('GET /api/cron/ranker', () => {
         records_new: 0,
         status: 'running',
         error_message: `${RUN_TAG}_overlap_seed`,
+        organization_id: ZEDCOR_ORG_ID,
       })
       .select('id')
       .maybeSingle();
@@ -229,6 +236,7 @@ describe.runIf(haveCreds)('GET /api/cron/ranker', () => {
       nearest_branch_id: null as string | null,
       ranked_at: null as string | null,
       ingested_at: new Date().toISOString(),
+      organization_id: ZEDCOR_ORG_ID,
     };
 
     // Clean any leftover row first.
@@ -295,6 +303,7 @@ describe.runIf(haveCreds)('GET /api/cron/ranker', () => {
       raw_payload: { stage: 'PLN' },
       score: null,
       ingested_at: new Date().toISOString(),
+      organization_id: ZEDCOR_ORG_ID,
     });
     expect(pErr).toBeNull();
 

@@ -25,6 +25,10 @@ export { ingestRouter } from './ingest-router';
 export { emailDailyCron } from './email-cron';
 // Phase 2C slice 1 — per-org ingest dispatch cron.
 export { ingestAllOrgsCron } from './ingest-all-orgs-cron';
+// Funder Stage 3 — `pathfinder/org.ingest_requested` subscriber that
+// runs the per-source SOURCE_ADAPTERS registry for opted-in orgs.
+// Zedcor remains on the inline ingestor in lib/ingestor.ts.
+export { ingestOrgRequested } from './ingest-org-requested';
 // Phase 2E slice 2 — Onboarding-to-Live state machine: status flip on
 // org.created + periodic threshold check transitioning first_run/ranking
 // → ready_to_view or awaiting_threshold.

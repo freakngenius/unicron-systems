@@ -9,7 +9,7 @@
 //
 // Sprint 7 Stream D: lazy-load all non-Now tabs to reduce initial bundle size.
 
-import { useEffect, useState, lazy, Suspense } from 'react';
+import { useEffect, useState, useCallback, lazy, Suspense } from 'react';
 // Tokens are now loaded globally from src/main.tsx so Metacron + Atrium share
 // the same :root custom properties. (Pass 1 rebrand — see SPEC.)
 import { useAuth } from '../lib/auth';
@@ -18,6 +18,13 @@ import { AtriumLayout, AtriumPlaceholder, type AtriumTab } from './AtriumLayout'
 import { AtriumNow } from './AtriumNow';
 import { Skeleton } from './ui-primitives';
 import { onAtriumNavigate, onOpenAtriumSettings } from './navigation';
+import {
+  currentRoute,
+  pushRoute,
+  replaceRoute,
+  parsePathname,
+  type AtriumRoute,
+} from './routes';
 
 // Heavy tabs — lazy-loaded so they're split into separate chunks
 const Library   = lazy(() => import('./Library').then(m => ({ default: m.Library })));
@@ -61,21 +68,59 @@ function TabSkeleton() {
 
 export function AtriumApp() {
   const auth = useAuth();
-  const [activeTab, setActiveTab] = useState<AtriumTab>('now');
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  // Bug 2 of the Atrium blockers goal (2026-05-13): route state mirrors
+  // window.location.pathname instead of being pure UI state. Initial render
+  // parses the current URL so deep links (e.g. /work/calls/<id>) open the
+  // right surface; popstate updates state on browser back/forward; every
+  // tab change is recorded via pushState so refresh keeps the route.
+  const [route, setRoute] = useState<AtriumRoute>(() => currentRoute());
+  const activeTab = route.tab;
+  const settingsOpen = route.settingsOpen;
+
+  // Normalize the URL on first load — if the user lands on `/` we replace
+  // (not push) so back-button history doesn't get a no-op entry.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (window.location.pathname === '/' || window.location.pathname === '') {
+      replaceRoute(route);
+    }
+  }, []); // intentionally first-render only
+
+  // Browser back/forward → re-derive route from window.location.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const handler = () => setRoute(parsePathname(window.location.pathname));
+    window.addEventListener('popstate', handler);
+    return () => window.removeEventListener('popstate', handler);
+  }, []);
+
+  const navigateTo = useCallback((next: AtriumRoute) => {
+    pushRoute(next);
+    setRoute(next);
+  }, []);
+
+  const setActiveTab = useCallback((tab: AtriumTab) => {
+    navigateTo({ tab, settingsOpen: false, workSubTab: tab === 'work' ? 'items' : undefined });
+  }, [navigateTo]);
+
+  const setSettingsOpen = useCallback((open: boolean) => {
+    if (open) navigateTo({ tab: route.tab, settingsOpen: true });
+    else navigateTo({ tab: route.tab, settingsOpen: false });
+  }, [route.tab, navigateTo]);
 
   // Cross-tab navigation: components dispatch atrium:navigate to jump tabs.
   useEffect(() => {
     return onAtriumNavigate((detail) => {
-      setSettingsOpen(false);
-      setActiveTab(detail.tab);
+      navigateTo({ tab: detail.tab, settingsOpen: false });
     });
-  }, []);
+  }, [navigateTo]);
 
   // Companion: components can request the Settings drawer.
   useEffect(() => {
-    return onOpenAtriumSettings(() => setSettingsOpen(true));
-  }, []);
+    return onOpenAtriumSettings((section) => {
+      navigateTo({ tab: route.tab, settingsOpen: true, settingsSection: section });
+    });
+  }, [navigateTo, route.tab]);
 
   if (!ATRIUM_ENABLED) {
     return (
@@ -117,7 +162,7 @@ export function AtriumApp() {
   return (
     <AtriumLayout
       activeTab={activeTab}
-      onTabChange={(tab) => { setSettingsOpen(false); setActiveTab(tab); }}
+      onTabChange={(tab) => setActiveTab(tab)}
       onOpenSettings={() => setSettingsOpen(true)}
     >
       <Suspense fallback={<TabSkeleton />}>
@@ -133,7 +178,18 @@ export function AtriumApp() {
         ) : activeTab === 'system' ? (
           <System />
         ) : activeTab === 'work' ? (
-          <Work />
+          <Work
+            initialSubTab={route.workSubTab ?? 'items'}
+            initialCallDetailId={route.callDetailId}
+            onSubTabChange={(subTab, detailId) => {
+              navigateTo({
+                tab: 'work',
+                workSubTab: subTab,
+                callDetailId: detailId,
+                settingsOpen: false,
+              });
+            }}
+          />
         ) : activeTab === 'money' ? (
           <Money />
         ) : activeTab === 'marketing' ? (

@@ -42,7 +42,7 @@ const DEFAULT_PREFS: NotificationPreferences = {
   push_notifications: false,
 };
 
-const CALENDAR_MINUTES_OPTIONS = [5, 10, 15, 30] as const;
+const CALENDAR_MINUTES_OPTIONS = [5, 10, 15, 30, 45, 60] as const;
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
@@ -179,9 +179,30 @@ export function Settings({ memberId, onClose }: SettingsProps) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ member_id: memberId, notifications: prefs }),
       });
+      const json = (await resp.json().catch(() => ({}))) as {
+        error?: string;
+        blocked?: boolean;
+        reason?: string;
+        notifications?: Partial<NotificationPreferences>;
+      };
       if (!resp.ok) {
-        const json = (await resp.json()) as { error?: string };
+        // Surface Taboo Keeper refusals with their stated reason.
+        if (resp.status === 422 && json.blocked) {
+          throw new Error(json.reason ?? 'Refused by Taboo Keeper');
+        }
         throw new Error(json.error ?? `HTTP ${resp.status}`);
+      }
+      // Sync local state to whatever the server clamped/stored.
+      if (json.notifications) {
+        const remote = json.notifications;
+        setPrefs({
+          ...DEFAULT_PREFS,
+          ...remote,
+          atrium_badges: {
+            ...DEFAULT_PREFS.atrium_badges,
+            ...(remote.atrium_badges ?? {}),
+          },
+        });
       }
       setSaveState('success');
       setTimeout(() => setSaveState('idle'), 2500);

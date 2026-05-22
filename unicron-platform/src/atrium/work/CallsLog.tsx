@@ -166,8 +166,13 @@ function VoiceBadge() {
 
 // ─── Bottom status bar ────────────────────────────────────────────────────────
 
+// Bug 1 of the Atrium blockers goal (2026-05-13): the UI now tracks an
+// explicit job lifecycle (queued → processing → done | failed) instead of
+// inferring 'done' from an audit_log row. 'queued' shows after upload returns
+// but before Inngest picks the job up.
 export type UploadStage =
   | { state: 'uploading' }
+  | { state: 'queued'; ledgerId: string; notionUrl: string | null }
   | { state: 'processing'; ledgerId: string; notionUrl: string | null }
   | {
       state: 'done';
@@ -186,7 +191,10 @@ export function UploadStatusBar({ stage, onDismiss }: { stage: UploadStage; onDi
 
   switch (stage.state) {
     case 'uploading':
-      label = 'Call uploading…';
+      label = 'Uploading…';
+      break;
+    case 'queued':
+      label = 'Queued…';
       break;
     case 'processing':
       label = 'Processing transcript…';
@@ -312,8 +320,10 @@ export function useUploadDriver(onAnyChange: () => void) {
         return;
       }
 
+      // Bug 1: upload returned quickly. Show 'queued' until the Inngest
+      // function flips the job to 'processing'.
       onAnyChange();
-      setStage({ state: 'processing', ledgerId, notionUrl });
+      setStage({ state: 'queued', ledgerId, notionUrl });
     } catch (err) {
       setStage({
         state: 'error',
@@ -322,32 +332,37 @@ export function useUploadDriver(onAnyChange: () => void) {
     }
   }, [onAnyChange]);
 
-  // Poll while in processing state; auto-dismiss in done state.
+  // Bug 1: poll the new job RPC every 5s. The 5-minute wall-clock window
+  // gives multi-minute Inngest runs (LLM + per-action-item Notion writes)
+  // plenty of headroom. The job's status is the source of truth for the
+  // transition — the UI no longer infers 'done' from an audit row.
   useEffect(() => {
     if (!stage) return;
-    if (stage.state === 'processing') {
+    if (stage.state === 'queued' || stage.state === 'processing') {
       const ledgerId = stage.ledgerId;
+      const notionUrl = stage.notionUrl;
+      const initialState = stage.state;
       let cancelled = false;
       let attempts = 0;
-      const MAX_ATTEMPTS = 60; // ~60s at 1s interval
+      const POLL_INTERVAL_MS = 5_000;
+      const MAX_ATTEMPTS = 60; // ~5 minutes
 
       async function poll() {
         if (cancelled) return;
         attempts += 1;
         try {
-          const { data, error } = await getSupabase().rpc('ns_call_processing_status', { p_call_id: ledgerId });
+          const { data, error } = await getSupabase().rpc('ns_get_call_processing_job', { p_call_id: ledgerId });
           if (cancelled) return;
-          if (error) {
-            // transient — keep trying
-          } else if (Array.isArray(data) && data.length > 0) {
+          if (!error && Array.isArray(data) && data.length > 0) {
             const row = data[0] as {
-              state: string;
+              status: string;
+              error_message: string | null;
               action_items_count: number;
               decisions_count: number;
               mentions_count: number;
               audit_log_id: string | null;
             };
-            if (row.state === 'done') {
+            if (row.status === 'complete') {
               setStage({
                 state: 'done',
                 ledgerId,
@@ -357,7 +372,25 @@ export function useUploadDriver(onAnyChange: () => void) {
                 mentions: row.mentions_count,
               });
               onAnyChange();
+              // Bug 1: notify the open ExpandedCallView so its sections
+              // (Key Takeaways, Action Items, Decisions, Mentions) re-fetch
+              // without the operator clicking refresh.
+              window.dispatchEvent(new CustomEvent('atrium:call-processing-complete', {
+                detail: { call_id: ledgerId },
+              }));
               return;
+            }
+            if (row.status === 'failed') {
+              setStage({
+                state: 'error',
+                message: row.error_message
+                  ? `Failed: ${row.error_message}`
+                  : 'Processing failed — see audit log.',
+              });
+              return;
+            }
+            if (row.status === 'processing' && initialState === 'queued') {
+              setStage({ state: 'processing', ledgerId, notionUrl });
             }
           }
         } catch {
@@ -370,16 +403,16 @@ export function useUploadDriver(onAnyChange: () => void) {
           });
           return;
         }
-        setTimeout(poll, 1000);
+        setTimeout(poll, POLL_INTERVAL_MS);
       }
-      const t = setTimeout(poll, 800); // first poll after a short delay
+      const t = setTimeout(poll, 1500); // brief gap before first poll so Inngest can pick up the event
       return () => {
         cancelled = true;
         clearTimeout(t);
       };
     }
     if (stage.state === 'done') {
-      const t = setTimeout(() => setStage(null), 5000);
+      const t = setTimeout(() => setStage(null), 6000);
       return () => clearTimeout(t);
     }
     return undefined;
@@ -390,7 +423,16 @@ export function useUploadDriver(onAnyChange: () => void) {
 
 // ─── Main export ──────────────────────────────────────────────────────────────
 
-export function CallsLog() {
+export interface CallsLogProps {
+  /**
+   * Bug 2 of the Atrium blockers goal (2026-05-13): when /work/calls/<id>
+   * is the URL, the detail modal opens immediately on mount.
+   */
+  initialDetailCallId?: string;
+  onDetailChange?: (callId: string | undefined) => void;
+}
+
+export function CallsLog({ initialDetailCallId, onDetailChange }: CallsLogProps = {}) {
   const [searchInput, setSearchInput] = useState('');
   const search = useDebounce(searchInput, 300);
   const [detail, setDetail] = useState<LedgerRow | null>(null);
@@ -402,6 +444,33 @@ export function CallsLog() {
 
   const triggerReload = useCallback(() => setReloadKey((k) => k + 1), []);
   const { stage, startUpload, dismiss } = useUploadDriver(triggerReload);
+
+  // Bug 2: open the detail modal automatically when the URL carries a call id.
+  // We try once the calls list has loaded — if the id doesn't appear in the
+  // first page, we fetch the single row directly so deep-links work even when
+  // the call is older than the list cap.
+  useEffect(() => {
+    if (!initialDetailCallId) return;
+    if (detail && detail.id === initialDetailCallId) return;
+    const fromList = rawCalls.find((r) => r.id === initialDetailCallId);
+    if (fromList) {
+      setDetail(fromList);
+      return;
+    }
+    if (loading) return;
+    let cancelled = false;
+    getSupabase()
+      .rpc('ns_get_call_ledger_row', { p_call_id: initialDetailCallId })
+      .then(
+        ({ data }) => {
+          if (cancelled) return;
+          const row = ((data as LedgerRow[] | null) ?? [])[0];
+          if (row) setDetail(row);
+        },
+        () => { /* leave detail null — list still renders */ },
+      );
+    return () => { cancelled = true; };
+  }, [initialDetailCallId, rawCalls, loading, detail]);
 
   useEffect(() => {
     writePersistedFilter(participantFilter);
@@ -512,7 +581,7 @@ export function CallsLog() {
             return (
               <div
                 key={call.id}
-                onClick={() => setDetail(call)}
+                onClick={() => { setDetail(call); onDetailChange?.(call.id); }}
                 className="bg-bg-card border border-border-default rounded-xl px-4 py-3 hover:border-border-hover transition-colors cursor-pointer"
                 role="button"
                 tabIndex={0}
@@ -520,6 +589,7 @@ export function CallsLog() {
                   if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault();
                     setDetail(call);
+                    onDetailChange?.(call.id);
                   }
                 }}
               >
@@ -567,7 +637,10 @@ export function CallsLog() {
       )}
 
       {detail && (
-        <ExpandedCallView call={detail as CallRow} onClose={() => setDetail(null)} />
+        <ExpandedCallView
+          call={detail as CallRow}
+          onClose={() => { setDetail(null); onDetailChange?.(undefined); }}
+        />
       )}
 
       {uploadModal}

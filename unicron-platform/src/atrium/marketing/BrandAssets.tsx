@@ -2,8 +2,11 @@
 // Grid of brand asset files organized by folder.
 // Loads from GET /api/atrium/brand-assets.
 // Click opens/downloads via GET /api/atrium/brand-assets/file?path=...
+//
+// Atrium audit fix #23: upload form added so the gallery is bidirectional,
+// not read-only. Uses POST /api/atrium/brand-assets (multipart/form-data).
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -23,6 +26,16 @@ interface BrandAssetsResponse {
   hint?: string;
   error?: string;
 }
+
+interface UploadResponse {
+  ok: boolean;
+  path?: string;
+  name?: string;
+  size?: number;
+  error?: string;
+}
+
+const ROOT_SENTINEL = '__root';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -120,6 +133,131 @@ function AssetCard({ asset }: { asset: BrandAsset }) {
   );
 }
 
+// ── Upload modal ──────────────────────────────────────────────────────────────
+
+interface UploadModalProps {
+  file: File;
+  folders: string[]; // existing folders (no 'All', no 'Root')
+  defaultFolder: string;
+  onCancel: () => void;
+  onUploaded: () => void;
+}
+
+function UploadModal({
+  file,
+  folders,
+  defaultFolder,
+  onCancel,
+  onUploaded,
+}: UploadModalProps) {
+  const [folder, setFolder] = useState<string>(defaultFolder);
+  const [uploading, setUploading] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const doUpload = useCallback(async () => {
+    setUploading(true);
+    setError(null);
+    try {
+      const fd = new FormData();
+      fd.append('file', file, file.name);
+      fd.append('folder', folder);
+      const res = await fetch('/api/atrium/brand-assets', {
+        method: 'POST',
+        body: fd,
+      });
+      const json = (await res.json()) as UploadResponse;
+      if (!res.ok || !json.ok) {
+        throw new Error(json.error ?? `Upload failed (HTTP ${res.status})`);
+      }
+      onUploaded();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Upload failed');
+    } finally {
+      setUploading(false);
+    }
+  }, [file, folder, onUploaded]);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+      onClick={(e) => {
+        if (e.target === e.currentTarget && !uploading) onCancel();
+      }}
+    >
+      <div className="bg-bg-card border border-border-default rounded-xl w-[420px] max-w-[92vw] p-5 shadow-xl">
+        <div className="mono text-[11px] uppercase tracking-[0.16em] text-text-muted mb-3">
+          Upload brand asset
+        </div>
+
+        <div className="mb-3">
+          <div className="mono text-[9px] uppercase tracking-[0.12em] text-text-muted mb-1">
+            File
+          </div>
+          <div
+            className="bg-bg-raised border border-border-default rounded-lg px-3 py-2 mono text-[11px] text-text-primary truncate"
+            title={file.name}
+          >
+            {file.name}
+          </div>
+          <div className="mono text-[9px] text-text-muted mt-1">
+            {formatSize(file.size)}
+          </div>
+        </div>
+
+        <div className="mb-4">
+          <label
+            htmlFor="brand-upload-folder"
+            className="mono text-[9px] uppercase tracking-[0.12em] text-text-muted mb-1 block"
+          >
+            Folder
+          </label>
+          <select
+            id="brand-upload-folder"
+            value={folder}
+            onChange={(e) => setFolder(e.target.value)}
+            disabled={uploading}
+            className="w-full bg-bg-raised border border-border-default rounded-lg px-3 py-2 mono text-[11px] text-text-primary"
+          >
+            <option value={ROOT_SENTINEL}>(brand root)</option>
+            {folders.map((f) => (
+              <option key={f} value={f}>{f}</option>
+            ))}
+          </select>
+        </div>
+
+        {error && (
+          <div className="bg-[#E14B4B]/10 border border-[#E14B4B]/30 rounded-lg px-3 py-2 mb-3">
+            <div className="mono text-[10px] text-[#E14B4B]">{error}</div>
+          </div>
+        )}
+
+        <div className="flex items-center justify-end gap-2">
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={uploading}
+            className="mono text-[10px] uppercase tracking-[0.12em] px-3 py-1.5 rounded-lg text-text-secondary hover:text-text-primary transition-colors disabled:opacity-40"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={() => void doUpload()}
+            disabled={uploading}
+            className="mono text-[10px] uppercase tracking-[0.12em] px-3 py-1.5 rounded-lg disabled:opacity-50"
+            style={{
+              background: 'rgba(232,118,58,0.13)',
+              color: 'var(--accent)',
+            }}
+          >
+            {uploading ? 'Uploading…' : 'Upload'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Main export ───────────────────────────────────────────────────────────────
 
 export function BrandAssets() {
@@ -129,6 +267,8 @@ export function BrandAssets() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeFolder, setActiveFolder] = useState<string>('All');
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -152,8 +292,23 @@ export function BrandAssets() {
   }, [load]);
 
   // Derive folders
-  const folders = ['All', ...Array.from(new Set(assets.map((a) => a.folder))).sort()];
+  const folderSet = Array.from(new Set(assets.map((a) => a.folder))).sort();
+  const folders = ['All', ...folderSet];
+  // Folders eligible as upload targets (drop synthetic 'Root' bucket — root
+  // is selectable via the __root sentinel in the modal).
+  const uploadFolders = folderSet.filter((f) => f !== 'Root');
   const filtered = activeFolder === 'All' ? assets : assets.filter((a) => a.folder === activeFolder);
+
+  const handleUploadClick = useCallback(() => {
+    fileInputRef.current?.click();
+  }, []);
+
+  const handleFileSelected = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (f) setPendingFile(f);
+    // reset value so picking the same file twice still triggers onChange
+    e.target.value = '';
+  }, []);
 
   if (loading) {
     return (
@@ -195,6 +350,11 @@ export function BrandAssets() {
     );
   }
 
+  const defaultUploadFolder =
+    activeFolder !== 'All' && activeFolder !== 'Root' && uploadFolders.includes(activeFolder)
+      ? activeFolder
+      : (uploadFolders[0] ?? ROOT_SENTINEL);
+
   return (
     <div>
       {/* Folder tabs */}
@@ -215,6 +375,25 @@ export function BrandAssets() {
         <span className="ml-auto mono text-[10px] text-text-muted shrink-0">
           {filtered.length} file{filtered.length !== 1 ? 's' : ''}
         </span>
+        <button
+          type="button"
+          onClick={handleUploadClick}
+          className="mono text-[10px] uppercase tracking-[0.1em] px-3 py-1.5 rounded-lg shrink-0 ml-2 transition-colors"
+          style={{
+            background: 'rgba(232,118,58,0.13)',
+            color: 'var(--accent)',
+          }}
+          title="Upload a new brand asset"
+        >
+          + Upload
+        </button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          onChange={handleFileSelected}
+          className="hidden"
+          aria-hidden="true"
+        />
       </div>
 
       {filtered.length === 0 ? (
@@ -229,6 +408,19 @@ export function BrandAssets() {
             <AssetCard key={asset.relativePath} asset={asset} />
           ))}
         </div>
+      )}
+
+      {pendingFile && (
+        <UploadModal
+          file={pendingFile}
+          folders={uploadFolders}
+          defaultFolder={defaultUploadFolder}
+          onCancel={() => setPendingFile(null)}
+          onUploaded={() => {
+            setPendingFile(null);
+            void load();
+          }}
+        />
       )}
     </div>
   );

@@ -31,8 +31,17 @@ const PRODUCTS_TABS: { id: ProductsTab; label: string; icon: AtriumIconName }[] 
   { id: 'voice',      label: 'Voice Agents', icon: 'Phone'   },
 ];
 
-function useVerifierAccuracy(): { total: number | null; accuracyPct: number | null } {
-  const [s, setS] = useState<{ total: number | null; accuracyPct: number | null }>({ total: null, accuracyPct: null });
+// Atrium audit fix item #12 — was a one-shot mount fetch with no refresh path;
+// now supports a manual refresh trigger and 30s polling so the dashboard
+// doesn't go stale on long-open tabs.
+function useVerifierAccuracy(refreshKey: number): {
+  total: number | null;
+  accuracyPct: number | null;
+  loadedAt: number | null;
+} {
+  const [s, setS] = useState<{ total: number | null; accuracyPct: number | null; loadedAt: number | null }>({
+    total: null, accuracyPct: null, loadedAt: null,
+  });
   useEffect(() => {
     let cancelled = false;
     getSupabase()
@@ -40,11 +49,15 @@ function useVerifierAccuracy(): { total: number | null; accuracyPct: number | nu
       .then(({ data }) => {
         if (cancelled) return;
         const row = (data as Array<{ total: number; successful: number; accuracy_pct: number }> | null)?.[0];
-        if (row) setS({ total: Number(row.total), accuracyPct: Number(row.accuracy_pct) });
+        if (row) {
+          setS({ total: Number(row.total), accuracyPct: Number(row.accuracy_pct), loadedAt: Date.now() });
+        } else {
+          setS((prev) => ({ ...prev, loadedAt: Date.now() }));
+        }
       })
       .catch(() => {/* leave nulls */});
     return () => { cancelled = true; };
-  }, []);
+  }, [refreshKey]);
   return s;
 }
 
@@ -66,15 +79,47 @@ function MetricCard({ label, value, sublabel, accent }: {
 
 export function Products() {
   const [active, setActive] = useState<ProductsTab>('pathfinder');
-  const verifier = useVerifierAccuracy();
+  // Atrium audit fix item #12 — bump refreshKey to refetch metrics + signal
+  // child views to refetch. 30s background poll keeps the dashboard fresh.
+  const [refreshKey, setRefreshKey] = useState(0);
+  const verifier = useVerifierAccuracy(refreshKey);
+
+  useEffect(() => {
+    const id = setInterval(() => setRefreshKey((k) => k + 1), 30_000);
+    return () => clearInterval(id);
+  }, []);
+
+  function loadedAgo(loadedAt: number | null): string {
+    if (loadedAt === null) return 'never';
+    const s = Math.round((Date.now() - loadedAt) / 1000);
+    if (s < 5) return 'just now';
+    if (s < 60) return `${s}s ago`;
+    const m = Math.round(s / 60);
+    return `${m}m ago`;
+  }
 
   return (
     <div className="w-full">
-      <div className="px-7 pt-6 pb-3">
-        <div className="text-[11.5px] text-text-muted mb-1.5">Pathfinder & Metacron</div>
-        <h1 className="text-[36px] font-semibold text-text-primary leading-none tracking-tight" style={{ fontFamily: 'var(--font-display)', letterSpacing: -0.7 }}>
-          Products
-        </h1>
+      <div className="px-7 pt-6 pb-3 flex items-start justify-between gap-4">
+        <div>
+          <div className="text-[11.5px] text-text-muted mb-1.5">Pathfinder & Metacron</div>
+          <h1 className="text-[36px] font-semibold text-text-primary leading-none tracking-tight" style={{ fontFamily: 'var(--font-display)', letterSpacing: -0.7 }}>
+            Products
+          </h1>
+        </div>
+        <div className="flex items-center gap-3 mt-2">
+          <span className="text-[11px] text-text-muted">
+            Last refresh: {loadedAgo(verifier.loadedAt)}
+          </span>
+          <button
+            type="button"
+            onClick={() => setRefreshKey((k) => k + 1)}
+            title="Refresh Products metrics"
+            className="text-[12px] font-medium px-3 py-1.5 rounded-md border border-border-default bg-white hover:bg-bg-elevated transition-colors"
+          >
+            Refresh
+          </button>
+        </div>
       </div>
 
       <div className="px-7 pb-4 grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>

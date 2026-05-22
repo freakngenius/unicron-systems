@@ -94,12 +94,144 @@ function unit_count_fit(_project: Project, _architecture: OrgArchitecture): numb
   return 0;
 }
 
+// ---------------------------------------------------------------------------
+// Funder onboarding Stage 5 — philanthropic-deal-sourcing extractors.
+//
+// Additive. Existing extractors above (geography_match, asset_class_match,
+// trigger_strength, basis_fit, unit_count_fit) are unchanged so Zedcor and
+// Realberry continue to score the same. Each Funder extractor returns 0..1
+// and reads only project + architecture + raw_payload — no LLM call. The
+// Sonnet rationale + first_step that wraps the score lives in
+// lib/agents/ranker/genericRationale.ts.
+// ---------------------------------------------------------------------------
+
+const TIER_1_INSTITUTIONS = [
+  'openai',
+  'anthropic',
+  'deepmind',
+  'google research',
+  'meta ai',
+  'mit csail',
+  'stanford ai lab',
+  'berkeley bair',
+  'cmu lti',
+  'allen institute',
+  'nvidia research',
+];
+
+const TIER_2_INSTITUTIONS = [
+  'google',
+  'meta',
+  'apple',
+  'microsoft research',
+  'stanford',
+  'mit',
+  'berkeley',
+  'cmu',
+  'princeton',
+  'oxford',
+  'cambridge',
+  'harvard',
+];
+
+function projectRawPayload(project: Project): Record<string, unknown> {
+  return (project.raw_payload as Record<string, unknown> | null) ?? {};
+}
+
+function projectHaystack(project: Project): string {
+  const payload = projectRawPayload(project);
+  const payloadStr = (payload.founder_affiliation as string | undefined) ?? JSON.stringify(payload).slice(0, 2000);
+  return `${project.title ?? ''} ${project.summary ?? ''} ${payloadStr}`.toLowerCase();
+}
+
+function thesis_fit(project: Project, architecture: OrgArchitecture): number {
+  const enumValues = architecture.lead_unit.schema.thesis_area?.enum_values ?? [];
+  if (enumValues.length === 0) return 0;
+  const payload = projectRawPayload(project);
+  const candidates = [
+    payload.funder_inferred_thesis as string | null,
+    payload.thesis_match as string | null,
+    payload.thesis as string | null,
+  ].filter((c): c is string => typeof c === 'string' && c.trim() !== '');
+  for (const c of candidates) {
+    if (enumValues.includes(c)) return 1.0;
+  }
+  // Soft text match
+  const text = `${project.title ?? ''} ${project.summary ?? ''}`.toLowerCase();
+  const hit = enumValues
+    .filter((t) => t !== 'other')
+    .some((t) => text.includes(t.replace(/-/g, ' ')));
+  return hit ? 0.6 : 0;
+}
+
+function founder_credential(project: Project, _architecture: OrgArchitecture): number {
+  const text = projectHaystack(project);
+  if (TIER_1_INSTITUTIONS.some((t) => text.includes(t))) return 1.0;
+  if (TIER_2_INSTITUTIONS.some((t) => text.includes(t))) return 0.7;
+  return 0.2;
+}
+
+function raise_stage(project: Project, _architecture: OrgArchitecture): number {
+  const payload = projectRawPayload(project);
+  const stage = ((payload.fundraising_stage as string | null) ?? '').toLowerCase();
+  const stageMap: Record<string, number> = {
+    'actively-raising': 1.0,
+    closing: 0.8,
+    'pre-raise': 0.6,
+    forming: 0.4,
+    raised: 0.1,
+  };
+  if (stage && stageMap[stage] !== undefined) return stageMap[stage];
+  return 0.5; // unknown
+}
+
+function talent_density(project: Project, _architecture: OrgArchitecture): number {
+  const text = projectHaystack(project);
+  let count = 0;
+  for (const inst of TIER_1_INSTITUTIONS) {
+    const matches = text.match(new RegExp(inst.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&'), 'g'));
+    if (matches) count += matches.length;
+  }
+  return Math.min(count / 3, 1);
+}
+
+function peer_funder_signal(project: Project, _architecture: OrgArchitecture): number {
+  const payload = projectRawPayload(project);
+  if (payload.peer_funder_signal) return 1.0;
+  if (project.source === 'custom-funder-990-filings') return 0.4;
+  const text = projectHaystack(project);
+  const peerNames = ['open philanthropy', 'survival and flourishing fund', 'founders pledge', 'longview philanthropy'];
+  if (peerNames.some((p) => text.includes(p))) return 0.7;
+  return 0.2;
+}
+
+function recency(project: Project, _architecture: OrgArchitecture): number {
+  const ts = project.posted_date ?? project.ingested_at ?? null;
+  if (!ts) return 0.3;
+  const parsed = Date.parse(ts);
+  if (!Number.isFinite(parsed)) return 0.3;
+  const days = (Date.now() - parsed) / (1000 * 86_400);
+  if (days < 30) return 1.0;
+  if (days < 90) return 0.8;
+  if (days < 180) return 0.6;
+  if (days < 365) return 0.4;
+  return 0.2;
+}
+
 const EXTRACTORS: Record<string, FeatureExtractor> = {
+  // Zedcor-shaped (existing) — unchanged.
   geography_match,
   asset_class_match,
   trigger_strength,
   basis_fit,
   unit_count_fit,
+  // Funder onboarding Stage 5 — philanthropic-deal-sourcing.
+  thesis_fit,
+  founder_credential,
+  raise_stage,
+  talent_density,
+  peer_funder_signal,
+  recency,
 };
 
 export interface GenericScoreResult {

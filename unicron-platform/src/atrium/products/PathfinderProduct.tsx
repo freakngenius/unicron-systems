@@ -34,6 +34,23 @@ interface TenantRow {
   name: string;
   monthly_value: number | null;
   customer_since: string | null;
+  // Atrium audit fix #20 — read tenant status from the API instead of the
+  // hardcoded "Active" pill that was the same on every row.
+  status: string | null;
+}
+
+// Atrium audit fix #20 — color + label per tenant status. Values mirror the
+// pathfinder.customers.status check constraint.
+const TENANT_STATUS_TINT: Record<string, { dot: string; label: string }> = {
+  active:    { dot: '#E8763A', label: 'Active' },
+  trial:     { dot: '#6081BE', label: 'Trial' },
+  paused:    { dot: '#C28A1F', label: 'Paused' },
+  churned:   { dot: '#E14B4B', label: 'Churned' },
+  prospect:  { dot: '#7355E5', label: 'Prospect' },
+};
+function tenantStatusTint(raw: string | null): { dot: string; label: string } {
+  const key = (raw ?? 'active').toLowerCase();
+  return TENANT_STATUS_TINT[key] ?? { dot: '#6B7280', label: raw ?? 'Unknown' };
 }
 
 // ── Design constants ───────────────────────────────────────────────────────────
@@ -240,12 +257,24 @@ export function PathfinderProduct() {
                       ${t.monthly_value.toLocaleString('en-US')}/mo
                     </div>
                   )}
-                  <div className="flex items-center gap-2 justify-end mt-1">
-                    <span className="w-2 h-2 rounded-full bg-accent-orange" />
-                    <span className="mono text-[10px] uppercase tracking-[0.1em] text-accent-orange">
-                      Active
-                    </span>
-                  </div>
+                  {/* Atrium audit fix #20 — real status pill from API row */}
+                  {(() => {
+                    const tint = tenantStatusTint(t.status);
+                    return (
+                      <div className="flex items-center gap-2 justify-end mt-1">
+                        <span
+                          className="w-2 h-2 rounded-full"
+                          style={{ background: tint.dot }}
+                        />
+                        <span
+                          className="mono text-[10px] uppercase tracking-[0.1em]"
+                          style={{ color: tint.dot }}
+                        >
+                          {tint.label}
+                        </span>
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
             ))}
@@ -372,10 +401,10 @@ export function PathfinderProduct() {
           <div className="bg-bg-card border border-border-default rounded-xl overflow-hidden">
             <div className="px-4 py-3 border-b border-border-default flex items-center justify-between">
               <span className="mono text-[9px] uppercase tracking-[0.18em] text-text-muted">
-                unicron-knowledge/wiki/products/pathfinder/kpis.md
+                unicron-knowledge/wiki/architecture/products/pathfinder/kpis.md
               </span>
               <a
-                href="https://github.com/freakngenius/unicron-knowledge/blob/main/wiki/products/pathfinder/kpis.md"
+                href="https://github.com/freakngenius/unicron-knowledge/blob/main/wiki/architecture/products/pathfinder/kpis.md"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="mono text-[10px] text-status-blue hover:underline"

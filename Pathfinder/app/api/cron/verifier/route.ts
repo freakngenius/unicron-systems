@@ -27,6 +27,17 @@ import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { nearestBranch, scoreProject, SCORE_TOLERANCE as SCORE_TOLERANCE_FALLBACK } from '@/lib/scoring';
 import { fetchActiveScoringConfig } from '@/lib/scoring-config-server';
+// Funder onboarding Stage 6 — non-Zedcor verifier dispatch.
+// Reads architecture thresholds and runs Funder-specific checks for any
+// project with a non-Zedcor organization_id. Zedcor projects (and any
+// row without organization_id) fall through to the existing 5-check
+// Zedcor-shaped flow below.
+import { loadOrgArchitecture } from '@/lib/agents/loadOrgArchitecture';
+import { verifyFunderProject } from '@/lib/agents/verifier/funderChecks';
+import type { OrgArchitecture } from '@/lib/types/architecture';
+// Platform org id (Zedcor) for telemetry attribution on agent_runs / agent_log.
+// Phase 2A completion made organization_id NOT NULL on those tables.
+import { getPlatformOrgId } from '@/lib/agent-runs';
 import { inngest } from '@/lib/inngest/client';
 import { checkOwnerAnchors, SAFE_RATIONALE_PLACEHOLDER } from '@/lib/verifier-owner-check';
 import type { Branch, Customer, Project } from '@/lib/types';
@@ -106,19 +117,30 @@ async function writeLog(
   event_data: Record<string, unknown>,
   opts: { latency_ms?: number; model_used?: string } = {},
 ): Promise<void> {
-  const row: LogRow = {
+  // agent_log.organization_id is NOT NULL post Phase 2A completion. Prefer
+  // event_data.organization_id when the caller set it (per-project events
+  // carry the project's org); fall back to Zedcor as the platform default.
+  const eventOrgId = typeof event_data.organization_id === 'string' ? event_data.organization_id : null;
+  const platformOrgId = eventOrgId ? null : await getPlatformOrgId();
+  const orgId = eventOrgId ?? platformOrgId;
+  if (!orgId) {
+    // Telemetry is fail-open — dropping a log row beats 500ing the cycle.
+    return;
+  }
+  const row: LogRow & { organization_id: string } = {
     agent_name: 'verifier',
     event_type,
     event_data,
     latency_ms: opts.latency_ms ?? null,
     model_used: opts.model_used ?? null,
+    organization_id: orgId,
   };
   // The .insert() return shape is loosely typed in this codebase to dodge the
   // generated-types lag (verifier columns post-date the type regen). Mirror
   // the pattern from app/api/refresh/route.ts.
   await (
     admin.from('agent_log') as unknown as {
-      insert: (rows: LogRow) => Promise<{ error: { message: string } | null }>;
+      insert: (rows: typeof row) => Promise<{ error: { message: string } | null }>;
     }
   ).insert(row);
 }
@@ -439,10 +461,46 @@ async function verifyOneProject(args: {
    *  GET handler. Passed in so a /settings edit takes effect on the very
    *  next cycle without a redeploy. */
   scoreTolerance: number;
+  /** Funder onboarding Stage 6 — pre-resolved org architectures keyed by
+   *  organization_id. Lets the per-project dispatch read thresholds +
+   *  branding without re-fetching per project. Cycle-local cache built
+   *  at the top of the handler. */
+  orgArchitectures?: Map<string, { slug: string; architecture: OrgArchitecture }>;
+  zedcorOrgId?: string | null;
 }): Promise<ProjectVerdict> {
-  const { admin, project, branches, customers, scoreTolerance } = args;
+  const { admin, project, branches, customers, scoreTolerance, orgArchitectures, zedcorOrgId } = args;
   const failures: string[] = [];
   const project_id = project.id;
+
+  // ---- Funder onboarding Stage 6 — non-Zedcor branch ----
+  // Run Funder-shaped checks for any project whose organization_id is
+  // present AND is not Zedcor. Reads architecture.scoring.thresholds
+  // instead of fetchActiveScoringConfig (Zedcor's path).
+  const projectOrgId = project.organization_id ?? null;
+  if (projectOrgId && zedcorOrgId && projectOrgId !== zedcorOrgId && orgArchitectures) {
+    const orgEntry = orgArchitectures.get(projectOrgId);
+    if (orgEntry) {
+      const verdict = verifyFunderProject({ project, architecture: orgEntry.architecture });
+      await writeLog(admin, 'check_rationale', {
+        message: `funder verify · ${project_id} · ${orgEntry.slug} · ${verdict.verified ? 'pass' : 'fail'} · threshold=${verdict.verified_threshold_0_100}/100`,
+        project_id,
+        organization_id: projectOrgId,
+        kernel: 'funder',
+        checks: verdict.checks,
+        verified_threshold_0_100: verdict.verified_threshold_0_100,
+      });
+      return {
+        project_id,
+        verified: verdict.verified,
+        verifier_pass_count: (project.verifier_pass_count ?? 0) + 1,
+        verifier_notes: verdict.notes,
+        failures: verdict.failures,
+        null_coordinate: false,
+        primary_failure: verdict.failures[0] ?? null,
+        rewritten_rationale: null,
+      };
+    }
+  }
 
   const recomputed_branch = recomputeNearestBranchId(project, branches);
   const null_coordinate = recomputed_branch === null;
@@ -803,7 +861,16 @@ export async function GET(req: Request) {
     records_new: number;
     status: 'running' | 'success' | 'failed';
     error_message: string | null;
+    // Phase 2A completion (migration 20260511_phase2a_completion_org_id_rls.sql)
+    // added NOT NULL on this column. Verifier cycles process multiple orgs
+    // in a single run; the cycle-level row is attributed to Zedcor as the
+    // canonical platform org.
+    organization_id: string;
   };
+  const platformOrgId = await getPlatformOrgId();
+  if (!platformOrgId) {
+    return NextResponse.json({ error: 'platform org (zedcor) not resolvable for agent_runs attribution' }, { status: 500 });
+  }
   const runRowPayload: AgentRunInsert = {
     agent_name: 'verifier',
     started_at: now.toISOString(),
@@ -812,6 +879,7 @@ export async function GET(req: Request) {
     records_new: 0,
     status: 'running',
     error_message: null,
+    organization_id: platformOrgId,
   };
   const runInsertRes = await (
     admin.from('agent_runs') as unknown as {
@@ -866,6 +934,42 @@ export async function GET(req: Request) {
   const scoringConfig = await fetchActiveScoringConfig();
   const SCORE_TOLERANCE = scoringConfig.score_tolerance ?? SCORE_TOLERANCE_FALLBACK;
 
+  // Funder onboarding Stage 6 — pre-resolve org architectures for any
+  // non-Zedcor projects in the queue. Cached for the cycle. Defensively
+  // wrapped: any failure of the lookup or per-org loadOrgArchitecture
+  // must NOT 500 the cycle — Funder-shaped projects whose architecture
+  // doesn't resolve fall back to the generic verifier flow.
+  // zedcorOrgId reuses the platform-org resolution done above (Zedcor is
+  // the canonical platform org) — no second supabase round-trip needed.
+  const zedcorOrgId: string | null = platformOrgId;
+  const orgArchitectures = new Map<string, { slug: string; architecture: OrgArchitecture }>();
+  try {
+    const distinctOrgIds = Array.from(
+      new Set(queue.map((p) => p.organization_id).filter((id): id is string => id != null && id !== zedcorOrgId)),
+    );
+    for (const orgId of distinctOrgIds) {
+      try {
+        const loaded = await loadOrgArchitecture(orgId);
+        orgArchitectures.set(orgId, { slug: loaded.org.slug, architecture: loaded.architecture });
+      } catch (err) {
+        await writeLog(admin, 'error', {
+          message: `verifier: loadOrgArchitecture failed for ${orgId} · ${(err as Error).message}`,
+          reason: 'org_load_failed',
+          organization_id: orgId,
+        });
+      }
+    }
+  } catch (err) {
+    // Total failure of the org-resolution block must not 500 the cycle.
+    // Log + continue; non-Zedcor projects with unresolved architecture
+    // simply skip the funder verifier dispatch and behave as if they
+    // were Zedcor (the existing fall-through).
+    await writeLog(admin, 'error', {
+      message: `verifier: org architecture pre-resolution failed · ${(err as Error).message}`,
+      reason: 'org_preresolution_failed',
+    });
+  }
+
   // 6. Per-project loop
   const cycleStart = Date.now();
   const stats: CycleStats = {
@@ -900,7 +1004,15 @@ export async function GET(req: Request) {
 
     let verdict: ProjectVerdict;
     try {
-      verdict = await verifyOneProject({ admin, project, branches, customers, scoreTolerance: SCORE_TOLERANCE });
+      verdict = await verifyOneProject({
+        admin,
+        project,
+        branches,
+        customers,
+        scoreTolerance: SCORE_TOLERANCE,
+        orgArchitectures,
+        zedcorOrgId,
+      });
     } catch (err) {
       // Unexpected error during checks. Log + continue.
       await writeLog(admin, 'error', {

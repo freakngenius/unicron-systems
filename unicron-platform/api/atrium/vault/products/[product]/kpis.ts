@@ -47,21 +47,33 @@ export default async function handler(
   //  1. process.cwd() + '../unicron-knowledge/...'  (monorepo layout on Vercel)
   //  2. process.cwd() + 'unicron-knowledge/...'     (if cwd IS the repo root)
 
-  const relativePath = join('wiki', 'products', product, 'kpis.md');
-
-  const candidates = [
-    // Vercel deploys from unicron-platform/ directory — vault is one level up
-    resolve(process.cwd(), '..', 'unicron-knowledge', relativePath),
-    // Deployed from monorepo root
-    resolve(process.cwd(), 'unicron-knowledge', relativePath),
-    // Local dev: __dirname is unicron-platform/api/atrium/vault/products/[product]/
-    resolve(__dirname, '..', '..', '..', '..', '..', '..', 'unicron-knowledge', relativePath),
+  // Atrium audit fix item #2: the canonical KPI file location is
+  // wiki/architecture/products/<product>/kpis.md (where the unicron-knowledge
+  // repo actually stores them). Keep wiki/products/<product>/kpis.md as a
+  // fallback for the original spec path so older vault layouts still resolve.
+  const relativePaths = [
+    join('wiki', 'architecture', 'products', product, 'kpis.md'),
+    join('wiki', 'products', product, 'kpis.md'),
   ];
 
-  // Validate none of the resolved paths escape unicron-knowledge/wiki/products/
+  // Each relative path expands into three deploy-layout candidates.
+  const candidates: string[] = [];
+  for (const relativePath of relativePaths) {
+    candidates.push(
+      // Vercel deploys from unicron-platform/ directory — vault is one level up
+      resolve(process.cwd(), '..', 'unicron-knowledge', relativePath),
+      // Deployed from monorepo root
+      resolve(process.cwd(), 'unicron-knowledge', relativePath),
+      // Local dev: __dirname is unicron-platform/api/atrium/vault/products/[product]/
+      resolve(__dirname, '..', '..', '..', '..', '..', '..', 'unicron-knowledge', relativePath),
+    );
+  }
+
+  // Validate none of the resolved paths escape unicron-knowledge/wiki/.../<product>/.
+  const allowedSuffixes = relativePaths.map((p) => join('unicron-knowledge', p));
   for (const candidate of candidates) {
     const normalised = normalize(candidate);
-    if (!normalised.includes(join('unicron-knowledge', 'wiki', 'products', product))) {
+    if (!allowedSuffixes.some((suffix) => normalised.includes(suffix))) {
       // Path traversal attempt — skip
       continue;
     }
@@ -79,7 +91,9 @@ export default async function handler(
   // All candidates failed — return 404 with helpful note
   res.status(404).json({
     error: `KPI file not found for product: ${product}`,
-    note: 'Expected at unicron-knowledge/wiki/products/<product>/kpis.md',
+    note:
+      'Expected at unicron-knowledge/wiki/architecture/products/<product>/kpis.md ' +
+      '(or wiki/products/<product>/kpis.md as legacy fallback)',
     tried: candidates,
   });
 }

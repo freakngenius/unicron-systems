@@ -1,169 +1,132 @@
-// Expenses.tsx — Sprint 5 Stream F
-// Categorized monthly expense view.
-// Categories: infrastructure | ai | communication | payroll | contractors |
-//             marketing | other
-// Groups connected_services rows by category, plus manual line items.
-// A "Manual" badge appears on entries without last_billed_at.
+// Expenses.tsx — Money > Expenses sub-tab
+// Reads /api/atrium/accounts (Notion Accounts DB mirror). Same source as the
+// Money tab Burn metric and the Accounts sub-tab — the three surfaces are
+// guaranteed consistent.
+//
+// One row per paid+active account: name, category, monthly cost, billing
+// cadence (Account Type), status. Sorted by monthly equivalent desc. Total
+// row at the bottom equals the Burn number.
 
-import { useState, useEffect, useCallback } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
-// ── Types ─────────────────────────────────────────────────────────────────────
+// ── Types (shape of /api/atrium/accounts response) ────────────────────────────
 
-interface ConnectedService {
-  id: string;
-  name: string;
-  category: string | null;
-  monthly_cost_usd: number | null;
-  last_billed_at: string | null;
+type AccountRow = {
+  notion_page_id: string;
+  notion_url: string | null;
+  service: string;
+  status: 'Active' | 'Paused' | 'Canceled' | null;
+  category: string[];
+  subscription_usd: number | null;
+  account_type: 'Monthly' | 'Yearly' | '1-time' | 'API' | 'Free' | null;
+  last_billed: string | null;
+  start_date: string | null;
   notes: string | null;
-  status: string;
+};
+
+type AccountsResponse = {
+  notion_url: string;
+  paid: AccountRow[];
+  free: AccountRow[];
+  paid_total_usd: number;
+  paid_monthly_equivalent_usd: number;
+  fetched_at: string;
+};
+
+// ── Styling ───────────────────────────────────────────────────────────────────
+
+const STATUS_TINT: Record<NonNullable<AccountRow['status']>, { bg: string; fg: string }> = {
+  Active:   { bg: 'rgba(46, 142, 102, 0.12)',  fg: '#2E8E66' },
+  Paused:   { bg: 'rgba(194, 138, 31, 0.14)',  fg: '#C28A1F' },
+  Canceled: { bg: 'rgba(225, 75, 75, 0.12)',   fg: '#E14B4B' },
+};
+
+const CATEGORY_TINT: Record<string, string> = {
+  AI:             '#7C3AED',
+  Communication:  '#E8763A',
+  Infrastructure: '#6081BE',
+  Integration:    '#46506A',
+  Pathfinder:     '#E8763A',
+};
+
+function catColor(name: string): string {
+  return CATEGORY_TINT[name] ?? '#7E8AA3';
 }
 
-// ── Category config (matching v3-money.jsx color palette) ─────────────────────
+// ── Formatting ────────────────────────────────────────────────────────────────
 
-const CATEGORIES: Array<{ id: string; label: string; color: string }> = [
-  { id: 'infrastructure', label: 'Infrastructure',  color: '#6081BE' },
-  { id: 'ai',            label: 'AI / LLM',         color: '#7C3AED' },
-  { id: 'communication', label: 'Communication',    color: 'var(--accent)' },
-  { id: 'payroll',       label: 'Payroll',          color: '#C28A1F' },
-  { id: 'contractors',   label: 'Contractors',      color: '#EC4899' },
-  { id: 'marketing',     label: 'Marketing',        color: '#C026D3' },
-  { id: 'other',         label: 'Other',            color: '#6B7280' },
-];
-
-function isManual(svc: ConnectedService): boolean {
-  return !svc.last_billed_at || (svc.notes?.toLowerCase().includes('manual') ?? false);
+function fmtUsd2(n: number): string {
+  return `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
-// ── Category section ──────────────────────────────────────────────────────────
+function monthlyEquivalent(row: AccountRow): number {
+  const v = row.subscription_usd ?? 0;
+  if (row.account_type === 'Yearly') return v / 12;
+  return v;
+}
 
-function CategorySection({
-  cat,
-  services,
-}: {
-  cat: (typeof CATEGORIES)[0];
-  services: ConnectedService[];
-}) {
-  const [open, setOpen] = useState(true);
-  const total = services.reduce((s, svc) => s + (svc.monthly_cost_usd ?? 0), 0);
-
-  if (services.length === 0) return null;
-
+function StatusPill({ status }: { status: AccountRow['status'] }) {
+  if (!status) return <span className="text-text-muted mono text-[11px]">—</span>;
+  const tint = STATUS_TINT[status];
   return (
-    <div className="border border-border-default rounded-xl overflow-hidden">
-      <button
-        onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center justify-between px-4 py-3 bg-bg-card hover:bg-bg-raised transition-colors"
-      >
-        <div className="flex items-center gap-3">
+    <span
+      className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full mono text-[10px] uppercase tracking-[0.1em] font-semibold"
+      style={{ background: tint.bg, color: tint.fg }}
+    >
+      <span className="w-1.5 h-1.5 rounded-full" style={{ background: tint.fg }} />
+      {status}
+    </span>
+  );
+}
+
+function CategoryChips({ categories }: { categories: string[] }) {
+  if (categories.length === 0) return <span className="text-text-muted mono text-[11px]">—</span>;
+  return (
+    <div className="flex flex-wrap gap-1">
+      {categories.map((c) => {
+        const color = catColor(c);
+        return (
           <span
-            className="w-2.5 h-2.5 rounded-sm"
-            style={{ backgroundColor: cat.color }}
-          />
-          <span className="mono text-[11px] font-semibold text-text-primary uppercase tracking-[0.12em]">
-            {cat.label}
-          </span>
-          <span className="mono text-[10px] text-text-muted">
-            {services.length} {services.length === 1 ? 'item' : 'items'}
-          </span>
-        </div>
-        <div className="flex items-center gap-4">
-          <span className="mono text-[13px] font-semibold text-text-primary tabular-nums">
-            ${total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/mo
-          </span>
-          <span
-            className="mono text-[10px] text-text-muted"
-            style={{ transform: open ? 'none' : 'rotate(-90deg)', display: 'inline-block', transition: 'transform 200ms ease' }}
+            key={c}
+            className="mono text-[10px] px-2 py-0.5 rounded-full font-semibold uppercase tracking-[0.08em]"
+            style={{ background: color + '22', color }}
           >
-            ▾
+            {c}
           </span>
-        </div>
-      </button>
-
-      {open && (
-        <div>
-          {services.map((svc, i) => (
-            <div
-              key={svc.id}
-              className={[
-                'flex items-center gap-3 px-4 py-2.5',
-                i < services.length - 1 ? 'border-b border-border-default' : '',
-              ].join(' ')}
-            >
-              <div className="flex-1">
-                <div className="flex items-center gap-2">
-                  <span className="mono text-[12px] text-text-primary">{svc.name}</span>
-                  {isManual(svc) && (
-                    <span className="mono text-[9px] px-1.5 py-0.5 rounded bg-[#C28A1F]/15 text-[#C28A1F] uppercase tracking-[0.08em]">
-                      Manual
-                    </span>
-                  )}
-                </div>
-                {svc.notes && (
-                  <div className="mono text-[10px] text-text-muted mt-0.5 truncate max-w-[400px]">
-                    {svc.notes}
-                  </div>
-                )}
-              </div>
-              <div className="flex items-center gap-3 shrink-0">
-                {svc.last_billed_at && (
-                  <span className="mono text-[10px] text-text-muted">
-                    Billed{' '}
-                    {new Date(svc.last_billed_at).toLocaleDateString('en-US', {
-                      month: 'short',
-                      day: 'numeric',
-                    })}
-                  </span>
-                )}
-                <span className="mono text-[12px] text-text-primary tabular-nums min-w-[70px] text-right">
-                  {svc.monthly_cost_usd != null
-                    ? `$${svc.monthly_cost_usd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                    : '—'}
-                </span>
-              </div>
-            </div>
-          ))}
-
-          {/* Category total */}
-          <div className="flex items-center justify-between px-4 py-2.5 border-t border-border-default bg-bg-raised">
-            <span className="mono text-[10px] uppercase tracking-[0.14em] text-text-muted">
-              {cat.label} total
-            </span>
-            <span
-              className="mono text-[12px] font-semibold tabular-nums"
-              style={{ color: cat.color }}
-            >
-              ${total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/mo
-            </span>
-          </div>
-        </div>
-      )}
+        );
+      })}
     </div>
   );
 }
 
 // ── Main export ───────────────────────────────────────────────────────────────
 
+const COLS = [
+  { key: 'service',      label: 'Service',         align: 'left'  as const },
+  { key: 'category',     label: 'Category',        align: 'left'  as const },
+  { key: 'monthly',      label: 'Monthly cost',    align: 'right' as const },
+  { key: 'cadence',      label: 'Billing cadence', align: 'left'  as const },
+  { key: 'status',       label: 'Status',          align: 'left'  as const },
+];
+
 export function Expenses() {
-  const [services, setServices] = useState<ConnectedService[]>([]);
+  const [data, setData] = useState<AccountsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [hint, setHint] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
+    setHint(null);
     try {
-      const res = await fetch('/api/atrium/connected-services');
-      const json = (await res.json()) as {
-        services?: ConnectedService[];
-        error?: string;
-      };
-      if (!res.ok) throw new Error(json.error ?? 'Load failed');
-      // Exclude sentinel/meta rows
-      const real = (json.services ?? []).filter(
-        (s) => s.name !== '__runway_config__' && s.category !== '__meta__',
-      );
-      setServices(real);
+      const res = await fetch('/api/atrium/accounts');
+      const json = (await res.json()) as Partial<AccountsResponse> & { error?: string; hint?: string };
+      if (!res.ok) {
+        setHint(json.hint ?? null);
+        throw new Error(json.error ?? `Failed to load expenses (HTTP ${res.status})`);
+      }
+      setData(json as AccountsResponse);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Unknown error');
     } finally {
@@ -172,10 +135,11 @@ export function Expenses() {
   }, []);
 
   useEffect(() => {
-    void load();
+    const t = setTimeout(() => { void load(); }, 0);
+    return () => clearTimeout(t);
   }, [load]);
 
-  if (loading) {
+  if (loading && !data) {
     return (
       <div className="space-y-2">
         {[0, 1, 2, 3].map((i) => (
@@ -188,10 +152,16 @@ export function Expenses() {
   if (error) {
     return (
       <div className="bg-[#E14B4B]/10 border border-[#E14B4B]/30 rounded-xl px-5 py-4">
-        <div className="mono text-[12px] text-[#E14B4B]">{error}</div>
+        <div className="mono text-[11px] uppercase tracking-[0.14em] text-[#E14B4B] mb-1">
+          Failed to load
+        </div>
+        <div className="mono text-[12px] text-[#E14B4B] mb-1">{error}</div>
+        {hint && (
+          <div className="text-[12px] text-text-secondary mt-2 leading-relaxed">{hint}</div>
+        )}
         <button
           onClick={() => void load()}
-          className="mono text-[10px] uppercase tracking-[0.12em] mt-2 text-text-secondary hover:text-text-primary transition-colors"
+          className="mono text-[10px] uppercase tracking-[0.12em] mt-3 text-text-secondary hover:text-text-primary transition-colors"
         >
           Retry
         </button>
@@ -199,52 +169,105 @@ export function Expenses() {
     );
   }
 
-  // Bucket services by category
-  const buckets = new Map<string, ConnectedService[]>();
-  for (const svc of services) {
-    const cat = svc.category ?? 'other';
-    const key = CATEGORIES.find((c) => c.id === cat) ? cat : 'other';
-    if (!buckets.has(key)) buckets.set(key, []);
-    buckets.get(key)!.push(svc);
-  }
+  if (!data) return null;
 
-  const grandTotal = services.reduce((sum, s) => sum + (s.monthly_cost_usd ?? 0), 0);
+  // Server already returns paid sorted by subscription_usd desc. We display
+  // monthly equivalents (Yearly ÷ 12) and re-sort by that so the on-screen
+  // ordering matches the on-screen monthly numbers.
+  const rows = [...data.paid].sort((a, b) => monthlyEquivalent(b) - monthlyEquivalent(a));
+  const total = data.paid_monthly_equivalent_usd;
 
   return (
-    <div className="space-y-3">
-      {/* Category sections */}
-      {CATEGORIES.map((cat) => (
-        <CategorySection
-          key={cat.id}
-          cat={cat}
-          services={buckets.get(cat.id) ?? []}
-        />
-      ))}
+    <div className="space-y-4">
+      <div className="flex items-baseline justify-between">
+        <div>
+          <h2 className="text-[18px] font-semibold text-text-primary" style={{ fontFamily: 'var(--font-display)', letterSpacing: -0.3 }}>
+            Expenses
+          </h2>
+          <div className="text-[11.5px] text-text-muted mt-0.5">
+            Source: Notion Accounts · paid + active · monthly equivalents
+          </div>
+        </div>
+        <span className="mono text-[11px] text-text-muted">
+          {rows.length} {rows.length === 1 ? 'service' : 'services'}
+        </span>
+      </div>
 
-      {services.length === 0 && (
-        <div className="bg-bg-card border border-border-default rounded-xl px-5 py-8 text-center">
+      {rows.length === 0 ? (
+        <div className="bg-white border border-border-default rounded-xl px-5 py-8 text-center">
           <div className="mono text-[11px] uppercase tracking-[0.18em] text-text-muted">
-            No expenses tracked
+            No paid + active accounts
           </div>
           <div className="mono text-[11px] text-text-muted mt-1">
-            Register services in the Accounts tab to track expenses.
+            Mark accounts as paid (Subscription &gt; 0) and Active in the Notion Accounts database.
           </div>
+        </div>
+      ) : (
+        <div className="overflow-x-auto rounded-xl border border-border-default bg-white">
+          <table className="w-full min-w-[720px]">
+            <thead>
+              <tr className="border-b border-border-default">
+                {COLS.map((c) => (
+                  <th
+                    key={c.key}
+                    className={`px-4 py-2.5 mono text-[9px] uppercase tracking-[0.16em] text-text-muted whitespace-nowrap text-${c.align}`}
+                  >
+                    {c.label}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => {
+                const monthly = monthlyEquivalent(r);
+                return (
+                  <tr key={r.notion_page_id} className="border-b border-border-default last:border-b-0 hover:bg-bg-raised transition-colors">
+                    <td className="px-4 py-3 text-[13px] text-text-primary font-medium">
+                      {r.notion_url ? (
+                        <a href={r.notion_url} target="_blank" rel="noopener noreferrer" className="hover:underline">
+                          {r.service}
+                        </a>
+                      ) : (
+                        r.service
+                      )}
+                    </td>
+                    <td className="px-4 py-3"><CategoryChips categories={r.category} /></td>
+                    <td className="px-4 py-3 mono text-[12px] text-text-primary text-right tabular-nums whitespace-nowrap">
+                      {fmtUsd2(monthly)}
+                      {r.account_type === 'Yearly' && (
+                        <span className="block mono text-[9px] text-text-muted tabular-nums">
+                          {fmtUsd2(r.subscription_usd ?? 0)}/yr
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 mono text-[11px] text-text-secondary whitespace-nowrap">
+                      {r.account_type ?? '—'}
+                    </td>
+                    <td className="px-4 py-3"><StatusPill status={r.status} /></td>
+                  </tr>
+                );
+              })}
+              <tr className="bg-bg-raised">
+                <td className="px-4 py-3" colSpan={2}>
+                  <span className="mono text-[10px] uppercase tracking-[0.14em] text-text-muted">
+                    Total (monthly equivalent)
+                  </span>
+                </td>
+                <td className="px-4 py-3 mono text-[13px] font-semibold text-text-primary text-right tabular-nums whitespace-nowrap">
+                  {fmtUsd2(total)}
+                </td>
+                <td className="px-4 py-3" colSpan={2}>
+                  <span className="mono text-[10px] text-text-muted">= Burn (30d, services)</span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       )}
 
-      {/* Grand total */}
-      {grandTotal > 0 && (
-        <div className="flex justify-end pt-2">
-          <div className="bg-bg-card border border-border-default rounded-lg px-4 py-2.5 flex items-center gap-3">
-            <span className="mono text-[10px] uppercase tracking-[0.14em] text-text-muted">
-              Grand total
-            </span>
-            <span className="mono text-[14px] font-semibold text-text-primary tabular-nums">
-              ${grandTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/mo
-            </span>
-          </div>
-        </div>
-      )}
+      <div className="mono text-[10px] text-text-faint">
+        Fetched {new Date(data.fetched_at).toLocaleString('en-US')}
+      </div>
     </div>
   );
 }

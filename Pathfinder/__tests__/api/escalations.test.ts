@@ -42,6 +42,9 @@ describe.runIf(haveCreds)('/api/agents/escalations', () => {
 
     // Seed three rows: one above threshold (escalated), one at the gate
     // boundary (one pass — should NOT escalate), and a pristine row.
+    // Zedcor's organization_id is required on every projects insert since
+    // the Phase 2A completion migration made organization_id NOT NULL.
+    const ZEDCOR_ORG_ID = '6cd87740-7c72-4337-ac79-316a54242eef';
     const seed = [
       {
         id: ESCALATED_ID,
@@ -51,6 +54,7 @@ describe.runIf(haveCreds)('/api/agents/escalations', () => {
         verified: false,
         verifier_notes: 'failed branch attribution twice',
         verifier_pass_count: 2,
+        organization_id: ZEDCOR_ORG_ID,
       },
       {
         id: PASS_ONCE_ID,
@@ -60,6 +64,7 @@ describe.runIf(haveCreds)('/api/agents/escalations', () => {
         verified: false,
         verifier_notes: 'one pass count',
         verifier_pass_count: 1,
+        organization_id: ZEDCOR_ORG_ID,
       },
       {
         id: PRISTINE_ID,
@@ -67,6 +72,7 @@ describe.runIf(haveCreds)('/api/agents/escalations', () => {
         source_id: PRISTINE_ID,
         title: 'escalation test · pristine',
         verifier_pass_count: 0,
+        organization_id: ZEDCOR_ORG_ID,
       },
     ];
     const { error } = await admin.from('projects').insert(seed);
