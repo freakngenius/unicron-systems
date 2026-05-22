@@ -1155,3 +1155,26 @@ The 4 adapter files modified in this PR (`propublica-nonprofit-explorer.ts`, `ir
 **Implements:** Barrel export for the Inngest function set. Adds `funderEnrichAdjacency` (PR #449). Existing entries unchanged.
 **Last verified against spec:** 2026-05-22.
 **Drift:** none.
+
+---
+
+## Funder UX pass (PR #464)
+
+**State:** PR #464 open on `funder-ux-pass`. Branched off `origin/main` post-merge of PR #463. End-to-end UX repair against the audit gap list in `Pathfinder/docs/AUDIT-funder-ux-pass.md`.
+
+### New helpers + lib changes
+
+#### Pathfinder/lib/agents/funder/leadView.ts
+**Implements:** Build-Spec §4 Stage 8 (lead-card shape) + `ui_plan.lead_card_layout` field projection. Projects a `pathfinder.projects` row into the flat shape the funder LeadCard renders. Field names align with `architecture.lead_unit.schema` (`org_name`, `thesis_area`, `founders`, `raise_target`, `score`, `legal_form`, `founded_date`, `fundraising_stage`, `geo_hub`, `source`) so `lead[field]` lookup in `LeadCardList` picks them up via `ui_plan.lead_card_layout.primary_fields` / `secondary_fields`. Reads enrichment-derived fields when present (`funder_enrichment.*`) and falls back to qualifier-time signals (`funder_inferred_thesis`, `funder_geo_hub`). Labels (thesis area, hub, stage, legal form, source) come from `architecture.lead_unit.schema.enum_values` → human labels per the operator ack to drive customer copy from the architecture vocabulary.
+**Last verified against spec:** 2026-05-22. Live driven on 65 Funder rows.
+**Drift:** none (new file, additive).
+
+#### Pathfinder/lib/metrics/chartQueries.ts
+**Implements:** Build-Spec §4 Stage 9 — chart-data resolvers consumed by the `[slug]` dashboard's `FunderChartGrid`. Each `ui_plan.charts` entry has a metric_id; this module owns the per-metric_id query that turns raw `pathfinder.projects` rows into a `[{ label, value }]` series the SVG renderer draws. Funder ui_plan.charts: `count_by_thesis` (bar, grouped by thesis_area, reads `funder_enrichment.thesis_area` then falls back to `funder_inferred_thesis`); `verified_count` (line, 8-week ISO-week series of `verified=true` projects). Adding a chart metric_id is additive — Zedcor's dashboards live outside `[slug]` and do not import this module.
+**Last verified against spec:** 2026-05-22.
+**Drift:** none.
+
+#### Pathfinder/lib/metrics/kpiQueries.ts
+**Implements:** Build-Spec §4 Stage 9 — `actively_raising_count` extended to read both legacy `raw_payload.fundraising_stage` and enrichment-derived `raw_payload.funder_enrichment.fundraising_stage`. The verifier reads the same enrichment block; this keeps the KPI honest against the actual enrichment surface that ships in Funder rows. `sources_live` unchanged (counts `architecture.sources[].type === 'registered'`); the persisted `organizations.architecture.sources` row was updated outside the codebase (Supabase SQL) to flip 4 live adapters from `pending` to `registered`, and `Pathfinder/Pathfinder-Funder-Architecture.json` was synced.
+**Last verified against spec:** 2026-05-22.
+**Drift:** none.
