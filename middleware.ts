@@ -53,18 +53,47 @@ export function middleware(req: NextRequest) {
   const host = req.headers.get("host");
   if (host === FUNDER_HOST) {
     const { pathname, search } = req.nextUrl;
-    if (pathname === "/pathfinder" || pathname.startsWith("/pathfinder/")) {
+    // Strip the Pathfinder basePath if present so all routing
+    // decisions below operate on the canonical app-relative path.
+    // Pathfinder's <Link href="/leads"> renders as
+    // /pathfinder/leads in HTML because Next.js auto-prepends the
+    // basePath; on the funder host that needs to land on the
+    // org-scoped /pathfinder/funder/leads, not the global Zedcor
+    // /pathfinder/leads.
+    const stripped = pathname === "/pathfinder"
+      ? "/"
+      : pathname.startsWith("/pathfinder/")
+        ? pathname.slice("/pathfinder".length)
+        : pathname;
+
+    // Global (non-tenant) Pathfinder routes: API handlers + auth
+    // callback. These do NOT take an org slug. Preserve the original
+    // basePath so the Pathfinder app still resolves the route.
+    if (stripped.startsWith("/api/") || stripped.startsWith("/auth/")) {
       return NextResponse.rewrite(
-        new URL(`${PATHFINDER_ORIGIN}${pathname}${search}`),
+        new URL(`${PATHFINDER_ORIGIN}/pathfinder${stripped}${search}`),
       );
     }
-    if (pathname === "/") {
+
+    // Already explicitly scoped to /funder/* — pass through as
+    // /pathfinder/funder/* on the origin.
+    if (stripped === "/funder" || stripped.startsWith("/funder/")) {
+      return NextResponse.rewrite(
+        new URL(`${PATHFINDER_ORIGIN}/pathfinder${stripped}${search}`),
+      );
+    }
+
+    // Bare root → funder dashboard.
+    if (stripped === "/") {
       return NextResponse.rewrite(
         new URL(`${PATHFINDER_ORIGIN}/pathfinder/funder${search}`),
       );
     }
+
+    // Tenant-scope everything else: /leads, /pipeline, /leads/<id>,
+    // /settings (→ org-scoped not-found backstop), /onboarding/* (same).
     return NextResponse.rewrite(
-      new URL(`${PATHFINDER_ORIGIN}/pathfinder${pathname}${search}`),
+      new URL(`${PATHFINDER_ORIGIN}/pathfinder/funder${stripped}${search}`),
     );
   }
   if (host === INTERNAL_HOST) {

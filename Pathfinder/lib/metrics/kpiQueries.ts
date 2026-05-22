@@ -38,20 +38,24 @@ async function verifiedCount7d(orgId: string): Promise<KpiValue> {
   return count ?? 0;
 }
 
-/** Projects with raw_payload.fundraising_stage = 'actively-raising'. */
+/** Projects with fundraising_stage = 'actively-raising'. Reads two paths:
+ *  - raw_payload.fundraising_stage              (legacy, pre-enrichment)
+ *  - raw_payload.funder_enrichment.fundraising_stage (current — Sonar enricher writes here)
+ *  The verifier reads the same enrichment block; this keeps the KPI
+ *  honest against the actual enrichment surface. */
 async function activelyRaisingCount(orgId: string): Promise<KpiValue> {
-  // Postgres jsonb path: raw_payload->>'fundraising_stage'.
-  // The supabase-js client doesn't expose a clean ->'x' DSL, so use
-  // the .filter() escape hatch with a JSONB cast.
   const { data, error } = await admin()
     .from('projects')
     .select('id, raw_payload')
     .eq('organization_id', orgId)
     .limit(10_000);
   if (error || !data) return null;
-  const count = (data as Array<{ raw_payload: Record<string, unknown> | null }>).filter(
-    (r) => (r.raw_payload?.fundraising_stage as string | undefined) === 'actively-raising',
-  ).length;
+  const count = (data as Array<{ raw_payload: Record<string, unknown> | null }>).filter((r) => {
+    const payload = r.raw_payload ?? {};
+    const legacy = payload.fundraising_stage as string | undefined;
+    const enriched = (payload.funder_enrichment as { fundraising_stage?: string } | undefined)?.fundraising_stage;
+    return legacy === 'actively-raising' || enriched === 'actively-raising';
+  }).length;
   return count;
 }
 

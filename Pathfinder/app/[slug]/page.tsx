@@ -1,38 +1,48 @@
 // app/[slug]/page.tsx
-// Per-org dashboard landing page. Reads org from OrgContextProvider (set by layout).
+// Per-org dashboard landing page. Reads org from OrgContextProvider
+// (set by layout). Renders the tailored Pathfinder per ui_plan with
+// real per-org lead cards and chart series.
 //
-// Phase 2A: routing shell + nav.
-// Phase 2E slice 4: best-effort operator_viewed transition on first render.
-// Build-Out Pass Slice 2 (Spec: SPEC - Pathfinder Build-Out Pass.md):
-//   - Resolves architecture via resolveArchitecture (BASE_ARCHITECTURE
-//     fills missing fields, including the default ui_plan).
-//   - Renders the tailored Pathfinder per ui_plan: KPIStrip + filter
-//     sidebar + chart placeholders + ui_plan-aware LeadCard list.
-//   - DoD smoke step 8 (scripts/dod-smoke.ts) probes for
-//     data-kpi-strip / data-lead-card / data-chart markers — present
-//     unconditionally so the harness flips from BLOCKED to PASS once
-//     the route resolves.
+// Funder UX pass:
+//   - Nav stays tenant-scoped: hrefs are bare paths (`/`, `/leads`,
+//     `/pipeline`). The unicron-systems edge middleware rewrites the
+//     funder host's bare paths under `/pathfinder/funder/*` so they
+//     resolve to the org-scoped [slug] routes.
+//   - Settings + onboarding/connectors removed from the customer nav
+//     (org config is operator-only).
+//   - Lead-card list now queries the correct `organization_id`
+//     column (was `org_id`, returned zero rows).
+//   - Lead rows are projected through `projectFunderLead` so the
+//     ui_plan.lead_card_layout fields resolve from
+//     `raw_payload.funder_enrichment.*` and qualifier-time signals.
+//   - Charts render real per-org series via `getChartSeries`
+//     (count_by_thesis, verified_count).
+//   - Raw architecture JSON disclosure removed; org config is
+//     operator-only.
 
 import Link from 'next/link';
 import { supabaseAdmin } from '@/lib/supabase';
-import type { Organization } from '@/lib/types';
+import type { Organization, Project } from '@/lib/types';
 import { flipToOperatorViewed } from '@/lib/agents/operator-viewed';
 import { resolveArchitecture } from '@/lib/config/resolveArchitecture';
 import { getKpiValue, type KpiValue } from '@/lib/metrics/kpiQueries';
+import { getChartSeries, type ChartSeries } from '@/lib/metrics/chartQueries';
 import { KPIStrip } from '@/components/KPIStrip';
 import { FilterSidebar } from '@/components/FilterSidebar';
-import { ChartGrid } from '@/components/ChartPlaceholder';
+import { FunderChartGrid } from '@/components/Chart';
 import { LeadCardList, type LeadLike } from '@/components/LeadCard';
+import { projectFunderLead } from '@/lib/agents/funder/leadView';
 
 type Props = { params: Promise<{ slug: string }> };
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
+const DASHBOARD_LEAD_LIMIT = 6;
+
 export default async function OrgPage({ params }: Props) {
   const { slug } = await params;
 
-  // Re-fetch org for display (layout already validated it exists + auth).
   const adminAny = supabaseAdmin() as unknown as { from: (t: string) => any };
   const { data: org } = (await adminAny
     .from('organizations')
@@ -42,40 +52,53 @@ export default async function OrgPage({ params }: Props) {
 
   const rawArch = (org?.architecture ?? null) as Record<string, unknown> | null;
   const architecture = resolveArchitecture(rawArch);
-  const uiPlan = architecture.ui_plan!; // resolveArchitecture always populates ui_plan from BASE_ARCHITECTURE
+  const uiPlan = architecture.ui_plan!;
+  const vocab = architecture.vocabulary ?? {};
+  const leadsPlural = (vocab.leads as string | undefined) ?? 'leads';
 
-  // Phase 2E slice 4 — first-render operator_viewed transition. Only
-  // flips when current status is `ready_to_view`; other states preserve
-  // their semantics. Best-effort: helper swallows update failures.
+  // Phase 2E slice 4 — first-render operator_viewed transition.
   if (org?.id) {
     await flipToOperatorViewed(org.id, org.status ?? null);
   }
 
-  // Lean per-org leads fetch (limit 5). Slice 2 only needs cards to
-  // render with whatever real data exists; the schema-driven query
-  // wiring (filters, scoring, etc.) is Slice 3+ scope.
+  // Per-org leads — surface top-scored opportunities for the dashboard.
   let leads: LeadLike[] = [];
+  let verifiedCount = 0;
   if (org?.id) {
     const projectsClient = supabaseAdmin() as unknown as { from: (t: string) => any };
-    // Stage 10 bug fix — the projects table scopes by `organization_id`,
-    // not `org_id`. The previous filter silently returned 0 rows for
-    // every non-Zedcor org (Funder, Realberry, Internal). All three
-    // are unblocked by this single fix; see Stage 10 §"pre-existing
-    // platform bug" in the worktree handoff.
     const { data: rows } = (await projectsClient
       .from('projects')
       .select('*')
       .eq('organization_id', org.id)
-      .limit(5)) as { data: LeadLike[] | null; error: unknown };
-    if (Array.isArray(rows)) leads = rows;
+      .order('verified', { ascending: false, nullsFirst: false })
+      .order('score', { ascending: false, nullsFirst: false })
+      .limit(DASHBOARD_LEAD_LIMIT)) as { data: Project[] | null; error: unknown };
+    if (Array.isArray(rows)) {
+      leads = rows.map((r) => projectFunderLead(r) as unknown as LeadLike);
+    }
+    const { count: vc } = (await projectsClient
+      .from('projects')
+      .select('id', { count: 'exact', head: true })
+      .eq('organization_id', org.id)
+      .eq('verified', true)) as { count: number | null };
+    verifiedCount = vc ?? 0;
   }
 
-  // Resolve KPI values via stub (returns null for unmapped metric_ids).
+  // KPI values via metric_id map.
   const kpiValues: Record<string, KpiValue> = {};
   if (org?.id) {
     for (const k of uiPlan.kpis) {
       // eslint-disable-next-line no-await-in-loop
       kpiValues[k.metric_id] = await getKpiValue(org.id, k.metric_id);
+    }
+  }
+
+  // Chart series via metric_id map.
+  const chartSeries: Record<string, ChartSeries> = {};
+  if (org?.id) {
+    for (const c of uiPlan.charts) {
+      // eslint-disable-next-line no-await-in-loop
+      chartSeries[c.metric_id] = await getChartSeries(org.id, c.metric_id);
     }
   }
 
@@ -106,12 +129,11 @@ export default async function OrgPage({ params }: Props) {
         </h1>
       </header>
 
-      <nav style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginBottom: '1.5rem' }}>
+      <nav data-funder-nav style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginBottom: '1.5rem' }}>
         {[
           { href: '/', label: 'Dashboard' },
-          { href: '/leads', label: 'Leads' },
+          { href: '/leads', label: titleCase(leadsPlural) },
           { href: '/pipeline', label: 'Pipeline' },
-          { href: '/settings', label: 'Settings' },
         ].map(({ href, label }) => (
           <Link
             key={href}
@@ -131,36 +153,85 @@ export default async function OrgPage({ params }: Props) {
         ))}
       </nav>
 
-      {/* KPI strip per ui_plan.kpis. Always renders the wrapper so DoD
-          smoke step 8 sees data-kpi-strip even when kpis array empty. */}
       <KPIStrip kpis={uiPlan.kpis} values={kpiValues} />
 
-      {/* Two-column main: filter sidebar + content (charts + leads). */}
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(220px, 240px) 1fr', gap: '1rem' }}>
         <FilterSidebar filters={uiPlan.filters} />
         <div>
-          <ChartGrid charts={uiPlan.charts} />
-          <LeadCardList leads={leads} layout={uiPlan.lead_card_layout} />
+          <FunderChartGrid charts={uiPlan.charts} seriesByMetricId={chartSeries} />
+
+          <div style={{ marginBottom: '0.5rem', display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
+            <h2 style={{ fontSize: '0.95rem', color: '#cfd8e3', margin: 0 }}>
+              {leads.some((l) => (l as unknown as { verified?: boolean }).verified) ? 'Verified' : 'Top-ranked'} {leadsPlural}
+            </h2>
+            <Link
+              href="/leads"
+              style={{
+                fontSize: '0.75rem',
+                color: '#888',
+                textDecoration: 'none',
+              }}
+            >
+              View all {verifiedCount > 0 ? `(${verifiedCount} verified)` : ''} →
+            </Link>
+          </div>
+          {leads.length === 0 ? (
+            <div style={{ color: '#666', fontSize: '0.85rem', padding: '1rem', background: '#111', border: '1px dashed #2a2a2a', borderRadius: 6 }}>
+              No {leadsPlural} yet. The pipeline is queued — the first cron cycle will populate this view.
+            </div>
+          ) : (
+            <FunderLeadLinks slug={slug} leads={leads} layout={uiPlan.lead_card_layout} />
+          )}
         </div>
       </div>
-
-      <details style={{ marginTop: '2rem', color: '#666', fontSize: '0.75rem' }}>
-        <summary style={{ cursor: 'pointer' }}>Architecture JSON</summary>
-        <pre
-          style={{
-            background: '#111',
-            border: '1px solid #222',
-            borderRadius: 4,
-            padding: '1rem',
-            fontSize: '0.7rem',
-            color: '#888',
-            overflowX: 'auto',
-            marginTop: '0.5rem',
-          }}
-        >
-          {JSON.stringify(architecture, null, 2)}
-        </pre>
-      </details>
     </div>
+  );
+}
+
+function titleCase(s: string): string {
+  if (!s) return s;
+  return s[0].toUpperCase() + s.slice(1);
+}
+
+// Wrap LeadCardList so each card links to the org-scoped detail page.
+function FunderLeadLinks({
+  slug,
+  leads,
+  layout,
+}: {
+  slug: string;
+  leads: LeadLike[];
+  layout: NonNullable<ReturnType<typeof resolveArchitecture>['ui_plan']>['lead_card_layout'];
+}) {
+  // Lightweight grid that wraps each card in an <a> so the customer
+  // can click into the verified opportunity. Reuses LeadCardList for
+  // an empty array to keep the data-lead-card-list marker present in
+  // DOM (DoD smoke step 8 probes for it).
+  return (
+    <>
+      <LeadCardList leads={[]} layout={layout} />
+      <div
+        data-funder-lead-grid
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+          gap: '0.75rem',
+        }}
+      >
+        {leads.map((lead) => {
+          const id = lead.id as string | undefined;
+          if (!id) return null;
+          return (
+            <Link
+              key={id}
+              href={`/leads/${encodeURIComponent(id)}`}
+              style={{ textDecoration: 'none', color: 'inherit' }}
+            >
+              <LeadCardList leads={[lead]} layout={layout} />
+            </Link>
+          );
+        })}
+      </div>
+    </>
   );
 }

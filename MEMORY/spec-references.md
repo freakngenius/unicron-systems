@@ -1372,3 +1372,23 @@ OPTIONAL (route degrades gracefully when absent):
 **Implements:** Stage 1 audit finding fix + PLAN Stage 10. Bug fix: `org_id` -> `organization_id` on the projects fetch. Unblocks every non-Zedcor slug page (Funder, Realberry, Internal). Regression guard: __tests__/api/slug-page-org-filter.test.ts greps source for the correct column name.
 **Last verified against spec:** 2026-05-22. 1 regression-guard test passes.
 **Drift:** none.
+
+---
+
+## Funder UX pass (PR #464)
+
+**State:** PR #464 on `funder-ux-pass`. End-to-end UX repair against the audit gap list in `Pathfinder/docs/AUDIT-funder-ux-pass.md`.
+
+#### Pathfinder/lib/agents/funder/leadView.ts
+**Implements:** Build-Spec §4 Stage 8 (lead-card shape) + `ui_plan.lead_card_layout` field projection. Projects a `pathfinder.projects` row into the flat shape the funder LeadCard renders. Field names align with `architecture.lead_unit.schema` so `lead[field]` lookup in `LeadCardList` picks them up via `ui_plan.lead_card_layout.primary_fields` / `secondary_fields`. Reads enrichment-derived fields when present (`funder_enrichment.*`) and falls back to qualifier-time signals (`funder_inferred_thesis`, `funder_geo_hub`). Labels come from `architecture.lead_unit.schema.enum_values` → human labels.
+**Last verified against spec:** 2026-05-22.
+**Drift:** none (new file, additive).
+
+#### Pathfinder/lib/metrics/chartQueries.ts
+**Implements:** Build-Spec §4 Stage 9 — chart-data resolvers consumed by the `[slug]` dashboard's `FunderChartGrid`. Funder ui_plan.charts: `count_by_thesis` (bar, grouped by thesis_area); `verified_count` (line, 8-week ISO-week series of `verified=true` projects). Additive — Zedcor's dashboards live outside `[slug]` and do not import this module.
+**Last verified against spec:** 2026-05-22.
+**Drift:** none.
+
+#### Pathfinder/lib/metrics/kpiQueries.ts (modified)
+**Drift:** `actively_raising_count` extended to read both legacy `raw_payload.fundraising_stage` and enrichment-derived `raw_payload.funder_enrichment.fundraising_stage` so the KPI agrees with the verifier's data path. `sources_live` unchanged.
+**Last verified against spec:** 2026-05-22.
