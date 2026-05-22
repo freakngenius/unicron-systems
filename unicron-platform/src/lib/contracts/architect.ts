@@ -287,6 +287,14 @@ export type DecompositionRequest = {
    * after Stream D returns the session_id.
    */
   customerIntake?: CustomerIntakePayload;
+  /**
+   * Accumulated operator turns from the conversational onboarding loop —
+   * one entry per operator message after the initial buyer-pain prompt.
+   * Forwarded as `constraints` on `DecompositionApiRequest`; the route
+   * handler caps the array at 16. Each operator message becomes one
+   * additional `architect_session` and the latest is the live blueprint.
+   */
+  constraints?: string[];
 };
 
 /** @deprecated UI-only line shape; Stream D ships `reasoning: string[]` instead. */

@@ -149,6 +149,93 @@ describe('Architect client — real mode', () => {
     expect(res.recommendedConfig.status).toBe('configured');
   });
 
+  it('postDecomposition forwards `constraints` when provided (conversational architect)', async () => {
+    // Minimal valid response so the call resolves; we only assert the request body.
+    const apiResponse: DecompositionApiResponse = {
+      proposal_id: 'prop-2',
+      session_id: 'sess-2',
+      architecture: {
+        buyer: 'b',
+        buying_signal: 's',
+        data_sources_proposed: [],
+        data_sources_rejected: [],
+        layer_2_watchers: [],
+        layer_3_agents: [],
+        layer_4_agents: [],
+        estimates: {
+          daily_qualified_volume: 1,
+          cost_per_lead_usd: 0.01,
+          architecture_confidence: 'medium',
+        },
+        open_questions: [],
+      },
+      reasoning: [],
+      cost_usd: 0.01,
+      duration_ms: 100,
+      status: 'completed',
+    };
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      text: async () => JSON.stringify(apiResponse),
+      json: async () => apiResponse,
+    }));
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    await postDecomposition({
+      buyerPain: 'pain',
+      constraints: ['drop Florida', 'raise ranker threshold to 75'],
+    });
+
+    const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(JSON.parse(init.body as string)).toEqual({
+      buyer_pain_prompt: 'pain',
+      constraints: ['drop Florida', 'raise ranker threshold to 75'],
+    });
+  });
+
+  it('postDecomposition omits `constraints` when empty (preserves first-turn body)', async () => {
+    const apiResponse: DecompositionApiResponse = {
+      proposal_id: 'prop-3',
+      session_id: 'sess-3',
+      architecture: {
+        buyer: 'b',
+        buying_signal: 's',
+        data_sources_proposed: [],
+        data_sources_rejected: [],
+        layer_2_watchers: [],
+        layer_3_agents: [],
+        layer_4_agents: [],
+        estimates: {
+          daily_qualified_volume: 1,
+          cost_per_lead_usd: 0.01,
+          architecture_confidence: 'medium',
+        },
+        open_questions: [],
+      },
+      reasoning: [],
+      cost_usd: 0.01,
+      duration_ms: 100,
+      status: 'completed',
+    };
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      text: async () => JSON.stringify(apiResponse),
+      json: async () => apiResponse,
+    }));
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    await postDecomposition({ buyerPain: 'pain', constraints: [] });
+
+    const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    const body = JSON.parse(init.body as string);
+    expect(body).toEqual({ buyer_pain_prompt: 'pain' });
+    expect('constraints' in body).toBe(false);
+  });
+
   it('listProposals reads architect_proposals via supabase and adapts rows', async () => {
     const row: ArchitectProposalRow = {
       id: 'p-real-1',
