@@ -83,11 +83,11 @@ export default async function OrgLeadDetailPage({ params }: Props) {
             marginBottom: '0.25rem',
           }}
         >
-          <Link href="/" style={{ color: '#666', textDecoration: 'none' }}>Pathfinder</Link>
+          <Link href={`/${slug}`} style={{ color: '#666', textDecoration: 'none' }}>Pathfinder</Link>
           {' / '}
-          <Link href="/" style={{ color: '#666', textDecoration: 'none' }}>{slug}</Link>
+          <Link href={`/${slug}`} style={{ color: '#666', textDecoration: 'none' }}>{slug}</Link>
           {' / '}
-          <Link href="/leads" style={{ color: '#666', textDecoration: 'none' }}>{leadsPlural}</Link>
+          <Link href={`/${slug}/leads`} style={{ color: '#666', textDecoration: 'none' }}>{leadsPlural}</Link>
           {' / '}
           {lead.org_name}
         </p>
@@ -134,19 +134,19 @@ export default async function OrgLeadDetailPage({ params }: Props) {
 
       <nav data-funder-nav style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginBottom: '1.5rem' }}>
         {[
-          { href: '/', label: 'Dashboard' },
-          { href: '/leads', label: titleCase(leadsPlural) },
-          { href: '/pipeline', label: 'Pipeline' },
+          { href: `/${slug}`, label: 'Dashboard' },
+          { href: `/${slug}/leads`, label: titleCase(leadsPlural) },
+          { href: `/${slug}/pipeline`, label: 'Pipeline' },
         ].map(({ href, label }) => (
           <Link
             key={href}
             href={href}
             style={{
               padding: '0.5rem 1rem',
-              background: href === '/leads' ? '#1a1a1a' : '#111',
-              border: `1px solid ${href === '/leads' ? '#444' : '#333'}`,
+              background: href === `/${slug}/leads` ? '#1a1a1a' : '#111',
+              border: `1px solid ${href === `/${slug}/leads` ? '#444' : '#333'}`,
               borderRadius: 4,
-              color: href === '/leads' ? '#fff' : '#aaa',
+              color: href === `/${slug}/leads` ? '#fff' : '#aaa',
               fontSize: '0.875rem',
               textDecoration: 'none',
             }}

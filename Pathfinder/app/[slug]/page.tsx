@@ -131,19 +131,19 @@ export default async function OrgPage({ params }: Props) {
 
       <nav data-funder-nav style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginBottom: '1.5rem' }}>
         {[
-          { href: '/', label: 'Dashboard' },
-          { href: '/leads', label: titleCase(leadsPlural) },
-          { href: '/pipeline', label: 'Pipeline' },
+          { href: `/${slug}`, label: 'Dashboard' },
+          { href: `/${slug}/leads`, label: titleCase(leadsPlural) },
+          { href: `/${slug}/pipeline`, label: 'Pipeline' },
         ].map(({ href, label }) => (
           <Link
             key={href}
             href={href}
             style={{
               padding: '0.5rem 1rem',
-              background: '#111',
-              border: '1px solid #333',
+              background: href === `/${slug}` ? '#1a1a1a' : '#111',
+              border: `1px solid ${href === `/${slug}` ? '#444' : '#333'}`,
               borderRadius: 4,
-              color: '#aaa',
+              color: href === `/${slug}` ? '#fff' : '#aaa',
               fontSize: '0.875rem',
               textDecoration: 'none',
             }}
@@ -165,7 +165,7 @@ export default async function OrgPage({ params }: Props) {
               {leads.some((l) => (l as unknown as { verified?: boolean }).verified) ? 'Verified' : 'Top-ranked'} {leadsPlural}
             </h2>
             <Link
-              href="/leads"
+              href={`/${slug}/leads`}
               style={{
                 fontSize: '0.75rem',
                 color: '#888',
@@ -224,7 +224,7 @@ function FunderLeadLinks({
           return (
             <Link
               key={id}
-              href={`/leads/${encodeURIComponent(id)}`}
+              href={`/${slug}/leads/${encodeURIComponent(id)}`}
               style={{ textDecoration: 'none', color: 'inherit' }}
             >
               <LeadCardList leads={[lead]} layout={layout} />
