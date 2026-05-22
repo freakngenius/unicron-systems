@@ -103,10 +103,13 @@ export const ingestOrgRequested = inngest.createFunction(
         status: 'running',
         records_processed: 0,
         records_new: 0,
-        // Internal Stage 5 — agent_runs.organization_id is NOT NULL in the
-        // Supabase schema; previously this insert relied on a legacy
-        // permissive RLS to drop the row when the constraint failed,
-        // which left agent_run telemetry empty. Pass the org id now.
+        // organization_id is NOT NULL in pathfinder.agent_runs; without
+        // it every cloud Inngest run failed silently at this step. The
+        // ingest-org-requested subscriber is per-org by construction, so
+        // the value is always available. (Convergent fix: Funder PR #463
+        // landed this on main while the Internal build added the same
+        // line on its branch; both branches converged on the same
+        // resolution.)
         organization_id,
       }).select('id');
       if (error) {

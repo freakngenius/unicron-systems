@@ -62,12 +62,17 @@ export async function postDecomposition(
 ): Promise<DecompositionResponse> {
   // `customer_intake` is intercepted by /api/architect/decompose-proxy and
   // stamped onto architect_sessions.input_payload after Stream D returns;
-  // Stream D itself never sees this field.
+  // Stream D itself never sees this field. `constraints` passes through to
+  // Stream D's POST /api/architect/decompose unchanged — the route handler
+  // caps the array at 16 items.
   const body: DecompositionApiRequest & {
     customer_intake?: DecompositionRequest['customerIntake'];
   } = {
     buyer_pain_prompt: req.buyerPain,
     customer_intake: req.customerIntake,
+    ...(req.constraints && req.constraints.length > 0
+      ? { constraints: req.constraints }
+      : {}),
   };
   const api = await fetchJson<DecompositionApiResponse>('/api/architect/decompose-proxy', {
     method: 'POST',

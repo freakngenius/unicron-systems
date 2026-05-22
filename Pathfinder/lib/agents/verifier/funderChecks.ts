@@ -78,23 +78,51 @@ function getPayload(project: Project): Record<string, unknown> {
   return (project.raw_payload as Record<string, unknown> | null) ?? {};
 }
 
+/**
+ * Founder affiliation strings the verifier may inspect. Combines the
+ * legacy `raw_payload.founder_affiliation` (string, pre-enrichment shape)
+ * with `raw_payload.funder_enrichment.founders[*].prior_affiliation`
+ * surfaced by lib/agents/funder/enricher.ts. Both are normalized to
+ * non-empty trimmed strings.
+ */
+function collectFounderAffiliations(payload: Record<string, unknown>): string[] {
+  const out: string[] = [];
+  const legacy = payload.founder_affiliation;
+  if (typeof legacy === 'string' && legacy.trim() !== '') out.push(legacy.trim());
+  const enrichment = payload.funder_enrichment as
+    | { founders?: Array<{ prior_affiliation?: unknown }> }
+    | undefined;
+  const founders = Array.isArray(enrichment?.founders) ? enrichment.founders : [];
+  for (const f of founders) {
+    const aff = f?.prior_affiliation;
+    if (typeof aff === 'string' && aff.trim() !== '') out.push(aff.trim());
+  }
+  return out;
+}
+
 function checkOrgExists(project: Project): { ok: boolean; reason: string } {
   const title = (project.title ?? '').trim();
   if (title.length < 5) return { ok: false, reason: 'org_name_too_short_or_empty' };
   if (NOISE_TITLES.includes(title.toLowerCase())) return { ok: false, reason: 'org_name_is_placeholder' };
   const payload = getPayload(project);
-  // At least one corroborating field: source-trusted, or has EIN, or has a founder_affiliation
+  // At least one corroborating field: source-trusted, EIN, or any founder
+  // affiliation (legacy `founder_affiliation` OR enrichment-derived
+  // `funder_enrichment.founders[*].prior_affiliation`).
   const hasEin = payload.ein != null && String(payload.ein).trim() !== '';
   const sourceTrusted = SOURCE_TRUSTED.has(project.source as string);
-  const hasFounderAffiliation =
-    typeof payload.founder_affiliation === 'string' && payload.founder_affiliation.trim() !== '';
+  const hasFounderAffiliation = collectFounderAffiliations(payload).length > 0;
   if (hasEin || sourceTrusted || hasFounderAffiliation) return { ok: true, reason: 'corroborated' };
   return { ok: false, reason: 'no_corroborating_field' };
 }
 
 function checkFounderCredible(project: Project): { ok: boolean; reason: string } {
   const payload = getPayload(project);
-  const haystack = `${project.title ?? ''} ${project.summary ?? ''} ${payload.founder_affiliation ?? ''}`.toLowerCase();
+  const affiliations = collectFounderAffiliations(payload);
+  const haystack = [
+    project.title ?? '',
+    project.summary ?? '',
+    ...affiliations,
+  ].join(' ').toLowerCase();
   if (TIER_1_INSTITUTIONS.some((t) => haystack.includes(t))) {
     return { ok: true, reason: 'tier_1_institution' };
   }

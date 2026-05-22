@@ -229,3 +229,96 @@ I am not setting any of these — operator action required per the deploy-chain 
 - 1 verified opportunity surfaced this run, against `verified_threshold=65`. Top candidates that *should* be in the candidate pool (METR @ 85, Rethink Priorities Cross-Cause Fund @ 70, Streisand Foundation @ 81) fail verification because (a) they're not from ProPublica/IRS (no source-trust shortcut) and (b) the verifier doesn't yet read enrichment-derived founder data. Follow-up §7.5.1.
 - All 64 projects ranked; ranker latency averaged ~8s per project (Sonnet rationale dominant cost).
 - Funder's Phase 2E status reached `awaiting_threshold` and held — neither `ready_to_view` nor `build_out_complete`. The `check-ready-to-view-cron` Inngest function gates the transition on verified count; with 1 verified, the threshold is not met. The transition mechanism itself is wired correctly (the same path advanced Funder from `setting_up` → `first_run` during PR #448).
+
+---
+
+## 8. Enrichment dispatch + verifier correctness pass (branch `funder-enrich-verify`, off `origin/main` post #460)
+
+**Run:** 2026-05-22, branch `funder-enrich-verify`. Scope-bounded to the three correctness items the post-merge audit flagged: (1) confirm cloud Inngest dispatch end-to-end, (2) close the verifier's enrichment-blind spot, (3) re-verify and honestly report the count.
+
+### 8.1 Inngest cloud dispatch — end-to-end confirmation + an agent-log bug fix
+
+`ingestOrgRequested` and `funderEnrichAdjacency` are both registered in `app/api/inngest/route.ts` `serve()` on `main` (verified by re-reading the file post-#449 + #460 merge). PUT `/pathfinder/api/inngest` returns 200, confirming Inngest cloud can re-introspect.
+
+End-to-end test: emitted `pathfinder/org.ingest_requested` directly via `https://inn.gs/e/$INNGEST_EVENT_KEY` (event id `01KS6ZB4371THTFWS5YS5JM2DG`). Vercel runtime log shows a POST 206 to `/pathfinder/api/inngest` at 04:33:20 with a console.error from the `[ingest-org-requested]` namespace — the function fired in cloud, ran a step, and logged an error.
+
+**Root cause of the error** (and reason no `agent_runs` row appeared after the cloud dispatch): `pathfinder.agent_runs.organization_id` is `uuid NOT NULL` (verified via `information_schema.columns`), but `ingestOrgRequested`'s `open-agent-run` step inserted without the `organization_id` field. Every cloud dispatch hit the NOT NULL constraint, swallowed the error in the catch (non-fatal by design — telemetry-only), then continued with a `null` run id — which meant no agent_run row was ever written, and the production verifier/ranker telemetry never saw evidence that the subscriber had executed.
+
+**Fix:** `lib/inngest/functions/ingest-org-requested.ts` — pass the in-scope `organization_id` into the `agent_runs` insert. Diff is one line + a comment. Verified by typecheck + full test suite.
+
+### 8.2 Verifier — read founder credentials from enrichment
+
+`lib/agents/verifier/funderChecks.ts` previously inspected only the legacy `raw_payload.founder_affiliation` string when checking org_exists corroboration and founder credibility. The enricher (PR #449) surfaces founders as `raw_payload.funder_enrichment.founders[*].{name, role, prior_affiliation, notes}`, but the verifier ignored those.
+
+**Fix:** new `collectFounderAffiliations(payload)` helper that combines the legacy field with `funder_enrichment.founders[*].prior_affiliation`, returning trimmed non-empty strings. `checkOrgExists` consults the helper for its "any corroborating field" gate. `checkFounderCredible` joins the strings into the haystack matched against the Tier 1 / Tier 2 institution lists. No threshold change. No SOURCE_TRUSTED change.
+
+Five new tests (`__tests__/agents/funder-verifier.test.ts`) cover:
+- Tier 1 hit via enrichment prior_affiliation (`OpenAI alignment team`).
+- Tier 2 hit via enrichment prior_affiliation (`Stanford CS dept`).
+- org_exists corroboration via enrichment alone.
+- Empty/missing prior_affiliation rejected (Streisand-shape regression).
+- Legacy `raw_payload.founder_affiliation` still works.
+
+### 8.3 Enrichment backfill — 7/65 → 65/65
+
+`scripts/backfill-funder-enrichment-locally.ts` mirrors the body of `funderEnrichAdjacency` and runs against all rows lacking `funder_enrichment.enriched_at`. Why a script: the original 65 Funder rows were inserted by `scripts/run-funder-ingest-locally.ts`, which bypasses Inngest entirely, so no `project.qualified` events fired and no enrichment ran. Cloud Inngest covers fresh rows going forward (post §8.1 fix); this script closes the existing backlog.
+
+Run result: `enriched=58/58 total_cost_usd=$0.0444`. 0 failures. All 65 Funder rows now carry `funder_enrichment` + `funder_adjacency` blocks in `raw_payload`.
+
+### 8.4 Re-verify (`scripts/reverify-funder-locally.ts`)
+
+Mirrors the Funder branch of `app/api/cron/verifier/route.ts`. Re-evaluates each row against current persisted state (post-enrichment) and writes `verified`, `verifier_pass_count`, `verifier_notes`.
+
+**Honest verified count: 1 of 65** (unchanged, Longevity Research Institute — propublica:824334368, score 65).
+
+Failure breakdown:
+| Reason | Count |
+|---|---|
+| `score_below_threshold` (score < 65) | 53 |
+| `org_exists_failed` (no EIN + not source-trusted + no founder affiliation) | 10 |
+| `founder_credible_failed` (no Tier 1/2 + not source-trusted) | 1 |
+
+### 8.5 Data-coverage finding — why verified did not rise
+
+Per the prompt's explicit directive ("If genuinely-qualified orgs still fall short of 3, report that as a data-coverage finding"), reporting this honestly:
+
+The 8 rows scoring ≥ 65 are:
+
+| id | title | score | source | enrichment found founders? | prior_affiliation present? |
+|---|---|---|---|---|---|
+| ea-forum:n6esoK5w4SB6sB9Xh | METR rogue-deployments report | 85 | ea-forum-rss | no (`founders: []`) | — |
+| philanthropy-rss:streisand-foundation | The Streisand Foundation | 81 | philanthropy-rss | yes (Barbra Streisand) | **no** |
+| ea-forum:7MEZzqQZtf9fQc24T | A Plea to the Laid-off, from an ex-Googler | 77 | ea-forum-rss | yes (Jen B.) | **no** ("no public-record evidence") |
+| ea-forum:QnxywrpGvogPmtENp | TAIxAnimals | 77 | ea-forum-rss | no | — |
+| ea-forum:YgbTWGyfwkoBtvT2R | Rethink Priorities Cross-Cause Fund | 70 | ea-forum-rss | no | — |
+| ea-forum:8mmxH5yoGykC5dW7e | IAP Entrepreneurship Track | 65 | ea-forum-rss | no | — |
+| ea-forum:mJeZtYopvfYXrt9wK | EA Impact Hub poll | 65 | ea-forum-rss | no | — |
+| propublica:824334368 | Longevity Research Institute | 65 | propublica | no | — (source-trusted = passes) |
+
+The verifier fix lands. It does what was asked. It is not the binding constraint at the current data shape. The binding constraint is the Sonar enricher returning empty `founders[]` (5 of 7 high-scoring non-trusted rows) or returning founders without `prior_affiliation` (Streisand: Barbra Streisand with `notes` but no prior employer; "ex-Googler" post: explicitly returned `no public-record evidence`). Neither situation is fixable by loosening the verifier or extending the source-trust list — both of which the prompt explicitly forbade.
+
+**Closing this gap is a separate scope-bounded item** that can take any of three forms, listed in increasing intrusiveness:
+1. Tune the Funder enricher prompt to more aggressively surface `prior_affiliation` for founders it does name, including for individuals whose primary public footprint is non-employer-based (e.g., celebrity philanthropists like Streisand whose "prior_affiliation" semantically maps to public profession).
+2. Add a "named-org-with-public-website" corroboration channel to `checkOrgExists` that consults `funder_enrichment.org_name` + `funder_enrichment.brief` length as a corroboration signal (would unblock METR @ 85, Rethink Priorities Cross-Cause Fund @ 70, Streisand @ 81). Requires operator agreement that this is not a verify-gate loosening.
+3. Real-grantee-portfolio swap (already a §4 follow-up). When the synthetic portfolio is replaced with Funder's real grantee list, the adjacency layer gets meaningful `portfolio_warm_intros` to corroborate "this org has a real connection to people Funder already trusts" — an independent verification path that doesn't depend on Sonar finding founders.
+
+### 8.6 Phase 2E state-machine observation (not in scope)
+
+`lib/inngest/functions/check-ready-to-view-cron.ts` defines `CHECKABLE_STATES = ['first_run', 'ranking']`. Funder is currently in `awaiting_threshold` — outside that set. The cron will not re-evaluate Funder even if its verified count rises later. This is a one-line bug (`awaiting_threshold` should be in the checkable set), but the fix is out of scope for this PR per the prompt's "do not loosen the verify gate" framing — fixing the re-check loop is unrelated to verifier correctness. Filed as a follow-up.
+
+### 8.7 Verification
+
+| Check | Result |
+|---|---|
+| `pnpm typecheck` | clean (`tsc --noEmit`, 0 errors) |
+| `pnpm test` | 170 files / 1739 tests passing (+5 new for the verifier fix) |
+| `pnpm build` | exit 0, "Compiled successfully", 18/18 static pages generated |
+| Zedcor + Realberry regressed? | No. Verifier change is gated by the existing non-Zedcor branch in `verifier/route.ts`; Zedcor still runs `recomputeNearestBranchId`+`scoreProject` checks. Realberry's `verifyFunderProject` was already running; the new `collectFounderAffiliations` helper is additive (legacy `founder_affiliation` field still wins when present). |
+| Destructive ops | None. Read-only Supabase reads + scoped writes to `projects.raw_payload`/`verified`/`verifier_pass_count`/`verifier_notes` for `organization_id = funder` only. |
+
+### 8.8 Follow-ups discovered this run (in priority order)
+
+1. **`check-ready-to-view-cron` doesn't re-check `awaiting_threshold`**. One-line fix to add `awaiting_threshold` to `CHECKABLE_STATES`. Without it, an org that initially fails the verified threshold is permanently stuck unless an operator manually flips the status. Scope-bounded PR.
+2. **Sonar enricher misses prior_affiliation for named founders**. The enrichment prompt could be tightened: today the model is given license to return `notes` instead of `prior_affiliation` when it can't find an explicit prior employer, which means rich founders (Barbra Streisand, "Jen B. the ex-Googler") collect notes but no structured `prior_affiliation` — which is the field the verifier reads. Either tighten the prompt to map "publicly-known profession" → `prior_affiliation`, or extend the verifier to also consider `notes` strings.
+3. **Named-org corroboration channel in `checkOrgExists`**. Per §8.5 option (2). Conditional on operator alignment that this isn't a gate loosening; arguably it's the equal-treatment of Sonar-derived org-existence evidence vs ProPublica's source-trust shortcut.
+4. **Real grantee-portfolio swap** (§4 follow-up). Until this lands, the adjacency layer produces synthetic warm-intro signal and the verifier has no portfolio-anchored corroboration to lean on.
