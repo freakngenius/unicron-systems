@@ -26,6 +26,15 @@ import { philanthropyTradePressRssAdapter } from './philanthropy-trade-press-rss
 import { acceleratorCohortPagesAdapter } from './accelerator-cohort-pages';
 import { businessLicenseIssuancesAdapter } from './business-license-issuances';
 import { funder990FilingsAdapter } from './funder-990-filings';
+// Internal onboarding Stage 5 — six adapter scaffolds for org slug
+// 'internal' (Pathfinder organization #4). Registrations below are
+// strictly additive; Funder entries above are untouched.
+import { samGovEntityAdapter } from './sam-gov-entity';
+import { usaspendingRecipientsAdapter } from './usaspending-recipients';
+import { constructionSalesJobPostingsAdapter } from './construction-sales-job-postings';
+import { tradeAssociationDirectoriesAdapter } from './trade-association-directories';
+import { sosBusinessRegistrationsAdapter } from './sos-business-registrations';
+import { stateContractorLicensesAdapter } from './state-contractor-licenses';
 
 export type { SourceAdapter, SourceAdapterType, SourceEvent, SourcePollOptions } from './types';
 
@@ -37,6 +46,13 @@ export const SOURCE_ADAPTERS: Record<string, SourceAdapter> = {
   [acceleratorCohortPagesAdapter.id]: acceleratorCohortPagesAdapter,
   [businessLicenseIssuancesAdapter.id]: businessLicenseIssuancesAdapter,
   [funder990FilingsAdapter.id]: funder990FilingsAdapter,
+  // Internal Stage 5 adapters.
+  [samGovEntityAdapter.id]: samGovEntityAdapter,
+  [usaspendingRecipientsAdapter.id]: usaspendingRecipientsAdapter,
+  [constructionSalesJobPostingsAdapter.id]: constructionSalesJobPostingsAdapter,
+  [tradeAssociationDirectoriesAdapter.id]: tradeAssociationDirectoriesAdapter,
+  [sosBusinessRegistrationsAdapter.id]: sosBusinessRegistrationsAdapter,
+  [stateContractorLicensesAdapter.id]: stateContractorLicensesAdapter,
 };
 
 /** Look up an adapter by source id. Returns null when unregistered. */

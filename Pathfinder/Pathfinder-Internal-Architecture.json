@@ -1,0 +1,110 @@
+{
+  "_comment": "Canonical OrgArchitecture for Unicron Internal, Pathfinder organization #4. Persisted into pathfinder.organizations.architecture (jsonb). Consumed by resolveArchitecture() and POST /api/organizations. This instance is Pathfinder pointed inward: Unicron runs it on itself to fill the Pathfinder new-business pipeline. Weights, taxonomy, and vocabulary are drafts for Kyle and the Architect to tune. 'Unicron Internal' is a working display name; redline before launch. Org row fields: name='Unicron Internal', slug='internal', customer_org_id='unicron-internal'. Served at internal.unicron.systems (vanity domain aliased to the /internal route).",
+  "vertical": "construction-vertical-b2b-prospecting",
+  "lead_unit": {
+    "name": "company",
+    "plural": "companies",
+    "schema": {
+      "company_name":         { "type": "string", "display_label": "Company", "required": true },
+      "service_category":     { "type": "enum",   "display_label": "Service category",
+                                "enum_values": ["equipment-rental", "temp-fence", "temp-power-sanitation", "traffic-control", "modular-site-offices", "commercial-roofing", "industrial-cleaning", "waste-management", "crane-rental", "jobsite-connectivity", "site-safety-services", "general-contractor", "specialty-trade", "other"] },
+      "sales_motion":         { "type": "enum",   "display_label": "Sales motion",
+                                "enum_values": ["active-outbound", "hiring-bd", "inbound-only", "unknown"] },
+      "footprint":            { "type": "object", "display_label": "Operating footprint" },
+      "hq_location":          { "type": "string", "display_label": "Headquarters" },
+      "licensure":            { "type": "object", "display_label": "Contractor licensure" },
+      "federal_registration": { "type": "enum",   "display_label": "Federal registration",
+                                "enum_values": ["sam-registered", "federal-awardee", "both", "none"] },
+      "association_memberships": { "type": "object", "display_label": "Trade associations" },
+      "company_size":         { "type": "string", "display_label": "Size" },
+      "warm_intro":           { "type": "string", "display_label": "Warm intro" },
+      "first_step":           { "type": "string", "display_label": "Recommended first step" },
+      "score":                { "type": "number", "display_label": "Score" },
+      "source":               { "type": "string", "display_label": "Source" }
+    }
+  },
+  "pipeline": {
+    "stages": ["new-outreach-ready", "contacted", "in-conversation", "demo-scheduled", "proposal", "won", "lost"],
+    "stage_labels": {
+      "new-outreach-ready": "New / Outreach Ready",
+      "contacted": "Contacted",
+      "in-conversation": "In conversation",
+      "demo-scheduled": "Demo scheduled",
+      "proposal": "Proposal",
+      "won": "Won",
+      "lost": "Lost"
+    }
+  },
+  "scoring": {
+    "weights": {
+      "sales_motion_strength": 0.25,
+      "operational_footprint": 0.20,
+      "federal_signal": 0.15,
+      "project_driven_fit": 0.15,
+      "recency": 0.15,
+      "association_presence": 0.10
+    },
+    "thresholds": { "verified": 0.65, "high_priority": 0.80 }
+  },
+  "geography": {
+    "scope": "states",
+    "defaults": []
+  },
+  "sources": [
+    { "id": "sam-gov",                              "type": "registered" },
+    { "id": "usaspending",                          "type": "registered" },
+    { "id": "custom-state-contractor-licenses",     "type": "pending" },
+    { "id": "custom-construction-sales-job-postings","type": "pending" },
+    { "id": "custom-trade-association-directories",  "type": "pending" },
+    { "id": "custom-sos-business-registrations",     "type": "pending" }
+  ],
+  "outreach": {
+    "persona": "new-business sales rep at Unicron Systems selling the Pathfinder lead-intelligence service",
+    "tone": "direct, peer-to-peer, operator-credible, names the prospect's own prospecting pain, no fluff",
+    "value_prop": "a ranked, outreach-ready pipeline of qualified construction-vertical leads delivered every morning, so reps stop prospecting by hand"
+  },
+  "vocabulary": {
+    "lead": "company",
+    "leads": "companies",
+    "contact": "contact",
+    "project": "company",
+    "branch": "region"
+  },
+  "branding": {
+    "display_name": "Unicron Internal",
+    "accent_color": null,
+    "logo_url": null
+  },
+  "compliance": ["public-data-only"],
+  "integrations": ["hubspot", "slack", "resend"],
+  "business_summary": {
+    "lead_type": "A verified, ranked company profile for a construction-vertical B2B service provider (site-services companies), confirmed to have an active sales team, multi-region operations, and revenue tied to new construction starts.",
+    "business_area": "Unicron's own sales team uses these leads to fill the Pathfinder new-business pipeline, working a pre-ranked, outreach-ready list each morning instead of prospecting manually.",
+    "problem_solved": "Unicron's reps currently prospect by hand into a fragmented market of tens of thousands of construction-vertical firms, the same pain their own product solves for customers. This deployment turns Pathfinder inward, so the Unicron team reaches the right companies before competitors do, with a message that names the pain those companies already feel.",
+    "what_they_get": "Every morning, the Unicron sales team receives a ranked list of the day's best-fit target companies, each one enriched with headquarters location, operating footprint, sales-team evidence, and a note on any warm introduction available through shared trade-association or existing-customer connections. Three ready-to-send outreach drafts (email, LinkedIn message, and an internal HubSpot note) are pre-written for each company. The top leads are surfaced in a daily Slack digest and automatically loaded into the Pathfinder pipeline kanban at the New / Outreach Ready stage."
+  },
+  "ui_plan": {
+    "lead_card_layout": {
+      "primary_fields": ["company_name", "service_category", "footprint", "sales_motion", "score"],
+      "secondary_fields": ["hq_location", "licensure", "federal_registration", "association_memberships", "source"],
+      "score_position": "top-right"
+    },
+    "kpis": [
+      { "label": "Companies verified today",   "metric_id": "verified_count_1d" },
+      { "label": "Active outbound motion",     "metric_id": "active_motion_pct", "unit": "%" },
+      { "label": "Average sales priority",     "metric_id": "avg_score", "unit": "%" },
+      { "label": "Sources live",               "metric_id": "sources_live" }
+    ],
+    "charts": [
+      { "title": "Companies by service category", "type": "bar",  "metric_id": "count_by_category", "grouping": "service_category" },
+      { "title": "Verified companies over time",  "type": "line", "metric_id": "verified_count",    "grouping": "day" }
+    ],
+    "filters": [
+      { "field": "service_category",     "label": "Service category" },
+      { "field": "sales_motion",         "label": "Sales motion" },
+      { "field": "federal_registration", "label": "Federal registration" },
+      { "field": "source",               "label": "Source" }
+    ],
+    "dashboard_emphasis": "velocity"
+  }
+}

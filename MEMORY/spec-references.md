@@ -1155,3 +1155,220 @@ The 4 adapter files modified in this PR (`propublica-nonprofit-explorer.ts`, `ir
 **Implements:** Barrel export for the Inngest function set. Adds `funderEnrichAdjacency` (PR #449). Existing entries unchanged.
 **Last verified against spec:** 2026-05-22.
 **Drift:** none.
+
+---
+
+## Internal Onboarding, Stage 2 (Pathfinder organization #4)
+
+**State:** Branch `internal-org-record` off `internal-onboarding` at `5147493`. Stage 2 of the autonomous Internal build per `Pathfinder/docs/PLAN-internal-onboarding.md`. Persists "Unicron Internal" row via `POST /api/organizations` and adds the round-trip architecture fixture test. Spec: `Pathfinder/Pathfinder-Internal-Blueprint.md` Section 9. No `lib/` files touched; only `scripts/` and `__tests__/` additions.
+
+### Stage 2, Org record persistence
+
+#### Pathfinder/scripts/seed-internal-org.ts
+**Implements:** Blueprint Section 9, Stage 2, plus PLAN Stage 2. Idempotent loader that POSTs the Internal architecture JSON to `/api/organizations` (or direct supabaseAdmin insert as fallback). Mirrors `scripts/seed-funder-org.ts` structure. Two modes (`--via-api`, default supabase); `--dry-run` short-circuit; slug-based idempotency. Default `PATHFINDER_BASE_URL` is `http://localhost:3000/pathfinder` (basePath per next.config.js).
+**Last verified against spec:** 2026-05-21. Live POSTed against local dev (`localhost:3300/pathfinder/api/organizations`) and returned 201 with row id `2ff1197b-36f8-4210-aa11-65cf025ad83b`.
+**Drift:** none.
+
+#### Pathfinder/__tests__/fixtures/internal-architecture.json
+**Implements:** Blueprint Section 9, Stage 2. Verbatim copy of `Pathfinder/Pathfinder-Internal-Architecture.json` for fixture-based unit testing. Mirrors `__tests__/fixtures/funder-architecture.json` precedent.
+**Last verified against spec:** 2026-05-21.
+**Drift:** none.
+
+#### Pathfinder/__tests__/agents/loadOrgArchitecture-internal.test.ts
+**Implements:** Blueprint Section 9, Stage 2. Round-trip the Internal architecture JSON through `resolveArchitecture` and assert Internal-shaped values survive merge with `BASE_ARCHITECTURE`. 13 assertions cover vertical, lead unit, pipeline stages, scoring weights (6 keys summing to 1.0), thresholds (verified=0.65), sources (6 refs: 2 registered plus 4 pending), outreach, vocabulary, branding (`display_name = "Unicron Internal"`), ui_plan, business_summary, and base-fallback non-regression.
+**Last verified against spec:** 2026-05-21. 13/13 pass against `pnpm exec vitest run __tests__/agents/loadOrgArchitecture-internal.test.ts`.
+**Drift:** none.
+
+---
+
+## Internal Onboarding, Stage 3 (Vanity domain + host routing + auth)
+
+**State:** Branch `internal-host-routing` off `internal-onboarding` at `4b769ee`. Stage 3 of the autonomous Internal build per `Pathfinder/docs/PLAN-internal-onboarding.md`. Mirrors the Funder host-rewrite pattern (commit `b00f11f`) for `internal.unicron.systems` and re-uses the existing operator-allowlist gate at `Pathfinder/app/[slug]/layout.tsx`. No new auth fork; existing slug-generic gate already covers `/internal`.
+
+### Stage 3, Host routing + operator gate confirmation
+
+#### middleware.ts (workspace root, parent unicron-systems project)
+**Implements:** PLAN Stage 3 acceptance criterion 1 — `internal.unicron.systems` resolves to `/pathfinder/internal`. Strictly additive INTERNAL_HOST branch alongside the existing FUNDER_HOST branch. Bare host `/` rewrites to `${PATHFINDER_ORIGIN}/pathfinder/internal`; deep paths rewrite to `${PATHFINDER_ORIGIN}/pathfinder<path>`; existing `/pathfinder/*` paths pass through unchanged. Preserves query strings end-to-end. Mirrors the Funder branch shape exactly so the routing-precedent invariant from commit `b00f11f` (#460) holds for both hosts.
+**Last verified against spec:** 2026-05-22. 9/9 unit tests pass at `tests/unit/middleware.test.ts` (3 Funder regression + 6 Internal). Funder branch byte-identical pre/post; verified by reading the diff and by the 4 Funder regression cases (bare `/`, deep `/leads`, pass-through `/pathfinder/funder`, query-string preservation).
+**Drift:** none.
+
+#### Pathfinder/next.config.js
+**Implements:** PLAN Stage 3 — add `internal.unicron.systems` to `experimental.serverActions.allowedOrigins` so server actions issued from the Internal host do not trip the SSRF guard. Mirrors the Funder entry. Strictly additive (one host added to the list).
+**Last verified against spec:** 2026-05-22. `pnpm build` green; middleware bundle size 25.3 kB; no other changes.
+**Drift:** none.
+
+#### tests/unit/middleware.test.ts (workspace root)
+**Implements:** PLAN Stage 3 — guardrail tests asserting middleware host-rewrite shape for both Funder (regression) and Internal (this Stage). Reads `x-middleware-rewrite` off the `NextResponse.rewrite()` result. 9 assertions: 4 Funder regression (bare /, deep /leads, /pathfinder/funder pass-through, query-string preservation), 6 Internal (bare /, /settings, deep /leads/abc-123, /pathfinder/internal/leads pass-through, query-string preservation on deep paths, plus the bare-host case verifying `/pathfinder/internal` target).
+**Last verified against spec:** 2026-05-22. 9/9 pass via `npx vitest run tests/unit/middleware.test.ts`.
+**Drift:** none.
+
+#### Pathfinder/__tests__/api/internal-operator-gate.test.ts
+**Implements:** PLAN Stage 3 acceptance criterion 2 — operators in `operator_allowlist` see the dashboard; non-operators bounce to `/login?error=unauthorized`. Guardrail test: reads `Pathfinder/app/[slug]/layout.tsx` and asserts (a) no per-slug fork (no `slug === '...'` or `switch (slug)` branches), (b) every request checks `operator_allowlist`, (c) Supabase session is required before the allowlist check. If a future PR adds a per-slug fork, this test fails and the author must justify.
+**Last verified against spec:** 2026-05-22. 3/3 pass. Local dev verification (Pathfinder dev on `:3000`): unauthenticated `GET /pathfinder/internal` with basic-auth creds returns HTTP 307 to `/pathfinder/login`, confirming the layout's redirect path fires for the `internal` slug exactly as it does for the `funder` slug.
+**Drift:** none.
+
+#### Pathfinder/__tests__/metrics/internal-kpiQueries.test.ts
+**Implements:** PLAN Stage 3 — graceful degradation contract. Internal's `ui_plan.kpis` references 6 metric_ids: `verified_count_1d`, `active_motion_pct`, `avg_score`, `sources_live`, `count_by_category`, `verified_count`. Only `avg_score` and `sources_live` are mapped today (Funder Stage 9). The other 4 are unmapped; `getKpiValue` returns null for unmapped ids. The renderer (`Pathfinder/app/[slug]/page.tsx:73`) accepts null and never 503s. Stage 10 ships the missing four implementations. This test asserts the contract: every Internal metric_id either resolves or returns null; unmapped ones are null; shared ones (avg_score, sources_live) remain wired.
+**Last verified against spec:** 2026-05-22. 3/3 pass.
+**Drift:** none.
+
+### Env var enumeration (operator-render path for `/internal`)
+
+REQUIRED (route 500s without these):
+- `NEXT_PUBLIC_SUPABASE_URL` — `Pathfinder/app/[slug]/layout.tsx:39`, `lib/supabase.ts:24,58`. Used by both anon (auth.getUser) and admin (org + allowlist queries).
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY` — `Pathfinder/app/[slug]/layout.tsx:40`, `lib/supabase.ts:25`. Anon client for auth.getUser; layout explicitly redirects to `/login?error=misconfigured` when missing, NOT 500 — but downstream supabaseAdmin still throws if URL is missing.
+- `SUPABASE_SERVICE_ROLE_KEY` — `lib/supabase.ts:59`. Service-role for org + allowlist lookups; throws on missing.
+- `BASIC_AUTH_USER`, `BASIC_AUTH_PASS` — `Pathfinder/middleware.ts:78-79`. Pathfinder middleware basic-auth gate; in production, missing values return 503 ("Auth not configured"). Outside Stage 3's scope but documented since Internal requests transit this gate.
+
+OPTIONAL (route degrades gracefully when absent):
+- KPI metric implementations for `verified_count_1d`, `active_motion_pct`, `count_by_category`, `verified_count` — `getKpiValue` returns null; `KPIStrip` renders em-dash placeholders. No 503. Covered by `__tests__/metrics/internal-kpiQueries.test.ts`.
+- `ANTHROPIC_API_KEY`, `PERPLEXITY_API_KEY`, `UPSTASH_REDIS_REST_URL/TOKEN`, `HELICONE_API_KEY`, `AXIOM_TOKEN/DATASET`, `INNGEST_EVENT_KEY/SIGNING_KEY` — none touched at render time for `/[slug]/page.tsx`. They are consumed by the agent pipeline / cron / inngest paths, not the dashboard render. Absence does not 503 the dashboard.
+- `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` — used by leads detail / map components, not the `/[slug]` landing render. Absence yields a missing map widget elsewhere, not a 503.
+
+---
+
+## Internal Onboarding, Stage 4 (Source adapters)
+
+**State:** Branch `internal-source-adapters` off `internal-onboarding` at `3d5011e`. Six SourceAdapter modules for Internal (Pathfinder org #4), all additive in the source-id-keyed `SOURCE_ADAPTERS` registry Funder introduced. Two priority-1 adapters (sam-gov, usaspending) and one priority-2 adapter (construction-sales-job-postings) hit real endpoints; three priority-3/4 adapters (sos-business-registrations, state-contractor-licenses, trade-association-directories) ship as blocked-on-credentials scaffolds with the required env vars named in stderr at startup. The per-slug ingest dispatch and a qualifier scaffold land here as Stage 4 prerequisites; Stage 5 expands the qualifier.
+
+### Stage 4, Source adapters
+
+#### Pathfinder/lib/adapters/sources/index.ts
+**Implements:** PLAN Stage 4. Additively registers six Internal adapters in `SOURCE_ADAPTERS` alongside existing Zedcor/Funder entries. No re-key, no rewire.
+**Last verified against spec:** 2026-05-22. Funder regression suite (10 tests at `__tests__/adapters/sources-funder.test.ts`) passes unchanged.
+**Drift:** none.
+
+#### Pathfinder/lib/adapters/sources/_internal-shared.ts
+**Implements:** PLAN Stage 4. Internal-only shared helpers: NAICS construction-set predicate (236/237/238/532412), source-event normalization (`buildSourceEvent`), `blockedOnCredentials` returner that logs the missing env var name to stderr per the runner rule "Never fake data. Never silently skip."
+**Last verified against spec:** 2026-05-22. Used by all six Internal adapters; 13 unit tests at `__tests__/adapters/sources-internal.test.ts` cover the gate and normalization paths.
+**Drift:** none.
+
+#### Pathfinder/lib/adapters/sources/sam-gov-entity.ts
+**Implements:** Blueprint Section 8 + PLAN Stage 4. SAM Entity Management registration API, filtered to construction NAICS 236/237/238/532412. Auth via `SAM_GOV_API_KEY`. Returns `[]` with `blocked-on-credentials` log when key absent; the runner explicitly authorizes empty-return-with-log over silent-skip.
+**Last verified against spec:** 2026-05-22. Adapter unit test covers blocked-on-credentials path and fixture-based parse.
+**Drift:** none.
+
+#### Pathfinder/lib/adapters/sources/usaspending-recipients.ts
+**Implements:** Blueprint Section 8 + PLAN Stage 4. USASpending recipient/awardee search filtered to construction NAICS. No auth key; the endpoint is fully open.
+**Last verified against spec:** 2026-05-22. Fixture-based parse test passes.
+**Drift:** none.
+
+#### Pathfinder/lib/adapters/sources/construction-sales-job-postings.ts
+**Implements:** Blueprint Section 8 priority 2 + PLAN Stage 4. Keyless job-board RSS aggregator targeting construction-vertical companies hiring sales/BD roles. Paid Indeed/LinkedIn upgrade deferred per blueprint Section 10 decision 2.
+**Last verified against spec:** 2026-05-22. Unit test covers RSS parse + role-filter heuristic.
+**Drift:** none.
+
+#### Pathfinder/lib/adapters/sources/sos-business-registrations.ts
+**Implements:** Blueprint Section 8 + PLAN Stage 4. Scaffold returning `[]` with `blocked-on-credentials` log naming `SOCRATA_APP_TOKEN`. Activates per-state Socrata querying when the token is present.
+**Last verified against spec:** 2026-05-22. Blocked-on-credentials assertion in adapter test.
+**Drift:** none.
+
+#### Pathfinder/lib/adapters/sources/state-contractor-licenses.ts
+**Implements:** Blueprint Section 8 + PLAN Stage 4. Scaffold returning `[]` when no state portals configured. Logs the env-var names that would unblock each state (`CSLB_BULK_URL` / `TDLR_API_TOKEN` / `FL_DBPR_API_TOKEN`).
+**Last verified against spec:** 2026-05-22. Blocked-on-credentials assertion in adapter test.
+**Drift:** none.
+
+#### Pathfinder/lib/adapters/sources/trade-association-directories.ts
+**Implements:** Blueprint Section 8 + PLAN Stage 4. Scaffold for AGC/ABC/NECA/AED member directories. Returns `[]` with `blocked-on-credentials` log naming `AGC_DIRECTORY_TOKEN` / `ABC_DIRECTORY_TOKEN` / `NECA_DIRECTORY_TOKEN` / `AED_DIRECTORY_TOKEN`.
+**Last verified against spec:** 2026-05-22. Blocked-on-credentials assertion in adapter test.
+**Drift:** none.
+
+#### Pathfinder/lib/inngest/functions/ingest-org-requested.ts
+**Implements:** PLAN Stage 4. Additive `'internal'` entry in `SUBSCRIBER_OPT_IN_SLUGS` (line ~57), additive per-slug qualifier dispatch routing Internal events to `qualifyForInternal`. Funder branch byte-identical pre/post; Zedcor remains on the legacy ingestor. Also fixes a latent bug: passes `organization_id` on the `agent_runs` insert, which previously relied on a permissive RLS to drop the row when the NOT NULL constraint failed (silently empty telemetry for Funder too).
+**Last verified against spec:** 2026-05-22. Compile + lint clean; Funder regression test passes unchanged.
+**Drift:** none.
+
+#### Pathfinder/lib/agents/internal/qualifier.ts
+**Implements:** PLAN Stage 4 prerequisite (Stage 5 will expand). Trusts construction-NAICS + sales-motion filtering already performed at the adapter layer; passes events through unless explicit reject signals fire. Deeper qualifier logic lands in Stage 5.
+**Last verified against spec:** 2026-05-22. Compile + lint clean; tested via integration with the per-slug dispatch.
+**Drift:** Stage 5 will expand. Current Stage 4 acceptance is "qualifier scaffold exists and the inngest dispatch routes through it"; expansion is in scope for Stage 5.
+
+#### Pathfinder/scripts/run-internal-ingest-locally.ts
+**Implements:** PLAN Stage 4. Manual ingest trigger that invokes the inngest dispatch for Internal org id `2ff1197b-36f8-4210-aa11-65cf025ad83b` without waiting on a cron tick. Used for local verification.
+**Last verified against spec:** 2026-05-22. Compile + lint clean. Live ingest verification deferred to Stage 11 end-to-end run; the runner allows deferral when local dev cannot reach Inngest cloud.
+**Drift:** none.
+
+
+---
+
+## Internal onboarding Stages 5-10 (2026-05-22)
+
+#### Pathfinder/lib/agents/internal/qualifier.ts
+**Implements:** Blueprint §6 + PLAN Stage 5. Expanded with ambiguous-allow path (unknown source + construction keyword passes to verifier) and association_hint propagation from the trade-association adapter payload.
+**Last verified against spec:** 2026-05-22. 11 unit tests pass.
+**Drift:** none.
+
+#### Pathfinder/lib/agents/internal/enricher.ts
+**Implements:** Blueprint §7 + PLAN Stage 5. Sonar-driven enricher returning STRICT JSON: website, linkedin, employee_count, service_category (architecture enum-clamped), sales_motion, contacts[], associations[], brief. Same lib/llm/run substrate as Zedcor and Funder enrichers; pre-existing enrichers untouched.
+**Last verified against spec:** 2026-05-22. Parser-level tests pass; live Sonar integration covered by the Stage 5 inngest follow-on.
+**Drift:** none.
+
+#### Pathfinder/lib/agents/internal/geo.ts
+**Implements:** Blueprint §7 + PLAN Stage 5. Pure heuristic mapping to {hq_state, operating_states[]}. No branches, no haversine. Payload-first with title/summary text scanning as fallback.
+**Last verified against spec:** 2026-05-22. 7 unit tests pass.
+**Drift:** none.
+
+#### Pathfinder/lib/agents/internal/adjacency.ts
+**Implements:** Blueprint §10 decision 5 + PLAN Stage 5. Code-complete adjacency-mapper that is inert when UNICRON_INTERNAL_ADJACENCY_SEED_PATH is unset. Seed shape (unicron_customers, crm_contacts, trade_associations) documented inline.
+**Last verified against spec:** 2026-05-22. 4 unit tests pass including the inert-assertion when no seed is present.
+**Drift:** none. The Stage 5 acceptance was "code-complete and INACTIVE without the seed."
+
+#### Pathfinder/lib/inngest/functions/internal-enrich-geo-adjacency.ts
+**Implements:** Blueprint §7 + PLAN Stage 5. Subscribes to `pathfinder/project.qualified` and runs enricher + geo + adjacency for slug='internal' only. Funder events pass through unchanged into the Funder handler. Registered in app/api/inngest/route.ts.
+**Last verified against spec:** 2026-05-22. Typecheck + lint clean.
+**Drift:** none.
+
+#### Pathfinder/lib/agents/ranker/genericScorer.ts
+**Implements:** Architecture scoring.weights for Internal + Funder + Zedcor. Stage 6 ADDITIVELY adds five new extractors (sales_motion_strength, operational_footprint, federal_signal, project_driven_fit, association_presence) and reuses the existing `recency` extractor. All Funder + Zedcor extractors untouched.
+**Last verified against spec:** 2026-05-22. 15 unit tests pass; Funder ranker regression (11 tests) + qualifier/geo regression (14 tests) all pass.
+**Drift:** none.
+
+#### Pathfinder/lib/agents/ranker/genericRationale.ts
+**Implements:** Closes the generic-org Sonnet rationale gap. Stage 6 surfaces additional Internal raw_payload keys (internal_qualifier_reason, internal_enrichment, internal_geo, internal_adjacency, etc.) so Sonnet can quote them.
+**Last verified against spec:** 2026-05-22. Funder regression tests pass unchanged.
+**Drift:** none.
+
+#### Pathfinder/lib/agents/internal/verifier.ts
+**Implements:** Blueprint §8 + PLAN Stage 7. Four checks: company_exists, sales_motion_corroborated, footprint_present, score_above_threshold (threshold read from architecture.scoring.thresholds.verified × 100).
+**Last verified against spec:** 2026-05-22. 7 unit tests pass including architecture-driven threshold verification.
+**Drift:** none.
+
+#### Pathfinder/app/api/cron/verifier/route.ts
+**Implements:** PLAN Stage 7. The non-Zedcor branch now switches on orgEntry.slug. slug='internal' routes to verifyInternalProject; everything else non-Zedcor stays on verifyFunderProject. Zedcor's 5-check kernel path untouched.
+**Last verified against spec:** 2026-05-22. Typecheck + lint clean; Funder verifier regression covered by existing tests in __tests__/api/verifier-*.
+**Drift:** none.
+
+#### Pathfinder/lib/agents/internal/digest.ts
+**Implements:** Architecture business_summary + PLAN Stage 8. Composes the daily morning digest. Pure function — projects[] in, slack_text + slack_blocks + entries[] out.
+**Last verified against spec:** 2026-05-22. 5 unit tests pass.
+**Drift:** none.
+
+#### Pathfinder/app/api/cron/internal-digest/route.ts
+**Implements:** PLAN Stage 8. Vercel cron route. Looks up Internal org, pulls verified projects in the last 24h, posts to Slack via INTERNAL_SLACK_WEBHOOK_URL, and seeds deals at pipeline_stage='NEW' for each verified project (idempotent).
+**Last verified against spec:** 2026-05-22. Typecheck + lint clean. Live cron verification deferred to Stage 11.
+**Drift:** none.
+
+#### Pathfinder/vercel.json
+**Implements:** PLAN Stage 8. Appends `{ path: /pathfinder/api/cron/internal-digest, schedule: "0 13 * * 1,2,3,4,5" }`. Numeric day-of-week 1-5 (Mon-Fri) per CLAUDE.md rules.
+**Last verified against spec:** 2026-05-22.
+**Drift:** none.
+
+#### Pathfinder/lib/agents/internal/outreachDrafter.ts
+**Implements:** Architecture outreach + PLAN Stage 9. Three artifacts per verified company: cold email (Sonnet), LinkedIn message (Sonnet), internal HubSpot note (deterministic) + hubspot fields bag. Em-dash stripping enforced. Graceful no-api-key fallback for both Sonnet calls.
+**Last verified against spec:** 2026-05-22. 6 unit tests pass.
+**Drift:** none.
+
+#### Pathfinder/lib/agents/internal/hubspotNote.ts
+**Implements:** PLAN Stage 9. HubSpot writer. Gated on INTERNAL_HUBSPOT_API_KEY; missing key returns status='skipped:no_api_key' without throwing. Finds-or-creates company by name then attaches note via HubSpot association 190.
+**Last verified against spec:** 2026-05-22. Graceful-skip path covered by unit test.
+**Drift:** none.
+
+#### Pathfinder/lib/metrics/kpiQueries.ts
+**Implements:** Architecture ui_plan.kpis + PLAN Stage 10. Adds four Internal metric_id implementations: verified_count_1d, active_motion_pct, count_by_category, verified_count. avg_score and sources_live (Funder Stage 9) untouched. Stage 3 graceful-degradation contract preserved.
+**Last verified against spec:** 2026-05-22. 3 KPI-routing unit tests pass.
+**Drift:** none.
+
+#### Pathfinder/app/[slug]/page.tsx
+**Implements:** Stage 1 audit finding fix + PLAN Stage 10. Bug fix: `org_id` -> `organization_id` on the projects fetch. Unblocks every non-Zedcor slug page (Funder, Realberry, Internal). Regression guard: __tests__/api/slug-page-org-filter.test.ts greps source for the correct column name.
+**Last verified against spec:** 2026-05-22. 1 regression-guard test passes.
+**Drift:** none.

@@ -218,6 +218,139 @@ function recency(project: Project, _architecture: OrgArchitecture): number {
   return 0.2;
 }
 
+// ---------------------------------------------------------------------------
+// Internal onboarding Stage 6 — construction-vertical B2B feature extractors.
+//
+// Six per-architecture-weight extractors that read project + raw_payload
+// (no LLM). All return 0..1 normalized. Architecture weights at
+// Pathfinder-Internal-Architecture.json§scoring.weights:
+//   - sales_motion_strength: 0.25
+//   - operational_footprint: 0.20
+//   - federal_signal:        0.15
+//   - project_driven_fit:    0.15
+//   - recency:               0.15  (reused — name collides intentionally
+//                                    with Funder recency above; the
+//                                    extractor map keys by feature name
+//                                    so there is exactly one entry, used
+//                                    by both architectures.)
+//   - association_presence:  0.10
+// ---------------------------------------------------------------------------
+
+function internalRawPayload(project: Project): Record<string, unknown> {
+  return (project.raw_payload as Record<string, unknown> | null) ?? {};
+}
+
+function internalEnrichment(project: Project): Record<string, unknown> {
+  const p = internalRawPayload(project);
+  return ((p.internal_enrichment as Record<string, unknown> | undefined) ?? {}) as Record<string, unknown>;
+}
+
+function internalGeo(project: Project): Record<string, unknown> {
+  const p = internalRawPayload(project);
+  return ((p.internal_geo as Record<string, unknown> | undefined) ?? {}) as Record<string, unknown>;
+}
+
+function sales_motion_strength(project: Project, _architecture: OrgArchitecture): number {
+  const enr = internalEnrichment(project);
+  const payload = internalRawPayload(project);
+  const motion =
+    (enr.sales_motion as string | undefined) ??
+    (payload.internal_sales_motion_signal as string | undefined) ??
+    null;
+  if (motion === 'active-outbound') return 1.0;
+  if (motion === 'hiring-bd') return 0.8;
+  if (motion === 'inbound-only') return 0.3;
+
+  // Fallback: count BD/sales role signals in enrichment contacts.
+  const contacts = (enr.contacts as Array<{ title?: string }> | undefined) ?? [];
+  let salesContactCount = 0;
+  for (const c of contacts) {
+    const t = (c.title ?? '').toLowerCase();
+    if (/sales|business development|revenue|growth|bd|sdr|account executive/.test(t)) {
+      salesContactCount++;
+    }
+  }
+  if (salesContactCount >= 2) return 0.6;
+  if (salesContactCount === 1) return 0.4;
+
+  // Source-trusted: job-posting sources mean hiring-bd at the minimum.
+  if (project.source === 'custom-construction-sales-job-postings') return 0.6;
+  return 0.2;
+}
+
+function operational_footprint(project: Project, _architecture: OrgArchitecture): number {
+  const geo = internalGeo(project);
+  const states = (geo.operating_states as string[] | undefined) ?? [];
+  if (states.length >= 10) return 1.0;
+  if (states.length >= 5) return 0.8;
+  if (states.length >= 3) return 0.6;
+  if (states.length >= 2) return 0.4;
+  if (states.length === 1) return 0.2;
+  return 0;
+}
+
+function federal_signal(project: Project, _architecture: OrgArchitecture): number {
+  const payload = internalRawPayload(project);
+  const fed =
+    (payload.internal_federal_registration as string | undefined) ??
+    null;
+  if (fed === 'both') return 1.0;
+  if (fed === 'federal-awardee') return 0.8;
+  if (fed === 'sam-registered') return 0.5;
+
+  // Soft check: source = usaspending implies awardee, source = sam-gov
+  // implies sam-registered.
+  if (project.source === 'usaspending') return 0.8;
+  if (project.source === 'sam-gov') return 0.5;
+  return 0;
+}
+
+function project_driven_fit(project: Project, _architecture: OrgArchitecture): number {
+  const payload = internalRawPayload(project);
+  // NAICS match: construction 236/237/238/532412 family.
+  const naicsRaw =
+    (payload.internal_construction_naics_match as string | undefined) ??
+    (payload.primary_naics as string | undefined) ??
+    (project.naics_code as string | undefined) ??
+    '';
+  const naics = String(naicsRaw).trim();
+  const naicsHit =
+    naics.startsWith('236') || naics.startsWith('237') || naics.startsWith('238') || naics === '532412';
+
+  // Recent award density: count of recipient awards on payload if surfaced.
+  const awards = payload.awards as Array<unknown> | undefined;
+  const awardCount = Array.isArray(awards) ? awards.length : 0;
+  const jobs = payload.jobs as Array<unknown> | undefined;
+  const jobCount = Array.isArray(jobs) ? jobs.length : 0;
+
+  let score = 0;
+  if (naicsHit) score += 0.6;
+  if (awardCount >= 5) score += 0.3;
+  else if (awardCount >= 1) score += 0.15;
+  if (jobCount >= 3) score += 0.1;
+  else if (jobCount >= 1) score += 0.05;
+  return Math.min(score, 1);
+}
+
+function association_presence(project: Project, _architecture: OrgArchitecture): number {
+  const enr = internalEnrichment(project);
+  const payload = internalRawPayload(project);
+  const assocs = (enr.associations as string[] | undefined) ?? [];
+  const hint = payload.internal_association_hint as string | undefined;
+  const adjacency = (payload.internal_adjacency as Record<string, unknown> | undefined) ?? {};
+  const overlap =
+    ((adjacency.association_overlap as unknown[] | undefined) ?? []).length;
+
+  let count = assocs.length;
+  if (hint) count = Math.max(count, 1);
+  count = Math.max(count, overlap);
+
+  if (count >= 3) return 1.0;
+  if (count === 2) return 0.7;
+  if (count === 1) return 0.4;
+  return 0;
+}
+
 const EXTRACTORS: Record<string, FeatureExtractor> = {
   // Zedcor-shaped (existing) — unchanged.
   geography_match,
@@ -232,6 +365,12 @@ const EXTRACTORS: Record<string, FeatureExtractor> = {
   talent_density,
   peer_funder_signal,
   recency,
+  // Internal onboarding Stage 6 — construction-vertical B2B prospecting.
+  sales_motion_strength,
+  operational_footprint,
+  federal_signal,
+  project_driven_fit,
+  association_presence,
 };
 
 export interface GenericScoreResult {
