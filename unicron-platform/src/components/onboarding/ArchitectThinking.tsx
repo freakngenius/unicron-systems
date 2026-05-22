@@ -12,6 +12,7 @@ import type {
 import type { SystemConfig } from '../../context/SystemContext';
 import { ArchitectureEditor } from './ArchitectureEditor';
 import { ApproveDeployModal, deriveDefaultName } from './ApproveDeployModal';
+import type { CustomerIntake } from './CustomerIntakeModal';
 import {
   BusinessSummaryPanel,
   type BusinessSummaryStatus,
@@ -25,12 +26,19 @@ export type ApproveMeta = {
 
 type Props = {
   buyerPain: string;
+  /**
+   * Captured up-front via CustomerIntakeModal before decomposition kicks off.
+   * When present, the values are forwarded to postDecomposition so the proxy
+   * can stamp them onto architect_sessions.input_payload.customer_intake,
+   * and they pre-fill the ApproveDeployModal at deploy time.
+   */
+  customerIntake?: CustomerIntake;
   onApprove: (config: SystemConfig, meta: ApproveMeta) => Promise<void> | void;
 };
 
 const REVEAL_INTERVAL_MS = 60;
 
-export function ArchitectThinking({ buyerPain, onApprove }: Props) {
+export function ArchitectThinking({ buyerPain, customerIntake, onApprove }: Props) {
   const { settings } = useSettings();
   const [response, setResponse] = useState<DecompositionResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -46,9 +54,12 @@ export function ArchitectThinking({ buyerPain, onApprove }: Props) {
   // Operator-edited business_summary; overrides response.architecture.business_summary
   // until Approve/Deploy. Reset on each new decomposition.
   const [summaryEdits, setSummaryEdits] = useState<BusinessSummary | null>(null);
-  // Customer display name — starts blank (panel shows fallback "WHAT THE CUSTOMER GETS")
-  // and updates live as the operator types in the ApproveDeployModal name field.
-  const [customerDisplayName, setCustomerDisplayName] = useState('');
+  // Customer display name — seeded from CustomerIntakeModal when present so
+  // the BusinessSummaryPanel header reads the real name from the first
+  // decomposition frame; otherwise starts blank with fallback copy.
+  const [customerDisplayName, setCustomerDisplayName] = useState(
+    customerIntake?.name ?? '',
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -62,7 +73,16 @@ export function ArchitectThinking({ buyerPain, onApprove }: Props) {
     setServerError(null);
     setSummaryEdits(null);
 
-    postDecomposition({ buyerPain })
+    postDecomposition({
+      buyerPain,
+      customerIntake: customerIntake
+        ? {
+            name: customerIntake.name,
+            slug: customerIntake.slug,
+            contact_name: customerIntake.contactName,
+          }
+        : undefined,
+    })
       .then((res) => {
         if (cancelled) return;
         setResponse(res);
@@ -74,7 +94,7 @@ export function ArchitectThinking({ buyerPain, onApprove }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [buyerPain]);
+  }, [buyerPain, customerIntake]);
 
   // Prefetch existing slugs so the modal can validate uniqueness offline.
   useEffect(() => {
@@ -302,7 +322,8 @@ export function ArchitectThinking({ buyerPain, onApprove }: Props) {
 
       {pending ? (
         <ApproveDeployModal
-          defaultName={deriveDefaultName(buyerPain)}
+          defaultName={customerIntake?.name ?? deriveDefaultName(buyerPain)}
+          defaultSlug={customerIntake?.slug}
           existingSlugs={existingSlugs}
           submitting={submitting}
           serverError={serverError}

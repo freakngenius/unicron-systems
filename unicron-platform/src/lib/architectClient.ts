@@ -60,7 +60,15 @@ async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
 export async function postDecomposition(
   req: DecompositionRequest,
 ): Promise<DecompositionResponse> {
-  const body: DecompositionApiRequest = { buyer_pain_prompt: req.buyerPain };
+  // `customer_intake` is intercepted by /api/architect/decompose-proxy and
+  // stamped onto architect_sessions.input_payload after Stream D returns;
+  // Stream D itself never sees this field.
+  const body: DecompositionApiRequest & {
+    customer_intake?: DecompositionRequest['customerIntake'];
+  } = {
+    buyer_pain_prompt: req.buyerPain,
+    customer_intake: req.customerIntake,
+  };
   const api = await fetchJson<DecompositionApiResponse>('/api/architect/decompose-proxy', {
     method: 'POST',
     body: JSON.stringify(body),
