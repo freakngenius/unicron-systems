@@ -28,6 +28,9 @@ import type { SourceEvent } from '@/lib/adapters/sources';
 // Funder onboarding Stage 4 — qualifier gate before insert.
 import { qualifyForFunder } from '@/lib/agents/funder/qualifier';
 import { assignHub } from '@/lib/agents/funder/geo';
+// Internal onboarding Stage 5 — per-slug qualifier dispatch. Funder path
+// stays bit-identical; Internal events route to qualifyForInternal.
+import { qualifyForInternal } from '@/lib/agents/internal/qualifier';
 
 type StepCtx = {
   run: <T>(name: string, fn: () => Promise<T>) => Promise<T>;
@@ -53,7 +56,10 @@ interface SourceRunResult {
 // subscriber must NOT pull Zedcor sources even if a future Zedcor row
 // listed one of Funder's sources in its architecture. Gate by slug as
 // the safest discriminator (loadOrgArchitecture exposes org.slug).
-const SUBSCRIBER_OPT_IN_SLUGS = new Set(['funder']);
+// Internal onboarding Stage 4 prerequisite — additive 'internal' entry so
+// the per-org subscriber fires for the Internal org (slug 'internal').
+// Funder entry stays untouched; Zedcor remains on the legacy ingestor path.
+const SUBSCRIBER_OPT_IN_SLUGS = new Set(['funder', 'internal']);
 
 export const ingestOrgRequested = inngest.createFunction(
   {
@@ -97,6 +103,11 @@ export const ingestOrgRequested = inngest.createFunction(
         status: 'running',
         records_processed: 0,
         records_new: 0,
+        // Internal Stage 5 — agent_runs.organization_id is NOT NULL in the
+        // Supabase schema; previously this insert relied on a legacy
+        // permissive RLS to drop the row when the constraint failed,
+        // which left agent_run telemetry empty. Pass the org id now.
+        organization_id,
       }).select('id');
       if (error) {
         // Non-fatal: continue without the run id (telemetry-only).
@@ -152,9 +163,29 @@ export const ingestOrgRequested = inngest.createFunction(
 
         // Stage 4: qualifier gate before persistence. Drop events the
         // qualifier rejects so we don't pay downstream Sonnet costs for
-        // noise. Qualified events also carry inferred_thesis +
-        // compliance_flag into raw_payload for the ranker + outreach.
+        // noise. Per-slug dispatch — Funder events route to
+        // qualifyForFunder (bit-identical pre-Stage-5 behavior); Internal
+        // events route to qualifyForInternal which trusts the construction
+        // NAICS / job-board filtering already done at the adapter layer.
         const qualifiedEvents = events.filter((e) => {
+          if (org.slug === 'internal') {
+            const q = qualifyForInternal({
+              source_event_id: e.source_event_id,
+              source: sourceRef.id,
+              title: e.title,
+              summary: e.summary,
+              raw_payload: e.raw_payload,
+              architecture,
+            });
+            if (q.qualified) {
+              const p = e.raw_payload as Record<string, unknown>;
+              p.internal_qualifier_reason = q.reason;
+              p.internal_inferred_service_category = q.inferred_service_category ?? null;
+              p.internal_sales_motion_signal = q.sales_motion_signal ?? p.internal_sales_motion_signal ?? null;
+              p.internal_federal_registration = q.federal_registration ?? p.internal_federal_registration ?? null;
+            }
+            return q.qualified;
+          }
           const q = qualifyForFunder({
             source_event_id: e.source_event_id,
             source: sourceRef.id,
