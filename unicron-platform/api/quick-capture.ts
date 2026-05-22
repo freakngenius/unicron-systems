@@ -35,8 +35,11 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
+// Pathfinder runs on Next.js with basePath '/pathfinder' (see Pathfinder/
+// next.config.js). Routes live at /pathfinder/api/* on its Vercel project.
+// PATHFINDER_INGEST_URL may include the basePath already; if not, we append.
 const PATHFINDER_BASE =
-  process.env.PATHFINDER_INGEST_URL ?? 'https://pathfinder-ashy.vercel.app';
+  process.env.PATHFINDER_INGEST_URL ?? 'https://pathfinder-ashy.vercel.app/pathfinder';
 
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   res.setHeader('Access-Control-Allow-Origin', '*');
