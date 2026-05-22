@@ -51,11 +51,11 @@
   },
   "sources": [
     { "id": "custom-irs-exempt-org-filings",       "type": "pending" },
-    { "id": "custom-propublica-nonprofit-explorer", "type": "pending" },
+    { "id": "custom-propublica-nonprofit-explorer", "type": "registered" },
     { "id": "custom-accelerator-cohort-pages",     "type": "pending" },
-    { "id": "custom-ea-forum-rss",                 "type": "pending" },
-    { "id": "custom-funder-990-filings",           "type": "pending" },
-    { "id": "custom-philanthropy-trade-press-rss", "type": "pending" },
+    { "id": "custom-ea-forum-rss",                 "type": "registered" },
+    { "id": "custom-funder-990-filings",           "type": "registered" },
+    { "id": "custom-philanthropy-trade-press-rss", "type": "registered" },
     { "id": "business-license-issuances",          "type": "pending" }
   ],
   "outreach": {

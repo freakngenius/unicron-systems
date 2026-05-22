@@ -45,18 +45,38 @@ export function middleware(req: NextRequest) {
   const host = req.headers.get("host");
   if (host === FUNDER_HOST) {
     const { pathname, search } = req.nextUrl;
+    // Explicit /pathfinder/* paths are a legacy-compat passthrough
+    // (so direct deep links like /pathfinder/funder/leads still work
+    // even though the address bar shows funder.unicron.systems).
     if (pathname === "/pathfinder" || pathname.startsWith("/pathfinder/")) {
       return NextResponse.rewrite(
         new URL(`${PATHFINDER_ORIGIN}${pathname}${search}`),
       );
     }
+    // Global Pathfinder routes that are not org-scoped: API handlers,
+    // auth callback. These live at the Pathfinder root (with basePath
+    // `/pathfinder`), not under any slug.
+    if (
+      pathname.startsWith("/api/") ||
+      pathname.startsWith("/auth/")
+    ) {
+      return NextResponse.rewrite(
+        new URL(`${PATHFINDER_ORIGIN}/pathfinder${pathname}${search}`),
+      );
+    }
+    // Bare root → funder dashboard. Same-shape as everything-else but
+    // explicit so reading the middleware tells the routing story.
     if (pathname === "/") {
       return NextResponse.rewrite(
         new URL(`${PATHFINDER_ORIGIN}/pathfinder/funder${search}`),
       );
     }
+    // All other paths are tenant-scoped onto /pathfinder/funder/<path>.
+    // This is what makes funder.unicron.systems/leads resolve to the
+    // app/[slug]/leads route (slug=funder), not the global Zedcor
+    // /leads route. Same shape extends for /pipeline, /leads/<id>, etc.
     return NextResponse.rewrite(
-      new URL(`${PATHFINDER_ORIGIN}/pathfinder${pathname}${search}`),
+      new URL(`${PATHFINDER_ORIGIN}/pathfinder/funder${pathname}${search}`),
     );
   }
 
