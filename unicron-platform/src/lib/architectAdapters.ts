@@ -44,11 +44,18 @@ export function decompositionApiToLegacy(
 // Synthesize the type-on `lines[]` Stream C's UI expects from Stream D's
 // structured `architecture` + `reasoning[]`. The lines are categorized by
 // `kind` so the UI's color/glyph treatment still works.
+//
+// `options.includeOpenQuestions` defaults to true for backward compat —
+// callers that render open questions as a separate interactive UI element
+// (the conversational onboarding loop) pass `false` to omit the OPEN
+// QUESTIONS block from the type-on lines.
 export function architectureToLines(
   arch: DecompositionArchitecture,
   reasoning: string[],
   costUsd?: number,
+  options?: { includeOpenQuestions?: boolean },
 ): DecompositionLine[] {
+  const includeOpenQuestions = options?.includeOpenQuestions ?? true;
   const out: DecompositionLine[] = [];
   let i = 0;
   out.push({ index: i++, text: `BUYER         ${arch.buyer}`, kind: 'buyer' });
@@ -84,7 +91,7 @@ export function architectureToLines(
     out.push({ index: i++, text: `  L4  ${a.role.padEnd(20)} ${truncate(a.instruction, 80)}`, kind: 'arch' });
   }
 
-  if (arch.open_questions.length > 0) {
+  if (includeOpenQuestions && arch.open_questions.length > 0) {
     out.push({ index: i++, text: '', kind: 'header' });
     out.push({ index: i++, text: 'OPEN QUESTIONS', kind: 'header' });
     for (const q of arch.open_questions) {

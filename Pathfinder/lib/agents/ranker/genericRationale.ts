@@ -83,6 +83,15 @@ function buildUserPayload(args: GenericRationaleArgs): string {
         'ntee_code',
         'fundraising_stage',
         'raise_target',
+        // Internal onboarding Stage 6 — surface Internal context.
+        'internal_qualifier_reason',
+        'internal_inferred_service_category',
+        'internal_sales_motion_signal',
+        'internal_federal_registration',
+        'internal_association_hint',
+        'internal_enrichment',
+        'internal_geo',
+        'internal_adjacency',
       ].includes(k),
     ),
   );

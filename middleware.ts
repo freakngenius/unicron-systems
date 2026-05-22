@@ -10,7 +10,15 @@ import { NextResponse, type NextRequest } from "next/server";
 // middleware approach runs before file-system routing and reliably sees
 // the Host header, so bare `/` and arbitrary `/<path>` requests on the
 // funder host land on the right Pathfinder route.
+//
+// INTERNAL HOST ROUTING (Stage 3 of internal-onboarding):
+// Internal org accesses Pathfinder via internal.unicron.systems. Mirrors
+// the Funder shape: bare host root rewrites to /pathfinder/internal, deep
+// paths rewrite to /pathfinder/internal/<path> (or pass-through when the
+// path already carries /pathfinder). Strictly additive — does not alter
+// the Funder branch.
 const FUNDER_HOST = "funder.unicron.systems";
+const INTERNAL_HOST = "internal.unicron.systems";
 const PATHFINDER_ORIGIN = "https://pathfinder-ashy.vercel.app";
 
 // The admin gate originally ran on a narrow matcher list. Now that the
@@ -86,6 +94,22 @@ export function middleware(req: NextRequest) {
     // /settings (→ org-scoped not-found backstop), /onboarding/* (same).
     return NextResponse.rewrite(
       new URL(`${PATHFINDER_ORIGIN}/pathfinder/funder${stripped}${search}`),
+    );
+  }
+  if (host === INTERNAL_HOST) {
+    const { pathname, search } = req.nextUrl;
+    if (pathname === "/pathfinder" || pathname.startsWith("/pathfinder/")) {
+      return NextResponse.rewrite(
+        new URL(`${PATHFINDER_ORIGIN}${pathname}${search}`),
+      );
+    }
+    if (pathname === "/") {
+      return NextResponse.rewrite(
+        new URL(`${PATHFINDER_ORIGIN}/pathfinder/internal${search}`),
+      );
+    }
+    return NextResponse.rewrite(
+      new URL(`${PATHFINDER_ORIGIN}/pathfinder${pathname}${search}`),
     );
   }
 

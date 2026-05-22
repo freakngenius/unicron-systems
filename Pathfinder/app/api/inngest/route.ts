@@ -24,6 +24,7 @@ import {
   orgCreated,
   checkReadyToViewCron,
   funderEnrichAdjacency,
+  internalEnrichGeoAdjacency,
 } from '@/lib/inngest/functions';
 
 export const { GET, POST, PUT } = serve({
@@ -60,6 +61,12 @@ export const { GET, POST, PUT } = serve({
     // the next ranker cycle picks up the row. Funder-only via slug filter
     // inside the handler.
     funderEnrichAdjacency,
+    // Internal onboarding Stage 5 — `pathfinder/project.qualified`
+    // subscriber that runs the Internal enricher + geo + adjacency
+    // before the next ranker cycle picks up the row. Internal-only
+    // via slug filter inside the handler. Adjacency is inert until
+    // UNICRON_INTERNAL_ADJACENCY_SEED_PATH is set.
+    internalEnrichGeoAdjacency,
   ],
 });
 

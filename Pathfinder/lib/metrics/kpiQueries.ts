@@ -87,12 +87,95 @@ async function sourcesLive(orgId: string): Promise<KpiValue> {
   return sources.filter((s) => s.type === 'registered').length;
 }
 
+// ---------------------------------------------------------------------------
+// Internal KPI implementations (Stage 10).
+// ---------------------------------------------------------------------------
+
+/** verified=true projects ranked in the last 24 hours for the org. */
+async function verifiedCount1d(orgId: string): Promise<KpiValue> {
+  const dayAgo = new Date(Date.now() - 86_400_000).toISOString();
+  const { count, error } = await admin()
+    .from('projects')
+    .select('id', { count: 'exact', head: true })
+    .eq('organization_id', orgId)
+    .eq('verified', true)
+    .gte('ranked_at', dayAgo);
+  if (error) return null;
+  return count ?? 0;
+}
+
+/** Percent of verified Internal companies with sales_motion='active-outbound'. */
+async function activeMotionPct(orgId: string): Promise<KpiValue> {
+  const { data, error } = await admin()
+    .from('projects')
+    .select('raw_payload')
+    .eq('organization_id', orgId)
+    .eq('verified', true)
+    .limit(10_000);
+  if (error || !data) return null;
+  const rows = data as Array<{ raw_payload: Record<string, unknown> | null }>;
+  if (rows.length === 0) return 0;
+  const active = rows.filter((r) => {
+    const enr = (r.raw_payload?.internal_enrichment as Record<string, unknown> | undefined) ?? {};
+    return enr.sales_motion === 'active-outbound';
+  }).length;
+  return Math.round((active / rows.length) * 100);
+}
+
+/** count by service_category as a JSON-stringified record (for the bar chart). */
+async function countByCategory(orgId: string): Promise<KpiValue> {
+  const { data, error } = await admin()
+    .from('projects')
+    .select('raw_payload')
+    .eq('organization_id', orgId)
+    .eq('verified', true)
+    .limit(10_000);
+  if (error || !data) return null;
+  const rows = data as Array<{ raw_payload: Record<string, unknown> | null }>;
+  const buckets: Record<string, number> = {};
+  for (const r of rows) {
+    const enr = (r.raw_payload?.internal_enrichment as Record<string, unknown> | undefined) ?? {};
+    const cat =
+      (enr.service_category as string | undefined) ??
+      (r.raw_payload?.internal_inferred_service_category as string | undefined) ??
+      'unknown';
+    buckets[cat] = (buckets[cat] ?? 0) + 1;
+  }
+  return JSON.stringify(buckets);
+}
+
+/** count of verified projects per day for the last 30 days (JSON line chart). */
+async function verifiedCount(orgId: string): Promise<KpiValue> {
+  const since = new Date(Date.now() - 30 * 86_400_000).toISOString();
+  const { data, error } = await admin()
+    .from('projects')
+    .select('ranked_at')
+    .eq('organization_id', orgId)
+    .eq('verified', true)
+    .gte('ranked_at', since)
+    .limit(10_000);
+  if (error || !data) return null;
+  const rows = data as Array<{ ranked_at: string | null }>;
+  const buckets: Record<string, number> = {};
+  for (const r of rows) {
+    if (!r.ranked_at) continue;
+    const day = r.ranked_at.slice(0, 10);
+    buckets[day] = (buckets[day] ?? 0) + 1;
+  }
+  return JSON.stringify(buckets);
+}
+
 export const kpiQueryByMetricId: Record<string, KpiQueryFn> = {
   // Funder KPI metric_ids (architecture.ui_plan.kpis):
   verified_count_7d: verifiedCount7d,
   actively_raising_count: activelyRaisingCount,
   avg_score: avgScore,
   sources_live: sourcesLive,
+  // Internal KPI metric_ids (Stage 10):
+  verified_count_1d: verifiedCount1d,
+  active_motion_pct: activeMotionPct,
+  count_by_category: countByCategory,
+  verified_count: verifiedCount,
 };
 
 /** Resolve a kpi value by metric_id. Returns null for unmapped ids. */
