@@ -3,8 +3,8 @@
 @tailwind utilities;
 
 @layer base {
-  html, body { margin: 0; padding: 0; height: 100%; background: #ffffff; overflow: hidden; }
-  #__next, body, html { height: 100%; }
+  html, body { margin: 0; padding: 0; min-height: 100%; background: #ffffff; }
+  #__next { min-height: 100%; }
   * { box-sizing: border-box; }
   body {
     font-family: var(--font-inter), system-ui, -apple-system, sans-serif;

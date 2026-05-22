@@ -108,19 +108,19 @@ export default async function OrgPipelinePage({ params }: Props) {
 
       <nav data-funder-nav style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginBottom: '1.5rem' }}>
         {[
-          { href: '/', label: 'Dashboard' },
-          { href: '/leads', label: titleCase(leadsPlural) },
-          { href: '/pipeline', label: 'Pipeline' },
+          { href: `/${slug}`, label: 'Dashboard' },
+          { href: `/${slug}/leads`, label: titleCase(leadsPlural) },
+          { href: `/${slug}/pipeline`, label: 'Pipeline' },
         ].map(({ href, label }) => (
           <Link
             key={href}
             href={href}
             style={{
               padding: '0.5rem 1rem',
-              background: href === '/pipeline' ? '#1a1a1a' : '#111',
-              border: `1px solid ${href === '/pipeline' ? '#444' : '#333'}`,
+              background: href === `/${slug}/pipeline` ? '#1a1a1a' : '#111',
+              border: `1px solid ${href === `/${slug}/pipeline` ? '#444' : '#333'}`,
               borderRadius: 4,
-              color: href === '/pipeline' ? '#fff' : '#aaa',
+              color: href === `/${slug}/pipeline` ? '#fff' : '#aaa',
               fontSize: '0.875rem',
               textDecoration: 'none',
             }}
@@ -193,7 +193,7 @@ export default async function OrgPipelinePage({ params }: Props) {
                   {items.map((lead) => (
                     <Link
                       key={lead.id}
-                      href={`/leads/${encodeURIComponent(lead.id)}`}
+                      href={`/${slug}/leads/${encodeURIComponent(lead.id)}`}
                       style={{
                         background: '#0a0a0a',
                         border: '1px solid #1f1f1f',
