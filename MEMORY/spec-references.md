@@ -1155,3 +1155,26 @@ The 4 adapter files modified in this PR (`propublica-nonprofit-explorer.ts`, `ir
 **Implements:** Barrel export for the Inngest function set. Adds `funderEnrichAdjacency` (PR #449). Existing entries unchanged.
 **Last verified against spec:** 2026-05-22.
 **Drift:** none.
+
+---
+
+## Internal Onboarding, Stage 2 (Pathfinder organization #4)
+
+**State:** Branch `internal-org-record` off `internal-onboarding` at `5147493`. Stage 2 of the autonomous Internal build per `Pathfinder/docs/PLAN-internal-onboarding.md`. Persists "Unicron Internal" row via `POST /api/organizations` and adds the round-trip architecture fixture test. Spec: `Pathfinder/Pathfinder-Internal-Blueprint.md` Section 9. No `lib/` files touched; only `scripts/` and `__tests__/` additions.
+
+### Stage 2, Org record persistence
+
+#### Pathfinder/scripts/seed-internal-org.ts
+**Implements:** Blueprint Section 9, Stage 2, plus PLAN Stage 2. Idempotent loader that POSTs the Internal architecture JSON to `/api/organizations` (or direct supabaseAdmin insert as fallback). Mirrors `scripts/seed-funder-org.ts` structure. Two modes (`--via-api`, default supabase); `--dry-run` short-circuit; slug-based idempotency. Default `PATHFINDER_BASE_URL` is `http://localhost:3000/pathfinder` (basePath per next.config.js).
+**Last verified against spec:** 2026-05-21. Live POSTed against local dev (`localhost:3300/pathfinder/api/organizations`) and returned 201 with row id `2ff1197b-36f8-4210-aa11-65cf025ad83b`.
+**Drift:** none.
+
+#### Pathfinder/__tests__/fixtures/internal-architecture.json
+**Implements:** Blueprint Section 9, Stage 2. Verbatim copy of `Pathfinder/Pathfinder-Internal-Architecture.json` for fixture-based unit testing. Mirrors `__tests__/fixtures/funder-architecture.json` precedent.
+**Last verified against spec:** 2026-05-21.
+**Drift:** none.
+
+#### Pathfinder/__tests__/agents/loadOrgArchitecture-internal.test.ts
+**Implements:** Blueprint Section 9, Stage 2. Round-trip the Internal architecture JSON through `resolveArchitecture` and assert Internal-shaped values survive merge with `BASE_ARCHITECTURE`. 13 assertions cover vertical, lead unit, pipeline stages, scoring weights (6 keys summing to 1.0), thresholds (verified=0.65), sources (6 refs: 2 registered plus 4 pending), outreach, vocabulary, branding (`display_name = "Unicron Internal"`), ui_plan, business_summary, and base-fallback non-regression.
+**Last verified against spec:** 2026-05-21. 13/13 pass against `pnpm exec vitest run __tests__/agents/loadOrgArchitecture-internal.test.ts`.
+**Drift:** none.
