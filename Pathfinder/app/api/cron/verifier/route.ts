@@ -34,6 +34,8 @@ import { fetchActiveScoringConfig } from '@/lib/scoring-config-server';
 // Zedcor-shaped flow below.
 import { loadOrgArchitecture } from '@/lib/agents/loadOrgArchitecture';
 import { verifyFunderProject } from '@/lib/agents/verifier/funderChecks';
+// Internal onboarding Stage 7 — per-slug verifier dispatch.
+import { verifyInternalProject } from '@/lib/agents/internal/verifier';
 import type { OrgArchitecture } from '@/lib/types/architecture';
 // Platform org id (Zedcor) for telemetry attribution on agent_runs / agent_log.
 // Phase 2A completion made organization_id NOT NULL on those tables.
@@ -472,20 +474,26 @@ async function verifyOneProject(args: {
   const failures: string[] = [];
   const project_id = project.id;
 
-  // ---- Funder onboarding Stage 6 — non-Zedcor branch ----
-  // Run Funder-shaped checks for any project whose organization_id is
-  // present AND is not Zedcor. Reads architecture.scoring.thresholds
-  // instead of fetchActiveScoringConfig (Zedcor's path).
+  // ---- Funder + Internal onboarding — non-Zedcor branch ----
+  // Run the per-slug verifier for any project whose organization_id is
+  // present AND is not Zedcor. Internal (Stage 7) dispatches to
+  // verifyInternalProject; everything else non-Zedcor stays on the
+  // Funder-shaped checks. Both read architecture.scoring.thresholds
+  // (×100 inside the per-slug module) instead of fetchActiveScoringConfig
+  // (Zedcor's path).
   const projectOrgId = project.organization_id ?? null;
   if (projectOrgId && zedcorOrgId && projectOrgId !== zedcorOrgId && orgArchitectures) {
     const orgEntry = orgArchitectures.get(projectOrgId);
     if (orgEntry) {
-      const verdict = verifyFunderProject({ project, architecture: orgEntry.architecture });
+      const isInternal = orgEntry.slug === 'internal';
+      const verdict = isInternal
+        ? verifyInternalProject({ project, architecture: orgEntry.architecture })
+        : verifyFunderProject({ project, architecture: orgEntry.architecture });
       await writeLog(admin, 'check_rationale', {
-        message: `funder verify · ${project_id} · ${orgEntry.slug} · ${verdict.verified ? 'pass' : 'fail'} · threshold=${verdict.verified_threshold_0_100}/100`,
+        message: `${isInternal ? 'internal' : 'funder'} verify · ${project_id} · ${orgEntry.slug} · ${verdict.verified ? 'pass' : 'fail'} · threshold=${verdict.verified_threshold_0_100}/100`,
         project_id,
         organization_id: projectOrgId,
-        kernel: 'funder',
+        kernel: isInternal ? 'internal' : 'funder',
         checks: verdict.checks,
         verified_threshold_0_100: verdict.verified_threshold_0_100,
       });
