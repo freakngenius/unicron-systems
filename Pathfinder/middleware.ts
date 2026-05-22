@@ -87,7 +87,12 @@ const PUBLIC_HOSTS = new Set(['funder.unicron.systems']);
 // domain has not been wired yet but whose /pathfinder/<slug> surface
 // should already be reachable for review. Must be kept in lockstep with
 // PUBLIC_SLUGS in app/[slug]/layout.tsx so both layers agree.
-const PUBLIC_PATH_PREFIXES = ['/pathfinder/internal'];
+//
+// IMPORTANT: Next.js strips the basePath from `req.nextUrl.pathname` in
+// middleware, so a request for `/pathfinder/internal` arrives here as
+// `/internal`. Prefixes here MUST be basePath-stripped paths, not the
+// raw URL paths visible to the browser.
+const PUBLIC_PATH_PREFIXES = ['/internal'];
 
 export function middleware(req: NextRequest) {
   const forwardedHost = req.headers.get('x-forwarded-host') ?? req.headers.get('host') ?? '';
