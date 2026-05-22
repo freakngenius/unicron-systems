@@ -322,3 +322,111 @@ The verifier fix lands. It does what was asked. It is not the binding constraint
 2. **Sonar enricher misses prior_affiliation for named founders**. The enrichment prompt could be tightened: today the model is given license to return `notes` instead of `prior_affiliation` when it can't find an explicit prior employer, which means rich founders (Barbra Streisand, "Jen B. the ex-Googler") collect notes but no structured `prior_affiliation` — which is the field the verifier reads. Either tighten the prompt to map "publicly-known profession" → `prior_affiliation`, or extend the verifier to also consider `notes` strings.
 3. **Named-org corroboration channel in `checkOrgExists`**. Per §8.5 option (2). Conditional on operator alignment that this isn't a gate loosening; arguably it's the equal-treatment of Sonar-derived org-existence evidence vs ProPublica's source-trust shortcut.
 4. **Real grantee-portfolio swap** (§4 follow-up). Until this lands, the adjacency layer produces synthetic warm-intro signal and the verifier has no portfolio-anchored corroboration to lean on.
+
+---
+
+## 9. UX pass (branch `funder-ux-pass`, off `origin/main` post #463)
+
+**Run:** 2026-05-22, branch `funder-ux-pass`. Scope: end-to-end UX repair against the audit gap list in `Pathfinder/docs/AUDIT-funder-ux-pass.md`. Acceptance bar: a customer can be shown `https://funder.unicron.systems` without losing the deal.
+
+### 9.1 Audit
+
+Pre-fix Playwright walk captured 6 views to `Pathfinder/docs/audit-screenshots/`. Per-view gaps documented in `Pathfinder/docs/AUDIT-funder-ux-pass.md`:
+
+- Dashboard: nav links global (Dashboard → Zedcor); lead cards empty (org_id vs organization_id bug); both charts placeholder text; KPI sources_live=0 dishonest; architecture JSON disclosure leaked operator-only config; no clickable destination for the verified opportunity.
+- /leads: not-found.tsx (no app/[slug]/leads route).
+- /pipeline: global Zedcor kanban, no header, no funder nav.
+- /settings: header literally said "Pathfinder / ZEDCOR / SETTINGS" — hard brand leak.
+- /onboarding/connectors: "ORG / ZEDCOR" chip.
+
+Operator acks on four open questions: (1) sources_live counts `type='registered'` (option a); (2) Settings + onboarding/connectors removed from nav entirely + 404 backstop; (3) new file for funder lead detail; (4) copy driven by architecture vocabulary.
+
+### 9.2 Fixes (all additive, zero Zedcor diff)
+
+#### Routing — `middleware.ts` (workspace root)
+
+The funder-host catch-all previously rewrote `/<path>` → `/pathfinder/<path>`, which sent every nav click to the global Zedcor surface. Rewritten so:
+- `/api/*`, `/auth/*` (and their basePath-prefixed forms) → `/pathfinder/api/*`, `/pathfinder/auth/*` (global handlers).
+- `/funder*`, `/pathfinder/funder*` → `/pathfinder/funder*` (explicit org pass-through).
+- Everything else (`/`, `/leads`, `/pipeline`, `/leads/<id>`, including the basePath-prepended forms `/pathfinder/leads`, `/pathfinder/pipeline`, ...) → `/pathfinder/funder<stripped>`. This is what makes funder.unicron.systems/leads resolve to `app/[slug]/leads/page.tsx` (slug=funder) instead of the global Zedcor `/leads`.
+
+Strips a leading `/pathfinder` segment before routing so Next.js Link's basePath-prepended hrefs (`<Link href="/leads">` → `/pathfinder/leads` in HTML) are tenant-scoped identically to bare hrefs. Zero diff for any other host.
+
+#### Persisted architecture + JSON
+
+Flipped the 4 live adapters from `pending` to `registered` on the `pathfinder.organizations.architecture` row (Supabase SQL) and synced `Pathfinder-Funder-Architecture.json`:
+
+| Source | Old | New | Reason |
+|---|---|---|---|
+| `custom-propublica-nonprofit-explorer` | pending | **registered** | 44 rows ingested live |
+| `custom-ea-forum-rss` | pending | **registered** | 7 rows ingested live |
+| `custom-philanthropy-trade-press-rss` | pending | **registered** | 2 rows ingested live (Chronicle + IP) |
+| `custom-funder-990-filings` | pending | **registered** | 2 rows ingested live (Open Phil + EV Foundation) |
+| `custom-irs-exempt-org-filings` | pending | pending | Needs operator config: `architecture.sources[id].config.bulk_url` |
+| `custom-accelerator-cohort-pages` | pending | pending | Tier-2 human-assist, returns `[]` until operator seeds URLs |
+| `business-license-issuances` | pending | pending | Tier-2 by design |
+
+KPI `sources_live` consumes the row directly (`lib/metrics/kpiQueries.ts:73-83`) so it flips from 0 → 4 with zero code change. Honest: increments as operator config + adapter promotion land.
+
+#### New routes (all under `app/[slug]/...`, additive)
+
+- **`app/[slug]/leads/page.tsx`** — lists all org-scoped opportunities (top scored first, verified first). Total + verified counts in header. Cards link into the org-scoped detail.
+- **`app/[slug]/leads/[projectId]/page.tsx`** — funder-shaped detail: VERIFIED chip + score, chip row (thesis/stage/legal-form/hub/source), Sonar brief, founders list with prior affiliations, snapshot grid, citations, ranker rationale. URL-decodes `projectId` before the Supabase lookup (Next.js does NOT auto-decode dynamic segments; project ids contain `:` which arrive URL-encoded as `%3A`).
+- **`app/[slug]/pipeline/page.tsx`** — kanban driven by `architecture.pipeline.stages` (sourced/reviewing/contacted/in-diligence/funded/passed). Each card shows org_name + score + thesis/stage chips. Cards click into the detail. Bucketed by `raw_payload.funder_pipeline_stage` with a "sourced" default. No fake `deal_activities` rows.
+
+#### Dashboard rewrite — `app/[slug]/page.tsx`
+
+- **Fixed `.eq('org_id', org.id)` → `.eq('organization_id', org.id)`.** This was the silent reason Funder's 65 DB rows rendered as zero leads in the dashboard.
+- Nav dropped Settings + onboarding/connectors entirely (org config is operator-only). The 3 remaining tabs use bare paths (`/`, `/leads`, `/pipeline`) that the funder-host middleware tenant-scopes.
+- Removed the `<details>Architecture JSON</details>` block. Operator-only data no longer leaks into the customer UI.
+- Project rows through `projectFunderLead` before passing to `LeadCardList` so primary/secondary fields populate from `raw_payload.funder_enrichment.*` and qualifier-time signals.
+- Charts now real SVG; placeholder text removed. Series resolved via `getChartSeries(orgId, metric_id)`.
+
+#### New helpers
+
+- **`lib/agents/funder/leadView.ts`** — projects a `pathfinder.projects` row into the flat shape `LeadCard` wants. Labels (thesis area, hub, stage, legal form, source) come from `architecture.lead_unit.schema.enum_values` → human labels. Drives copy from the architecture, not Zedcor.
+- **`lib/metrics/chartQueries.ts`** — `count_by_thesis` (bar) buckets by `funder_enrichment.thesis_area / funder_inferred_thesis`. `verified_count` (line) is 8-week ISO-week series of `verified=true` projects.
+- **`lib/metrics/kpiQueries.ts` (actively_raising)** — extended to read both legacy `raw_payload.fundraising_stage` AND the enrichment-derived `raw_payload.funder_enrichment.fundraising_stage`. The verifier already reads the same enrichment block; KPI now agrees with the verifier's data path.
+
+#### New chart renderer — `components/Chart.tsx`
+
+Zero-dep SVG bar + line. Preserves `data-chart` / `data-chart-id` / `data-chart-type` markers so the DoD smoke harness (`scripts/dod-smoke.ts` step 8) still finds them. Existing `components/ChartPlaceholder.tsx` kept untouched for backwards compatibility with its 4 existing tests.
+
+### 9.3 Pipeline + Inngest dispatch — end-to-end re-verification
+
+Emitted `pathfinder/org.ingest_requested` to `inn.gs` for org=funder (event id `01KS76DHMJXAYWBCRQ7FEF2VAS`). Live verified:
+
+- `pathfinder.agent_runs` id 5929 — `agent_name='ingestor'`, `organization_id='a91e88ef-...'`, `records_processed=85`, `records_new=0`, `status='success'`. PR #463's `organization_id` fix on the `agent_runs` insert held — function now logs telemetry every cycle.
+- 0 net-new rows because all 85 source events deduped against existing 65 — correct behavior. No `pathfinder/project.qualified` events fired this cycle, so `funderEnrichAdjacency` did not run (correct; nothing fresh to enrich).
+- Funder data state confirmed: **65 total · 65 enriched · 65 adjacency · 65 scored · 1 verified**.
+
+### 9.4 Honest verified count
+
+**1 of 65 verified** (Longevity Research Institute, propublica:824334368, score 65). Unchanged from PR #463 §8.4. The verifier fix from PR #463 (`funder_enrichment.founders[*].prior_affiliation`) is in. Did not loosen the gate. Did not extend the SOURCE_TRUSTED set. Data-coverage finding from §8.5 still applies — Sonar enrichment returned empty founders[] or no prior_affiliation for the 7 other high-scoring rows.
+
+### 9.5 Verification
+
+| Check | Result |
+|---|---|
+| `pnpm typecheck` | 0 errors |
+| `pnpm test` | 170 files / 1739 tests passing (in isolation; 3 ranker integration tests flake on parallel full-suite runs against the live DB — unrelated to this PR) |
+| `pnpm build` | exit 0, "Compiled successfully", static pages generated |
+| Zedcor regressed? | No. No diff to `lib/zedcor/**`, `lib/scoring.ts`, `app/zedcor/**`, `app/leads`, `app/pipeline`, `app/settings`, `app/onboarding`, verifier route, ranker route, ingest-org-requested logic. The middleware change is gated by `host === FUNDER_HOST`. |
+| Destructive ops | None. Read-only Supabase reads + the architecture.sources jsonb_set on `organization_id=funder` only. |
+
+### 9.6 Screenshots (post-fix, attached to PR)
+
+`Pathfinder/docs/audit-screenshots-after/`:
+- `01-after-funder-root.png` — dashboard with real KPIs (1/0/46%/4), real bar+line charts, 6 lead cards.
+- `02-after-funder-leads.png` — Opportunities list, "65 total · 1 verified".
+- `03-after-funder-pipeline.png` — 6-column kanban; SOURCED = 65; other columns honestly 0.
+- `04-after-funder-lead-detail.png` — Longevity Research Institute detail with VERIFIED chip, brief, citations, rationale.
+- `05-after-funder-settings-404.png` — Settings backstop 404 (no nav button visible to customer).
+- `06-after-funder-onboarding-404.png` — Onboarding-connectors backstop 404.
+
+### 9.7 Known polish items (not in scope, observed during the run)
+
+1. **Lead-card field labels** still render as raw schema keys (`ORG_NAME`, `THESIS_AREA`). `architecture.lead_unit.schema.<field>.display_label` is present in the persisted architecture (e.g., `"Organization"`, `"Thesis area"`). Threading the label through `LeadCard` is a follow-up touch — copy on cards reads less polished than headings/chips that already use vocabulary.
+2. **Empty-state for `RAISE_TARGET` / `FOUNDERS`** is "—" on cards where enrichment didn't surface founders or a numeric raise target. Honest, but visually busy. A future pass could hide empty fields entirely.
+3. **`onboarding/connectors` and `settings`** currently fall through to a generic `not-found.tsx`. A more polished backstop would be a customer-facing "Managed by the Pathfinder team" panel — defer until the operator-side Settings surface is built.
+4. **Pipeline default bucket** sends every row to SOURCED until an operator sets `raw_payload.funder_pipeline_stage`. The "move card" interaction isn't wired in this PR — the kanban is read-only.

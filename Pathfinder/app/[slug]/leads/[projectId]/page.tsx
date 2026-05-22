@@ -23,7 +23,13 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 export default async function OrgLeadDetailPage({ params }: Props) {
-  const { slug, projectId } = await params;
+  const raw = await params;
+  const slug = raw.slug;
+  // Next.js dynamic-route params are NOT URL-decoded by the framework.
+  // Project ids carry colons (e.g. `propublica:824334368`), which
+  // browsers encode as %3A — leave that as-is in the URL, decode here
+  // before hitting Supabase.
+  const projectId = decodeURIComponent(raw.projectId);
 
   const adminAny = supabaseAdmin() as unknown as { from: (t: string) => any };
   const { data: org } = (await adminAny
