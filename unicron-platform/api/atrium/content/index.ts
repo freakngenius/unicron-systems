@@ -4,10 +4,17 @@
 // and returns a structured list for the Atrium Marketing > Content view.
 //
 // Sprint 6 Stream A.
+//
+// Bug fix (2026-05-22): added GitHub fallback. Production (Vercel) has no
+// filesystem-mounted vault, so VAULT_WIKI_DIR is never set and the endpoint
+// returned an empty list. Now mirrors the wiki/index.ts pattern: try the
+// filesystem first (local dev), then fall back to walking the
+// unicron-knowledge GitHub repo via the git-trees + blob APIs.
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import fs from 'node:fs';
 import path from 'node:path';
+import { ghListWikiFiles, ghFetchBlob } from '../wiki/_github.js';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -153,19 +160,90 @@ export default async function handler(
   }
 
   const wikiDir = resolveVaultWikiDir();
-
-  if (!wikiDir) {
-    // Vault not mounted — return empty list with hint
-    res.status(200).json({
-      items: [],
-      vaultMounted: false,
-      hint: 'Set VAULT_WIKI_DIR env var to the absolute path of unicron-knowledge/wiki/',
-    });
-    return;
-  }
-
   const items: ContentItem[] = [];
-  walkMarkdown(wikiDir, wikiDir, items);
+  let vaultMounted = false;
+  let source: 'filesystem' | 'github' | 'none' = 'none';
+
+  if (wikiDir) {
+    // Local dev path: walk the mounted filesystem.
+    walkMarkdown(wikiDir, wikiDir, items);
+    vaultMounted = true;
+    source = 'filesystem';
+  } else {
+    // Production fallback: walk the unicron-knowledge GitHub repo. Mirrors the
+    // approach already used by api/atrium/wiki/index.ts when VAULT_PATH is
+    // absent. Requires GITHUB_VAULT_TOKEN to be set (it already is for wiki).
+    try {
+      const files = await ghListWikiFiles();
+      // Fetch blobs in parallel (cap at 25 concurrent to be polite to the API).
+      const BATCH = 25;
+      for (let i = 0; i < files.length; i += BATCH) {
+        const batch = files.slice(i, i + BATCH);
+        const contents = await Promise.all(
+          batch.map(async (f) => {
+            try {
+              const raw = await ghFetchBlob(f.sha);
+              return { path: f.path, raw };
+            } catch {
+              return null;
+            }
+          }),
+        );
+        for (const c of contents) {
+          if (!c) continue;
+          const fm = parseFrontmatter(c.raw);
+          const typeVal = typeof fm['type'] === 'string' ? fm['type'] : '';
+          if (!CONTENT_TYPES.has(typeVal)) continue;
+          const tagsRaw = fm['tags'];
+          const tags = Array.isArray(tagsRaw)
+            ? tagsRaw
+            : typeof tagsRaw === 'string' && tagsRaw
+              ? [tagsRaw]
+              : [];
+          // c.path is wiki/foo/bar.md — strip the leading 'wiki/' so
+          // relativePath matches the filesystem-walked shape.
+          const relPath = c.path.startsWith('wiki/') ? c.path.slice(5) : c.path;
+          items.push({
+            filename: path.basename(c.path),
+            relativePath: relPath,
+            title:
+              typeof fm['title'] === 'string' && fm['title']
+                ? fm['title']
+                : path.basename(c.path).replace(/\.md$/, ''),
+            type: typeVal,
+            publishedDate:
+              typeof fm['date'] === 'string' && fm['date'] ? fm['date'] : null,
+            channel:
+              typeof fm['channel'] === 'string' && fm['channel']
+                ? fm['channel']
+                : null,
+            traction:
+              typeof fm['traction'] === 'string' && fm['traction']
+                ? fm['traction']
+                : null,
+            tags,
+          });
+        }
+      }
+      vaultMounted = true;
+      source = 'github';
+    } catch (err) {
+      // GitHub unreachable or token missing — fall through to empty list with
+      // a helpful hint so the UI can surface something actionable.
+      const detail = err instanceof Error ? err.message : String(err);
+      res.status(200).json({
+        items: [],
+        vaultMounted: false,
+        source: 'none',
+        hint:
+          'Vault content unavailable. Either mount VAULT_WIKI_DIR locally or ' +
+          'set GITHUB_VAULT_TOKEN on the unicron-platform Vercel project so ' +
+          'the GitHub fallback can read freakngenius/unicron-knowledge. ' +
+          `(detail: ${detail})`,
+      });
+      return;
+    }
+  }
 
   // Sort by publishedDate desc, then title asc
   items.sort((a, b) => {
@@ -177,5 +255,5 @@ export default async function handler(
     return a.title.localeCompare(b.title);
   });
 
-  res.status(200).json({ items, vaultMounted: true });
+  res.status(200).json({ items, vaultMounted, source });
 }

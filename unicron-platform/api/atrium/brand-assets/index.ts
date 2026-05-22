@@ -354,10 +354,22 @@ export default async function handler(
 
   const brandDir = resolveBrandDir();
   if (!brandDir) {
+    // Bug-fix (2026-05-22): Brand/ lives outside the unicron-knowledge git
+    // repo (Dropbox-only), so there's no GitHub fallback like Content has.
+    // On Vercel, BRAND_DIR will never be set and this endpoint returns empty.
+    // The proper fix is to migrate Brand/ to Supabase Storage (or a similar
+    // remote bucket) so both reads and writes work across deploys. Until that
+    // ships, this hint surfaces the real situation rather than the misleading
+    // "set BRAND_DIR" instruction that won't help on Vercel.
     res.status(200).json({
       assets: [],
       brandDirMounted: false,
-      hint: 'Set BRAND_DIR env var to the absolute path of the Brand/ directory.',
+      hint:
+        'Brand Assets is currently filesystem-only. Locally, set BRAND_DIR to ' +
+        'the absolute path of your Brand/ directory. On Vercel, the surface ' +
+        'is empty until Brand/ is migrated to Supabase Storage (tracked in ' +
+        'the Atrium audit fix closeout punch list).',
+      migration_target: 'supabase-storage://brand',
     });
     return;
   }
