@@ -52,12 +52,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     return;
   }
 
-  const apiKey = process.env.UNICRON_INTERNAL_API_KEY;
+  // Pathfinder's /api/ingest endpoint authenticates against
+  // UNICRON_INGEST_API_KEY (see Pathfinder/app/api/ingest/route.ts auth
+  // comment). That's a different env name from UNICRON_INTERNAL_API_KEY
+  // (which Pathfinder's action-items PATCH uses). Prefer the canonical
+  // INGEST var; fall back to INTERNAL for projects that already have only
+  // that variable set.
+  const apiKey =
+    process.env.UNICRON_INGEST_API_KEY ?? process.env.UNICRON_INTERNAL_API_KEY;
   if (!apiKey) {
     res.status(503).json({
       configured: false,
       error:
-        'Quick Capture is not configured. Set UNICRON_INTERNAL_API_KEY on the unicron-platform Vercel project (must match the same key set on the Pathfinder project).',
+        'Quick Capture is not configured. Set UNICRON_INGEST_API_KEY on the ' +
+        'unicron-platform Vercel project — must match the same value already ' +
+        'set on the Pathfinder project (which is where /api/ingest validates).',
     });
     return;
   }
