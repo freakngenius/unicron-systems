@@ -147,3 +147,79 @@ No `lib/` files modified. No do-not-touch path modified.
 Stage 2 added only `scripts/`, `__tests__/`, and `MEMORY/` entries. No shared platform code modified. Cross-org regression check N/A; will be exercised by the build/typecheck/test gate of every subsequent stage and at Stage 11 end-to-end.
 
 ---
+
+## Stage 3, Vanity domain, host routing, auth
+
+**Status:** complete (stage branch merged into `internal-onboarding`).
+**Stage branch:** `internal-host-routing` (commits `ecc9497`, `ecc0043`, `0ed9ae8`).
+**Integration merge commit:** `4449f22 merge(stage3): integrate Internal host routing, operator gate, env-var enumeration`.
+**Push:** `4b769ee..4449f22 internal-onboarding -> internal-onboarding`.
+**Kanban:** Stage 3 card moved to Deployed with append.
+
+### What landed
+
+| File | Change |
+| --- | --- |
+| `middleware.ts` (workspace root) | +24 lines. `INTERNAL_HOST` branch mirroring the Funder `FUNDER_HOST` shape from commit `b00f11f` (additive). |
+| `Pathfinder/next.config.js` | Added `internal.unicron.systems` to `experimental.serverActions.allowedOrigins`. |
+| `tests/unit/middleware.test.ts` (NEW) | 9 host-rewrite tests: 5 Internal (root, deep path, query-string preservation, basePath handling, non-matching host pass-through) + 4 Funder regression. |
+| `Pathfinder/__tests__/api/internal-operator-gate.test.ts` (NEW) | 3 guardrail tests asserting `app/[slug]/layout.tsx` is slug-generic and the existing operator gate covers `/internal` without a per-org fork. |
+| `Pathfinder/__tests__/metrics/internal-kpiQueries.test.ts` (NEW) | 3 graceful-degradation tests for the 6 Internal KPI metric_ids (renderer returns null, no 503). |
+| `MEMORY/spec-references.md` | +47 lines. Stage 3 entries plus env-var enumeration. |
+
+### Curl evidence (Pathfinder dev, port 3000)
+
+```
+$ curl -i http://localhost:3000/pathfinder/internal
+HTTP 401   (Pathfinder middleware basic-auth gate)
+
+$ curl -i -u "$BASIC_AUTH_USER:$BASIC_AUTH_PASS" http://localhost:3000/pathfinder/internal
+HTTP 307   Location: /pathfinder/login   (operator gate, no session)
+
+$ curl -i -u "$BASIC_AUTH_USER:$BASIC_AUTH_PASS" http://localhost:3000/pathfinder/funder
+HTTP 307   Location: /pathfinder/login   (Funder regression: bit-identical)
+```
+
+The `Host: internal.unicron.systems` rewrite path is covered by unit tests; the rewrite target is the production Vercel URL `pathfinder-ashy.vercel.app`, unreachable from local dev. The Funder precedent shipped on the same constraint.
+
+### Auto-merge gate output (Pathfinder)
+
+```
+pnpm test:      1729 passed, 24 skipped, 173 files (includes 6 new Stage 3 tests)
+pnpm typecheck: clean
+pnpm lint:      No ESLint warnings or errors
+pnpm build:     green; Middleware 25.3 kB
+```
+
+Workspace-root vitest pass: 9/9 host-rewrite tests. Three pre-existing env-required failures (env.test.ts + 2 mycelium integration) on the unchanged base SHA are not caused by this stage.
+
+### Env-var enumeration (per runner Stage 3 acceptance)
+
+**REQUIRED (route 500s without):**
+- `NEXT_PUBLIC_SUPABASE_URL` (org lookup, allowlist, `auth.getUser`).
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY` (anon client for session validation).
+- `SUPABASE_SERVICE_ROLE_KEY` (service-role for org + allowlist queries).
+- `BASIC_AUTH_USER`, `BASIC_AUTH_PASS` (Pathfinder middleware basic-auth transit gate).
+
+**OPTIONAL (route degrades gracefully, asserted by tests):**
+- KPI implementations for `verified_count_1d`, `active_motion_pct`, `count_by_category`, `verified_count` (not yet populated for Internal; `getKpiValue` returns null and the renderer shows an em-dash placeholder). Stage 10 fills these.
+- `ANTHROPIC_API_KEY`, `PERPLEXITY_API_KEY`, `UPSTASH_REDIS_REST_URL`/`TOKEN`, `HELICONE_API_KEY`, `AXIOM_*`, `INNGEST_*` (agent-pipeline only, not touched at render time).
+- `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` (used by leads/map components, not the `/[slug]` landing).
+
+### Newly discovered fork
+
+The orchestrator brief named `Pathfinder/middleware.ts` as the host-routing file (an assumption inherited from the runner prompt). The Funder precedent commit `b00f11f` and the Stage 1 audit (PLAN line 179) actually confirm the host routing lives in the **workspace-root** `middleware.ts`. The subagent followed the precedent and the audit, not the assumption. `Pathfinder/middleware.ts` was not modified.
+
+### Multi-Vercel verification note (for operator)
+
+The workspace-root `middleware.ts` is part of the unicron-systems Vercel project (the reverse proxy that fronts `unicron.systems` and rewrites `/pathfinder/*` to the pathfinder app). Per the multi-Vercel rule, verify the unicron-systems project independently after this branch goes live. The change is purely additive (new conditional, no removal), and the Funder precedent landed the same shape on `main`. Risk: low. Verification: hit `https://unicron.systems/` (root rewrites) and `https://funder.unicron.systems/` after the next unicron-systems redeploy.
+
+### Operator action (Vercel domain + DNS)
+
+This stage delivers the code path. Assign `internal.unicron.systems` to the **pathfinder** Vercel project (not unicron-systems), then add a CNAME at the registrar pointing the subdomain to the Vercel target. Confirm DNS control of `unicron.systems` and that the subdomain does not collide with an existing record before assigning it. Stage 3 cannot be human-Verified until both are done.
+
+### Regression check
+
+Funder host rewrite: 4 unit tests pass plus local curl returns bit-identical behavior. Zedcor scoring kernel: not exercised by Stage 3 (Stage 3 touched no scorer code). Cron routes: not exercised by Stage 3 (Stage 3 touched no cron code). Will be exercised by Stage 11 end-to-end.
+
+---
