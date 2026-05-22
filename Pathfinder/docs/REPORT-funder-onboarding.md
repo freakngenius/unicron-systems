@@ -143,3 +143,89 @@ The user's standing rule was honored: any implementation/architecture fork the s
 ## 6. Closing
 
 `funder-onboarding` is at commit `691cc37`, pushed to origin. One PR into `main` is opened with this report linked, awaiting human review.
+
+---
+
+## 7. Post-merge follow-ups (PR #448 → main, work continued on `funder-followups`)
+
+**Run:** 2026-05-22, branch `funder-followups` off `origin/main` post merge of PR #448 (squash `a12b7cb`). Single PR opened, not merged.
+
+**Scope addressed:** §4 follow-up items 1 (adapter endpoints), 5 (enricher + adjacency invocation), plus host routing (carried over from a parallel-session commit `6471244` preserved through the merge).
+
+### 7.1 Adapter endpoint fixes — live-verified 2026-05-22
+
+| Adapter | Pre-fix state | Patch | Live verification |
+|---|---|---|---|
+| `custom-propublica-nonprofit-explorer` | HTTP 500 on `ntee[id]=<letter>` (V, W, E, R, B). ProPublica's search.json rejects NTEE letter codes; numeric major-category IDs would collapse all sub-codes into one bucket. | Drop `ntee[id]` param entirely. Rely on free-text `q` + `c_code[id]=3` (501(c)(3)). NTEE granularity moved to the qualifier stage. | 6/12 thesis queries return real records, 6/12 are zero-result (404 with valid JSON), adapter logs+continues. 44 unique orgs ingested in the E2E run. |
+| `custom-irs-exempt-org-filings` | HTTP 403 from TEOS spot search (`apps.irs.gov/app/eos/api/Search`). Endpoint is now bot-gated behind Akamai. | Switch to bulk BMF CSV mode only. Adapter type `'registered'` → `'pending'`. Documents canonical bulk URLs (`irs.gov/pub/irs-soi/eo[1-4].csv`). New CSV parser handles BMF schema, filters by SUBSECTION=`03` (501(c)(3)) within `lookback_years` recency window. | All 4 BMF CSVs return HTTP 200. Returns `[]` when `config.bulk_url` unset, which is the correct unconfigured state. Adapter test rewritten to cover bulk-CSV path. |
+| `custom-philanthropy-trade-press-rss` | Chronicle URL `/section/news/137/feed` → 404. Inside Philanthropy `/home?format=rss` → returns HTML (Squarespace ignored the param). PND `/news/rss.xml` 301-redirects to Candid blog page with no RSS. | Chronicle URL → `/feed/`. IP URL → `/feed` (discovered via `<link rel="alternate" type="application/rss+xml">`). PND retired from defaults. | Chronicle: 200, 10 items. IP: 200, 20 items. PND: confirmed no working replacement. |
+| `custom-funder-990-filings` | HTTP 404 on both hardcoded EINs (`454962108`, `463254889`). Parent entities renamed and re-registered under new EINs. | Replace with live-verified EINs: Open Philanthropy `810737472` (6 filings), Effective Ventures Foundation USA `471988398` (10 filings). | Both EINs resolve via ProPublica org-detail endpoint. |
+| `custom-ea-forum-rss` | Already working (HTTP 200, ~190KB RSS). | No change. | Confirmed live. |
+| `custom-accelerator-cohort-pages` | Working (returns `[]` by design, tier-2-human-assist). | No change. | Confirmed: empty default config returns `[]`. |
+| `business-license-issuances` | Working (returns `[]` by design, `pending`). | No change. | Confirmed: empty default config returns `[]`. |
+
+### 7.2 Enricher + adjacency wired into pipeline
+
+New event surface `pathfinder/project.qualified` (events.ts) — distinct from `signal.qualified` which fires after ranking; this fires after the qualifier gate during ingest, BEFORE the ranker sees the row. Emitted from `ingestOrgRequested` per inserted row.
+
+New Inngest function `funderEnrichAdjacency` (`lib/inngest/functions/funder-enrich-adjacency.ts`) subscribes to `project.qualified`, slug-filters to `funder`, loads the project, runs `enrichForFunder` + `findFunderAdjacency`, and merges results into `projects.raw_payload` under `funder_enrichment` + `funder_adjacency` keys. Idempotent on `funder_enrichment.enriched_at`. Graceful-empty when the LLM gateway is unavailable so a missing env never blocks a row.
+
+Also registered `ingestOrgRequested` in `app/api/inngest/route.ts` `serve()` — it was exported in PR #448 but never wired into the serve handler, so Inngest cloud was not receiving the per-org dispatch.
+
+### 7.3 Pipeline E2E driven 2026-05-22
+
+Driven against Funder org `a91e88ef-be63-43d0-84f1-cc2fadf01467` on Supabase `anfihcusvekpovcchpoh`:
+
+- **Ingest** — 50 new projects inserted (44 ProPublica, 2 EA Forum, 2 funder-990, 2 philanthropy-RSS). 4 deduped vs existing. 0 errors. Total fetched 85, qualified 54.
+- **Rank** — 6 ranker cycles cleared the queue. All 64 Funder projects scored. Top scores 85 (METR), 81 (Streisand Foundation), 77, 70, 65×3.
+- **Enrich + adjacency** — Inngest dev server was not running locally, so the function body was driven directly via a one-off script for the top 6 ranked projects. 6/6 enrich + 6/6 adjacency succeeded, total cost ~$0.006 via Perplexity Sonar.
+- **Verify** — 64/64 ran one verifier pass (`verifier_pass_count=1`). **`verified=true` count: 1** (Longevity Research Institute, propublica:824334368, score 65). 63 fail one of: source-trust shortcut (EA Forum + philanthropy-rss have no source-trusted bypass), score < verified threshold (65), or no Tier-1/2 institution name in title/summary.
+- **Phase 2E status** — `awaiting_threshold` (verified-count below threshold).
+- **Weekly Deal Memo cron** — HTTP 200, generated non-empty memo: 1 opportunity, 1 thesis area (longevity), ~3300-char HTML body, real Sonnet rationale + first-step prose. `send_result: { skipped: 'no_to_env' }` — `FUNDER_MEMO_TO` env not set locally; the route generates correctly and email delivery is gated.
+
+### 7.4 Host routing for `funder.unicron.systems` (parallel-session commit preserved)
+
+Commit `6471244` (parallel session before the merge) added host-conditional `beforeFiles` rewrites in the parent `unicron-systems` `next.config.mjs` so `funder.unicron.systems/<path>` proxies to `pathfinder-ashy.vercel.app/pathfinder/<path>`, with a special case mapping `/` to `/pathfinder/funder`. Pathfinder's `next.config.js` adds the subdomain to `experimental.serverActions.allowedOrigins`. `Pathfinder/middleware.ts` carries a comment-only change documenting that host routing lives at the parent project, not in Pathfinder (because Pathfinder's `basePath` is enforced at request-receipt). No Zedcor paths touched. Verification needs the merged code on `unicron-systems` Vercel + DNS for the subdomain — operator action.
+
+### 7.5 New follow-ups discovered during the post-merge run
+
+1. **Verifier doesn't read `funder_enrichment.founders` yet.** `verifyFunderProject` checks for `raw_payload.founder_affiliation` (string) and the haystack `title + summary + founder_affiliation`. With enrichment now wired, the verifier could read `raw_payload.funder_enrichment.founders[*].prior_affiliation` to clear the `founder_credible` check on ProPublica/EA-Forum orgs that previously failed. Holding for a separate scope-bounded PR.
+2. **EA-Forum source-trust bypass.** Several EA-Forum posts surface as ranked candidates (METR @ 85, Rethink Priorities Cross-Cause Fund @ 70) but fail `org_exists`/`founder_credible` because EA-Forum is not in `SOURCE_TRUSTED`. Question for operator: extend `SOURCE_TRUSTED` to include `custom-ea-forum-rss` when the post passes the qualifier (e.g., for posts tagged `Announcing` or `Launch`), or keep the strict source-trust set and rely on enrichment-derived corroboration.
+3. **ProPublica 404-on-zero-results error noise.** ProPublica's search.json returns HTTP 404 with valid JSON when zero matches. The adapter throws and the per-query catch logs `[propublica] query "<q>" failed: ProPublica fetch failed: 404 {…}`. Functionally fine (skipped + continued); the log noise is misleading because it reads like a real error. Could short-circuit a 404 with empty `total_results` as a benign empty-result, separate PR.
+4. **Inngest function registration completeness.** `ingestOrgRequested` was previously missing from `serve()`; I added it in this PR. There may be other exported Inngest functions in `lib/inngest/functions/index.ts` that aren't registered in `app/api/inngest/route.ts` — worth a separate audit pass.
+
+### 7.6 Operator env vars required in Vercel (Pathfinder project, Production scope)
+
+For `/funder` to render and for HubSpot/Slack/memo delivery to operate end-to-end after merge, the following env vars need to be set in the **Pathfinder Vercel project** (not unicron-systems / unicron-platform):
+
+**Already required by PR #448 (status carried forward):**
+- `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` — Supabase access.
+- `ANTHROPIC_API_KEY` — Sonnet rationale + Haiku classifier.
+- `PERPLEXITY_API_KEY` — Funder enricher + adjacency (Sonar surface via the LLM gateway).
+- `CRON_SECRET` — Vercel cron auth for all `/api/cron/*` routes.
+- `INNGEST_EVENT_KEY`, `INNGEST_SIGNING_KEY` — Inngest dispatch.
+- `BASIC_AUTH_USER`, `BASIC_AUTH_PASS` — middleware gate for the Pathfinder demo (operator-facing).
+- `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`, `NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID` — leaflet/map for Zedcor; not required by Funder paths but the build assumes them present.
+
+**New for Funder Weekly Deal Memo + delivery:**
+- `RESEND_API_KEY` — email send via Resend (already required platform-wide; new requirement is the FUNDER_MEMO_TO addressee).
+- `FUNDER_MEMO_TO` — comma-separated list of recipient emails for the Weekly Deal Memo (without this the cron generates the memo but skips send with `skipped: 'no_to_env'`).
+- `FUNDER_MEMO_FROM` — optional, defaults to `pathfinder@unicron.systems`.
+
+**New for Funder integrations (degrades gracefully when missing):**
+- `FUNDER_HUBSPOT_API_KEY` — HubSpot record push from the Funder outreach drafter.
+- `FUNDER_SLACK_WEBHOOK_URL` — Funder Slack channel for the one-line alert.
+- `FUNDER_OUTREACH_FROM` — sender address for cold-email auto-drafts.
+
+**New for IRS BMF bulk ingest (operator-configured in `architecture.sources[id=custom-irs-exempt-org-filings].config`, not env):**
+- `bulk_url` — set to one of `https://www.irs.gov/pub/irs-soi/eo[1-4].csv` per region.
+- `lookback_years` — optional, defaults to 3.
+- `row_limit` — optional, defaults to 5000.
+
+I am not setting any of these — operator action required per the deploy-chain rule (`vercel env add` is the allowed exception; this is the operator's call).
+
+### 7.7 Pipeline-quality observations (not code blockers)
+
+- 1 verified opportunity surfaced this run, against `verified_threshold=65`. Top candidates that *should* be in the candidate pool (METR @ 85, Rethink Priorities Cross-Cause Fund @ 70, Streisand Foundation @ 81) fail verification because (a) they're not from ProPublica/IRS (no source-trust shortcut) and (b) the verifier doesn't yet read enrichment-derived founder data. Follow-up §7.5.1.
+- All 64 projects ranked; ranker latency averaged ~8s per project (Sonnet rationale dominant cost).
+- Funder's Phase 2E status reached `awaiting_threshold` and held — neither `ready_to_view` nor `build_out_complete`. The `check-ready-to-view-cron` Inngest function gates the transition on verified count; with 1 verified, the threshold is not met. The transition mechanism itself is wired correctly (the same path advanced Funder from `setting_up` → `first_run` during PR #448).
