@@ -296,3 +296,70 @@ The `agent_runs.organization_id` fix MAY require the Funder live-ingest path to 
 - Then dispatch Stage 5 (qualifier expansion + Enricher reconfigure + Geo-mapper reconfigure + Adjacency-mapper inactive scaffold). The qualifier scaffold from Stage 4 is the starting point.
 
 ---
+
+## Stages 5 through 10, Pipeline build (consolidated sub-agent)
+
+**Status:** all six stages complete, merged, pushed.
+**Stage branch:** `internal-pipeline-5to10` (7 commits: `b48e2c3`, `af07bed`, `eaf9b55`, `459c982`, `6671b8a`, `8b81215`, `37c3f43`).
+**Integration merge commit:** `1244bab merge(stages5-10): integrate Internal pipeline (qualifier through dashboard)`.
+**Push:** `7718cbe..1244bab internal-onboarding -> internal-onboarding`.
+
+### Per-stage summary
+
+| Stage | Commit | What landed |
+| --- | --- | --- |
+| 5  Qualifier + Enricher + Geo + Adjacency | `b48e2c3` | `lib/agents/internal/{qualifier,enricher,geo,adjacency}.ts` plus `internal-enrich-geo-adjacency` Inngest handler. Adjacency-mapper code-complete but INACTIVE until `UNICRON_INTERNAL_ADJACENCY_SEED_PATH` is set (seed shape documented in file header). |
+| 6  Six feature extractors | `af07bed` | Additive entries in `lib/agents/ranker/genericScorer.ts` for sales_motion_strength, operational_footprint, federal_signal, project_driven_fit, recency (shared with Funder), association_presence. Rationale builder reads Internal raw_payload keys. Zedcor + Funder scoring byte-identical. |
+| 7  Verifier | `eaf9b55` | `lib/agents/internal/verifier.ts` + per-slug dispatch at `app/api/cron/verifier/route.ts`. Thresholds from `architecture.scoring.thresholds.verified` (0.65). |
+| 8  Daily digest | `459c982` | `composeInternalDigest` + `app/api/cron/internal-digest/route.ts` + Vercel cron `0 13 * * 1,2,3,4,5` (weekday morning UTC, numeric DoW). Idempotent kanban load at `deals.pipeline_stage='NEW'`. |
+| 9  Outreach + integrations | `6671b8a` | `draftInternalOutreach` (Sonnet email + LinkedIn + deterministic HubSpot note). `postInternalHubspotNote` gated on `INTERNAL_HUBSPOT_API_KEY` (HubSpot company-note association id 190; distinct from existing 214 for note to deal). Slack gating shipped in Stage 8 via `INTERNAL_SLACK_WEBHOOK_URL`. |
+| 10 Dashboard + bug fix | `8b81215` | Four new KPI impls in `lib/metrics/kpiQueries.ts` (`verified_count_1d`, `active_motion_pct`, `count_by_category`, `verified_count`). **Pre-existing `app/[slug]/page.tsx:63` org_id-vs-organization_id bug fixed** (Funder + Realberry feeds unblocked too). Regression-guard test added at `__tests__/api/slug-page-org-filter.test.ts`. |
+| Docs | `37c3f43` | `MEMORY/spec-references.md` +84 lines covering all Stage 5-10 lib/ touches. |
+
+### Auto-merge gate (run at end of consolidated sub-agent)
+
+```
+pnpm install --frozen-lockfile: clean (Done in 831ms)
+pnpm typecheck:                 clean (tsc --noEmit no output)
+pnpm lint:                      No ESLint warnings or errors
+pnpm test --run:                Test Files 176 passed | 7 skipped (183)
+                                Tests      1804 passed | 24 skipped (1828)
+                                +62 new Internal tests vs baseline 1742; zero failures
+pnpm build:                     clean (rendered route listing, no errors)
+```
+
+### Funder regression result
+
+- `__tests__/agents/funder-ranker.test.ts`: 11/11 pass.
+- `__tests__/agents/funder-qualifier-geo.test.ts`: 14/14 pass.
+- `__tests__/adapters/sources-funder.test.ts`: included in full-suite green.
+
+### Newly discovered forks (recorded by sub-agent)
+
+1. Internal enricher/geo/adjacency live at `lib/agents/internal/*` parallel to `lib/agents/funder/*`. The platform-shared `lib/agents/{enricher,geo,adjacency}.ts` stays Zedcor-shaped (do-not-touch zone).
+2. Per-slug dispatch has two surfaces: (a) inline qualifier switch in `ingest-org-requested`; (b) `HANDLER_OPT_IN_SLUGS = new Set(['internal'])` on the new `internalEnrichGeoAdjacency` handler. Funder's `funder-enrich-adjacency` handler is unchanged.
+3. `recency` extractor shared between Funder and Internal (single map entry).
+4. Kanban "New / Outreach Ready" maps to `deals.pipeline_stage = 'NEW'` (existing column value).
+5. HubSpot company-note association id 190; distinct from the existing 214 used by `lib/hubspot/client.ts:attachNote`.
+
+### Unresolved for human (post-merge)
+
+1. **Adjacency-mapper INACTIVE** until `UNICRON_INTERNAL_ADJACENCY_SEED_PATH` env var is set and points to the Unicron customer-list / CRM / trade-association seed file. Code is loaded but no-ops without the seed (per blueprint Section 10 decision 5).
+2. **Inngest cloud rediscovery**: `internalEnrichGeoAdjacency` is registered at `app/api/inngest/route.ts`. Inngest cloud must rediscover the function set on the next production deploy after merge for the new subscription to fire.
+3. **Cron secret**: `app/api/cron/internal-digest` requires `CRON_SECRET` (same secret already in use by other Pathfinder crons; likely already set).
+4. **Optional env vars**: `INTERNAL_SLACK_WEBHOOK_URL` (digest delivery) and `INTERNAL_HUBSPOT_API_KEY` (HubSpot note write). Both degrade gracefully when unset.
+
+### Live-run verification
+
+Deferred to Stage 11 per runner allowance. All code paths have typed + unit-tested fallbacks so a failing live integration degrades to a no-op rather than throwing. The first production cron tick after merge will exercise the full pipeline end-to-end against Internal org id `2ff1197b-36f8-4210-aa11-65cf025ad83b` and populate `agent_runs`, `pathfinder.projects`, and the daily Slack digest.
+
+---
+
+## Final session disposition
+
+- **PR #465** (`internal-onboarding -> main`) open and unmerged at commit `1244bab` (Stages 0-10).
+- **Live preview** at `https://pathfinder-git-internal-onboarding-kekas-projects-89ac4317.vercel.app/pathfinder/internal` confirmed `READY` on the Vercel branch deployment for the post-merge head (rebuilds on push).
+- **Stage 11 (end-to-end live proof)** deferred to post-PR-merge. Once `main` advances and the production cron tick fires, the pipeline runs against Internal automatically. Verify by polling `pathfinder.projects` for `organization_id = '2ff1197b-36f8-4210-aa11-65cf025ad83b'` and watching the daily Slack digest (if `INTERNAL_SLACK_WEBHOOK_URL` set).
+- All kanban cards for Stages 0-10 moved to Deployed. Verified column remains human-only.
+
+---
