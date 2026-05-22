@@ -97,6 +97,11 @@ export const ingestOrgRequested = inngest.createFunction(
         status: 'running',
         records_processed: 0,
         records_new: 0,
+        // organization_id is NOT NULL in pathfinder.agent_runs; without
+        // it every cloud Inngest run failed silently at this step. The
+        // ingest-org-requested subscriber is per-org by construction, so
+        // the value is always available.
+        organization_id,
       }).select('id');
       if (error) {
         // Non-fatal: continue without the run id (telemetry-only).

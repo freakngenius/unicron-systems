@@ -118,4 +118,99 @@ describe('Funder verifier', () => {
     // should pass.
     expect(v.checks.not_widely_funded).toBe(true);
   });
+
+  it('reads founder credibility from funder_enrichment.founders[*].prior_affiliation (Tier 1)', () => {
+    const v = verifyFunderProject({
+      project: makeProject({
+        source: 'custom-philanthropy-trade-press-rss', // not in SOURCE_TRUSTED
+        title: 'Mission-Aligned Research Lab',
+        summary: 'Independent AI safety research.',
+        raw_payload: {
+          // No legacy founder_affiliation; enrichment has it.
+          funder_enrichment: {
+            founders: [
+              { name: 'Jane Doe', prior_affiliation: 'OpenAI alignment team' },
+            ],
+          },
+        },
+      }),
+      architecture: FUNDER_ARCH,
+    });
+    expect(v.checks.founder_credible).toBe(true);
+    expect(v.checks.org_exists).toBe(true);
+  });
+
+  it('reads founder credibility from funder_enrichment.founders[*].prior_affiliation (Tier 2)', () => {
+    const v = verifyFunderProject({
+      project: makeProject({
+        source: 'custom-philanthropy-trade-press-rss',
+        title: 'Independent Foundation',
+        summary: 'New philanthropy.',
+        raw_payload: {
+          funder_enrichment: {
+            founders: [
+              { name: 'Jane Doe', prior_affiliation: 'Stanford CS dept' },
+            ],
+          },
+        },
+      }),
+      architecture: FUNDER_ARCH,
+    });
+    expect(v.checks.founder_credible).toBe(true);
+  });
+
+  it('falls back to org_exists corroboration via enrichment-derived founder affiliation', () => {
+    const v = verifyFunderProject({
+      project: makeProject({
+        source: 'custom-ea-forum-rss', // not source-trusted, no EIN, no legacy founder_affiliation
+        title: 'New AI safety project',
+        summary: 'Research org launch.',
+        raw_payload: {
+          funder_enrichment: {
+            founders: [
+              { name: 'Jane Doe', prior_affiliation: 'Anthropic interpretability' },
+            ],
+          },
+        },
+      }),
+      architecture: FUNDER_ARCH,
+    });
+    expect(v.checks.org_exists).toBe(true);
+    expect(v.checks.founder_credible).toBe(true);
+  });
+
+  it('ignores enrichment founders with empty/missing prior_affiliation', () => {
+    // Streisand-foundation-shaped row: enrichment has founders but no
+    // prior_affiliation strings. Verifier should still fail org_exists +
+    // founder_credible because there is no corroborating affiliation.
+    const v = verifyFunderProject({
+      project: makeProject({
+        source: 'custom-philanthropy-trade-press-rss',
+        title: 'The Streisand Foundation',
+        summary: 'Philanthropy.',
+        raw_payload: {
+          funder_enrichment: {
+            founders: [
+              { name: 'Barbra Streisand', role: 'founder' }, // no prior_affiliation
+            ],
+          },
+        },
+      }),
+      architecture: FUNDER_ARCH,
+    });
+    expect(v.checks.org_exists).toBe(false);
+    expect(v.checks.founder_credible).toBe(false);
+  });
+
+  it('legacy raw_payload.founder_affiliation still works (no regression)', () => {
+    const v = verifyFunderProject({
+      project: makeProject({
+        source: 'custom-philanthropy-trade-press-rss',
+        raw_payload: { founder_affiliation: 'DeepMind safety' },
+      }),
+      architecture: FUNDER_ARCH,
+    });
+    expect(v.checks.founder_credible).toBe(true);
+    expect(v.checks.org_exists).toBe(true);
+  });
 });

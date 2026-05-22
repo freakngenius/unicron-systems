@@ -74,7 +74,20 @@ function decodeBasicHeader(header: string | null): { user: string; pass: string 
   }
 }
 
+// Customer-direct subdomains that bypass the Pathfinder demo basic-auth
+// gate entirely. The unicron-systems edge middleware (PR #460) routes
+// these hosts onto Pathfinder's /pathfinder/<slug> route via external
+// rewrite; x-forwarded-host preserves the original host so we can match
+// on it here. The corresponding /[slug] layout has the slug in its
+// PUBLIC_SLUGS set, so the Supabase magic-link layer is also bypassed.
+const PUBLIC_HOSTS = new Set(['funder.unicron.systems']);
+
 export function middleware(req: NextRequest) {
+  const forwardedHost = req.headers.get('x-forwarded-host') ?? req.headers.get('host') ?? '';
+  if (PUBLIC_HOSTS.has(forwardedHost.toLowerCase())) {
+    return NextResponse.next();
+  }
+
   const expectedUser = process.env.BASIC_AUTH_USER;
   const expectedPass = process.env.BASIC_AUTH_PASS;
 
