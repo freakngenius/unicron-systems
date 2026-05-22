@@ -1,0 +1,64 @@
+{
+  "totalRecords": 2,
+  "entityData": [
+    {
+      "ueiSAM": "ABC123DEF456",
+      "entityRegistration": {
+        "samRegistered": "Yes",
+        "ueiSAM": "ABC123DEF456",
+        "cageCode": "1ABC2",
+        "legalBusinessName": "Sample Construction Services Inc",
+        "dbaName": null,
+        "registrationStatus": "A",
+        "registrationDate": "2024-03-15",
+        "lastUpdateDate": "2026-04-10",
+        "purposeOfRegistrationCode": "Z1"
+      },
+      "coreData": {
+        "physicalAddress": {
+          "addressLine1": "100 Main St",
+          "city": "Houston",
+          "stateOrProvinceCode": "TX",
+          "zipCode": "77001",
+          "countryCode": "USA"
+        }
+      },
+      "assertions": {
+        "goodsAndServices": {
+          "primaryNaics": "236220",
+          "naicsList": [
+            { "naicsCode": "236220", "naicsDescription": "Commercial and Institutional Building Construction", "sbaSmallBusiness": "Y" }
+          ]
+        }
+      }
+    },
+    {
+      "ueiSAM": "XYZ987WVU654",
+      "entityRegistration": {
+        "samRegistered": "Yes",
+        "ueiSAM": "XYZ987WVU654",
+        "cageCode": "9XYZ8",
+        "legalBusinessName": "Sample Heavy Civil LLC",
+        "registrationStatus": "A",
+        "registrationDate": "2023-11-01",
+        "lastUpdateDate": "2026-03-20",
+        "purposeOfRegistrationCode": "Z1"
+      },
+      "coreData": {
+        "physicalAddress": {
+          "city": "Phoenix",
+          "stateOrProvinceCode": "AZ",
+          "countryCode": "USA"
+        }
+      },
+      "assertions": {
+        "goodsAndServices": {
+          "primaryNaics": "237310",
+          "naicsList": [
+            { "naicsCode": "237310", "naicsDescription": "Highway, Street, and Bridge Construction" }
+          ]
+        }
+      }
+    }
+  ]
+}

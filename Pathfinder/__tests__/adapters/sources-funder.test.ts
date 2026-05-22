@@ -42,8 +42,13 @@ function mockFetchByUrl(map: Record<string, { body: unknown; isXml?: boolean; ok
 
 describe('SOURCE_ADAPTERS registry', () => {
   it('registers all 7 Funder source ids', () => {
-    const ids = Object.keys(SOURCE_ADAPTERS).sort();
-    expect(ids).toEqual([
+    // Internal onboarding Stage 5 added six Internal adapters additively.
+    // This regression check verifies the seven Funder ids are still
+    // present (subset check, not equality, so future per-org additions
+    // do not destabilize the suite). The Internal-side registry coverage
+    // lives in __tests__/adapters/sources-internal.test.ts.
+    const ids = new Set(Object.keys(SOURCE_ADAPTERS));
+    const funderIds = [
       'business-license-issuances',
       'custom-accelerator-cohort-pages',
       'custom-ea-forum-rss',
@@ -51,7 +56,10 @@ describe('SOURCE_ADAPTERS registry', () => {
       'custom-irs-exempt-org-filings',
       'custom-philanthropy-trade-press-rss',
       'custom-propublica-nonprofit-explorer',
-    ]);
+    ];
+    for (const id of funderIds) {
+      expect(ids.has(id), `Funder adapter id missing from registry: ${id}`).toBe(true);
+    }
   });
 
   it('every Funder architecture source id resolves to a registered adapter', () => {
