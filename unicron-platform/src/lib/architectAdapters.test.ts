@@ -169,6 +169,21 @@ describe('architectureToLines', () => {
     const text = lines.map((l) => l.text).join('\n');
     expect(text).not.toMatch(/REJECTED SOURCES/);
   });
+
+  it('omits the OPEN QUESTIONS block when includeOpenQuestions is false', () => {
+    // Conversational onboarding renders open_questions as a separate
+    // interactive UI element, so it asks the adapter to skip them in lines.
+    const arch: DecompositionArchitecture = {
+      ...exampleArchitecture,
+      open_questions: ['need to clarify branch coverage radius'],
+    };
+    const lines = architectureToLines(arch, [], undefined, {
+      includeOpenQuestions: false,
+    });
+    const text = lines.map((l) => l.text).join('\n');
+    expect(text).not.toMatch(/OPEN QUESTIONS/);
+    expect(text).not.toMatch(/branch coverage radius/);
+  });
 });
 
 describe('archProposalRowToLegacy', () => {
