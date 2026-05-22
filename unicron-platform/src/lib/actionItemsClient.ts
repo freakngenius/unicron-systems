@@ -19,9 +19,13 @@
 // UNICRON_INTERNAL_API_KEY secret stored in Vercel. The value must be set in
 // the Atrium runtime environment as VITE_UNICRON_INTERNAL_API_KEY.
 
+// Pathfinder runs on Next.js with basePath '/pathfinder' (see
+// Pathfinder/next.config.js). Routes are at /pathfinder/api/* on its Vercel
+// project. The configured override may already include the basePath; the
+// default does not, so we add it here.
 const ACTION_ITEMS_BASE_URL =
   import.meta.env.VITE_PATHFINDER_INTERNAL_URL ??
-  'https://pathfinder-ashy.vercel.app';
+  'https://pathfinder-ashy.vercel.app/pathfinder';
 
 const INTERNAL_API_KEY =
   (import.meta.env.VITE_UNICRON_INTERNAL_API_KEY as string | undefined) ?? '';
