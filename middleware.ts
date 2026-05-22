@@ -1,20 +1,69 @@
 import { NextResponse, type NextRequest } from "next/server";
 
+// FUNDER HOST ROUTING:
+// The Funder customer accesses Pathfinder via funder.unicron.systems. We
+// proxy funder.unicron.systems/* → pathfinder-ashy.vercel.app/pathfinder/*
+// here in edge middleware (not in next.config.mjs rewrites) because the
+// `has: [{ type: 'host' }]` rewrite for `source: '/'` in `beforeFiles`
+// silently does not fire in production on this project — only the
+// non-host-conditional `afterFiles` `/pathfinder*` rewrites match. The
+// middleware approach runs before file-system routing and reliably sees
+// the Host header, so bare `/` and arbitrary `/<path>` requests on the
+// funder host land on the right Pathfinder route.
+const FUNDER_HOST = "funder.unicron.systems";
+const PATHFINDER_ORIGIN = "https://pathfinder-ashy.vercel.app";
+
+// The admin gate originally ran on a narrow matcher list. Now that the
+// matcher is broadened to catch the funder host, re-assert the original
+// scope inside the function so non-funder traffic on manifesto / marketing
+// / pathfinder paths keeps passing through untouched.
+const GATED_PREFIXES = [
+  "/app",
+  "/api/mycelium",
+  "/api/beehive",
+  "/api/colony",
+  "/api/murmuration",
+  "/api/slime",
+  "/api/cron",
+  "/api/demo",
+];
+
+function isGatedPath(pathname: string): boolean {
+  return GATED_PREFIXES.some(
+    (p) => pathname === p || pathname.startsWith(`${p}/`),
+  );
+}
+
 export const config = {
-  matcher: [
-    "/app/:path*",
-    "/api/mycelium/:path*",
-    "/api/beehive/:path*",
-    "/api/colony/:path*",
-    "/api/murmuration/:path*",
-    "/api/slime/:path*",
-    "/api/cron/:path*",
-    "/api/demo/:path*",
-  ],
+  // Broad matcher so the funder host rewrite can fire on `/` and arbitrary
+  // paths. Static assets and favicon skip middleware. Non-funder hosts on
+  // ungated paths get a fast pass-through via isGatedPath().
+  matcher: ["/((?!_next/static|_next/image|favicon\\.ico).*)"],
 };
 
 export function middleware(req: NextRequest) {
+  const host = req.headers.get("host");
+  if (host === FUNDER_HOST) {
+    const { pathname, search } = req.nextUrl;
+    if (pathname === "/pathfinder" || pathname.startsWith("/pathfinder/")) {
+      return NextResponse.rewrite(
+        new URL(`${PATHFINDER_ORIGIN}${pathname}${search}`),
+      );
+    }
+    if (pathname === "/") {
+      return NextResponse.rewrite(
+        new URL(`${PATHFINDER_ORIGIN}/pathfinder/funder${search}`),
+      );
+    }
+    return NextResponse.rewrite(
+      new URL(`${PATHFINDER_ORIGIN}/pathfinder${pathname}${search}`),
+    );
+  }
+
   const { pathname } = req.nextUrl;
+  if (!isGatedPath(pathname)) {
+    return NextResponse.next();
+  }
 
   // Cron endpoints: accept either `Authorization: Bearer <CRON_SECRET>`
   // (Vercel Cron's default header) or `x-cron-secret: <CRON_SECRET>`
