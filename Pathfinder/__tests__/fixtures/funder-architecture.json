@@ -1,0 +1,110 @@
+{
+  "_comment": "Test fixture mirroring Pathfinder/Pathfinder-Funder-Architecture.json. Kept in __tests__/fixtures/ so vitest can load it without reaching outside the worktree. Update both files together if the canonical architecture changes.",
+  "vertical": "philanthropic-deal-sourcing",
+  "lead_unit": {
+    "name": "opportunity",
+    "plural": "opportunities",
+    "schema": {
+      "org_name":          { "type": "string", "display_label": "Organization", "required": true },
+      "legal_form":        { "type": "enum",   "display_label": "Legal form",
+                             "enum_values": ["501c3", "pbc", "llc-mission-lock", "fiscally-sponsored", "other"] },
+      "thesis_area":       { "type": "enum",   "display_label": "Thesis area",
+                             "enum_values": ["ai-safety", "biosecurity", "longevity", "civic-infrastructure", "ai-governance", "epistemics", "other"] },
+      "founders":          { "type": "object", "display_label": "Founders" },
+      "founded_date":      { "type": "date",   "display_label": "Founded" },
+      "raise_target":      { "type": "string", "display_label": "Raise target" },
+      "fundraising_stage": { "type": "enum",   "display_label": "Fundraising stage",
+                             "enum_values": ["forming", "pre-raise", "actively-raising", "closing", "raised"] },
+      "geo_hub":           { "type": "enum",   "display_label": "Hub",
+                             "enum_values": ["sf-bay", "nyc", "dc-metro", "boston", "london", "remote", "other"] },
+      "thesis_fit":        { "type": "string", "display_label": "Thesis fit" },
+      "first_step":        { "type": "string", "display_label": "Recommended first step" },
+      "score":             { "type": "number", "display_label": "Score" },
+      "source":            { "type": "string", "display_label": "Source" }
+    }
+  },
+  "pipeline": {
+    "stages": ["sourced", "reviewing", "contacted", "in-diligence", "funded", "passed"],
+    "stage_labels": {
+      "sourced": "Sourced",
+      "reviewing": "Reviewing",
+      "contacted": "Contacted",
+      "in-diligence": "In diligence",
+      "funded": "Funded",
+      "passed": "Passed"
+    }
+  },
+  "scoring": {
+    "weights": {
+      "thesis_fit": 0.30,
+      "founder_credential": 0.25,
+      "raise_stage": 0.15,
+      "talent_density": 0.12,
+      "peer_funder_signal": 0.10,
+      "recency": 0.08
+    },
+    "thresholds": { "verified": 0.65, "high_priority": 0.80 }
+  },
+  "geography": {
+    "scope": "metros",
+    "defaults": ["sf-bay", "nyc", "dc-metro", "boston", "london"]
+  },
+  "sources": [
+    { "id": "custom-irs-exempt-org-filings",       "type": "pending" },
+    { "id": "custom-propublica-nonprofit-explorer", "type": "pending" },
+    { "id": "custom-accelerator-cohort-pages",     "type": "pending" },
+    { "id": "custom-ea-forum-rss",                 "type": "pending" },
+    { "id": "custom-funder-990-filings",           "type": "pending" },
+    { "id": "custom-philanthropy-trade-press-rss", "type": "pending" },
+    { "id": "business-license-issuances",          "type": "pending" }
+  ],
+  "outreach": {
+    "persona": "philanthropic deal-sourcing lead at Funder",
+    "tone": "warm, peer-to-peer, specific, non-transactional",
+    "value_prop": "early high-conviction philanthropic capital and a fast, founder-friendly process"
+  },
+  "vocabulary": {
+    "lead": "opportunity",
+    "leads": "opportunities",
+    "contact": "founder",
+    "project": "organization",
+    "branch": "thesis area"
+  },
+  "branding": {
+    "display_name": "Funder",
+    "accent_color": null,
+    "logo_url": null
+  },
+  "compliance": ["public-data-only"],
+  "integrations": ["hubspot", "slack", "resend"],
+  "business_summary": {
+    "lead_type": "An early-stage, talent-dense organization (nonprofit or mission-locked for-profit) founded within the last three years by credentialed founders (AI lab alumni, top-university researchers, or senior tech operators), actively seeking philanthropic capital of $1M to $100M+, working on AI-transition risk or human flourishing problems.",
+    "business_area": "Funder's deal-sourcing and portfolio development team uses these opportunities to identify and approach fundable organizations before they are widely known in philanthropic networks, operating at venture speed rather than grant-cycle speed.",
+    "problem_solved": "The most fundable mission-driven orgs form and begin raising faster than relationship-based philanthropy can discover them. Funder needs a systematic way to monitor regulatory filings, community forums, accelerator pipelines, and peer-funder grant records simultaneously, without a large research staff, so no high-fit founder slips through the window while still actively fundraising.",
+    "what_they_get": "A weekly curated Deal Memo (one-page email and downloadable PDF) grouping the top verified opportunities by thesis area, each with a three-sentence org snapshot, founder bio, thesis-fit rationale, and a concrete first-step recommendation. Every opportunity also carries a ready-to-send personalized outreach email, a one-line Slack alert for the deal team, and a pre-filled HubSpot record."
+  },
+  "ui_plan": {
+    "lead_card_layout": {
+      "primary_fields": ["org_name", "thesis_area", "founders", "raise_target", "score"],
+      "secondary_fields": ["legal_form", "founded_date", "fundraising_stage", "geo_hub", "source"],
+      "score_position": "top-right"
+    },
+    "kpis": [
+      { "label": "Verified opportunities this week", "metric_id": "verified_count_7d" },
+      { "label": "Actively raising",                 "metric_id": "actively_raising_count" },
+      { "label": "Average thesis fit",               "metric_id": "avg_score", "unit": "%" },
+      { "label": "Sources live",                     "metric_id": "sources_live" }
+    ],
+    "charts": [
+      { "title": "Opportunities by thesis area",     "type": "bar",  "metric_id": "count_by_thesis", "grouping": "thesis_area" },
+      { "title": "Verified opportunities over time", "type": "line", "metric_id": "verified_count",  "grouping": "week" }
+    ],
+    "filters": [
+      { "field": "thesis_area",       "label": "Thesis area" },
+      { "field": "fundraising_stage", "label": "Fundraising stage" },
+      { "field": "geo_hub",           "label": "Hub" },
+      { "field": "legal_form",        "label": "Legal form" }
+    ],
+    "dashboard_emphasis": "quality"
+  }
+}

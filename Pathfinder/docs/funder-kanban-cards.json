@@ -1,0 +1,16 @@
+{
+  "_comment": "Notion card IDs for the Funder onboarding kanban (Pathfinder Features Kanban). Created at run start 2026-05-20 by the autonomous Funder build. Future sessions read this to update card Stage values without re-querying the kanban.",
+  "data_source": "collection://1e675609-7a89-47ff-8edb-f8ed9ccd38c1",
+  "cards": {
+    "stage_1_platform_audit":             "367785c6-7e72-819c-bd94-c43badf22757",
+    "stage_2_org_record":                 "367785c6-7e72-81e5-aa41-e1179e965606",
+    "stage_3_source_adapters":            "367785c6-7e72-8189-90fd-eff4bb177688",
+    "stage_4_qualifier_enrichment":       "367785c6-7e72-8180-b440-d3885ec0204f",
+    "stage_5_ranker":                     "367785c6-7e72-8125-a0c4-d999d420e1ab",
+    "stage_6_verifier":                   "367785c6-7e72-8116-bf08-d4bd6a16308a",
+    "stage_7_weekly_deal_memo":           "367785c6-7e72-8171-9b3a-cdbc9b952c42",
+    "stage_8_outreach":                   "367785c6-7e72-81ca-ad4d-fe4f43f3f112",
+    "stage_9_dashboard_kpis":             "367785c6-7e72-81c9-b754-c72596572f93",
+    "stage_10_e2e":                       "367785c6-7e72-8118-927d-d9ec8aea569d"
+  }
+}

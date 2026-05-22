@@ -31,6 +31,10 @@ const haveCreds = Boolean(url && serviceKey);
 const RUN_TAG = `_verifier_test_${Date.now()}`;
 const PROJECT_INSERT_ID = `${RUN_TAG}_insert`;
 const PROJECT_UPDATE_ID = `${RUN_TAG}_update`;
+// Zedcor's organization_id on the live Supabase project. Required on
+// every insert into projects / agent_log since the Phase 2A completion
+// migration made organization_id NOT NULL on those tables.
+const ZEDCOR_ORG_ID = '6cd87740-7c72-4337-ac79-316a54242eef';
 
 // Use a loosely-typed client for these tests — Supabase's generated types
 // for the pathfinder schema don't yet include the verifier columns added
@@ -69,6 +73,7 @@ describe.runIf(haveCreds)('verifier schema (0005_agent_expansion_layer1)', () =>
         verified: true,
         verifier_notes: 'inserted in passing state',
         verifier_pass_count: 1,
+        organization_id: ZEDCOR_ORG_ID,
       })
       .select('id, verified, verifier_notes, verifier_pass_count')
       .maybeSingle();
@@ -87,6 +92,7 @@ describe.runIf(haveCreds)('verifier schema (0005_agent_expansion_layer1)', () =>
       source: 'sam.gov',
       source_id: PROJECT_UPDATE_ID,
       title: 'verifier schema test · update path',
+      organization_id: ZEDCOR_ORG_ID,
     });
     expect(insErr).toBeNull();
 
@@ -115,6 +121,7 @@ describe.runIf(haveCreds)('verifier schema (0005_agent_expansion_layer1)', () =>
         agent_name: 'verifier',
         event_type: 'verify_pass',
         event_data: { tag: RUN_TAG, message: 'schema test · verifier accepted' },
+        organization_id: ZEDCOR_ORG_ID,
       })
       .select('id, agent_name, event_type')
       .maybeSingle();
@@ -131,6 +138,7 @@ describe.runIf(haveCreds)('verifier schema (0005_agent_expansion_layer1)', () =>
         agent_name: 'not-a-real-agent',
         event_type: 'verify_pass',
         event_data: { tag: RUN_TAG, message: 'should be rejected by check constraint' },
+        organization_id: ZEDCOR_ORG_ID,
       });
 
     expect(error).not.toBeNull();
