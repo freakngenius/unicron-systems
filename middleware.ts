@@ -147,28 +147,36 @@ export function middleware(req: NextRequest) {
     // to the headline Dashboard at /pathfinder/ (map, branches, leads,
     // chat, agent log) which already reads Zedcor-scoped data.
     //
-    // Two-way URL handling:
-    //   - User visits zedcor.unicron.systems/foo → rewrite to /pathfinder/foo
-    //     internally (Pathfinder app serves it; URL bar stays clean).
-    //   - User visits zedcor.unicron.systems/pathfinder/foo (because
-    //     Pathfinder auto-prepends basePath in <Link> hrefs) → redirect
-    //     to clean zedcor.unicron.systems/foo so URL bar stays clean.
+    // Mirrors the Funder/Internal pattern exactly: preserve the
+    // /pathfinder basePath end-to-end so JS chunks, fonts, API routes,
+    // and Next.js client-side routing all resolve correctly. Bare host
+    // root rewrites to /pathfinder/ (the root Dashboard).
     const { pathname, search } = req.nextUrl;
 
-    // Clean-URL redirect: strip /pathfinder prefix from the visible URL.
-    if (pathname === "/pathfinder") {
-      return NextResponse.redirect(new URL(`/${search}`, req.url));
-    }
-    if (pathname.startsWith("/pathfinder/")) {
-      const cleaned = pathname.slice("/pathfinder".length) || "/";
-      return NextResponse.redirect(new URL(`${cleaned}${search}`, req.url));
+    // API + auth handlers — preserve /pathfinder prefix on origin.
+    if (
+      pathname.startsWith("/pathfinder/api/") ||
+      pathname.startsWith("/pathfinder/auth/") ||
+      pathname.startsWith("/pathfinder/_next/") ||
+      pathname.startsWith("/pathfinder/favicon") ||
+      pathname.startsWith("/pathfinder/icon")
+    ) {
+      return NextResponse.rewrite(
+        new URL(`${PATHFINDER_ORIGIN}${pathname}${search}`),
+      );
     }
 
-    // Bare paths: rewrite internally to /pathfinder/* so the Pathfinder
-    // app (with basePath /pathfinder) serves the content.
+    // Paths that already carry /pathfinder — pass through unchanged.
+    if (pathname === "/pathfinder" || pathname.startsWith("/pathfinder/")) {
+      return NextResponse.rewrite(
+        new URL(`${PATHFINDER_ORIGIN}${pathname}${search}`),
+      );
+    }
+
+    // Bare paths (zedcor.unicron.systems/...) — prepend /pathfinder.
     const localPath = `/pathfinder${pathname === "/" ? "" : pathname}`;
     return NextResponse.rewrite(
-      new URL(`${localPath}${search}`, req.url),
+      new URL(`${PATHFINDER_ORIGIN}${localPath}${search}`),
     );
   }
 
