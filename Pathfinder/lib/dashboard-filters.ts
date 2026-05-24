@@ -27,12 +27,17 @@ import type { ListFilterState } from '@/lib/list-filters';
 import type { SourceKey } from '@/components/TopBar';
 import { normalizeStage } from '@/lib/leads/stage-normalize';
 
-const SOURCE_FILTER_TO_DB: Record<Exclude<SourceKey, 'all'>, string> = {
+const SOURCE_FILTER_TO_DB: Record<Exclude<SourceKey, 'all' | 'pc'>, string> = {
   usa: 'usaspending',
   sam: 'sam.gov',
   news: 'news',
   harris: 'harris',
 };
+
+// Sources written by the original Vercel-cron pipeline. Anything outside
+// this set is written by Perplexity Computer agents (or future agents)
+// and gets surfaced when the user picks the 'pc' filter.
+const CRON_SOURCE_SET = new Set(['usaspending', 'sam.gov', 'news', 'harris']);
 
 /** Best-available distance for range gating. Mirrors the helper in
  * components/ProjectList.tsx so both call sites agree on which column
@@ -111,14 +116,18 @@ export function applyNonBranchFilters(ctx: NonBranchFilterContext): Project[] {
       // something rather than rendering empty.
       arr = arr.filter((p) => !!p.warm_for_customer_id);
     }
-    if (source !== 'all') {
+    if (source === 'pc') {
+      arr = arr.filter((p) => !CRON_SOURCE_SET.has((p.source ?? '').toLowerCase()));
+    } else if (source !== 'all') {
       const db = SOURCE_FILTER_TO_DB[source];
       arr = arr.filter((p) => p.source === db);
     }
     return arr;
   }
 
-  if (source !== 'all') {
+  if (source === 'pc') {
+    arr = arr.filter((p) => !CRON_SOURCE_SET.has((p.source ?? '').toLowerCase()));
+  } else if (source !== 'all') {
     const db = SOURCE_FILTER_TO_DB[source];
     arr = arr.filter((p) => p.source === db);
   }
@@ -145,7 +154,12 @@ export function applyNonBranchFilters(ctx: NonBranchFilterContext): Project[] {
   }
 
   if (state.minScore > 0) {
-    arr = arr.filter((p) => (p.score ?? 0) >= state.minScore);
+    // PC-written rows have score=NULL until the Ranker (Vercel cron) scores
+    // them. Treat NULL/missing score as "not yet scored, show it" rather
+    // than "score=0, filter out." This lets fresh PC ingest rows surface
+    // in the dashboard immediately instead of being invisible until the
+    // next Ranker run.
+    arr = arr.filter((p) => p.score == null || p.score >= state.minScore);
   }
 
   // Gate 19 — stage filter. `null` = show all stages (default). When the
