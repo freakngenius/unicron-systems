@@ -63,7 +63,7 @@ const DEFAULT_CENTER = { lat: 39.5, lng: -98.5 };
 const DEFAULT_ZOOM = 4.5;
 const BRANCH_FOCUS_ZOOM = 7;
 
-const SOURCE_FILTER_TO_DB: Record<Exclude<SourceKey, 'all'>, string> = {
+const SOURCE_FILTER_TO_DB: Record<Exclude<SourceKey, 'all' | 'pc'>, string> = {
   usa: 'usaspending',
   sam: 'sam.gov',
   news: 'news',
