@@ -142,22 +142,27 @@ export function middleware(req: NextRequest) {
     );
   }
   if (host === ZEDCOR_HOST) {
-    // ZEDCOR HOST ROUTING (Zedcor PC variant — 2026-05-24, corrected):
-    // Zedcor is the DEFAULT Pathfinder org. The Pathfinder root route /
-    // (rendered by app/page.tsx → <Dashboard />) already shows the
-    // Zedcor-scoped view with map, branches, leads, chat, agent log, etc.
-    // Unlike Funder/Internal which rewrite to org-subroutes
-    // (/pathfinder/funder, /pathfinder/internal), Zedcor maps directly to
-    // the Pathfinder root. Just preserve the basePath and let the existing
-    // Pathfinder app render itself.
+    // ZEDCOR HOST ROUTING (Zedcor PC variant — 2026-05-24):
+    // Zedcor is the DEFAULT Pathfinder org. Map zedcor.unicron.systems/
+    // → /pathfinder/ (root Dashboard with map, branches, leads, chat,
+    // agent log). The Pathfinder root reads pathfinder.branches /
+    // pathfinder.customers / pathfinder.projects which are already
+    // Zedcor-scoped by default.
     //
-    // We do still need to bypass the basic-auth gate — PUBLIC_HOSTS in
-    // Pathfinder/middleware.ts handles that based on x-forwarded-host.
+    // Unlike Funder/Internal (which use the multi-tenant /[slug] page),
+    // Zedcor gets the headline operator-grade Dashboard at root.
+    //
+    // Implementation: rewrite the URL but preserve as a local path so the
+    // afterFiles rewrites in next.config.mjs handle the proxy to
+    // pathfinder-ashy.vercel.app correctly. Direct rewrite to the origin
+    // URL was being interpreted by Vercel as a /[slug] match.
     const { pathname, search } = req.nextUrl;
-    const rewritten = pathname.startsWith("/pathfinder")
-      ? `${PATHFINDER_ORIGIN}${pathname}${search}`
-      : `${PATHFINDER_ORIGIN}/pathfinder${pathname}${search}`;
-    return NextResponse.rewrite(new URL(rewritten));
+    const localPath = pathname.startsWith("/pathfinder")
+      ? pathname
+      : `/pathfinder${pathname === "/" ? "" : pathname}`;
+    return NextResponse.rewrite(
+      new URL(`${localPath}${search}`, req.url),
+    );
   }
 
   const { pathname } = req.nextUrl;
