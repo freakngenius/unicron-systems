@@ -40,6 +40,14 @@ export function isHoustonOnlyMode(): boolean {
   return process.env.NEXT_PUBLIC_DEMO_HOUSTON_ONLY === '1';
 }
 
+/** True when the dashboard should show ALL branches as-is (no demo
+ * filtering). Used for Zedcor full-network view at zedcor.unicron.systems.
+ * When set, `pickDemoBranches` returns its input unchanged so all 34
+ * Zedcor branches render on the map and in the dock. */
+export function isZedcorFullNetworkMode(): boolean {
+  return process.env.NEXT_PUBLIC_ZEDCOR_FULL_NETWORK === '1';
+}
+
 /** The active demo-branch id list for the dashboard surface. Returns the
  * Houston-only subset when the env flag is set, otherwise the canonical
  * four-city list. Order is demo-narrative (Houston first either way). */
@@ -61,6 +69,9 @@ export function isDemoBranchId(id: string | null | undefined): boolean {
  * (Houston → LA → Nashville → Pittsburgh, or Houston only when Gate 17A
  * mode is active) regardless of the input order. */
 export function pickDemoBranches<T extends { id: string }>(branches: T[]): T[] {
+  // Zedcor full-network mode: render every branch as-is (no demo filter).
+  if (isZedcorFullNetworkMode()) return branches;
+
   const byId = new Map(branches.map((b) => [b.id, b]));
   const out: T[] = [];
   for (const id of getActiveDemoBranchIds()) {
