@@ -19,17 +19,31 @@ const PF = {
   ruleSoft: 'rgba(10,10,10,0.12)',
 } as const;
 
-export type SourceKey = 'all' | 'usa' | 'sam' | 'news' | 'harris';
+export type SourceKey =
+  | 'all'
+  | 'pc'
+  | 'usa'
+  | 'sam'
+  | 'news'
+  | 'harris';
 
 export const SOURCE_LABELS: Record<SourceKey, string> = {
   all: 'All sources',
+  pc: 'Perplexity Computer',
   usa: 'USAspending',
   sam: 'SAM.gov',
   news: 'Google News',
   harris: 'Harris Co.',
 };
 
-export const SOURCE_KEYS: readonly SourceKey[] = ['all', 'usa', 'sam', 'news', 'harris'] as const;
+export const SOURCE_KEYS: readonly SourceKey[] = [
+  'all',
+  'pc',
+  'usa',
+  'sam',
+  'news',
+  'harris',
+] as const;
 
 function UnhideButton() {
   const hidden = useHidden();
