@@ -80,7 +80,11 @@ function decodeBasicHeader(header: string | null): { user: string; pass: string 
 // rewrite; x-forwarded-host preserves the original host so we can match
 // on it here. The corresponding /[slug] layout has the slug in its
 // PUBLIC_SLUGS set, so the Supabase magic-link layer is also bypassed.
-const PUBLIC_HOSTS = new Set(['funder.unicron.systems']);
+const PUBLIC_HOSTS = new Set([
+  'funder.unicron.systems',
+  'internal.unicron.systems',
+  'zedcor.unicron.systems',
+]);
 
 // Public path prefixes that bypass basic-auth even when the request did
 // not arrive via a PUBLIC_HOSTS subdomain. Useful for orgs whose vanity

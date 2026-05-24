@@ -19,6 +19,7 @@ import { NextResponse, type NextRequest } from "next/server";
 // the Funder branch.
 const FUNDER_HOST = "funder.unicron.systems";
 const INTERNAL_HOST = "internal.unicron.systems";
+const ZEDCOR_HOST = "zedcor.unicron.systems";
 const PATHFINDER_ORIGIN = "https://pathfinder-ashy.vercel.app";
 
 // The admin gate originally ran on a narrow matcher list. Now that the
@@ -138,6 +139,42 @@ export function middleware(req: NextRequest) {
     // /settings (→ org-scoped not-found backstop), /onboarding/* (same).
     return NextResponse.rewrite(
       new URL(`${PATHFINDER_ORIGIN}/pathfinder/internal${stripped}${search}`),
+    );
+  }
+  if (host === ZEDCOR_HOST) {
+    // ZEDCOR HOST ROUTING (Zedcor PC variant — 2026-05-24):
+    // Zedcor accesses Pathfinder via zedcor.unicron.systems. Mirrors
+    // Funder/Internal shape: bare host root rewrites to /pathfinder/zedcor,
+    // deep paths rewrite to /pathfinder/zedcor/<path>. The /pathfinder/zedcor
+    // route already exists (Pathfinder/app/zedcor/leads + /map); this rewrite
+    // makes it reachable at the vanity URL.
+    const { pathname, search } = req.nextUrl;
+    const stripped = pathname === "/pathfinder"
+      ? "/"
+      : pathname.startsWith("/pathfinder/")
+        ? pathname.slice("/pathfinder".length)
+        : pathname;
+
+    if (stripped.startsWith("/api/") || stripped.startsWith("/auth/")) {
+      return NextResponse.rewrite(
+        new URL(`${PATHFINDER_ORIGIN}/pathfinder${stripped}${search}`),
+      );
+    }
+
+    if (stripped === "/zedcor" || stripped.startsWith("/zedcor/")) {
+      return NextResponse.rewrite(
+        new URL(`${PATHFINDER_ORIGIN}/pathfinder${stripped}${search}`),
+      );
+    }
+
+    if (stripped === "/") {
+      return NextResponse.rewrite(
+        new URL(`${PATHFINDER_ORIGIN}/pathfinder/zedcor${search}`),
+      );
+    }
+
+    return NextResponse.rewrite(
+      new URL(`${PATHFINDER_ORIGIN}/pathfinder/zedcor${stripped}${search}`),
     );
   }
 
