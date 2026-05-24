@@ -142,24 +142,31 @@ export function middleware(req: NextRequest) {
     );
   }
   if (host === ZEDCOR_HOST) {
-    // ZEDCOR HOST ROUTING (Zedcor PC variant — 2026-05-24):
-    // Zedcor is the DEFAULT Pathfinder org. Map zedcor.unicron.systems/
-    // → /pathfinder/ (root Dashboard with map, branches, leads, chat,
-    // agent log). The Pathfinder root reads pathfinder.branches /
-    // pathfinder.customers / pathfinder.projects which are already
-    // Zedcor-scoped by default.
+    // ZEDCOR HOST ROUTING (Zedcor PC variant):
+    // Zedcor is the DEFAULT Pathfinder org. zedcor.unicron.systems maps
+    // to the headline Dashboard at /pathfinder/ (map, branches, leads,
+    // chat, agent log) which already reads Zedcor-scoped data.
     //
-    // Unlike Funder/Internal (which use the multi-tenant /[slug] page),
-    // Zedcor gets the headline operator-grade Dashboard at root.
-    //
-    // Implementation: rewrite the URL but preserve as a local path so the
-    // afterFiles rewrites in next.config.mjs handle the proxy to
-    // pathfinder-ashy.vercel.app correctly. Direct rewrite to the origin
-    // URL was being interpreted by Vercel as a /[slug] match.
+    // Two-way URL handling:
+    //   - User visits zedcor.unicron.systems/foo → rewrite to /pathfinder/foo
+    //     internally (Pathfinder app serves it; URL bar stays clean).
+    //   - User visits zedcor.unicron.systems/pathfinder/foo (because
+    //     Pathfinder auto-prepends basePath in <Link> hrefs) → redirect
+    //     to clean zedcor.unicron.systems/foo so URL bar stays clean.
     const { pathname, search } = req.nextUrl;
-    const localPath = pathname.startsWith("/pathfinder")
-      ? pathname
-      : `/pathfinder${pathname === "/" ? "" : pathname}`;
+
+    // Clean-URL redirect: strip /pathfinder prefix from the visible URL.
+    if (pathname === "/pathfinder") {
+      return NextResponse.redirect(new URL(`/${search}`, req.url));
+    }
+    if (pathname.startsWith("/pathfinder/")) {
+      const cleaned = pathname.slice("/pathfinder".length) || "/";
+      return NextResponse.redirect(new URL(`${cleaned}${search}`, req.url));
+    }
+
+    // Bare paths: rewrite internally to /pathfinder/* so the Pathfinder
+    // app (with basePath /pathfinder) serves the content.
+    const localPath = `/pathfinder${pathname === "/" ? "" : pathname}`;
     return NextResponse.rewrite(
       new URL(`${localPath}${search}`, req.url),
     );
