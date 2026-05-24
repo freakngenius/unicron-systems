@@ -28,7 +28,7 @@ const nextConfig = {
   assetPrefix: '/pathfinder',
   experimental: {
     serverActions: {
-      allowedOrigins: ['localhost:3000', 'localhost:3001', 'unicron.systems', 'www.unicron.systems', 'funder.unicron.systems', 'internal.unicron.systems'],
+      allowedOrigins: ['localhost:3000', 'localhost:3001', 'unicron.systems', 'www.unicron.systems', 'funder.unicron.systems', 'internal.unicron.systems', 'zedcor.unicron.systems'],
     },
   },
 };
