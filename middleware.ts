@@ -142,40 +142,22 @@ export function middleware(req: NextRequest) {
     );
   }
   if (host === ZEDCOR_HOST) {
-    // ZEDCOR HOST ROUTING (Zedcor PC variant — 2026-05-24):
-    // Zedcor accesses Pathfinder via zedcor.unicron.systems. Mirrors
-    // Funder/Internal shape: bare host root rewrites to /pathfinder/zedcor,
-    // deep paths rewrite to /pathfinder/zedcor/<path>. The /pathfinder/zedcor
-    // route already exists (Pathfinder/app/zedcor/leads + /map); this rewrite
-    // makes it reachable at the vanity URL.
+    // ZEDCOR HOST ROUTING (Zedcor PC variant — 2026-05-24, corrected):
+    // Zedcor is the DEFAULT Pathfinder org. The Pathfinder root route /
+    // (rendered by app/page.tsx → <Dashboard />) already shows the
+    // Zedcor-scoped view with map, branches, leads, chat, agent log, etc.
+    // Unlike Funder/Internal which rewrite to org-subroutes
+    // (/pathfinder/funder, /pathfinder/internal), Zedcor maps directly to
+    // the Pathfinder root. Just preserve the basePath and let the existing
+    // Pathfinder app render itself.
+    //
+    // We do still need to bypass the basic-auth gate — PUBLIC_HOSTS in
+    // Pathfinder/middleware.ts handles that based on x-forwarded-host.
     const { pathname, search } = req.nextUrl;
-    const stripped = pathname === "/pathfinder"
-      ? "/"
-      : pathname.startsWith("/pathfinder/")
-        ? pathname.slice("/pathfinder".length)
-        : pathname;
-
-    if (stripped.startsWith("/api/") || stripped.startsWith("/auth/")) {
-      return NextResponse.rewrite(
-        new URL(`${PATHFINDER_ORIGIN}/pathfinder${stripped}${search}`),
-      );
-    }
-
-    if (stripped === "/zedcor" || stripped.startsWith("/zedcor/")) {
-      return NextResponse.rewrite(
-        new URL(`${PATHFINDER_ORIGIN}/pathfinder${stripped}${search}`),
-      );
-    }
-
-    if (stripped === "/") {
-      return NextResponse.rewrite(
-        new URL(`${PATHFINDER_ORIGIN}/pathfinder/zedcor${search}`),
-      );
-    }
-
-    return NextResponse.rewrite(
-      new URL(`${PATHFINDER_ORIGIN}/pathfinder/zedcor${stripped}${search}`),
-    );
+    const rewritten = pathname.startsWith("/pathfinder")
+      ? `${PATHFINDER_ORIGIN}${pathname}${search}`
+      : `${PATHFINDER_ORIGIN}/pathfinder${pathname}${search}`;
+    return NextResponse.rewrite(new URL(rewritten));
   }
 
   const { pathname } = req.nextUrl;
