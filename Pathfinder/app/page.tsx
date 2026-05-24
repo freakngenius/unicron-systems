@@ -10,6 +10,35 @@ import { fetchCrossPollMatches } from '@/lib/cross-poll-fetch';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
+/** Resolve the Zedcor organization UUID at request time. Cached for the
+ * lifetime of the server process. */
+let _zedcorOrgIdCache: string | null | undefined;
+async function getZedcorOrgId(): Promise<string | null> {
+  if (_zedcorOrgIdCache !== undefined) return _zedcorOrgIdCache;
+  const { data } = await (supabase
+    .from('organizations') as ReturnType<typeof supabase.from>)
+    .select('id')
+    .eq('slug', 'zedcor')
+    .maybeSingle();
+  const row = data as { id?: string } | null;
+  _zedcorOrgIdCache = row?.id ?? null;
+  return _zedcorOrgIdCache;
+}
+
+// Sources written by orgs other than Zedcor (funder, internal, etc.). The
+// multi-tenant refactor added organization_id to pathfinder.projects, but
+// older rows have organization_id = NULL. We filter these source prefixes
+// belt-and-suspenders so non-Zedcor rows never pollute the dashboard.
+const NON_ZEDCOR_SOURCE_PREFIXES = [
+  'custom-ea-forum',
+  'custom-propublica',
+  'custom-philanthropy',
+  'custom-funder-',
+  'custom-sos-business',
+  'custom-construction-sales-job',
+  'synthetic-portfolio',
+];
+
 async function fetchInitialData(): Promise<{
   branches: Branch[];
   customers: Customer[];
@@ -21,14 +50,33 @@ async function fetchInitialData(): Promise<{
   // for a representative customer lat/lon (Path B in the Gate 2 plan) so
   // the dashboard's warm-intro overlay can render Zedcor contractor
   // matches without routing through the multi-tenant `customers` table.
+  //
+  // Scope projects to Zedcor's org only. Without this, EA Forum articles,
+  // 990 filings, and other non-Zedcor rows from the funder + internal
+  // pipelines pollute the Zedcor dashboard.
+  const zedcorOrgId = await getZedcorOrgId();
+
+  let projectsQuery = supabase
+    .from('projects')
+    .select('*')
+    .order('score', { ascending: false, nullsFirst: false })
+    .order('ingested_at', { ascending: false });
+
+  // Allow Zedcor's rows + legacy rows where organization_id was never set.
+  if (zedcorOrgId) {
+    projectsQuery = projectsQuery.or(
+      `organization_id.eq.${zedcorOrgId},organization_id.is.null`,
+    );
+  }
+  // Exclude rows whose source slug matches a known non-Zedcor prefix.
+  for (const prefix of NON_ZEDCOR_SOURCE_PREFIXES) {
+    projectsQuery = projectsQuery.not('source', 'ilike', `${prefix}%`);
+  }
+
   const [branchesRes, customersRes, projectsRes, crossPollMatches] = await Promise.all([
     supabase.from('branches').select('*').order('code', { ascending: true }),
     supabase.from('customers').select('*').order('id', { ascending: true }),
-    supabase
-      .from('projects')
-      .select('*')
-      .order('score', { ascending: false, nullsFirst: false })
-      .order('ingested_at', { ascending: false }),
+    projectsQuery,
     fetchCrossPollMatches(supabase),
   ]);
 
