@@ -312,9 +312,16 @@ export function Dashboard({
   // respect the visible coverage circles rather than the lead's
   // nearest_branch_id distance. Pass the active demo branch ids through
   // so applyNonBranchFilters can do a branch-set membership check.
+  //
+  // Zedcor full-network mode: use every visible branch's id so all leads
+  // pass the branch-set membership check.
   const activeBranchIdsSet = React.useMemo<ReadonlySet<string>>(
-    () => new Set(getActiveDemoBranchIds()),
-    [],
+    () => new Set(
+      process.env.NEXT_PUBLIC_ZEDCOR_FULL_NETWORK === '1'
+        ? initialBranches.map((b) => b.id)
+        : getActiveDemoBranchIds(),
+    ),
+    [initialBranches],
   );
 
   const preBranchFiltered = React.useMemo<Project[]>(
