@@ -138,16 +138,21 @@ export function applyNonBranchFilters(ctx: NonBranchFilterContext): Project[] {
       // mirror the visible coverage circles on the map rather than the
       // lead's nearest_branch_id distance, which broke once
       // DEMO_HOUSTON_ONLY narrowed the dock to a single branch.
+      //
+      // PC-written rows have nearest_branch_id=NULL until GeoMapper runs.
+      // Treat NULL as 'within range' so fresh PC ingest rows surface
+      // immediately instead of being invisible until the next GeoMapper
+      // run. Same pattern as the NULL-score fix below.
       arr = arr.filter((p) => {
         const id = p.nearest_branch_id;
-        if (id == null) return state.range === 'outside';
+        if (id == null) return state.range === 'within';
         const inSet = activeBranchIds.has(id);
         return state.range === 'within' ? inSet : !inSet;
       });
     } else {
       arr = arr.filter((p) => {
         const d = projectDistanceMiles(p);
-        if (d == null) return false;
+        if (d == null) return state.range === 'within';
         return state.range === 'within' ? d <= maxDistance : d > maxDistance;
       });
     }
