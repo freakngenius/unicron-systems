@@ -2,6 +2,28 @@
 
 ## Done in this session
 
+### 0. Enrichment — all 9 PC rows manually enriched + bucket prompts amended for inline enrichment
+
+**Root cause of "Not yet enriched" everywhere:**
+- No `/api/cron/enricher` route exists. Enrichment never runs automatically.
+- The "Request enrichment" button on the lead modal is literally `window.alert("endpoint pending Gate 8")` at `components/lead/LeadDetail.tsx:495`.
+- The "Run now" button on the Contacts card only works for `source='sam.gov'` — for everything else it returns 200 + "manual research required" (silent no-op).
+- The enrichment SERVICE exists at `services/enricher/lead-detail.ts` (Sonar + Sonnet, fills owner/contractor/NAICS/dates/towers/permits). It works — but the only invocation path is the manual script `scripts/run-lead-detail-enrichment.ts`, which requires `pnpm tsx`, API keys, and an operator hand on the keyboard.
+
+DB state at session start: of 1,834 Zedcor rows, **1,012 verified+scored but never enriched** (banner shown), 398 marked `enrichment_provider='raw_payload_only'` (no-op label), 51 with real Sonar/Anthropic enrichment.
+
+**What I did:**
+- Manual SQL backfill of all 9 PC rows (`owner_name`, `owner_type`, `description_long`, `naics_code`, `naics_description`, `estimated_start_date`, `estimated_end_date`, `estimated_towers_count`, `estimated_towers_rationale`, `rationale`, `enriched_at=now()`, `enrichment_provider='manual_backfill'`). Hero row (Galveston Hurricane Levee) carries 8–14 tower estimate, sub-bid phase, "GC selected, subcontractor packages out for bid NOW" rationale.
+- Amended Bucket 2 + Bucket 4 prompts to do **inline enrichment** at ingest time (visit the opportunity detail page, extract owner / contractor / NAICS / dates / towers in the same INSERT, set `enrichment_provider='pc-inline'`). Per-opportunity token cap raised 1,500 → 5,000. Future PC writes won't need a manual backfill.
+
+**Verify:** click any of the 9 PC rows in the dashboard. Modal should show owner, NAICS, description, estimated towers, rationale — no "Request enrichment" banner.
+
+**What's NOT done (post-submission work):**
+- Wire the "Request enrichment" button to a real endpoint (e.g., `POST /api/leads/[id]/enrich-detail` wrapping `enrichOneLead`).
+- Add `/api/cron/enricher/route.ts` that runs `enrichOneLead` on N unenriched rows nightly.
+- Add Bucket 1 + Bucket 3 inline-enrichment paragraphs (parity with new Bucket 2 + Bucket 4 prompts). I left `01-ingestor-pc.md` alone to avoid breaking the existing PC-chat behavior mid-flight; do this once the submission lands.
+- Backfill enrichment on the 1,012 unenriched cron rows. Either run `pnpm tsx scripts/run-lead-detail-enrichment.ts` locally with `PERPLEXITY_API_KEY` + `ANTHROPIC_API_KEY` set (budget ~$10 per the script's default halt), or wait for the new cron to chew through them.
+
 ### 1. Lead-rail visibility — all 9 PC rows now pass HOUSTON_ONLY filter
 
 Ran SQL in Supabase project `anfihcusvekpovcchpoh` to make the existing 9 Perplexity-Computer-written project rows render in the lead rail at `zedcor.unicron.systems`:

@@ -181,17 +181,60 @@ PER-RUN WORKFLOW
       Required (NOT NULL): source, source_id, title, organization_id.
       UNIQUE (source, source_id) — that's the dedup key.
 
-   d. Dedup check before insert:
+   d. INLINE ENRICHMENT — visit the opportunity's own detail page
+      (e.g. each Bonfire opportunity has its own URL at
+      bonfirehub.com/opportunities/<id>; each IonWave instance has
+      a per-RFP page). Extract these enrichment fields in the same
+      INSERT — there is NO separate enrichment cron, so without
+      inline extraction the row lands in the dashboard as an
+      "unenriched" empty shell. Required additional columns:
+
+        location_text            text — "City, County, State"
+        owner_name               text — the buying agency
+        owner_type               text — one of: 'federal_agency',
+                                    'state_agency','municipality','county',
+                                    'special_district','school_district',
+                                    'university','private_developer',
+                                    'pe_firm','reit','nonprofit'
+        prime_contractor_name    text — only set if source page names
+                                    the awarded GC; otherwise NULL
+        description_long         text — 2–4 sentences plain English:
+                                    what's being built, who buys, where
+                                    it stands in the procurement timeline
+        naics_code               text — 6-digit, e.g. '236220'
+        naics_description        text — short label for the NAICS
+        estimated_start_date     date — close_date + 8 weeks (ITB) or
+                                    12 weeks (RFP)
+        estimated_end_date       date — start + typical project duration
+        estimated_towers_count   text — range '<min>-<max>' for Zedcor's
+                                    likely deployment
+        estimated_towers_rationale  text — 1 sentence: why that count
+        rationale                text — 1–2 sentences: why this lead
+                                    matters to Zedcor (geography, owner
+                                    pain, buy-window timing)
+        enriched_at              timestamptz — now()
+        enrichment_provider      text — 'pc-inline'
+        enrichment_cost_usd      numeric — your estimated additional
+                                    token cost for the detail-page pass
+
+      If a fact is not found on the detail page, leave that field
+      NULL — never fabricate. Per-opportunity token cap raised from
+      1,500 to 5,000 to accommodate the detail-page pass.
+
+   e. Dedup check before insert:
       ```sql
       SELECT id FROM pathfinder.projects
       WHERE source = $source AND source_id = $external_id;
       ```
       If a row exists, log dedup_skip and continue.
 
-   e. Insert. Also log event_type='project_inserted' with project_id,
-      source_slug, platform, latency_ms, cost_usd.
+   f. Insert (single row, both basic + enrichment fields in one
+      INSERT statement). Also log event_type='project_inserted' with
+      project_id, source_slug, platform, latency_ms, cost_usd, AND
+      log a second event event_type='project_enriched_inline' with
+      the set of enrichment field names you populated.
 
-   f. If a platform returns 0 records or 4xx/5xx/timeout, log
+   g. If a platform returns 0 records or 4xx/5xx/timeout, log
       'source_empty' or 'source_failed' with detail and continue.
 
 4. Caps:
