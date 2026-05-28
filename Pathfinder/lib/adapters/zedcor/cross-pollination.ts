@@ -9,10 +9,12 @@
 //
 // Spec: SPEC-zedcor-z4-cross-pollination-pitch.md §"Component 1".
 //
-// Note: spec references "pathfinder.customers WHERE organization_id=<uuid>".
-// Actual schema uses pathfinder.zedcor_customer_sites with customer_org_id='zedcor'
-// (string slug, not UUID). This module honors the spec's intent against the
-// real schema.
+// Schema: pathfinder.zedcor_customer_sites + pathfinder.zedcor_branches both
+// carry customer_org_id keyed by the Zedcor org UUID
+// '6cd87740-7c72-4337-ac79-316a54242eef' (migrated from the legacy 'zedcor'
+// slug in Sprint Z11 Fix 1 — see
+// supabase/migrations/20260528_zedcor_z11_customer_org_uuid.sql). The default
+// below matches that UUID so callers don't have to pass it.
 //
 // Cloud-only. Pure logic apart from supabase reads.
 
@@ -48,7 +50,7 @@ interface BranchRow {
 const WARM_THRESHOLD = 0.8;
 const POSSIBLE_THRESHOLD = 0.6;       // lower-bound for "possible" — below this it's not even noted
 const MAX_POSSIBLE_RESULTS = 5;
-const ZEDCOR_CUSTOMER_ORG = 'zedcor';
+const ZEDCOR_CUSTOMER_ORG = '6cd87740-7c72-4337-ac79-316a54242eef';
 
 // ─────────────────────────────────────────────────────────────────────────
 // Levenshtein + similarity

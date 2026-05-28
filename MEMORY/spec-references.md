@@ -1804,3 +1804,24 @@ OPTIONAL (route degrades gracefully when absent):
 **Implements:** unit coverage for the pure functions in `contact-cache.ts` (`normalizeCompanyName`) and `email-pattern-guesser.ts` (`inferDomainCandidates`, `generateEmailCandidates`). 7 tests, all passing 2026-05-28. Network-touching layers (Hunter / Apollo / DNS) are deferred to integration verification via the backfill smoke (`--cap=5 --dry-run`).
 **Last verified against spec:** 2026-05-28.
 **Drift:** none.
+
+---
+
+## Sprint Z11 — Zedcor pipeline fixes (PR #?)
+
+**State:** branch `feat/zedcor-z11-pipeline-fixes`. Three blockers that prevent the demo from showing the full pipeline: (1) customer_org_id text/UUID mismatch breaks cross-pollination lookups; (2) Fort Bend adapter ghost rows from pre-Z3 surface as page-nav; (3) public-construction solicitation rows never reach Notion even as pre-window tracking.
+
+#### Pathfinder/lib/adapters/zedcor/cross-pollination.ts (modified)
+**Implements:** Z11 Fix 1 — switches the default `customerOrgId` from the legacy slug `'zedcor'` to the canonical UUID `6cd87740-7c72-4337-ac79-316a54242eef` that `pathfinder.organizations.id` carries. Companion migration `20260528_zedcor_z11_customer_org_uuid.sql` rewrites `pathfinder.zedcor_customer_sites.customer_org_id` + `pathfinder.zedcor_branches.customer_org_id` from the slug to the UUID (3,627 sites + 34 branches updated live 2026-05-28).
+**Last verified against spec:** 2026-05-28.
+**Drift:** none — argumentless callers still work; spec-text now matches the schema.
+
+#### Pathfinder/lib/adapters/sources/fort-bend-county.ts (modified)
+**Implements:** Z11 Fix 2 — hardens the landing-page fallback with three additional guards: `MAX_TITLE_LEN` (200 chars) rejects nav-blob concatenations, `NAV_PHRASE_RE` rejects sidebar / breadcrumb phrases (`about us`, `doing business`, `surplus property`, etc.), and `OPPORTUNITY_TOKEN_RE` requires at least one opportunity-shaped token (`rfp|rfq|ifb|itb|bid|quote|solicitation|proposal|construction|service`) in the title or ref before admission. The 23 pre-Z3 ghost rows that survived as `project_stage='unknown'` were DELETEd from `pathfinder.projects` on 2026-05-28 — those came from the original Z1A adapter that scanned every `table tr` / list item.
+**Last verified against spec:** 2026-05-28.
+**Drift:** none — the Bonfire JSON primary path is unchanged; only the fallback gets stricter.
+
+#### Pathfinder/lib/notion/zedcor-writer.ts (modified — additive)
+**Implements:** Z11 Fix 3 — exports `isPreWindowConstructionSolicitation(title, projectStage, sourceAuthority)`. True when stage ∈ {solicitation, owner_bid, rfp} AND source_authority ∈ {public_construction, county_purchasing, school_district, state_dot} AND title matches the construction-keyword regex (rehab\*, replac\*, construct\*, renovat\*, repair\*, improv\*, expansion\*, infrastructure, channel\*, bridge\*, road\*, paving, roof\*, hvac, mechanical, demolition, levee, drainage, sidewalk, culvert, stormwater, water-line, sewer, wastewater, electrical, excavation, grading). Existing `bidStageFor` / `buyWindowFor` already map solicitation → Bid Stage='Solicitation' + Buy Window='Closed' so eligible rows surface as pre-window tracking with the correct tags. No behavior change for any existing call site.
+**Last verified against spec:** 2026-05-28.
+**Drift:** none — additive helper export.

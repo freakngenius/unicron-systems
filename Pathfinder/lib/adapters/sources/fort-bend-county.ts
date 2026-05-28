@@ -65,6 +65,19 @@ const HISTORICAL_RE = /\b(tabulation|tabulations|historical|closed|past|archive|
 // 4-digit year alone (e.g. "2024 Bid/RFP/RFQ Tabulations") — the county lists
 // archive folders this way. Combined with HISTORICAL_RE this is belt+suspenders.
 const YEAR_ARCHIVE_RE = /^\s*(?:19|20)\d{2}\b/;
+// Z11 hardening — site-navigation phrases that shouldn't show up in a real
+// RFP title. Catches sidebar / breadcrumb / page-header text that survived
+// previous adapter passes.
+const NAV_PHRASE_RE =
+  /\b(about us|doing business( with)?( the)? county|disadvantaged business|term contract schedule|surplus property|sealed bid sale|conflict of interest|fta funded procurements|state requirements|business record research|new business information|w[-\s]?9|home|contact|sitemap|breadcrumb)\b/i;
+// Z11 hardening — real RFP titles are rarely longer than ~150 chars. Long
+// strings tend to be concatenated nav blobs ("Purchasing Agent About Us
+// Surplus Property Auction Current Bids..."). Cap defensively.
+const MAX_TITLE_LEN = 200;
+// Z11 hardening — at least one of these tokens has to appear in a title for
+// us to accept it as an opportunity row. Filters out pure category/section
+// names like "Purchasing Agent" while still admitting "RFP - Foo Bar".
+const OPPORTUNITY_TOKEN_RE = /\b(rfp|rfq|ifb|itb|rsq|qrf|bid|quote|solicitation|proposal|construction|services?)\b/i;
 
 type Row = {
   sourceEventId: string;
@@ -145,6 +158,15 @@ async function pollLandingFallback(opts: { fetch?: typeof fetch }): Promise<Row[
       // Reject historical / tabulation rows defensively.
       if (HISTORICAL_RE.test(titleRaw) || HISTORICAL_RE.test(refRaw)) return;
       if (YEAR_ARCHIVE_RE.test(titleRaw)) return;
+
+      // Z11 hardening — reject nav-blob titles and over-long concatenations.
+      if (titleRaw.length > MAX_TITLE_LEN) return;
+      if (NAV_PHRASE_RE.test(titleRaw)) return;
+      // Title MUST carry at least one opportunity-shaped token. Catches pure
+      // section names ("Purchasing Agent", "Auction Sealed Bid Sale") that
+      // slipped past previous filters; combined with the table-header sniff
+      // above this drops the entire page-nav class.
+      if (!OPPORTUNITY_TOKEN_RE.test(`${refRaw} ${titleRaw}`)) return;
 
       const href = titleCell.find('a').first().attr('href');
       let absoluteUrl: string;
