@@ -264,3 +264,98 @@ export async function resolveCrossPollination(
 
 // Exported for unit testing.
 export const __internal = { levenshtein, similarity, normalizedSubstringHit };
+
+// ─────────────────────────────────────────────────────────────────────────
+// Sprint Z8 — backfill re-evaluation (additive)
+// ─────────────────────────────────────────────────────────────────────────
+//
+// scripts/backfill-cross-pollination.ts walks every in-window project after
+// the Z8 customer import lands and re-runs the match against the now-
+// populated zedcor_customer_sites corpus. Most projects already have a
+// cross_pollination string from the Z4 pipeline — usually the "cold
+// outreach" fallback computed before customers existed. `force` lets the
+// backfill bypass the "already pitched" guard so those rows get re-scored
+// against the new corpus.
+
+export interface ReevaluateCrossPollinationOpts extends ResolveCrossPollinationOpts {
+  /**
+   * Existing cross_pollination value on the project, if any. Used to decide
+   * whether the re-evaluation is a no-op (saves a Notion write).
+   */
+  existingCrossPollination?: string | null;
+  /**
+   * Existing matched_customer canonical, if any. Used as the diff key.
+   */
+  existingMatchedCustomer?: string | null;
+  /**
+   * When false (default), returns { changed: false } if the existing value
+   * already reflects a confirmed warm intro. When true, always recomputes
+   * and reports the diff. Z8's backfill passes true.
+   */
+  force?: boolean;
+}
+
+export interface ReevaluateResult extends CrossPollinationResult {
+  /**
+   * True when the re-evaluation produced a different cross_pollination
+   * string or matched_customer than the existing value. Caller uses this
+   * to decide whether to write to Notion + persist.
+   */
+  changed: boolean;
+  /**
+   * True when the new result surfaces a warm intro (confidence ≥ 0.8) that
+   * the existing value did not. Used to count warm-intro flips for the
+   * spec's §"Acceptance criterion 3".
+   */
+  warm_intro_gained: boolean;
+}
+
+/**
+ * Re-evaluate cross-pollination for a project, comparing against the
+ * existing stored value. Pure additive wrapper around resolveCrossPollination
+ * — adds the diff-keyed change detection that Z8's backfill needs.
+ *
+ * Honors `force`:
+ *   - force=false (default): if existing value is already a warm intro
+ *     (i.e., not "No existing Zedcor relationship — cold outreach"), skip
+ *     the supabase reads and return { changed: false }.
+ *   - force=true: always recompute, always diff. Z8's backfill passes true.
+ */
+export async function reevaluateCrossPollination(
+  opts: ReevaluateCrossPollinationOpts,
+): Promise<ReevaluateResult> {
+  const existing = (opts.existingCrossPollination ?? '').trim();
+  const existingIsWarm = existing.length > 0 &&
+    !existing.startsWith('No existing Zedcor relationship');
+
+  if (!opts.force && existingIsWarm) {
+    return {
+      cross_pollination: existing,
+      warm_intro_path: null,
+      matched_customer: opts.existingMatchedCustomer ?? null,
+      confidence: 1,
+      possible_cross_pollination: [],
+      changed: false,
+      warm_intro_gained: false,
+    };
+  }
+
+  const fresh = await resolveCrossPollination({
+    gcName: opts.gcName,
+    supabase: opts.supabase,
+    customerOrgId: opts.customerOrgId,
+  });
+
+  const changed = fresh.cross_pollination !== existing ||
+    (fresh.matched_customer ?? null) !== (opts.existingMatchedCustomer ?? null);
+
+  const freshIsWarm = fresh.confidence >= WARM_THRESHOLD &&
+    fresh.matched_customer !== null;
+  const warm_intro_gained = freshIsWarm && !existingIsWarm;
+
+  return {
+    ...fresh,
+    changed,
+    warm_intro_gained,
+  };
+}
