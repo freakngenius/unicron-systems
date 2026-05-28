@@ -6,22 +6,26 @@
 // action_by_date) and update the corresponding Notion row.
 //
 // Usage:
-//   pnpm tsx scripts/backfill-pitch-generation.ts                 # write
-//   pnpm tsx scripts/backfill-pitch-generation.ts --dry-run       # log only
-//   pnpm tsx scripts/backfill-pitch-generation.ts --limit=50      # cap
-//   pnpm tsx scripts/backfill-pitch-generation.ts --skip-notion   # DB-only
-//   pnpm tsx scripts/backfill-pitch-generation.ts --skip-anthropic
-//     # Iterate rows that ALREADY have pitch_metadata, push the cached
-//     # values into Notion only. Never calls Sonnet, never recomputes
-//     # cross-pollination. Use this when re-syncing Notion after a writer
-//     # fix (e.g. Z5.2 v5 migration) without spending new tokens.
+//   pnpm tsx scripts/backfill-pitch-generation.ts                       # write
+//   pnpm tsx scripts/backfill-pitch-generation.ts --dry-run             # log only
+//   pnpm tsx scripts/backfill-pitch-generation.ts --limit=50            # cap
+//   pnpm tsx scripts/backfill-pitch-generation.ts --skip-notion         # DB-only
+//   pnpm tsx scripts/backfill-pitch-generation.ts --skip-anthropic      # Notion-only
+//
+// --skip-anthropic (Sprint Z5b) — Notion-update-only mode: iterate rows where
+// pitch_metadata IS NOT NULL, read the cached hooks / cross-pollination /
+// recommended-action from that jsonb, and push to Notion via the existing
+// updateProjectPitchBySignature path. Never calls Sonnet, never re-runs
+// cross-pollination, never re-writes pitch_metadata. Useful when an earlier
+// run completed the DB side but the Notion writer was gated (e.g.
+// NOTION_API_TOKEN absent at that time) and the cached pitches now need to
+// be pushed without re-spending tokens.
 //
 // Env loading mirrors scripts/backfill-notion-zedcor.ts:
 //   .env.production.local → .env.local → process.env
 //
 // Required envs: NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY,
-// ANTHROPIC_API_KEY (unless --skip-anthropic), NOTION_API_TOKEN
-// (unless --skip-notion).
+// ANTHROPIC_API_KEY (unless --skip-anthropic), NOTION_API_TOKEN (unless --skip-notion).
 
 import { config as dotenvConfig } from 'dotenv';
 import { createClient } from '@supabase/supabase-js';
@@ -54,8 +58,13 @@ if (!Number.isFinite(limit) || limit <= 0) {
   process.exit(1);
 }
 
+if (skipAnthropic && skipNotion) {
+  console.error('--skip-anthropic and --skip-notion together would do nothing. Pick one.');
+  process.exit(1);
+}
+
 if (!skipAnthropic && !process.env.ANTHROPIC_API_KEY) {
-  console.error('Missing ANTHROPIC_API_KEY — required for pitch generation (or pass --skip-anthropic to push cached pitches to Notion only)');
+  console.error('Missing ANTHROPIC_API_KEY — required for pitch generation (or pass --skip-anthropic to push cached pitches only)');
   process.exit(1);
 }
 
@@ -86,6 +95,22 @@ interface ProjectRow {
 }
 
 async function loadCandidates(): Promise<ProjectRow[]> {
+  // Sprint Z5b — in --skip-anthropic mode the candidate pool is "rows that
+  // already carry a cached pitch_metadata.pitch_hooks array". The legacy
+  // pitch_metadata column on older rows holds a stub shape (type_tags /
+  // degraded only) without the pitch_hooks key; filtering by the key's
+  // presence avoids loading stubs that would no-op.
+  if (skipAnthropic) {
+    const cached = await supabase
+      .from('projects')
+      .select('*')
+      .not('pitch_metadata->pitch_hooks', 'is', null)
+      .order('posted_date', { ascending: false, nullsFirst: false })
+      .limit(limit);
+    if (cached.error) throw new Error(`load cached-pitch rows failed: ${cached.error.message}`);
+    return ((cached.data ?? []) as unknown as ProjectRow[]).slice(0, limit);
+  }
+
   // SELECT * so missing optional columns (gc_metadata pre-Z3.5) don't fail.
   // PostgREST .or filter for stage OR buy_window_open.
   const stageList = 'project_stage.in.(awarded,gc_selected,sub_bid,mobilization)';
@@ -99,7 +124,7 @@ async function loadCandidates(): Promise<ProjectRow[]> {
     .limit(limit);
   if (priority.error) throw new Error(`load priority failed: ${priority.error.message}`);
 
-  let pool = (priority.data ?? []) as unknown as ProjectRow[];
+  const pool = (priority.data ?? []) as unknown as ProjectRow[];
   if (pool.length < limit) {
     const remaining = limit - pool.length;
     const stage = await supabase
@@ -195,10 +220,52 @@ async function main(): Promise<void> {
   const stats: Stats = { considered: 0, generated: 0, notion_updated: 0, notion_missing: 0, failures: 0 };
   const candidates = await loadCandidates();
   stats.considered = candidates.length;
-  console.log(`[backfill-pitch] loaded ${candidates.length} candidates (limit=${limit}, dryRun=${dryRun}, skipNotion=${skipNotion})`);
+  console.log(`[backfill-pitch] loaded ${candidates.length} candidates (limit=${limit}, dryRun=${dryRun}, skipNotion=${skipNotion}, skipAnthropic=${skipAnthropic})`);
 
   for (const p of candidates) {
     try {
+      // Sprint Z5b — --skip-anthropic branch: read cached pitch_metadata and
+      // push to Notion only. No Sonnet, no CP, no recommended-action recompute.
+      if (skipAnthropic) {
+        const pm = (p.pitch_metadata ?? {}) as Record<string, unknown>;
+        const hooksArr = Array.isArray(pm.pitch_hooks) ? (pm.pitch_hooks as unknown[]) : [];
+        const hook1 = typeof hooksArr[0] === 'string' ? (hooksArr[0] as string) : '';
+        const hook2 = typeof hooksArr[1] === 'string' ? (hooksArr[1] as string) : '';
+        const hook3 = typeof hooksArr[2] === 'string' ? (hooksArr[2] as string) : '';
+        const crossPoll = typeof pm.cross_pollination === 'string' ? (pm.cross_pollination as string) : null;
+        const warmIntro = typeof pm.warm_intro_path === 'string' ? (pm.warm_intro_path as string) : null;
+        const recAction = typeof pm.recommended_action === 'string' ? (pm.recommended_action as string) : null;
+        const actionByDate = typeof pm.action_by_date === 'string' ? (pm.action_by_date as string) : null;
+
+        if (!hook1 && !hook2 && !hook3 && !recAction) {
+          stats.notion_missing += 1;
+          continue;
+        }
+
+        if (dryRun) {
+          console.log(`[backfill-pitch] DRY-skip-anthropic ${p.source}:${p.source_id} hooks=[${[hook1.slice(0, 40), hook2.slice(0, 40), hook3.slice(0, 40)].join(' | ')}]`);
+          stats.generated += 1;
+          continue;
+        }
+
+        stats.generated += 1;
+        const notionRes = await updateProjectPitchBySignature({
+          source: p.source,
+          source_id: p.source_id,
+          pitch: {
+            cross_pollination: crossPoll,
+            warm_intro_path: warmIntro,
+            pitch_hooks: [hook1, hook2, hook3],
+            recommended_action: recAction,
+            action_by_date: actionByDate,
+          },
+        });
+        if (notionRes) stats.notion_updated += 1;
+        else stats.notion_missing += 1;
+        await new Promise((r) => setTimeout(r, 350));
+        continue;
+      }
+
       const gcMeta = (p.gc_metadata ?? {}) as Record<string, unknown>;
       const gcName = (gcMeta.gc_name as string | null | undefined) ?? null;
       const gcContactName = (gcMeta.gc_contact_name as string | null | undefined) ?? null;

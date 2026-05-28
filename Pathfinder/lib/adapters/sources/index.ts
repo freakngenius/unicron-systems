@@ -50,6 +50,28 @@ import { galvestonCountyAdapter } from './galveston-county';
 import { brazoriaCountyAdapter } from './brazoria-county';
 import { hisdIonwaveAdapter } from './hisd-ionwave';
 import { txdotHoustonDistrictAdapter } from './txdot-houston-district';
+// Sprint Z10 — 20 adapters for the DFW, Austin, San Antonio, and South
+// Texas hubs. Strictly additive; Z1A Houston entries above are untouched.
+import { fortWorthCityAdapter } from './fort-worth-city';
+import { tarrantCountyAdapter } from './tarrant-county';
+import { dallasIsdAdapter } from './dallas-isd';
+import { dfwAirportAdapter } from './dfw-airport';
+import { arlingtonCityAdapter } from './arlington-city';
+import { planoCityAdapter } from './plano-city';
+import { garlandCityAdapter } from './garland-city';
+import { irvingCityAdapter } from './irving-city';
+import { austinEresponseAdapter } from './austin-eresponse';
+import { austinBergstromAdapter } from './austin-bergstrom';
+import { travisCountyAdapter } from './travis-county';
+import { utSystemAdapter } from './ut-system';
+import { sanAntonioCityAdapter } from './san-antonio-city';
+import { bexarCountyAdapter } from './bexar-county';
+import { sanAntonioAirportAdapter } from './san-antonio-airport';
+import { northsideIsdAdapter } from './northside-isd';
+import { corpusChristiCityAdapter } from './corpus-christi-city';
+import { nuecesCountyAdapter } from './nueces-county';
+import { portCorpusChristiAdapter } from './port-corpus-christi';
+import { laredoCityAdapter } from './laredo-city';
 
 export type { SourceAdapter, SourceAdapterType, SourceEvent, SourcePollOptions } from './types';
 
@@ -79,6 +101,27 @@ export const SOURCE_ADAPTERS: Record<string, SourceAdapter> = {
   [brazoriaCountyAdapter.id]: brazoriaCountyAdapter,
   [hisdIonwaveAdapter.id]: hisdIonwaveAdapter,
   [txdotHoustonDistrictAdapter.id]: txdotHoustonDistrictAdapter,
+  // Zedcor Sprint Z10 adapters — DFW, Austin, San Antonio, South Texas.
+  [fortWorthCityAdapter.id]: fortWorthCityAdapter,
+  [tarrantCountyAdapter.id]: tarrantCountyAdapter,
+  [dallasIsdAdapter.id]: dallasIsdAdapter,
+  [dfwAirportAdapter.id]: dfwAirportAdapter,
+  [arlingtonCityAdapter.id]: arlingtonCityAdapter,
+  [planoCityAdapter.id]: planoCityAdapter,
+  [garlandCityAdapter.id]: garlandCityAdapter,
+  [irvingCityAdapter.id]: irvingCityAdapter,
+  [austinEresponseAdapter.id]: austinEresponseAdapter,
+  [austinBergstromAdapter.id]: austinBergstromAdapter,
+  [travisCountyAdapter.id]: travisCountyAdapter,
+  [utSystemAdapter.id]: utSystemAdapter,
+  [sanAntonioCityAdapter.id]: sanAntonioCityAdapter,
+  [bexarCountyAdapter.id]: bexarCountyAdapter,
+  [sanAntonioAirportAdapter.id]: sanAntonioAirportAdapter,
+  [northsideIsdAdapter.id]: northsideIsdAdapter,
+  [corpusChristiCityAdapter.id]: corpusChristiCityAdapter,
+  [nuecesCountyAdapter.id]: nuecesCountyAdapter,
+  [portCorpusChristiAdapter.id]: portCorpusChristiAdapter,
+  [laredoCityAdapter.id]: laredoCityAdapter,
 };
 
 /** Stable list of the 10 Z1A source slugs, in orchestrator dispatch order. */
@@ -95,6 +138,36 @@ export const ZEDCOR_Z1A_SOURCE_SLUGS = [
   'txdot-houston-district',
 ] as const;
 export type ZedcorZ1aSourceSlug = (typeof ZEDCOR_Z1A_SOURCE_SLUGS)[number];
+
+/** Stable list of the 20 Z10 source slugs, grouped by hub.
+ *  Dispatch order is hub-then-source so a partial run still covers each metro. */
+export const ZEDCOR_Z10_SOURCE_SLUGS = [
+  // DFW (8)
+  'fort-worth-city',
+  'tarrant-county',
+  'dallas-isd',
+  'dfw-airport',
+  'arlington-city',
+  'plano-city',
+  'garland-city',
+  'irving-city',
+  // Austin (4)
+  'austin-eresponse',
+  'austin-bergstrom',
+  'travis-county',
+  'ut-system',
+  // San Antonio (4)
+  'san-antonio-city',
+  'bexar-county',
+  'san-antonio-airport',
+  'northside-isd',
+  // South Texas / Coast (4)
+  'corpus-christi-city',
+  'nueces-county',
+  'port-corpus-christi',
+  'laredo-city',
+] as const;
+export type ZedcorZ10SourceSlug = (typeof ZEDCOR_Z10_SOURCE_SLUGS)[number];
 
 /** Look up an adapter by source id. Returns null when unregistered. */
 export function getSourceAdapter(id: string): SourceAdapter | null {
