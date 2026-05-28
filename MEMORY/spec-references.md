@@ -1403,3 +1403,84 @@ OPTIONAL (route degrades gracefully when absent):
 **Implements:** Internal architecture (`Pathfinder-Internal-Architecture.json`) lead_unit.schema and `raw_payload.internal_enrichment` / `internal_geo` projection. Function `projectToCompanyLeadView(project)` returns a flat `CompanyLeadView` with company name, service category, sales motion, footprint (HQ + ops states), hq location, employee count, federal registration, associations, first step / warm intro, rationale, brief, citations, website, linkedin, and contact list. Falls back to qualifier-time signals (`internal_inferred_service_category`, `internal_sales_motion_signal`, `internal_federal_registration`, `internal_association_hint`) when enrichment has not filled in. Mirror of `lib/agents/funder/leadView.ts`. Drives the new `CompanyDetailContents` rendered inside `LeadDetailShell` at `app/[slug]/leads/[projectId]/page.tsx` when `architecture.lead_unit.name === 'company'`.
 **Last verified against spec:** 2026-05-22. `pnpm typecheck`, `pnpm lint`, `pnpm test` (1833 tests) all pass. Verified live by curling `/pathfinder/internal/leads/<id>` and inspecting the rendered section list (Recommended first step, Why this scored, Snapshot, Trade associations, Brief, Contact, Citations); Funder lead detail at `/pathfinder/funder/leads/<id>` still renders Founders / Brief / Snapshot inside the same shell.
 **Drift:** none (new file, additive).
+
+---
+
+## Sprint Z3 — Zedcor parser quality + phase inference (PR #488)
+
+**State:** PR #488 on `feat/zedcor-z3-parser-phase`. Closes the parser-quality + phase-inference gap from Sprint Z1A. 9 Houston source adapters rebuilt to mirror the `galveston-county` gold-standard shape (project_stage + phase_confidence + buy_window_open + source_authority); `phase-signals` deterministic regex/keyword library wired through `enrichDetailPages()`; Notion writer additively populates Bid Stage / Buy Window / Source Type; verifier relaxed to drop only rows missing title OR source_url. Spec: `Specs/SPEC-zedcor-z3-parser-phase-fix.md`.
+
+#### Pathfinder/lib/adapters/sources/_zedcor-shared.ts
+**Implements:** SPEC-zedcor-z3-parser-phase-fix.md §"Per-adapter rebuild" — shared HTTP fetch wrapper (PathfinderBot user-agent, 1.5s detail-fetch rate limit, robots.txt respect) + `enrichDetailPages()` helper that fetches up to 5 most-recently-posted opportunity detail pages per source and applies the phase-signals regex library, with per-URL Cloudflare/403/timeout errors swallowed so per-source yield stays at listing-level confidence=0.5 when detail pages are gated.
+**Last verified against spec:** 2026-05-28.
+**Drift:** none (new file, additive).
+
+#### Pathfinder/lib/adapters/sources/brazoria-county.ts
+**Implements:** SPEC-zedcor-z3-parser-phase-fix.md §"Per-adapter rebuild" item 7. Primary path is the legacy Bonfire JSON (`brazoriacounty.bonfirehub.com/PublicPortal/getOpenPublicOpportunitiesSectionData`); HTML fallback constrains to the current-bids table with explicit archive-text rejection (the previous adapter surfaced 23 historical-tabulation links). source_authority=county_purchasing.
+**Last verified against spec:** 2026-05-28.
+**Drift:** none (rewritten against spec).
+
+#### Pathfinder/lib/adapters/sources/fort-bend-county.ts
+**Implements:** SPEC-zedcor-z3-parser-phase-fix.md §"Per-adapter rebuild" item 6. Routes primary traffic through the county's Bonfire JSON; the legacy adapter scanned `table tr, .accordion-item, li, .panel` against any `rfp|rfq|bid|ifb` token and produced 23 historical-tabulation links. Structurally correct against the spec; populates when the county posts opportunities. source_authority=county_purchasing.
+**Last verified against spec:** 2026-05-28.
+**Drift:** none (rewritten against spec).
+
+#### Pathfinder/lib/adapters/sources/harris-county-bonfire.ts
+**Implements:** SPEC-zedcor-z3-parser-phase-fix.md §"Per-adapter rebuild" item 3. Reads the modern Bonfire JSON (`harriscountytx.bonfirehub.com/PublicPortal/getOpenPublicOpportunitiesSectionData`). Detail pages 403 via Cloudflare → enrichment swallows per-URL errors. source_authority=county_purchasing.
+**Last verified against spec:** 2026-05-28.
+**Drift:** none (rewritten against spec).
+
+#### Pathfinder/lib/adapters/sources/hisd-ionwave.ts
+**Implements:** SPEC-zedcor-z3-parser-phase-fix.md §"Per-adapter rebuild" item 8. Selector scoped to Telerik RadGrid master-table at `/SourcingEvents.aspx?SourceType=1` (the documented `/CurrentSolicitations.aspx` serves an "Invalid Address Requested" placeholder to unauthenticated GETs). BidIDs extracted from `_clientKeyValues` ClientState JSON regex. source_authority=school_district.
+**Last verified against spec:** 2026-05-28.
+**Drift:** none (rewritten against spec).
+
+#### Pathfinder/lib/adapters/sources/houston-metro.ts
+**Implements:** SPEC-zedcor-z3-parser-phase-fix.md §"Per-adapter rebuild" item 4. Selector locked to `table[title="Open Procurements Table"] tbody > tr` (eliminates the ~50% junk from the previous indiscriminate `table tr, .views-row, .card` scan). Detail URLs route through Bonfire (`ridemetro.bonfirehub.com`). source_authority=public_construction.
+**Last verified against spec:** 2026-05-28.
+**Drift:** none (rewritten against spec).
+
+#### Pathfinder/lib/adapters/sources/houston-obo.ts
+**Implements:** SPEC-zedcor-z3-parser-phase-fix.md §"Per-adapter rebuild" item 1. OBO publishes a directory of 12 partner-portal links — the rebuilt adapter emits one row per partner-portal and the orchestrator's detail-page enricher probes the top-5 partner portals for phase signals. source_authority=public_construction.
+**Last verified against spec:** 2026-05-28.
+**Drift:** none (rewritten against spec).
+
+#### Pathfinder/lib/adapters/sources/houston-public-works.ts
+**Implements:** SPEC-zedcor-z3-parser-phase-fix.md §"Per-adapter rebuild" item 2. HPW publishes a gateway page pointing at CivCast + the 12-month Forecast PDF (~58 upcoming advertisements); the rebuilt adapter scopes to procurement-href regex (`civcastusa.com/publishers/|advertisement_report|advertisement_forecast|construction_bid|bid_set|capital_projects_forecast|purchasinghouston.org`). PDF parsing deferred to Z4 (spec §"Hard-halt conditions" allows the documented deferral). source_authority=public_construction.
+**Last verified against spec:** 2026-05-28.
+**Drift:** PDF-parsing deferred to Z4 per spec §"Hard-halt conditions".
+
+#### Pathfinder/lib/adapters/sources/port-houston.ts
+**Implements:** SPEC-zedcor-z3-parser-phase-fix.md §"Per-adapter rebuild" item 5. Adapter probed every plausible Workday Strategic Sourcing JSON path; the public portal is a JS-rendered SPA that returns a 1,489-byte shell for every path, with real data gated by `_pp_xsrf` and `_pp_session` cookies. Adapter is structurally correct; Z4 plan is Playwright headless or vendor-specific public-portal API key. source_authority=public_construction.
+**Last verified against spec:** 2026-05-28.
+**Drift:** Workday SPA fetch deferred to Z4 per spec §"Hard-halt conditions".
+
+#### Pathfinder/lib/adapters/sources/txdot-houston-district.ts
+**Implements:** SPEC-zedcor-z3-parser-phase-fix.md §"Per-adapter rebuild" item 9. TxDOT Houston-District page returns HTTP 404; the statewide letting hub funnels Houston-district letting to Tableau dashboards and the authenticated EBS portal. Adapter logs the 404 verbatim; Z4 plan is Tableau VizQL client OR FTP+PDF parser. source_authority=state_dot.
+**Last verified against spec:** 2026-05-28.
+**Drift:** Tableau/FTP-PDF fetch deferred to Z4 per spec §"Hard-halt conditions".
+
+#### Pathfinder/lib/adapters/zedcor/phase-signals.ts
+**Implements:** SPEC-zedcor-z3-parser-phase-fix.md §"Phase signals to look for". Deterministic regex/keyword library for inferring bid-lifecycle phase from detail-page text (gc_selected, sub_bid, mobilization, etc.). Take-the-latest-stage resolution per spec; `applyBuyWindowAging()` drops `buy_window_open=true` after 60 days for awarded/gc_selected/sub_bid and 30 days for mobilization, per spec §"Aging rule for buy_window_open=true".
+**Last verified against spec:** 2026-05-28.
+**Drift:** none (new file, additive).
+
+#### Pathfinder/lib/notion/types.ts
+**Implements:** SPEC-zedcor-z3-parser-phase-fix.md §"Notion DB schema update" — `NotionBidStage` / `NotionBuyWindow` / `NotionSourceType` union types matching the new Notion DB select properties (Pre-Budget, Solicitation, GC Selected, Sub Bid, Mobilization, Awarded, Unknown for Bid Stage; Open, Closed, Unknown for Buy Window; Public Construction, Federal Contract, Federal Spending, State DOT, County Purchasing, School District, News Report, Other for Source Type). Additive — existing `NotionPhase` / `NotionState` unions preserved.
+**Last verified against spec:** 2026-05-28.
+**Drift:** none (additive type union expansion).
+
+#### Pathfinder/lib/notion/zedcor-writer.ts
+**Implements:** SPEC-zedcor-z3-parser-phase-fix.md §"Wave 2: Notion writer (ADDITIVE)". `bidStageFor` / `buyWindowFor` / `sourceTypeFor` mapping per spec. Federal authorities (sam.gov/usaspending) always map to Closed buy window so they stop polluting Rep View even when their project_stage is 'awarded'. Existing `Phase` property mapping unchanged.
+**Last verified against spec:** 2026-05-28.
+**Drift:** none (additive property mappings only).
+
+#### Pathfinder/lib/orchestrator/orchestrator.ts
+**Implements:** SPEC-zedcor-z3-parser-phase-fix.md §"Wave 2: Notion writer (ADDITIVE)" wiring. ProjectRow type extended with project_stage / buy_window_open / source_authority columns; loadRunProjects() reads them; Notion writer call passes them. The legacy date-based tag-phase is preserved ONLY for Notion's date-based Phase property; it no longer overwrites project_stage (which is now set by the adapter + detail-page enrichment).
+**Last verified against spec:** 2026-05-28.
+**Drift:** none (additive — existing tag-phase wiring preserved for the date-based Phase Notion property).
+
+#### Pathfinder/lib/orchestrator/run-source.ts
+**Implements:** SPEC-zedcor-z3-parser-phase-fix.md §"Wave 3: Verifier relaxation" + §"Wave 0: Foundation" source_authority promotion. Reject rows missing title OR source_url (the new structural floor — solicitation-stage rows pass through). Adapter-stage project_stage / phase_confidence / buy_window_open promoted from raw_payload to top-level columns. source_authority fallback table maps each slug to its taxonomy value.
+**Last verified against spec:** 2026-05-28.
+**Drift:** none (additive — geofence + dedup paths preserved).
