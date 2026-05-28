@@ -5,7 +5,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { RunButton } from './RunButton';
-import { LiveProgress } from './LiveProgress';
+import { LiveProgress, type LastSummary } from './LiveProgress';
 import { ScheduledToggle } from './ScheduledToggle';
 import { SendDigestPanel } from './SendDigestPanel';
 import { RecentRunsTable } from './RecentRunsTable';
@@ -53,6 +53,9 @@ export function RunPanel() {
   const [pollErrSticky, setPollErrSticky] = useState(false);
   const [banner, setBanner] = useState<{ tone: 'error' | 'info'; text: string } | null>(null);
   const [hydrated, setHydrated] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [lastSummary, setLastSummary] = useState<LastSummary | null>(null);
+  const runStartedAtRef = useRef<number | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const errCountRef = useRef(0);
 
@@ -78,19 +81,22 @@ export function RunPanel() {
     void refreshRecent();
   }, [refreshRecent]);
 
-  // Polling loop: every 2s while a run is in flight. Three consecutive failures
-  // flip a sticky banner but keep polling.
+  // Polling loop: every 1.5s while a run is in flight. Three consecutive failures
+  // flip a sticky banner but keep polling. On finish, capture the summary into
+  // lastSummary so the UI can show "Run #N · X projects · Y sources · Zs" even
+  // after currentRunId clears.
   useEffect(() => {
     if (currentRunId == null) {
       if (intervalRef.current) clearInterval(intervalRef.current);
       intervalRef.current = null;
       return;
     }
+    const runId = currentRunId;
     errCountRef.current = 0;
     setPollErrSticky(false);
     const tick = async () => {
       try {
-        const res = await fetch(`/pathfinder/api/zedcor/run-status?run_id=${currentRunId}`, {
+        const res = await fetch(`/pathfinder/api/zedcor/run-status?run_id=${runId}`, {
           cache: 'no-store',
         });
         if (!res.ok) throw new Error(`status ${res.status}`);
@@ -100,7 +106,15 @@ export function RunPanel() {
         if (json.finished) {
           if (intervalRef.current) clearInterval(intervalRef.current);
           intervalRef.current = null;
+          const startedAt = runStartedAtRef.current ?? Date.now();
+          const durationMs = Math.max(0, Date.now() - startedAt);
+          setLastSummary({
+            runId,
+            summary: (json.summary ?? {}) as RunSummary,
+            durationMs,
+          });
           setCurrentRunId(null);
+          runStartedAtRef.current = null;
           void refreshRecent();
         }
       } catch {
@@ -109,7 +123,7 @@ export function RunPanel() {
       }
     };
     void tick();
-    intervalRef.current = setInterval(tick, 2000);
+    intervalRef.current = setInterval(tick, 1500);
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
       intervalRef.current = null;
@@ -120,6 +134,9 @@ export function RunPanel() {
     setProgress(null);
     setPollErrSticky(false);
     setBanner(null);
+    setLastSummary(null);
+    setSubmitting(true);
+    runStartedAtRef.current = Date.now();
     try {
       const res = await fetch('/pathfinder/api/zedcor/run-orchestrator', { method: 'POST' });
       if (!res.ok) {
@@ -135,12 +152,16 @@ export function RunPanel() {
             text: body.error ?? `run-orchestrator returned ${res.status}`,
           });
         }
+        runStartedAtRef.current = null;
         return;
       }
       const body = (await res.json()) as { run_id: number };
       setCurrentRunId(body.run_id);
     } catch (e) {
       setBanner({ tone: 'error', text: e instanceof Error ? e.message : String(e) });
+      runStartedAtRef.current = null;
+    } finally {
+      setSubmitting(false);
     }
   }, []);
 
@@ -187,12 +208,18 @@ export function RunPanel() {
         </div>
       )}
       <section className="rounded-lg border border-neutral-200 bg-white p-6 shadow-sm">
-        <RunButton onClick={handleRun} disabled={currentRunId != null} />
+        <RunButton
+          onClick={handleRun}
+          disabled={submitting || currentRunId != null}
+          pending={submitting || currentRunId != null}
+        />
         <div className="mt-4">
           <LiveProgress
             running={currentRunId != null}
+            pending={submitting}
             progress={progress}
             lastRun={lastRun}
+            lastSummary={lastSummary}
             hydrated={hydrated}
           />
         </div>
