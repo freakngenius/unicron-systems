@@ -1,48 +1,38 @@
 // lib/adapters/sources/txdot-houston-district.ts
 //
-// Sprint Z1A adapter — TxDOT Houston District.
-// Landing page at txdot.gov/about/districts/houston.html.
+// Sprint Z3 adapter — TxDOT Houston District.
+//
+// STRATEGY DEFERRED TO Z4.
+//
+// Investigation (2026-05-28):
+//   - https://www.txdot.gov/about/districts/houston.html → HTTP 404.
+//   - https://www.txdot.gov/about/districts/houston-district.html → renders, but
+//     is pure district contact/nav. No opportunities embedded in the HTML.
+//   - https://www.txdot.gov/business/road-bridge-maintenance/contract-letting.html
+//     is the statewide letting hub. It does not list individual projects; it
+//     directs bidders to Tableau dashboards
+//     (tableau.txdot.gov/views/ProjectInformationDashboard,
+//     tableau.txdot.gov/views/Plan24MonthLettingSchedule) and to the
+//     Electronic Bidding System (EBS). Both are interactive
+//     non-HTML-scrapable surfaces (Tableau Vizql, authenticated EBS).
+//   - The actual Houston-district letting docs (Notice to Contractors,
+//     plansets, bid tabs) are published as PDFs from the FTP site
+//     (ftp.dot.state.tx.us). PDF parsing is out of scope for Z3.
+//
+// Until Z4 builds either a Tableau Vizql client or an FTP/PDF parser,
+// this adapter returns []. We still emit the canonical SourceAdapter shape
+// so the orchestrator registers the source and source_failed never fires.
 
 import type { SourceAdapter, SourceEvent } from './types';
-import { buildEvent, hashId, parseLooseDate, pfFetchHtml } from './_zedcor-shared';
-
-const ENDPOINT = 'https://www.txdot.gov/about/districts/houston.html';
 
 export const txdotHoustonDistrictAdapter: SourceAdapter = {
   id: 'txdot-houston-district',
   type: 'registered',
-  description: 'TxDOT Houston District (HTML scrape; landing + contracting follow).',
+  description:
+    'TxDOT Houston District (deferred to Z4 — letting is Tableau/EBS/PDF-only, no scrapable HTML).',
 
-  async poll(opts): Promise<SourceEvent[]> {
-    const $ = await pfFetchHtml(ENDPOINT, { fetchImpl: opts.fetch });
-    const events: SourceEvent[] = [];
-
-    $('a').each((_, el) => {
-      const text = $(el).text().trim();
-      if (text.length < 8) return;
-      if (!/\b(letting|project|construction|maintenance|notice|lay-?down|surveillance)\b/i.test(text)) return;
-      const href = $(el).attr('href');
-      if (!href) return;
-      const absoluteUrl = new URL(href, ENDPOINT).toString();
-      const sourceEventId = hashId(`${text}|${absoluteUrl}`);
-      events.push(
-        buildEvent({
-          source_event_id: sourceEventId,
-          title: text.slice(0, 240),
-          summary: null,
-          posted_date: null,
-          raw_payload: {
-            agency: 'TxDOT — Houston District',
-            city: 'Houston',
-            county: 'Harris County',
-            state: 'TX',
-            source_url: absoluteUrl,
-            response_deadline: null,
-            estimated_value: null,
-          },
-        }),
-      );
-    });
-    return events;
+  async poll(_opts): Promise<SourceEvent[]> {
+    // Intentional no-op. See file header for the Z4 deferral rationale.
+    return [];
   },
 };
