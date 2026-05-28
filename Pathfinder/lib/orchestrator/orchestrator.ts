@@ -17,7 +17,10 @@
 
 import { supabaseAdmin } from '@/lib/supabase';
 import { ZEDCOR_Z1A_SOURCE_SLUGS } from '@/lib/adapters/sources';
-import { writeProjectToNotion } from '@/lib/notion/zedcor-writer';
+import {
+  writeProjectToNotion,
+  updateProjectPitchOnNotion,
+} from '@/lib/notion/zedcor-writer';
 import type { NotionPhase, NotionState } from '@/lib/notion/types';
 import { runSource, type RunSourceResult } from './run-source';
 import { tagPhaseWithConfidence } from './tag-phase';
@@ -27,6 +30,13 @@ import {
   ORCHESTRATOR_AGENT_NAME,
   ZEDCOR_ORG_ID,
 } from './constants';
+// Sprint Z4 imports — additive. Pitch generation runs as the final
+// orchestrator wave (after Notion writes), gated by env. Never modifies
+// pre-Z4 behavior.
+import { resolveCrossPollination } from '@/lib/adapters/zedcor/cross-pollination';
+import { generatePitchHooks } from '@/lib/adapters/zedcor/pitch-generator';
+import { assembleRecommendedAction } from '@/lib/adapters/zedcor/recommended-action';
+import { inferTypeTags } from '@/lib/adapters/zedcor/type-tag-inferrer';
 
 export interface RunSummary {
   run_id: number;
@@ -282,11 +292,27 @@ export async function runZedcorOrchestrator(): Promise<RunSummary> {
     }
   }
 
+  // Sprint Z4 — Wave 4: pitch metadata. Runs after Notion writes complete.
+  // Gated on env so it can be disabled without removing the wiring.
+  // Degrades gracefully when Z3.5's gc_metadata isn't populated yet.
+  const pitchResult = await runZedcorZ4PitchWave(runId).catch(async (err) => {
+    await logEvent({
+      agent_name: ORCHESTRATOR_AGENT_NAME,
+      event_type: 'zedcor_z4_pitch_wave_failed',
+      event_data: { run_id: runId, error: (err as Error).message.slice(0, 500) },
+      organization_id: ZEDCOR_ORG_ID,
+      runner: 'manual',
+      ts: new Date().toISOString(),
+      run_id: runId,
+    });
+    return { eligible: 0, generated: 0, failures: 0, skipped: 0 };
+  });
+
   // Emit a final step_progress=100 so the UI's percent_complete settles.
   await logEvent({
     agent_name: ORCHESTRATOR_AGENT_NAME,
     event_type: 'step_progress',
-    event_data: { step_label: 'Writing to Notion complete', percent: 100, run_id: runId },
+    event_data: { step_label: 'Writing to Notion complete', percent: 100, run_id: runId, pitch: pitchResult },
     organization_id: ZEDCOR_ORG_ID,
     runner: 'manual',
     ts: new Date().toISOString(),
@@ -333,4 +359,265 @@ export async function runZedcorOrchestrator(): Promise<RunSummary> {
   });
 
   return summary;
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Sprint Z4 — Wave 4: pitch metadata generation.
+//
+// Runs as the final wave of runZedcorOrchestrator (after Notion writes).
+// Additive — never reads or modifies projects outside its filter.
+//
+// Filter: project_stage IN ('awarded','gc_selected','sub_bid','mobilization')
+//         OR buy_window_open=true. Cap DEFAULT_PITCH_CAP_PER_RUN per run.
+//
+// Degrades gracefully when Z3.5's gc_metadata is missing — generates
+// generic hooks from title + agency only and skips cross-pollination.
+// ─────────────────────────────────────────────────────────────────────────
+
+const DEFAULT_PITCH_CAP_PER_RUN = 200;
+
+interface PitchWaveSummary {
+  eligible: number;
+  generated: number;
+  failures: number;
+  skipped: number;
+}
+
+interface PitchProjectRow {
+  id: string;
+  source: string;
+  source_id: string;
+  title: string;
+  summary: string | null;
+  project_value: number | null;
+  project_stage: string | null;
+  posted_date: string | null;
+  raw_payload: Record<string, unknown> | null;
+  buy_window_open: boolean | null;
+  external_refs: Record<string, unknown> | null;
+  gc_metadata: Record<string, unknown> | null;
+  pitch_metadata: Record<string, unknown> | null;
+}
+
+function isPitchEnabled(): boolean {
+  if (process.env.ZEDCOR_DISABLE_PITCH === 'true') return false;
+  if (process.env.ZEDCOR_DISABLE_ANTHROPIC === 'true') return false;
+  return Boolean(process.env.ANTHROPIC_API_KEY);
+}
+
+function pitchCap(): number {
+  const raw = process.env.ZEDCOR_PITCH_CAP_PER_RUN;
+  const n = raw ? Number(raw) : NaN;
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : DEFAULT_PITCH_CAP_PER_RUN;
+}
+
+async function loadPitchEligibleProjects(runId: number, cap: number): Promise<PitchProjectRow[]> {
+  const admin = supabaseAdmin() as unknown as {
+    from: (t: string) => {
+      select: (cols: string) => {
+        eq: (col: string, val: number | string | boolean) => {
+          or: (filter: string) => {
+            limit: (n: number) => Promise<{ data: PitchProjectRow[] | null; error: { message: string } | null }>;
+          };
+        };
+      };
+    };
+  };
+  const stageList = "project_stage.in.(awarded,gc_selected,sub_bid,mobilization)";
+  const buyWindow = "buy_window_open.is.true";
+  // Use SELECT * so missing optional columns (gc_metadata if Z3.5 hasn't
+  // merged yet, pitch_metadata before its migration applies) don't fail the
+  // query. Row shape includes only the keys the row actually carries; reads
+  // below treat absent keys as null.
+  const { data, error } = await admin
+    .from('projects')
+    .select('*')
+    .eq('agent_run_id', runId)
+    .or(`${stageList},${buyWindow}`)
+    .limit(cap);
+  if (error) throw new Error(`load pitch-eligible projects failed: ${error.message}`);
+  return data ?? [];
+}
+
+async function writeProjectPitchMetadata(id: string, metadata: Record<string, unknown>): Promise<void> {
+  const admin = supabaseAdmin() as unknown as {
+    from: (t: string) => {
+      update: (row: Record<string, unknown>) => {
+        eq: (col: string, val: string) => Promise<{ error: { message: string } | null }>;
+      };
+    };
+  };
+  const { error } = await admin
+    .from('projects')
+    .update({ pitch_metadata: metadata })
+    .eq('id', id);
+  if (error) throw new Error(`write pitch_metadata failed: ${error.message}`);
+}
+
+export async function runZedcorZ4PitchWave(runId: number): Promise<PitchWaveSummary> {
+  const summary: PitchWaveSummary = { eligible: 0, generated: 0, failures: 0, skipped: 0 };
+  if (!isPitchEnabled()) {
+    await logEvent({
+      agent_name: ORCHESTRATOR_AGENT_NAME,
+      event_type: 'zedcor_z4_pitch_wave_skipped',
+      event_data: { run_id: runId, reason: 'pitch disabled or ANTHROPIC_API_KEY missing' },
+      organization_id: ZEDCOR_ORG_ID,
+      runner: 'manual',
+      ts: new Date().toISOString(),
+      run_id: runId,
+    });
+    return summary;
+  }
+
+  const cap = pitchCap();
+  const eligible = await loadPitchEligibleProjects(runId, cap);
+  summary.eligible = eligible.length;
+  if (eligible.length === 0) return summary;
+
+  const supabase = supabaseAdmin() as unknown as Parameters<typeof resolveCrossPollination>[0]['supabase'];
+
+  await logEvent({
+    agent_name: ORCHESTRATOR_AGENT_NAME,
+    event_type: 'zedcor_z4_pitch_wave_started',
+    event_data: { run_id: runId, eligible: eligible.length, cap },
+    organization_id: ZEDCOR_ORG_ID,
+    runner: 'manual',
+    ts: new Date().toISOString(),
+    run_id: runId,
+  });
+
+  for (const p of eligible) {
+    try {
+      const gcMeta = (p.gc_metadata ?? {}) as Record<string, unknown>;
+      const gcName = (gcMeta.gc_name as string | null | undefined) ?? null;
+      const gcContactName = (gcMeta.gc_contact_name as string | null | undefined) ?? null;
+      const gcContactRole = (gcMeta.gc_contact_role as string | null | undefined) ?? null;
+      const gcContactPhone = (gcMeta.gc_contact_phone as string | null | undefined) ?? null;
+      const subBidDeadline = (gcMeta.sub_bid_deadline as string | null | undefined) ?? null;
+      const gcAwardDate = (gcMeta.gc_award_date as string | null | undefined) ?? null;
+
+      const agency = (p.raw_payload?.agency as string | null) ?? null;
+      const city = (p.raw_payload?.city as string | null) ?? null;
+      const county = (p.raw_payload?.county as string | null) ?? null;
+      const state = (p.raw_payload?.state as string | null) ?? null;
+
+      const typeTags = inferTypeTags({ title: p.title, summary: p.summary });
+
+      // Cross-pollination (skip when gc_name absent — spec: degrade gracefully).
+      const cp = gcName
+        ? await resolveCrossPollination({ gcName, supabase })
+        : { cross_pollination: null, warm_intro_path: null, matched_customer: null, confidence: 0, possible_cross_pollination: [] };
+
+      // Pitch hooks via Sonnet.
+      const pitchResult = await generatePitchHooks({
+        title: p.title,
+        agency,
+        summary: p.summary,
+        project_value: p.project_value,
+        city,
+        county,
+        state,
+        project_stage: p.project_stage,
+        posted_date: p.posted_date,
+        gc_name: gcName,
+        inferred_type_tags: typeTags,
+      }, { agentRunId: runId });
+
+      // Recommended action.
+      const action = assembleRecommendedAction({
+        title: p.title,
+        gc_name: gcName,
+        gc_contact_name: gcContactName,
+        gc_contact_role: gcContactRole,
+        gc_contact_phone: gcContactPhone,
+        cross_pollination: cp.cross_pollination,
+        hooks: pitchResult.hooks,
+        sub_bid_deadline: subBidDeadline,
+        gc_award_date: gcAwardDate,
+        posted_date: p.posted_date,
+      });
+
+      const metadata = {
+        cross_pollination: cp.cross_pollination,
+        warm_intro_path: cp.warm_intro_path,
+        matched_customer: cp.matched_customer,
+        match_confidence: cp.confidence,
+        possible_cross_pollination: cp.possible_cross_pollination,
+        pitch_hooks: [pitchResult.hooks.hook_1, pitchResult.hooks.hook_2, pitchResult.hooks.hook_3],
+        pitch_model: pitchResult.model,
+        recommended_action: action.recommended_action,
+        action_by_date: action.action_by_date,
+        type_tags: typeTags,
+        degraded: pitchResult.degraded,
+        generated_at: pitchResult.generated_at,
+      };
+
+      await writeProjectPitchMetadata(p.id, metadata);
+
+      // Update Notion if we have a page url stashed in external_refs.
+      const notionPageId = (p.external_refs?.notion_page_id as string | null | undefined)
+        ?? extractNotionPageIdFromUrl(p.external_refs?.notion_page_url as string | null | undefined);
+      if (notionPageId) {
+        try {
+          await updateProjectPitchOnNotion({
+            pageId: notionPageId,
+            pitch: {
+              cross_pollination: cp.cross_pollination,
+              warm_intro_path: cp.warm_intro_path,
+              pitch_hooks: [pitchResult.hooks.hook_1, pitchResult.hooks.hook_2, pitchResult.hooks.hook_3],
+              recommended_action: action.recommended_action,
+              action_by_date: action.action_by_date,
+            },
+          });
+          await new Promise((r) => setTimeout(r, 350));
+        } catch (notionErr) {
+          await logEvent({
+            agent_name: ORCHESTRATOR_AGENT_NAME,
+            event_type: 'zedcor_z4_notion_pitch_update_failed',
+            event_data: { run_id: runId, project_id: p.id, error: (notionErr as Error).message.slice(0, 500) },
+            organization_id: ZEDCOR_ORG_ID,
+            runner: 'manual',
+            ts: new Date().toISOString(),
+            run_id: runId,
+          });
+        }
+      } else {
+        summary.skipped += 1;
+      }
+
+      summary.generated += 1;
+    } catch (err) {
+      summary.failures += 1;
+      await logEvent({
+        agent_name: ORCHESTRATOR_AGENT_NAME,
+        event_type: 'zedcor_z4_pitch_generation_failed',
+        event_data: { run_id: runId, project_id: p.id, error: (err as Error).message.slice(0, 500) },
+        organization_id: ZEDCOR_ORG_ID,
+        runner: 'manual',
+        ts: new Date().toISOString(),
+        run_id: runId,
+      });
+    }
+  }
+
+  await logEvent({
+    agent_name: ORCHESTRATOR_AGENT_NAME,
+    event_type: 'zedcor_z4_pitch_wave_complete',
+    event_data: { run_id: runId, ...summary },
+    organization_id: ZEDCOR_ORG_ID,
+    runner: 'manual',
+    ts: new Date().toISOString(),
+    run_id: runId,
+  });
+
+  return summary;
+}
+
+function extractNotionPageIdFromUrl(url: string | null | undefined): string | null {
+  if (!url) return null;
+  // Notion page URLs end with '...-<32hexid>'. Extract the trailing id.
+  const match = url.match(/([0-9a-f]{32})(?:[?#]|$)/i);
+  if (!match) return null;
+  const id = match[1];
+  return `${id.slice(0, 8)}-${id.slice(8, 12)}-${id.slice(12, 16)}-${id.slice(16, 20)}-${id.slice(20, 32)}`;
 }
