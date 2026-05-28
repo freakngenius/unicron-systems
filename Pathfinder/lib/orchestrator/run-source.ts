@@ -35,6 +35,7 @@ interface AgentLogInsert {
   organization_id: string;
   runner: string;
   ts: string;
+  run_id: number | null;
 }
 
 interface ProjectInsert {
@@ -110,6 +111,7 @@ export async function runSource(slug: string, runId: number): Promise<RunSourceR
       organization_id: ZEDCOR_ORG_ID,
       runner: 'manual',
       ts: new Date().toISOString(),
+      run_id: runId,
     });
     return result;
   }
@@ -137,6 +139,7 @@ export async function runSource(slug: string, runId: number): Promise<RunSourceR
       organization_id: ZEDCOR_ORG_ID,
       runner: 'manual',
       ts: new Date().toISOString(),
+      run_id: runId,
     });
     return result;
   }
@@ -151,6 +154,7 @@ export async function runSource(slug: string, runId: number): Promise<RunSourceR
       organization_id: ZEDCOR_ORG_ID,
       runner: 'manual',
       ts: new Date().toISOString(),
+      run_id: runId,
     });
   }
 
@@ -163,6 +167,7 @@ export async function runSource(slug: string, runId: number): Promise<RunSourceR
       organization_id: ZEDCOR_ORG_ID,
       runner: 'manual',
       ts: new Date().toISOString(),
+      run_id: runId,
     });
     return result;
   }
@@ -182,6 +187,7 @@ export async function runSource(slug: string, runId: number): Promise<RunSourceR
       organization_id: ZEDCOR_ORG_ID,
       runner: 'manual',
       ts: new Date().toISOString(),
+      run_id: runId,
     });
 
     const projectId = projectIdFor(slug, ev.source_event_id);
@@ -231,6 +237,7 @@ export async function runSource(slug: string, runId: number): Promise<RunSourceR
         organization_id: ZEDCOR_ORG_ID,
         runner: 'manual',
         ts: new Date().toISOString(),
+        run_id: runId,
       });
     } else {
       result.dedup_skips += 1;

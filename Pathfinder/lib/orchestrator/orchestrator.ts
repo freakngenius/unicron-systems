@@ -51,6 +51,7 @@ interface AgentLogInsert {
   organization_id: string;
   runner: string;
   ts: string;
+  run_id: number | null;
 }
 
 async function logEvent(event: AgentLogInsert): Promise<void> {
@@ -58,6 +59,39 @@ async function logEvent(event: AgentLogInsert): Promise<void> {
     from: (t: string) => { insert: (row: AgentLogInsert) => Promise<{ error: unknown }> };
   };
   await admin.from('agent_log').insert(event);
+}
+
+const SLUG_TO_LABEL: Record<string, string> = {
+  'houston-obo': 'City of Houston OBO',
+  'houston-public-works': 'Houston Public Works',
+  'harris-county-bonfire': 'Harris County (Bonfire)',
+  'houston-metro': 'METRO Houston',
+  'port-houston': 'Port of Houston',
+  'fort-bend-county': 'Fort Bend County',
+  'galveston-county': 'Galveston County',
+  'brazoria-county': 'Brazoria County',
+  'hisd-ionwave': 'Houston ISD (IonWave)',
+  'txdot-houston-district': 'TxDOT Houston District',
+};
+
+async function emitStepProgress(
+  runId: number,
+  sourcesCompleted: number,
+  sourcesTotal: number,
+  lastSlug: string,
+  projectsSoFar: number,
+): Promise<void> {
+  const label = `Polled ${sourcesCompleted} of ${sourcesTotal} (last: ${SLUG_TO_LABEL[lastSlug] ?? lastSlug}) · ${projectsSoFar} projects so far`;
+  const percent = Math.min(95, Math.floor((sourcesCompleted / sourcesTotal) * 90));
+  await logEvent({
+    agent_name: ORCHESTRATOR_AGENT_NAME,
+    event_type: 'step_progress',
+    event_data: { step_label: label, percent, run_id: runId, sources_completed: sourcesCompleted, sources_total: sourcesTotal },
+    organization_id: ZEDCOR_ORG_ID,
+    runner: 'manual',
+    ts: new Date().toISOString(),
+    run_id: runId,
+  });
 }
 
 async function openAgentRun(): Promise<number> {
@@ -173,8 +207,19 @@ export async function runZedcorOrchestrator(): Promise<RunSummary> {
   const runId = await openAgentRun();
 
   // Wave 1 — adapters in parallel (each bounded by per-adapter fetch timeout).
+  // Wrap each adapter so a step_progress event fires as it completes — Z1B's
+  // UI polls run-status and reads the latest step_label/percent from these.
+  const total = ZEDCOR_Z1A_SOURCE_SLUGS.length;
+  let completed = 0;
+  let runningProjectCount = 0;
   const sourceResults: RunSourceResult[] = await Promise.all(
-    ZEDCOR_Z1A_SOURCE_SLUGS.map((slug) => runSource(slug, runId)),
+    ZEDCOR_Z1A_SOURCE_SLUGS.map(async (slug) => {
+      const result = await runSource(slug, runId);
+      completed += 1;
+      runningProjectCount += result.projects_inserted;
+      await emitStepProgress(runId, completed, total, slug, runningProjectCount);
+      return result;
+    }),
   );
 
   // Wave 2 — load all inserted projects, tag phase + score.
@@ -239,9 +284,21 @@ export async function runZedcorOrchestrator(): Promise<RunSummary> {
         organization_id: ZEDCOR_ORG_ID,
         runner: 'manual',
         ts: new Date().toISOString(),
+        run_id: runId,
       });
     }
   }
+
+  // Emit a final step_progress=100 so the UI's percent_complete settles.
+  await logEvent({
+    agent_name: ORCHESTRATOR_AGENT_NAME,
+    event_type: 'step_progress',
+    event_data: { step_label: 'Writing to Notion complete', percent: 100, run_id: runId },
+    organization_id: ZEDCOR_ORG_ID,
+    runner: 'manual',
+    ts: new Date().toISOString(),
+    run_id: runId,
+  });
 
   // Aggregate summary.
   const completedAt = new Date().toISOString();
@@ -269,13 +326,17 @@ export async function runZedcorOrchestrator(): Promise<RunSummary> {
   };
 
   await closeAgentRun(runId, summary);
+  // Z1B's run-status endpoint reads the summary from the
+  // `orchestrator_run_summary` event_type — emit it as the canonical
+  // terminal event for this run.
   await logEvent({
     agent_name: ORCHESTRATOR_AGENT_NAME,
-    event_type: 'run_completed',
+    event_type: 'orchestrator_run_summary',
     event_data: summary as unknown as Record<string, unknown>,
     organization_id: ZEDCOR_ORG_ID,
     runner: 'manual',
     ts: new Date().toISOString(),
+    run_id: runId,
   });
 
   return summary;

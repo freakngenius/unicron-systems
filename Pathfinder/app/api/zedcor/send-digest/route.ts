@@ -10,6 +10,7 @@ import { Resend } from 'resend';
 import { supabaseAdmin } from '@/lib/supabase';
 import { buildDigestData, buildDigestText } from '@/lib/email/build-digest-data';
 import { renderDigest } from '@/lib/email/handlebars-setup';
+import { getOperatorIdentity, operatorDenied } from '@/lib/auth/require-operator';
 import { ORCHESTRATOR_AGENT_NAME, ZEDCOR_ORG_ID } from '@/lib/orchestrator/constants';
 
 export const runtime = 'nodejs';
@@ -39,6 +40,9 @@ async function logDigestSent(payload: Record<string, unknown>): Promise<void> {
 }
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
+  const auth = await getOperatorIdentity();
+  if (!auth.ok) return operatorDenied(auth);
+
   let body: SendDigestBody = {};
   try {
     body = (await req.json()) as SendDigestBody;

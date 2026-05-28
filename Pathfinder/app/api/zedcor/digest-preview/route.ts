@@ -9,6 +9,7 @@ import path from 'node:path';
 import { NextResponse } from 'next/server';
 import { buildDigestData } from '@/lib/email/build-digest-data';
 import { renderDigest } from '@/lib/email/handlebars-setup';
+import { getOperatorIdentity, operatorDenied } from '@/lib/auth/require-operator';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -19,6 +20,9 @@ async function loadTemplate(): Promise<string> {
 }
 
 export async function GET(): Promise<NextResponse | Response> {
+  const auth = await getOperatorIdentity();
+  if (!auth.ok) return operatorDenied(auth);
+
   try {
     const data = await buildDigestData({});
     const template = await loadTemplate();
