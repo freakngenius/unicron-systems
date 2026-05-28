@@ -28,6 +28,10 @@ import { scoreZedcorProject } from './zedcor-scorer';
 // Sprint Z3.5 — additive enrichment step (gc_metadata + Notion enrichment cols).
 import { enrichEligibleProjects } from './enrich-zedcor';
 import type { GcMetadata } from '@/lib/adapters/zedcor/gc-extractor';
+// Sprint Z7 — additive contact resolution wave (Hunter / Apollo / pattern).
+// Runs after Z3.5 enrichment and before Wave 3 Notion writes so any
+// contact info we resolve flows into the existing Notion-writes path.
+import { resolveExternalContact } from '@/lib/adapters/zedcor/external-contact-resolver';
 import {
   HOUSTON_HUB_SLUG,
   ORCHESTRATOR_AGENT_NAME,
@@ -274,6 +278,38 @@ export async function runZedcorOrchestrator(): Promise<RunSummary> {
     await logEvent({
       agent_name: ORCHESTRATOR_AGENT_NAME,
       event_type: 'enrichment_failed',
+      event_data: { run_id: runId, error: (err as Error).message.slice(0, 500) },
+      organization_id: ZEDCOR_ORG_ID,
+      runner: 'manual',
+      ts: new Date().toISOString(),
+      run_id: runId,
+    });
+  }
+
+  // Sprint Z7 Wave 2.6 — External contact resolution. Strictly additive;
+  // mutates enrichmentResult.enrichedById in place so Wave 3 Notion writes
+  // pick up the new contact fields without re-querying. On any failure
+  // the run continues and the project is written to Notion with whatever
+  // contact data Z3.5 had (spec §"No halts").
+  let contactResolutionSummary = { attempted: 0, succeeded: 0, failed: 0, by_layer: { 1: 0, 2: 0, 3: 0, cache: 0 } };
+  try {
+    contactResolutionSummary = await runZedcorZ7ContactResolutionWave(
+      runId,
+      enrichmentResult.enrichedById,
+    );
+    await logEvent({
+      agent_name: ORCHESTRATOR_AGENT_NAME,
+      event_type: 'zedcor_z7_contact_resolution_complete',
+      event_data: { run_id: runId, ...contactResolutionSummary },
+      organization_id: ZEDCOR_ORG_ID,
+      runner: 'manual',
+      ts: new Date().toISOString(),
+      run_id: runId,
+    });
+  } catch (err) {
+    await logEvent({
+      agent_name: ORCHESTRATOR_AGENT_NAME,
+      event_type: 'zedcor_z7_contact_resolution_failed',
       event_data: { run_id: runId, error: (err as Error).message.slice(0, 500) },
       organization_id: ZEDCOR_ORG_ID,
       runner: 'manual',
@@ -666,4 +702,113 @@ function extractNotionPageIdFromUrl(url: string | null | undefined): string | nu
   if (!match) return null;
   const id = match[1];
   return `${id.slice(0, 8)}-${id.slice(8, 12)}-${id.slice(12, 16)}-${id.slice(16, 20)}-${id.slice(20, 32)}`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Sprint Z7 — Wave 2.6: external contact resolution.
+//
+// Inputs: runId + the in-memory enrichedById Map produced by Z3.5 in
+// this run. We iterate the map, skip rows that already have a contact
+// email, and run the three-layer resolver (Hunter → Apollo → pattern).
+// On a hit we merge the resolved fields into the GcMetadata object in
+// the map (which Wave 3's Notion writer reads) and persist the merge
+// to pathfinder.projects.gc_metadata so cross-run reads see it too.
+//
+// Soft cap: DEFAULT_CONTACT_RESOLUTION_CAP_PER_RUN, overridable via
+// ZEDCOR_CONTACT_CAP. Each layer skips gracefully when its env key is
+// absent or its monthly quota is at 80%.
+// ─────────────────────────────────────────────────────────────────────────
+
+const DEFAULT_CONTACT_RESOLUTION_CAP_PER_RUN = 100;
+
+export interface ContactResolutionSummary {
+  attempted: number;
+  succeeded: number;
+  failed: number;
+  by_layer: { 1: number; 2: number; 3: number; cache: number };
+}
+
+function contactCap(): number {
+  const raw = process.env.ZEDCOR_CONTACT_CAP;
+  const n = raw ? Number(raw) : NaN;
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : DEFAULT_CONTACT_RESOLUTION_CAP_PER_RUN;
+}
+
+async function persistContactMerge(
+  projectId: string,
+  current: GcMetadata,
+  patch: Partial<GcMetadata> & { contact_resolution_layer?: number | 'cache' | null },
+): Promise<void> {
+  const merged: Record<string, unknown> = { ...current, ...patch };
+  const admin = supabaseAdmin() as unknown as {
+    from: (t: string) => {
+      update: (row: Record<string, unknown>) => {
+        eq: (col: string, val: string) => Promise<{ error: { message: string } | null }>;
+      };
+    };
+  };
+  const { error } = await admin.from('projects').update({ gc_metadata: merged }).eq('id', projectId);
+  if (error) throw new Error(`persist contact merge failed: ${error.message}`);
+}
+
+export async function runZedcorZ7ContactResolutionWave(
+  runId: number,
+  enrichedById: Map<string, GcMetadata>,
+): Promise<ContactResolutionSummary> {
+  const summary: ContactResolutionSummary = {
+    attempted: 0,
+    succeeded: 0,
+    failed: 0,
+    by_layer: { 1: 0, 2: 0, 3: 0, cache: 0 },
+  };
+
+  const cap = contactCap();
+  let processed = 0;
+
+  for (const [projectId, meta] of enrichedById.entries()) {
+    if (processed >= cap) break;
+    if (!meta.gc_name) continue;
+    if (meta.gc_contact_email) continue;
+    processed += 1;
+    summary.attempted += 1;
+
+    try {
+      const resolved = await resolveExternalContact(meta.gc_name, { runId, projectId });
+      if (!resolved.contact_email) continue;
+
+      const layerKey =
+        resolved.source === 'cache'
+          ? 'cache'
+          : ((resolved.layer ?? 0) as 1 | 2 | 3);
+      if (layerKey === 'cache' || layerKey === 1 || layerKey === 2 || layerKey === 3) {
+        summary.by_layer[layerKey] += 1;
+      }
+
+      const patch: Partial<GcMetadata> & { contact_resolution_layer?: number | 'cache' | null } = {
+        gc_contact_name: meta.gc_contact_name ?? resolved.contact_name,
+        gc_contact_role: meta.gc_contact_role ?? resolved.contact_role,
+        gc_contact_email: resolved.contact_email,
+        gc_contact_phone: meta.gc_contact_phone ?? resolved.contact_phone,
+        contact_resolution_layer:
+          resolved.source === 'cache' ? 'cache' : resolved.layer,
+      };
+
+      Object.assign(meta, patch);
+      await persistContactMerge(projectId, meta, patch);
+      summary.succeeded += 1;
+    } catch (err) {
+      summary.failed += 1;
+      await logEvent({
+        agent_name: ORCHESTRATOR_AGENT_NAME,
+        event_type: 'zedcor_z7_contact_resolution_project_failed',
+        event_data: { run_id: runId, project_id: projectId, error: (err as Error).message.slice(0, 500) },
+        organization_id: ZEDCOR_ORG_ID,
+        runner: 'manual',
+        ts: new Date().toISOString(),
+        run_id: runId,
+      });
+    }
+  }
+
+  return summary;
 }
