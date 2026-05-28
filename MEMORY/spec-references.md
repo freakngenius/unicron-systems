@@ -1804,3 +1804,92 @@ OPTIONAL (route degrades gracefully when absent):
 **Implements:** unit coverage for the pure functions in `contact-cache.ts` (`normalizeCompanyName`) and `email-pattern-guesser.ts` (`inferDomainCandidates`, `generateEmailCandidates`). 7 tests, all passing 2026-05-28. Network-touching layers (Hunter / Apollo / DNS) are deferred to integration verification via the backfill smoke (`--cap=5 --dry-run`).
 **Last verified against spec:** 2026-05-28.
 **Drift:** none.
+
+---
+
+## Sprint Z12 — GC enrichment + pipeline visibility fixes
+
+**State:** PR #499 open at commit `5596285` on `feat/zedcor-z12-gc-enrichment-fixes`. Three migrations applied pre-merge to `anfihcusvekpovcchpoh` (org-id fix, Fort Bend purge, tx-bid-tabs awarded-contractor backfill).
+
+### Migrations
+
+#### Pathfinder/supabase/migrations/20260528_zedcor_z12_org_id_fix.sql
+**Implements:** SPEC-zedcor-z12-gc-enrichment-fixes.md §"File ownership" → org-id repair. UPDATE on pathfinder.zedcor_customer_sites slug→UUID.
+**Last verified against spec:** 2026-05-28.
+**Drift:** none. Pre-apply COUNT showed all 3,627 rows already on UUID; migration is a no-op safety net.
+
+#### Pathfinder/supabase/migrations/20260528_zedcor_z12_fort_bend_purge.sql
+**Implements:** SPEC-zedcor-z12-gc-enrichment-fixes.md §"File ownership" → Fort Bend purge.
+**Last verified against spec:** 2026-05-28.
+**Drift:** none. Pre-apply COUNT showed 0 fort-bend-county rows in pathfinder.projects; statement remains for future safety.
+
+#### Pathfinder/supabase/migrations/20260528_zedcor_z12_tx_bid_tabs_awarded.sql
+**Implements:** SPEC-zedcor-z12-gc-enrichment-fixes.md §"File ownership" → tx-bid-tabs awarded contractor. Sets `prime_contractor_name` + `raw_payload.awarded_to` on the three existing tx-bid-tabs mobilization rows using apparent-low-bidder data from `data.texas.gov/de7b-7dna` SODA.
+**Last verified against spec:** 2026-05-28.
+**Drift:** none.
+
+### Adapters
+
+#### Pathfinder/lib/adapters/sources/fort-bend-county.ts (rewrite)
+**Implements:** SPEC-zedcor-z12-gc-enrichment-fixes.md §"File ownership" → rewrite to mirror galveston-county.ts gold standard. Bonfire JSON only; landing-page fallback removed because Fort Bend County stopped publishing solicitations on the landing page (verified 2026-05-28). The pre-Z12 fallback scraped historical "Tabulations" archive rows and page-nav tiles.
+**Last verified against spec:** 2026-05-28.
+**Drift:** none.
+
+#### Pathfinder/lib/adapters/sources/tx-bid-tabs.ts (new)
+**Implements:** SPEC-zedcor-z12-gc-enrichment-fixes.md §"File ownership" → tx-bid-tabs awarded-contractor extraction. Socrata SODA adapter for data.texas.gov/de7b-7dna emitting one row per project with `bid_rank_sequence_number='1' AND low_bidder_flag=true` as `prime_contractor_name` + `raw_payload.awarded_to`. `source_authority='state_dot'`, `project_stage='mobilization'`, `buy_window_open=true`.
+**Last verified against spec:** 2026-05-28.
+**Drift:** none (new file).
+
+#### Pathfinder/lib/adapters/sources/index.ts (modified — additive)
+**Implements:** SOURCE_ADAPTERS registration of `tx-bid-tabs`. Existing 39 adapter registrations untouched.
+**Last verified against spec:** 2026-05-28.
+**Drift:** none.
+
+### Zedcor pipeline
+
+#### Pathfinder/lib/adapters/zedcor/construction-keywords.ts (new)
+**Implements:** SPEC-zedcor-z12-gc-enrichment-fixes.md §"File ownership" → shared construction-relevance gate. Exports `CONSTRUCTION_KEYWORDS` and `isConstructionRelevant(...fragments)`. Consumed by cross-pollination.ts and notion/zedcor-writer.ts.
+**Last verified against spec:** 2026-05-28.
+**Drift:** none (new file).
+
+#### Pathfinder/lib/adapters/zedcor/cross-pollination.ts (modified — additive)
+**Implements:** SPEC-zedcor-z12-gc-enrichment-fixes.md §"File ownership" → construction-relevance gate before fuzzy-match. New `projectTitle` + `projectSummary` opts; when both are absent, gate is bypassed (back-compat). When provided and neither contains a construction keyword, the engine short-circuits to "Skipped — title not construction-relevant" without scoring zedcor_customer_sites. Prevents federal-product false positives like "FRENCH PRESS" → National Homes.
+**Last verified against spec:** 2026-05-28.
+**Drift:** none — existing callers without projectTitle/projectSummary keep original behavior.
+
+#### Pathfinder/lib/notion/zedcor-writer.ts (modified — additive)
+**Implements:** SPEC-zedcor-z12-gc-enrichment-fixes.md §"File ownership" → loosen filter. Exports new `shouldWriteToZedcorNotion(input)` predicate: true when `buy_window_open=true` OR `source_authority ∈ CONSTRUCTION_AUTHORITIES` AND `project_stage ∈ ELIGIBLE_PRE_WINDOW_STAGES` AND title/summary passes construction-keyword gate. Existing writer functions untouched.
+**Last verified against spec:** 2026-05-28.
+**Drift:** none.
+
+#### Pathfinder/lib/orchestrator/orchestrator.ts (modified — additive)
+**Implements:** SPEC-zedcor-z12-gc-enrichment-fixes.md §"File ownership" → wire construction gate into the pitch wave. `resolveCrossPollination` call now passes `projectTitle: p.title, projectSummary: p.summary` so the gate activates inline.
+**Last verified against spec:** 2026-05-28.
+**Drift:** none — strictly additive.
+
+### Scripts
+
+#### Pathfinder/scripts/verify-z6-production.ts (new)
+**Implements:** SPEC-zedcor-z12-gc-enrichment-fixes.md §"Execution sequence" #7. Reports SCRAPINGBEE_API_KEY presence and runs native → scrapingbee → playwright probes against a Bonfire URL. Honestly documents that the scrapingbee + playwright layers are not yet wired in `detail-page-fetcher.ts`.
+**Last verified against spec:** 2026-05-28.
+**Drift:** documented honest failure — Z6 layer infrastructure missing.
+
+#### Pathfinder/scripts/trigger-z6-news-sources.ts (new)
+**Implements:** SPEC-zedcor-z12-gc-enrichment-fixes.md §"Execution sequence" #8. Invokes the 5 named news adapters from `SOURCE_ADAPTERS`. Honestly documents that all 5 are unregistered (adapter files do not exist in lib/adapters/sources/).
+**Last verified against spec:** 2026-05-28.
+**Drift:** documented honest failure — Z6 news adapters missing.
+
+#### Pathfinder/scripts/backfill-cross-pollination.ts (new)
+**Implements:** SPEC-zedcor-z12-gc-enrichment-fixes.md §"Execution sequence" #10. Re-runs `resolveCrossPollination` (with Z12 construction gate) across Zedcor projects that have `gc_metadata.gc_name`. Writes result into `pitch_metadata.cross_pollination` (merge-preserving other pitch_metadata keys). Reports warm-intro count and federal-product regression check.
+**Last verified against spec:** 2026-05-28.
+**Drift:** none (new file). Effective output gated by Z3.5/Z6 having populated gc_name first.
+
+#### Pathfinder/scripts/backfill-zedcor-notion-prewindow.ts (new)
+**Implements:** SPEC-zedcor-z12-gc-enrichment-fixes.md §"Execution sequence" #13. Notion writer pass that loads Zedcor projects missing `notion_lead_id`, filters via `shouldWriteToZedcorNotion`, and pushes through `writeProjectToNotion`. Idempotent.
+**Last verified against spec:** 2026-05-28.
+**Drift:** none (new file).
+
+#### Pathfinder/scripts/backfill-pitch-generation.ts (modified — additive)
+**Implements:** SPEC-zedcor-z12-gc-enrichment-fixes.md §"File ownership" → pass `projectTitle`/`projectSummary` to `resolveCrossPollination` so the Z12 construction gate activates in this script too.
+**Last verified against spec:** 2026-05-28.
+**Drift:** none.

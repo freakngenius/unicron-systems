@@ -50,6 +50,8 @@ import { galvestonCountyAdapter } from './galveston-county';
 import { brazoriaCountyAdapter } from './brazoria-county';
 import { hisdIonwaveAdapter } from './hisd-ionwave';
 import { txdotHoustonDistrictAdapter } from './txdot-houston-district';
+// Sprint Z12 — TxDOT Bid Tabulations (Socrata SODA, data.texas.gov).
+import { txBidTabsAdapter } from './tx-bid-tabs';
 // Sprint Z10 — 20 adapters for the DFW, Austin, San Antonio, and South
 // Texas hubs. Strictly additive; Z1A Houston entries above are untouched.
 import { fortWorthCityAdapter } from './fort-worth-city';
@@ -101,6 +103,8 @@ export const SOURCE_ADAPTERS: Record<string, SourceAdapter> = {
   [brazoriaCountyAdapter.id]: brazoriaCountyAdapter,
   [hisdIonwaveAdapter.id]: hisdIonwaveAdapter,
   [txdotHoustonDistrictAdapter.id]: txdotHoustonDistrictAdapter,
+  // Sprint Z12 — TxDOT Bid Tabulations (state DOT, mobilization rows).
+  [txBidTabsAdapter.id]: txBidTabsAdapter,
   // Zedcor Sprint Z10 adapters — DFW, Austin, San Antonio, South Texas.
   [fortWorthCityAdapter.id]: fortWorthCityAdapter,
   [tarrantCountyAdapter.id]: tarrantCountyAdapter,

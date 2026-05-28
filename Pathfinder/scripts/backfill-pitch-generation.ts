@@ -217,8 +217,15 @@ async function main(): Promise<void> {
 
       const typeTags = inferTypeTags({ title: p.title, summary: p.summary });
 
+      // Sprint Z12 — pass project title + summary so cross-pollination can
+      // apply the construction-relevance gate.
       const cp = gcName
-        ? await resolveCrossPollination({ gcName, supabase: supabase as unknown as Parameters<typeof resolveCrossPollination>[0]['supabase'] })
+        ? await resolveCrossPollination({
+            gcName,
+            supabase: supabase as unknown as Parameters<typeof resolveCrossPollination>[0]['supabase'],
+            projectTitle: p.title,
+            projectSummary: p.summary,
+          })
         : { cross_pollination: null, warm_intro_path: null, matched_customer: null, confidence: 0, possible_cross_pollination: [] };
 
       const pitchResult = await generatePitchHooks({

@@ -18,6 +18,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { normalizeCustomerName } from '@/lib/normalization/customer-name';
+import { isConstructionRelevant } from './construction-keywords';
 
 export interface CrossPollinationResult {
   cross_pollination: string;            // human-readable summary
@@ -113,6 +114,15 @@ export interface ResolveCrossPollinationOpts {
   gcName: string | null | undefined;
   supabase: SupabaseClient;
   customerOrgId?: string;
+  // Sprint Z12 — construction-relevance gate. The cross-pollination engine
+  // only fuzzy-matches against zedcor_customer_sites when the underlying
+  // project title or summary actually looks like construction work. This
+  // prevents federal product contracts (coffee makers, contact lenses)
+  // from emitting warm intros against unrelated construction GCs.
+  // When both are omitted, the gate is skipped (back-compat for callers
+  // that don't yet pass project context — they get the old behaviour).
+  projectTitle?: string | null;
+  projectSummary?: string | null;
 }
 
 export async function resolveCrossPollination(
@@ -124,6 +134,26 @@ export async function resolveCrossPollination(
   if (!gcNameRaw) {
     return {
       cross_pollination: 'No existing Zedcor relationship — cold outreach',
+      warm_intro_path: null,
+      matched_customer: null,
+      confidence: 0,
+      possible_cross_pollination: [],
+    };
+  }
+
+  // Sprint Z12 — construction-relevance gate. Skip the fuzzy-match work
+  // entirely when the project clearly isn't a construction job. This is
+  // belt+suspenders against the federal-product false positives seen in
+  // the 2026-05-28 cross-pollination audit ("FRENCH PRESS" → National
+  // Homes, "CONTACT LENSES" → Zedcor customer matches, etc).
+  const gateInputsProvided =
+    opts.projectTitle !== undefined || opts.projectSummary !== undefined;
+  if (
+    gateInputsProvided &&
+    !isConstructionRelevant(opts.projectTitle, opts.projectSummary)
+  ) {
+    return {
+      cross_pollination: 'Skipped — title not construction-relevant',
       warm_intro_path: null,
       matched_customer: null,
       confidence: 0,

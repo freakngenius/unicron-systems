@@ -586,8 +586,16 @@ export async function runZedcorZ4PitchWave(runId: number): Promise<PitchWaveSumm
       const typeTags = inferTypeTags({ title: p.title, summary: p.summary });
 
       // Cross-pollination (skip when gc_name absent — spec: degrade gracefully).
+      // Sprint Z12 — pass project title + summary so the engine can apply the
+      // construction-relevance gate before fuzzy-matching against
+      // zedcor_customer_sites (filters out federal product-contract noise).
       const cp = gcName
-        ? await resolveCrossPollination({ gcName, supabase })
+        ? await resolveCrossPollination({
+            gcName,
+            supabase,
+            projectTitle: p.title,
+            projectSummary: p.summary,
+          })
         : { cross_pollination: null, warm_intro_path: null, matched_customer: null, confidence: 0, possible_cross_pollination: [] };
 
       // Pitch hooks via Sonnet.
