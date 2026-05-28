@@ -30,7 +30,6 @@ import type { LLMSurface } from './llm/types';
 export const RATIONALE_MODEL = process.env.PF_RATIONALE_MODEL ?? 'claude-sonnet-4-6';
 const MAX_TOKENS = 800;
 
-const apiKey = process.env.ANTHROPIC_API_KEY;
 let _client: Anthropic | null = null;
 type AnthropicLike = Pick<Anthropic, 'messages'>;
 let _override: AnthropicLike | null = null;
@@ -85,6 +84,7 @@ export function setAgentContext(ctx: Partial<AgentContext>): () => void {
 export function anthropic(): Anthropic {
   if (_override) return _override as Anthropic;
   if (_client) return _client;
+  const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error('ANTHROPIC_API_KEY is not set');
   const heliconeKey = process.env.HELICONE_API_KEY;
   const real = heliconeKey

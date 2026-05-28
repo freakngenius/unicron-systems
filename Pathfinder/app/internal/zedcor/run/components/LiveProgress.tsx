@@ -1,24 +1,43 @@
 'use client';
 
-import type { RecentRun, RunStatusResponse } from './RunPanel';
+import type { RecentRun, RunStatusResponse, RunSummary } from './RunPanel';
 
 function formatTime(iso: string): string {
   const d = new Date(iso);
   return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
 }
 
+export type LastSummary = {
+  runId: number;
+  summary: RunSummary;
+  durationMs: number;
+};
+
+function formatDuration(ms: number): string {
+  if (ms < 1000) return `${ms}ms`;
+  const s = ms / 1000;
+  if (s < 60) return `${s.toFixed(s < 10 ? 1 : 0)}s`;
+  const m = Math.floor(s / 60);
+  const rem = Math.round(s - m * 60);
+  return `${m}m ${rem}s`;
+}
+
 export function LiveProgress({
   running,
+  pending,
   progress,
   lastRun,
+  lastSummary,
   hydrated,
 }: {
   running: boolean;
+  pending: boolean;
   progress: RunStatusResponse | null;
   lastRun: RecentRun | null;
+  lastSummary: LastSummary | null;
   hydrated: boolean;
 }) {
-  if (running) {
+  if (running || pending) {
     const pct = Math.max(0, Math.min(100, progress?.percent_complete ?? 0));
     const step = progress?.current_step ?? 'Starting…';
     return (
@@ -39,6 +58,23 @@ export function LiveProgress({
             style={{ width: `${pct}%` }}
           />
         </div>
+      </div>
+    );
+  }
+
+  if (lastSummary) {
+    const projects = lastSummary.summary.projects_inserted ?? 0;
+    const sources = lastSummary.summary.sources_hit ?? lastSummary.summary.sources_polled ?? 0;
+    return (
+      <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs font-medium text-emerald-900">
+        <span className="inline-flex items-center gap-2">
+          <span
+            className="inline-block h-2 w-2 rounded-full bg-emerald-500"
+            aria-hidden
+          />
+          Run #{lastSummary.runId} · {projects} project{projects === 1 ? '' : 's'} ·{' '}
+          {sources} source{sources === 1 ? '' : 's'} · {formatDuration(lastSummary.durationMs)}
+        </span>
       </div>
     );
   }
