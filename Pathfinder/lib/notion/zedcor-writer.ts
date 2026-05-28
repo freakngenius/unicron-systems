@@ -126,6 +126,16 @@ function databaseId(): string {
   return id;
 }
 
+// Sprint Z5b — @notionhq/client v5 removed client.databases.query and
+// requires client.dataSources.query({ data_source_id }). For Notion v2025-09-03
+// each database has one or more data_sources; the Zedcor leads DB has a
+// single data_source whose id is hard-coded here as the deploy default.
+// Override via ZEDCOR_NOTION_DATA_SOURCE_ID for future schema changes.
+function dataSourceId(): string {
+  const id = process.env.ZEDCOR_NOTION_DATA_SOURCE_ID ?? '39b001e3-fa1f-4fbf-aeea-219d4ef2b19a';
+  return id;
+}
+
 function richText(value: string | null | undefined) {
   if (!value) return { rich_text: [] as const };
   return {
@@ -290,17 +300,21 @@ interface NotionQueryResultPage {
 }
 
 async function findExisting(client: Client, projectId: string): Promise<NotionQueryResultPage | null> {
-  const dbId = databaseId();
+  // Sprint Z5b — v5 SDK migration. Notion v2025-09-03 + @notionhq/client@5+
+  // dropped databases.query; queries now go through dataSources.query with
+  // a data_source_id (a database can have N data_sources; the Zedcor leads
+  // DB has 1). See Notion changelog 2025-09-03.
+  const dsId = dataSourceId();
   const res = (await (client as unknown as {
-    databases: {
+    dataSources: {
       query: (args: {
-        database_id: string;
+        data_source_id: string;
         filter: unknown;
         page_size: number;
       }) => Promise<{ results: NotionQueryResultPage[] }>;
     };
-  }).databases.query({
-    database_id: dbId,
+  }).dataSources.query({
+    data_source_id: dsId,
     filter: {
       property: 'Project ID',
       rich_text: { equals: projectId },
@@ -343,15 +357,17 @@ export async function writeProjectToNotion(
     ...buildProperties(input),
     ...enrichmentToNotionProperties(enrichment ?? null),
   };
+  // Sprint Z5b — v5 SDK parent shape changed from { database_id } to
+  // { data_source_id } per Notion v2025-09-03.
   const created = (await (client as unknown as {
     pages: {
       create: (args: {
-        parent: { database_id: string };
+        parent: { data_source_id: string };
         properties: Record<string, unknown>;
       }) => Promise<NotionQueryResultPage>;
     };
   }).pages.create({
-    parent: { database_id: databaseId() },
+    parent: { data_source_id: dataSourceId() },
     properties,
   }));
 
