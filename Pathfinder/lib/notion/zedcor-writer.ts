@@ -20,6 +20,7 @@ import type {
   NotionState,
   NotionWriteResult,
 } from './types';
+import { isConstructionRelevant } from '@/lib/adapters/zedcor/construction-keywords';
 
 const ALLOWED_STATES: ReadonlySet<NotionState> = new Set<NotionState>(['TX', 'LA', 'OK', 'AR']);
 
@@ -188,6 +189,72 @@ function phoneProp(value: string | null | undefined): { phone_number: string | n
 
 function projectIdSignature(input: NotionProjectInput): string {
   return `${input.source}:${input.source_id}`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Sprint Z12 — pre-window construction eligibility.
+//
+// Before Z12 the live orchestrator wave wrote every project in the run to
+// Notion, and the Notion side filtered down to buy_window_open=true rows
+// via Rep View. Field reports showed: when Z3.5's enrichment hadn't fired
+// yet (the common case during a fresh ingest), in-window construction
+// rows arrived in Notion without GC info, but PRE-window construction
+// rows — the ones where the rep should be queuing intro calls now — never
+// surfaced at all because the buy_window filter was applied at write
+// time.
+//
+// Z12 expands the writer's eligibility set:
+//   • buy_window_open=true rows (unchanged — the existing path)
+//   • pre-window rows where ALL of the following hold:
+//       - source_authority ∈ CONSTRUCTION_AUTHORITIES
+//       - project_stage    ∈ ELIGIBLE_PRE_WINDOW_STAGES
+//       - title (or summary) passes the construction-keyword gate
+//
+// Rep View already filters by Bid Stage = Solicitation + Buy Window = Closed
+// for the pre-window queue, so the writer doesn't need to override
+// bidStageFor() / buyWindowFor() — it only needs to let these rows through.
+// ─────────────────────────────────────────────────────────────────────────
+
+const CONSTRUCTION_AUTHORITIES: ReadonlySet<string> = new Set([
+  'public_construction',
+  'county_purchasing',
+  'school_district',
+  'state_dot',
+]);
+
+const ELIGIBLE_PRE_WINDOW_STAGES: ReadonlySet<string> = new Set([
+  'solicitation',
+  'owner_bid',
+  'awarded',
+  'gc_selected',
+  'sub_bid',
+  'mobilization',
+]);
+
+/**
+ * Sprint Z12 — eligibility predicate for the Zedcor Notion writer.
+ *
+ * Returns true when the project should be pushed to Notion under the
+ * expanded Z12 filter. Pure function; callers (orchestrator wave, the
+ * Z12 Notion-writer backfill script) gate writeProjectToNotion() with it.
+ */
+export function shouldWriteToZedcorNotion(
+  input: Pick<
+    NotionProjectInput,
+    'title' | 'source_authority' | 'project_stage' | 'buy_window_open'
+  > & { summary?: string | null },
+): boolean {
+  // Path A — original eligibility: any row with buy_window_open=true.
+  if (input.buy_window_open === true) return true;
+
+  // Path B — pre-window construction rows.
+  const authority = (input.source_authority ?? '').toLowerCase();
+  if (!CONSTRUCTION_AUTHORITIES.has(authority)) return false;
+
+  const stage = (input.project_stage ?? '').toLowerCase();
+  if (!ELIGIBLE_PRE_WINDOW_STAGES.has(stage)) return false;
+
+  return isConstructionRelevant(input.title, input.summary ?? null);
 }
 
 // Sprint Z3.5 — shape of the gc_metadata jsonb (mirror of GcMetadata in
