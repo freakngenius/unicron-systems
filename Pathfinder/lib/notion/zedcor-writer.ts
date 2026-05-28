@@ -12,8 +12,11 @@
 
 import { Client } from '@notionhq/client';
 import type {
+  NotionBidStage,
+  NotionBuyWindow,
   NotionPhase,
   NotionProjectInput,
+  NotionSourceType,
   NotionState,
   NotionWriteResult,
 } from './types';
@@ -23,6 +26,94 @@ const ALLOWED_STATES: ReadonlySet<NotionState> = new Set<NotionState>(['TX', 'LA
 const ALLOWED_PHASES: ReadonlySet<NotionPhase> = new Set<NotionPhase>([
   'pre-bid', 'open', 'closing-soon', 'awarded', 'unknown',
 ]);
+
+// Sprint Z3 — federal awards (sam.gov / usaspending) don't have an active
+// buy window for site-services subs; they're post-award reporting. The
+// Notion writer treats them as Closed regardless of project_stage.
+const FEDERAL_AUTHORITIES: ReadonlySet<string> = new Set([
+  'federal_contract',
+  'federal_spending',
+]);
+
+const SOURCE_TYPE_MAP: Record<string, NotionSourceType> = {
+  public_construction: 'Public Construction',
+  federal_contract: 'Federal Contract',
+  federal_spending: 'Federal Spending',
+  state_dot: 'State DOT',
+  county_purchasing: 'County Purchasing',
+  school_district: 'School District',
+  news_report: 'News Report',
+  other: 'Other',
+};
+
+// Spec mapping (Sprint Z3 §"Wave 2: Notion writer"). Some project_stage
+// values resolve to different Bid Stage values depending on source_authority
+// (an 'awarded' federal contract is "Awarded"; an 'awarded' city contract is
+// "GC Selected" because the GC was just picked and subs are about to bid).
+function bidStageFor(
+  projectStage: string | null | undefined,
+  sourceAuthority: string | null | undefined,
+): NotionBidStage {
+  const stage = (projectStage ?? '').toLowerCase();
+  const authority = (sourceAuthority ?? '').toLowerCase();
+  const isFederal = FEDERAL_AUTHORITIES.has(authority);
+  switch (stage) {
+    case 'pre_budget':
+    case 'pre-budget':
+      return 'Pre-Budget';
+    case 'solicitation':
+    case 'owner_bid':
+    case 'rfp':
+      return 'Solicitation';
+    case 'awarded':
+      return isFederal ? 'Awarded' : 'GC Selected';
+    case 'gc_selected':
+      return 'GC Selected';
+    case 'sub_bid':
+      return 'Sub Bid';
+    case 'mobilization':
+      return 'Mobilization';
+    case 'subs_selected':
+      return 'Subs Selected';
+    default:
+      return 'Unknown';
+  }
+}
+
+function buyWindowFor(
+  projectStage: string | null | undefined,
+  sourceAuthority: string | null | undefined,
+  buyWindowOpen: boolean | null | undefined,
+  postedDate: string | null | undefined,
+): NotionBuyWindow {
+  const authority = (sourceAuthority ?? '').toLowerCase();
+  if (FEDERAL_AUTHORITIES.has(authority)) return 'Closed';
+  const stage = (projectStage ?? '').toLowerCase();
+
+  // Explicit signal from the adapter / orchestrator wins.
+  if (buyWindowOpen === true) return 'Open';
+  if (buyWindowOpen === false) {
+    // The orchestrator may stamp false on a row that ages back into Open
+    // later — re-evaluate via stage + posted_date below before defaulting.
+  }
+
+  const isOpenStage = stage === 'awarded' || stage === 'gc_selected' || stage === 'sub_bid';
+  const isMobilization = stage === 'mobilization';
+  if (!isOpenStage && !isMobilization) return 'Closed';
+
+  // Aging: open-stages last 60 days from posted_date, mobilization 30 days.
+  if (!postedDate) return 'Open'; // no posted_date = assume fresh
+  const t = new Date(postedDate).getTime();
+  if (!Number.isFinite(t)) return 'Open';
+  const ageDays = (Date.now() - t) / (1000 * 60 * 60 * 24);
+  const ceiling = isMobilization ? 30 : 60;
+  return ageDays <= ceiling ? 'Open' : 'Closed';
+}
+
+function sourceTypeFor(sourceAuthority: string | null | undefined): NotionSourceType {
+  const key = (sourceAuthority ?? '').toLowerCase();
+  return SOURCE_TYPE_MAP[key] ?? 'Other';
+}
 
 function notionClient(): Client {
   const token = process.env.NOTION_API_TOKEN;
@@ -106,9 +197,23 @@ function buildProperties(input: NotionProjectInput): Record<string, unknown> {
   if (input.rationale) rationaleParts.push(input.rationale);
   const rationaleText = rationaleParts.length > 0 ? rationaleParts.join(' ').trim() : null;
 
+  // Sprint Z3 — Bid Stage / Buy Window / Source Type. Always set so Rep View
+  // can filter on the new properties even for legacy federal-award rows.
+  const bidStage = bidStageFor(input.project_stage, input.source_authority);
+  const buyWindow = buyWindowFor(
+    input.project_stage,
+    input.source_authority,
+    input.buy_window_open,
+    input.posted_date,
+  );
+  const sourceType = sourceTypeFor(input.source_authority);
+
   return {
     Title: title(input.title),
     Phase: select<NotionPhase>(phase),
+    'Bid Stage': select<NotionBidStage>(bidStage),
+    'Buy Window': select<NotionBuyWindow>(buyWindow),
+    'Source Type': select<NotionSourceType>(sourceType),
     Score: number(input.score),
     'Rep Status': select('new'),
     'Response Deadline': isoDate(input.response_deadline),

@@ -20,7 +20,7 @@ import { ZEDCOR_Z1A_SOURCE_SLUGS } from '@/lib/adapters/sources';
 import { writeProjectToNotion } from '@/lib/notion/zedcor-writer';
 import type { NotionPhase, NotionState } from '@/lib/notion/types';
 import { runSource, type RunSourceResult } from './run-source';
-import { tagPhaseWithConfidence, type Phase } from './tag-phase';
+import { tagPhaseWithConfidence } from './tag-phase';
 import { scoreZedcorProject } from './zedcor-scorer';
 import {
   HOUSTON_HUB_SLUG,
@@ -142,6 +142,10 @@ interface ProjectRow {
   rationale: string | null;
   score: number | null;
   raw_payload: Record<string, unknown> | null;
+  // Sprint Z3 — Bid Stage / Buy Window / Source Type signals for Notion writer.
+  project_stage: string | null;
+  buy_window_open: boolean | null;
+  source_authority: string | null;
 }
 
 async function loadRunProjects(runId: number): Promise<ProjectRow[]> {
@@ -152,21 +156,9 @@ async function loadRunProjects(runId: number): Promise<ProjectRow[]> {
   };
   const { data } = await admin
     .from('projects')
-    .select('id, source, source_id, title, posted_date, response_deadline, source_url, rationale, score, raw_payload')
+    .select('id, source, source_id, title, posted_date, response_deadline, source_url, rationale, score, raw_payload, project_stage, buy_window_open, source_authority')
     .eq('agent_run_id', runId);
   return data ?? [];
-}
-
-async function updateProjectStage(id: string, phase: Phase, confidence: number): Promise<void> {
-  const admin = supabaseAdmin() as unknown as {
-    from: (t: string) => {
-      update: (row: Record<string, unknown>) => { eq: (col: string, val: string) => Promise<{ error: unknown }> };
-    };
-  };
-  await admin.from('projects').update({
-    project_stage: phase,
-    phase_confidence: confidence,
-  }).eq('id', id);
 }
 
 async function updateProjectScore(id: string, score: number | null, rationale: string): Promise<void> {
@@ -222,14 +214,13 @@ export async function runZedcorOrchestrator(): Promise<RunSummary> {
     }),
   );
 
-  // Wave 2 — load all inserted projects, tag phase + score.
+  // Wave 2 — load all inserted projects, score them.
+  // Sprint Z3 — bid-lifecycle project_stage is now set by the adapter +
+  // run-source.ts (from raw_payload, with detail-page enrichment). The
+  // legacy date-based tag-phase is preserved ONLY for Notion's date-based
+  // Phase property in Wave 3 below; it no longer overwrites project_stage.
   const projects = await loadRunProjects(runId);
   for (const p of projects) {
-    const { phase, phase_confidence } = tagPhaseWithConfidence({
-      response_deadline: p.response_deadline,
-      posted_date: p.posted_date,
-    });
-    await updateProjectStage(p.id, phase, phase_confidence);
     const { score, rationale } = scoreZedcorProject({
       response_deadline: p.response_deadline,
       estimated_value: (p.raw_payload?.estimated_value as number | null) ?? null,
@@ -254,9 +245,7 @@ export async function runZedcorOrchestrator(): Promise<RunSummary> {
         source_url: p.source_url,
         rationale: p.rationale,
         score: p.score,
-        // project_stage was updated in Wave 2 — re-read it from raw_payload? No,
-        // the loader didn't pull it. We pass a recomputed phase from tag-phase
-        // for safety. (Idempotent — Notion writer is dedup-protected.)
+        // Existing date-based Phase property (kept for back-compat).
         phase: (tagPhaseWithConfidence({
           response_deadline: p.response_deadline,
           posted_date: p.posted_date,
@@ -266,6 +255,10 @@ export async function runZedcorOrchestrator(): Promise<RunSummary> {
         county: (p.raw_payload?.county as string | null) ?? null,
         state: (p.raw_payload?.state as NotionState | string | null) ?? null,
         estimated_value: (p.raw_payload?.estimated_value as number | null) ?? null,
+        // Sprint Z3 — bid-lifecycle Bid Stage + Buy Window + Source Type.
+        project_stage: p.project_stage,
+        buy_window_open: p.buy_window_open,
+        source_authority: p.source_authority,
       });
       if (res.alreadyExists) notionDedupes += 1;
       else notionWrites += 1;
