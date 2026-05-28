@@ -24,6 +24,8 @@ export interface RunSourceResult {
   inserted_ids: string[];
   dedup_skips: number;
   geofence_skips: number;
+  /** Sprint Z3 — rows dropped for missing title OR source_url (Wave 3 rule). */
+  invalid_skips: number;
   errors: string[];
   status: 'success' | 'empty' | 'failed';
 }
@@ -115,6 +117,7 @@ export async function runSource(slug: string, runId: number): Promise<RunSourceR
     inserted_ids: [],
     dedup_skips: 0,
     geofence_skips: 0,
+    invalid_skips: 0,
     errors: [],
     status: 'success',
   };
@@ -193,6 +196,30 @@ export async function runSource(slug: string, runId: number): Promise<RunSourceR
   // Geofence + projects insert.
   const admin = supabaseAdmin();
   for (const ev of events) {
+    // Sprint Z3 Wave 3 — reject rows missing title OR source_url. Per SPEC
+    // §"Wave 3: Verifier relaxation": we no longer reject solicitation-stage
+    // rows; the only structural floor is "must have a title and a link the
+    // rep can click." Anything weaker than that is page-nav noise.
+    const evSourceUrl = (ev.raw_payload?.source_url as string | null) ?? null;
+    const evTitle = (ev.title ?? '').trim();
+    if (!evTitle || !evSourceUrl) {
+      result.invalid_skips += 1;
+      await logEvent({
+        agent_name: 'zedcor-orchestrator-manual',
+        event_type: 'source_invalid_row',
+        event_data: {
+          run_id: runId,
+          source_slug: slug,
+          source_event_id: ev.source_event_id,
+          reason: !evTitle ? 'missing_title' : 'missing_source_url',
+        },
+        organization_id: ZEDCOR_ORG_ID,
+        runner: 'manual',
+        ts: new Date().toISOString(),
+        run_id: runId,
+      });
+      continue;
+    }
     const state = (ev.raw_payload?.state as string | null) ?? null;
     if (!inGeofence(state)) {
       result.geofence_skips += 1;
