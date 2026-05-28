@@ -11,7 +11,6 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
-import { getOperatorIdentity, operatorDenied } from '@/lib/auth/require-operator';
 import { ZEDCOR_ORG_ID } from '@/lib/orchestrator/constants';
 
 export const runtime = 'nodejs';
@@ -33,9 +32,6 @@ type AgentLogRow = {
 const TERMINAL_STATUSES = new Set(['success', 'failed', 'partial_failure']);
 
 export async function GET(req: NextRequest): Promise<NextResponse> {
-  const auth = await getOperatorIdentity();
-  if (!auth.ok) return operatorDenied(auth);
-
   const runIdStr = req.nextUrl.searchParams.get('run_id');
   const runId = runIdStr ? Number.parseInt(runIdStr, 10) : NaN;
   if (!Number.isFinite(runId) || runId <= 0) {

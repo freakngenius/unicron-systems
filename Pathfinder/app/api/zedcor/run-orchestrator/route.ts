@@ -6,16 +6,12 @@
 
 import { NextResponse } from 'next/server';
 import { runZedcorOrchestrator } from '@/lib/orchestrator/orchestrator';
-import { getOperatorIdentity, operatorDenied } from '@/lib/auth/require-operator';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60; // Vercel hobby; Pro can raise this.
 export const dynamic = 'force-dynamic';
 
 export async function POST(): Promise<NextResponse> {
-  const auth = await getOperatorIdentity();
-  if (!auth.ok) return operatorDenied(auth);
-
   try {
     const summary = await runZedcorOrchestrator();
     return NextResponse.json(summary, { status: 200 });
