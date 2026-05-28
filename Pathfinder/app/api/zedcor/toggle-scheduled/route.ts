@@ -11,7 +11,6 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
-import { getOperatorIdentity, operatorDenied } from '@/lib/auth/require-operator';
 import { ORCHESTRATOR_AGENT_NAME, ZEDCOR_ORG_ID } from '@/lib/orchestrator/constants';
 
 export const runtime = 'nodejs';
@@ -19,9 +18,6 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
-  const auth = await getOperatorIdentity();
-  if (!auth.ok) return operatorDenied(auth);
-
   let body: { enabled?: unknown };
   try {
     body = (await req.json()) as { enabled?: unknown };
@@ -33,7 +29,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   }
   const nextScheduledEnabled = body.enabled;
   const nextManualOnly = !nextScheduledEnabled;
-  const operatorEmail = auth.identity.email;
+  const operatorEmail = 'manual-trigger';
 
   // Read current config — for the audit trail.
   const readAdmin = supabaseAdmin() as unknown as {

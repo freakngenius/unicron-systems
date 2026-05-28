@@ -7,7 +7,6 @@
 
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
-import { getOperatorIdentity, operatorDenied } from '@/lib/auth/require-operator';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -35,9 +34,6 @@ type RunSummary = {
 };
 
 export async function GET() {
-  const auth = await getOperatorIdentity();
-  if (!auth.ok) return operatorDenied(auth);
-
   const admin = supabaseAdmin() as unknown as {
     from: (t: string) => {
       select: (cols: string) => {
