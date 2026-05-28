@@ -100,8 +100,30 @@ export async function GET() {
       scheduled_enabled: scheduledEnabled,
     },
     runs: runs.map((r) => {
-      const meta = (r.run_metadata ?? {}) as { source?: string; summary?: RunSummary };
-      const summary = meta.summary ?? null;
+      const meta = (r.run_metadata ?? {}) as Record<string, unknown> & {
+        source?: string;
+        summary?: RunSummary;
+      };
+      // Orchestrator writes RunSummary fields at the top level of
+      // run_metadata (closeAgentRun in lib/orchestrator/orchestrator.ts).
+      // Stub paths and any pre-existing rows may still nest them under
+      // `.summary`, so fall back to that shape for backward compat.
+      const summary: RunSummary | null = meta.summary ?? (
+        meta.sources_polled !== undefined ||
+        meta.projects_inserted !== undefined ||
+        meta.notion_writes !== undefined
+          ? {
+              sources_polled: meta.sources_polled as number | undefined,
+              sources_hit: meta.sources_hit as number | undefined,
+              sources_empty: meta.sources_empty as number | undefined,
+              sources_failed: meta.sources_failed as number | undefined,
+              projects_inserted: meta.projects_inserted as number | undefined,
+              projects_deduped: meta.projects_deduped as number | undefined,
+              notion_writes: meta.notion_writes as number | undefined,
+              notion_dedupes: meta.notion_dedupes as number | undefined,
+            }
+          : null
+      );
       const startedMs = new Date(r.started_at).getTime();
       const completedMs = r.completed_at ? new Date(r.completed_at).getTime() : null;
       const duration_ms = completedMs != null ? completedMs - startedMs : null;
