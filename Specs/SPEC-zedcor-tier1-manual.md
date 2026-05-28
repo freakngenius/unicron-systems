@@ -18,18 +18,38 @@ Stand up a manual-trigger system so Kyle can click one button and produce live H
 
 ## Architecture
 
-Three new surfaces in the Pathfinder Next.js app:
+Z1 split into two parallel sprints. **This spec is the union; sprint scope is divided as follows.**
 
-1. `app/(authenticated)/internal/zedcor/run/page.tsx` — the manual trigger page with three controls (Run Zedcor button, Scheduled toggle, Send Digest button + recipients input).
-2. `app/api/zedcor/run-orchestrator/route.ts` — orchestrator endpoint that ingests 10 sources, runs phase mapper + ranker + verifier, and writes to Notion.
-3. `app/api/zedcor/send-digest/route.ts` and `app/api/zedcor/digest-preview/route.ts` — digest send + preview.
+### Z1A (this sprint, branch `feat/zedcor-tier1-manual`) — adapters + backend
 
-Two new lib modules:
+API routes:
+- `app/api/zedcor/run-orchestrator/route.ts` — orchestrator endpoint (POST).
+- `app/api/zedcor/run-status/route.ts` — GET polling endpoint Z1B's UI calls during a run.
+- `app/api/zedcor/send-digest/route.ts` — digest send (POST).
+- `app/api/zedcor/digest-preview/route.ts` — digest render preview (GET).
+- `app/api/zedcor/scheduled-toggle/route.ts` — POST that flips `pathfinder.organizations.config->>'manual_only'`; Z1B's toggle UI calls it.
 
+Lib modules:
 - `lib/notion/zedcor-writer.ts` — Notion write contract.
-- `lib/email/` — Handlebars setup, digest data builder, template file.
+- `lib/email/handlebars-setup.ts`, `lib/email/build-digest-data.ts`, `lib/email/zedcor-digest-template.html` — digest render layer.
+- `lib/orchestrator/orchestrator.ts` — the orchestrator implementation (separated from the route handler for testability).
+- `lib/orchestrator/run-source.ts` — per-source orchestrator wrapper (geofence + dedup + insert + agent_log).
+- `lib/orchestrator/tag-phase.ts` + `tag-phase.test.ts` — deterministic phase tagging (Phase 5 descope; see "Phase mapper descope" below).
 
-Ten new adapter modules under `lib/adapters/zedcor/<source_slug>.ts`.
+Adapters: 10 new modules under `lib/adapters/sources/<source_slug>.ts`, registered through the existing `SOURCE_ADAPTERS` map in `lib/adapters/sources/index.ts`.
+
+Migrations (already applied 2026-05-27):
+- `zedcor_z1a_projects_columns` — additive: `response_deadline date`, `source_url text`, `hub_id text`, `agent_run_id bigint FK`, `external_refs jsonb`.
+- `zedcor_z1a_organizations_config` — additive: `config jsonb` on `pathfinder.organizations`.
+
+Cron guards: add `ZEDCOR_MANUAL_ONLY` config check at the top of every Pathfinder cron handler that processes the Zedcor org, in `Pathfinder/app/api/cron/...`.
+
+### Z1B (parallel sprint, branch `feat/zedcor-tier1-ui`) — UI page
+
+- `app/(authenticated)/internal/zedcor/run/page.tsx` — the manual trigger page (Run Zedcor button, Scheduled toggle, Send Digest button + recipients input).
+- Any client-side components needed for the page.
+
+Z1B consumes Z1A's API routes; Z1A delivers stable contracts so Z1B can stub against them before integration.
 
 ## Canonical constants
 
@@ -83,7 +103,7 @@ Behavior:
 
 1. Open row in `pathfinder.agent_runs`: `agent_name='zedcor-orchestrator-manual'`, `runner='manual'`, `organization_id=Zedcor`, `hub_id=Houston`, `started_at=now()`, `status='running'`. Capture `run_id`.
 2. Invoke each of the 10 source adapters in order (see SPEC-zedcor-source-adapters.md). Each adapter writes its own `source_hit` / `source_empty` / `source_failed` events to `pathfinder.agent_log` with `run_id`.
-3. Run phase mapper over all projects with `agent_run_id=run_id`.
+3. Run deterministic phase tagging (`lib/orchestrator/tag-phase.ts`) over all projects with `agent_run_id=run_id`. Updates `project_stage` + `phase_confidence`. Date-based only (no LLM). 4 of 5 phases covered (awarded / closing-soon / open / unknown); `pre-bid` inference is descoped to follow-up Sprint Z2 (kanban card already queued). See "Phase mapper descope" note at end of spec.
 4. Run ranker (Anthropic). If `ANTHROPIC_API_KEY` absent or `ZEDCOR_DISABLE_ANTHROPIC=true`, skip — projects get `score=null`, `rationale="(scoring disabled)"`.
 5. Run relaxed verifier (do not hard-reject on radius if state in geofence_states; soft-flag only).
 6. For each new project, call `notionWriter.writeProjectToNotion(project)`. Capture `leadId`. Update `pathfinder.projects.external_refs` JSONB with `notion_lead_id` and `notion_page_url`.
@@ -127,11 +147,11 @@ Behavior:
 
 Two-layer disable:
 
-1. **`vercel.json` cron entries**: comment out (do not delete) all Zedcor-related cron entries with comment `// 2026-05-27 — disabled per manual-trigger sprint Z1; re-enable via Scheduled toggle in /internal/zedcor/run`. Other tenant crons (Unicron Internal, Funder) keep firing.
+1. **`vercel.json` cron entries** — **already disabled** at commit `92c9b5e` ("Disable Pathfinder crons"). `Pathfinder/vercel.json` currently has `"crons": []`. Z1A does NOT touch this file.
 
-2. **Per-handler guard**: at the top of every existing cron handler that processes the Zedcor org, read `pathfinder.organizations.config->>'manual_only'` for the org. If true, log `cron_skipped_manual_only` and return 204.
+2. **Per-handler guard (Z1A scope)** — at the top of every Pathfinder cron handler that processes the Zedcor org, read `pathfinder.organizations.config->>'manual_only'` for the org. If `true`, log `cron_skipped_manual_only` and return 204. Defense-in-depth in case Layer 1 is reverted.
 
-This is a soft-disable. Layer 1 stops the Vercel scheduler from waking the handlers at all. Layer 2 is defense-in-depth in case Layer 1 is reverted accidentally. The Scheduled toggle in the UI flips only Layer 2 (config flag) — to fully resume cron, both layers must be in the "live" state. Document this dual-layer in the PR description so future operators understand it.
+The Scheduled toggle in the Z1B UI flips Layer 2 (config flag) via `POST /api/zedcor/scheduled-toggle`. To fully resume cron, both layers must be in the "live" state: vercel.json must list Zedcor crons AND the org-config flag must be `false`. Document this dual-layer in the PR description so future operators understand it.
 
 ## Smoke test plan
 
@@ -183,5 +203,33 @@ The orchestrator and manual trigger page live in Pathfinder. Verify `pathfinder-
 
 ## Kanban hygiene
 
-- START: Move "Zedcor Houston Tier 1 Pilot — Manual-Trigger Build (Sprint Z1)" card to In Process on the Pathfinder Features Kanban (`collection://1e675609-7a89-47ff-8edb-f8ed9ccd38c1`).
-- END (on merge): Move to Deployed with comment `Implemented at <commit-sha> · merged at <ISO timestamp>`. Do NOT move to Verified (Kyle's column only).
+Z1 split into two cards (sprint scope split 2026-05-27 — see "Architecture" section):
+
+- **Z1A** (this sprint): `Zedcor Houston Tier 1 Pilot — Adapters + Backend (Sprint Z1A)` at https://www.notion.so/36e785c67e72810aafcdec22706fce05 (In Process as of 2026-05-27).
+- **Z1B** (parallel): `Sprint Z1B` UI card at https://www.notion.so/36e785c67e72812090f7c3dbaf8e7f46 (In Process).
+- **Z2** (follow-up): "Zedcor — real phase mapper (Sprint Z2)" — Not Yet Started.
+
+END (on merge): Move the Z1A card to Deployed with comment `Implemented at <commit-sha> · merged at <ISO timestamp>`. Do NOT move to Verified (human-only column).
+
+## Phase mapper descope (Sprint Z2)
+
+Phase 5 of the original sprint prompt assumed a reusable `phase-mapper.ts`. No such file exists in the codebase. Per Kyle's 2026-05-27 ratification, Z1A ships a **deterministic, date-based tagger** at `lib/orchestrator/tag-phase.ts`:
+
+```ts
+export type Phase = 'pre-bid' | 'open' | 'closing-soon' | 'awarded' | 'unknown';
+export function tagPhase(project: {
+  response_deadline?: string | Date | null;
+  posted_date?: string | Date | null;
+}): Phase {
+  const now = Date.now();
+  const deadlineMs = project.response_deadline ? new Date(project.response_deadline).getTime() : null;
+  const postedMs = project.posted_date ? new Date(project.posted_date).getTime() : null;
+  if (deadlineMs !== null && deadlineMs < now) return 'awarded';                       // deadline passed
+  if (deadlineMs !== null && (deadlineMs - now) <= 7 * 86400000) return 'closing-soon';
+  if (deadlineMs !== null && (deadlineMs - now) > 7 * 86400000) return 'open';
+  if (postedMs !== null && deadlineMs === null) return 'open';
+  return 'unknown';
+}
+```
+
+`pre-bid` is not detectable from dates alone — Sprint Z2 ships a real phase mapper covering pre-bid inference, RFI/RFP classification, etc. Z1A writes `phase_confidence=1.0` when the deterministic rule fires (awarded/closing-soon/open), `0.0` for `unknown`.
