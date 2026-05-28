@@ -10,12 +10,18 @@
 //   pnpm tsx scripts/backfill-pitch-generation.ts --dry-run       # log only
 //   pnpm tsx scripts/backfill-pitch-generation.ts --limit=50      # cap
 //   pnpm tsx scripts/backfill-pitch-generation.ts --skip-notion   # DB-only
+//   pnpm tsx scripts/backfill-pitch-generation.ts --skip-anthropic
+//     # Iterate rows that ALREADY have pitch_metadata, push the cached
+//     # values into Notion only. Never calls Sonnet, never recomputes
+//     # cross-pollination. Use this when re-syncing Notion after a writer
+//     # fix (e.g. Z5.2 v5 migration) without spending new tokens.
 //
 // Env loading mirrors scripts/backfill-notion-zedcor.ts:
 //   .env.production.local → .env.local → process.env
 //
 // Required envs: NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY,
-// ANTHROPIC_API_KEY, NOTION_API_TOKEN (unless --skip-notion).
+// ANTHROPIC_API_KEY (unless --skip-anthropic), NOTION_API_TOKEN
+// (unless --skip-notion).
 
 import { config as dotenvConfig } from 'dotenv';
 import { createClient } from '@supabase/supabase-js';
@@ -37,18 +43,19 @@ if (!url || !serviceKey) {
   console.error('Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY');
   process.exit(1);
 }
-if (!process.env.ANTHROPIC_API_KEY) {
-  console.error('Missing ANTHROPIC_API_KEY — required for pitch generation');
-  process.exit(1);
-}
-
 const flags = process.argv.slice(2);
 const dryRun = flags.includes('--dry-run');
 const skipNotion = flags.includes('--skip-notion');
+const skipAnthropic = flags.includes('--skip-anthropic');
 const limitFlag = flags.find((f) => f.startsWith('--limit='));
 const limit = limitFlag ? Number(limitFlag.split('=')[1]) : DEFAULT_LIMIT;
 if (!Number.isFinite(limit) || limit <= 0) {
   console.error(`Invalid --limit value: ${limitFlag}`);
+  process.exit(1);
+}
+
+if (!skipAnthropic && !process.env.ANTHROPIC_API_KEY) {
+  console.error('Missing ANTHROPIC_API_KEY — required for pitch generation (or pass --skip-anthropic to push cached pitches to Notion only)');
   process.exit(1);
 }
 
@@ -120,7 +127,71 @@ interface Stats {
   failures: number;
 }
 
+// Sprint Z5.2 — re-sync cached pitch_metadata into Notion without spending
+// new Sonnet tokens. Iterates pathfinder.projects rows that ALREADY have
+// pitch_metadata populated and pushes the cached values into the matching
+// Notion row via updateProjectPitchBySignature. Used after the v5 writer
+// migration to repair the rows whose pitches never landed in Notion the
+// first time around.
+async function pushCachedPitchesToNotion(): Promise<Stats> {
+  const stats: Stats = { considered: 0, generated: 0, notion_updated: 0, notion_missing: 0, failures: 0 };
+  const { data, error } = await supabase
+    .from('projects')
+    .select('id, source, source_id, pitch_metadata')
+    .not('pitch_metadata', 'is', null)
+    .order('posted_date', { ascending: false })
+    .limit(limit);
+  if (error) throw new Error(`load cached-pitch rows failed: ${error.message}`);
+  type CachedRow = { id: string; source: string; source_id: string; pitch_metadata: Record<string, unknown> | null };
+  const rows = ((data ?? []) as unknown as CachedRow[]).filter(
+    (r) => r.pitch_metadata && Object.keys(r.pitch_metadata).length > 0,
+  );
+  stats.considered = rows.length;
+  console.log(`[backfill-pitch] skip-anthropic mode: ${rows.length} cached-pitch rows (limit=${limit}, dryRun=${dryRun}, skipNotion=${skipNotion})`);
+
+  if (skipNotion) {
+    // No-op DB pass: caller wants neither Anthropic nor Notion. Report and exit.
+    console.log(`[backfill-pitch] DONE ${JSON.stringify(stats)} (skip-anthropic + skip-notion = nothing to do)`);
+    return stats;
+  }
+
+  for (const r of rows) {
+    try {
+      const meta = r.pitch_metadata ?? {};
+      const hooksArr = (meta.pitch_hooks as string[] | undefined) ?? ['', '', ''];
+      const pitch = {
+        cross_pollination: (meta.cross_pollination as string | null | undefined) ?? null,
+        warm_intro_path: (meta.warm_intro_path as string | null | undefined) ?? null,
+        pitch_hooks: [hooksArr[0] ?? '', hooksArr[1] ?? '', hooksArr[2] ?? ''] as [string, string, string],
+        recommended_action: (meta.recommended_action as string | null | undefined) ?? null,
+        action_by_date: (meta.action_by_date as string | null | undefined) ?? null,
+      };
+      if (dryRun) {
+        console.log(`[backfill-pitch] DRY-SKIP-ANTH ${r.source}:${r.source_id} hooks=[${pitch.pitch_hooks.map((h) => (h || '').slice(0, 40)).join(' | ')}]`);
+        continue;
+      }
+      const notionRes = await updateProjectPitchBySignature({
+        source: r.source,
+        source_id: r.source_id,
+        pitch,
+      });
+      if (notionRes) stats.notion_updated += 1;
+      else stats.notion_missing += 1;
+      await new Promise((res) => setTimeout(res, 350));
+    } catch (err) {
+      stats.failures += 1;
+      console.error(`[backfill-pitch] FAILED ${r.source}:${r.source_id} — ${(err as Error).message}`);
+    }
+  }
+  console.log(`[backfill-pitch] DONE ${JSON.stringify(stats)}`);
+  return stats;
+}
+
 async function main(): Promise<void> {
+  if (skipAnthropic) {
+    await pushCachedPitchesToNotion();
+    return;
+  }
   const stats: Stats = { considered: 0, generated: 0, notion_updated: 0, notion_missing: 0, failures: 0 };
   const candidates = await loadCandidates();
   stats.considered = candidates.length;

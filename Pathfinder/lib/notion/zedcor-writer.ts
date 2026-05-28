@@ -126,6 +126,19 @@ function databaseId(): string {
   return id;
 }
 
+// Sprint Z5.2 — Notion SDK v5 moved `databases.query` to `dataSources.query`
+// keyed by `data_source_id`. The Zedcor Houston Lead Feed DB
+// (`856b43a02b4d43649344c5e1a05d206d`) has a single data source — its UUID
+// is stable and equal to the value below. Override via env when migrating
+// between Notion workspaces. Page-create still accepts `parent.database_id`
+// in v5 (back-compat), so only the query path needs the data-source id.
+function dataSourceId(): string {
+  return (
+    process.env.ZEDCOR_NOTION_DATA_SOURCE_ID ??
+    '39b001e3-fa1f-4fbf-aeea-219d4ef2b19a'
+  );
+}
+
 function richText(value: string | null | undefined) {
   if (!value) return { rich_text: [] as const };
   return {
@@ -290,17 +303,17 @@ interface NotionQueryResultPage {
 }
 
 async function findExisting(client: Client, projectId: string): Promise<NotionQueryResultPage | null> {
-  const dbId = databaseId();
+  const dsId = dataSourceId();
   const res = (await (client as unknown as {
-    databases: {
+    dataSources: {
       query: (args: {
-        database_id: string;
+        data_source_id: string;
         filter: unknown;
         page_size: number;
       }) => Promise<{ results: NotionQueryResultPage[] }>;
     };
-  }).databases.query({
-    database_id: dbId,
+  }).dataSources.query({
+    data_source_id: dsId,
     filter: {
       property: 'Project ID',
       rich_text: { equals: projectId },
