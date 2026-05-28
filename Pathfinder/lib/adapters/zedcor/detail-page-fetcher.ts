@@ -1,20 +1,24 @@
 // lib/adapters/zedcor/detail-page-fetcher.ts
 //
-// Sprint Z3.5 — Detail-page fetch utility for GC + contact extraction.
+// Sprint Z6 — Cloudflare/robots bypass upgrade.
 //
-// One fetch per project per orchestrator run. The caller (gc-extractor)
-// records `fetched_at` into gc_metadata so re-runs short-circuit. This
-// module is responsible solely for fetching HTML safely:
+// Tiered fallback strategy for whitelisted procurement portals (Bonfire,
+// IonWave, Workday, DemandStar, etc. — see ./robots-policy.ts):
 //
-//   - 5s per-request timeout
-//   - 1.5s polite delay between fetches per source host
-//   - UA: PathfinderBot/1.0 (+https://unicron.systems/pathfinder)
-//   - 429 → exponential backoff (single retry)
-//   - robots.txt awareness (best-effort per host; cached for the run)
-//   - "gated" detection (login walls / paywalls returning HTML 200s)
+//   Layer 1: native fetch with browser User-Agent. Try first, fastest, free.
+//   Layer 2: ScrapingBee proxy (render_js=true, premium_proxy=true) if
+//            SCRAPINGBEE_API_KEY env var is present.
+//   Layer 3: Playwright headless Chromium via @sparticuz/chromium +
+//            playwright-core if the modules are installed at runtime.
+//   Layer 4: All three fail → return fetch_status='cloudflare_blocked' with
+//            a short response excerpt. Caller continues; no halt.
 //
-// Hard rule: this module never persists raw HTML. Callers extract fields
-// then discard the body.
+// For non-whitelisted domains: Layer 1 only, robots.txt honored as before.
+//
+// Hard rule: this module never persists raw HTML beyond the return value.
+// Callers extract fields then discard the body.
+
+import { policyForUrl, ROBOTS_POLICY_VERSION, type DomainPolicy } from './robots-policy';
 
 export type FetchStatus =
   | 'ok'
@@ -22,7 +26,10 @@ export type FetchStatus =
   | 'timeout'
   | 'http_error'
   | 'no_source_url'
-  | 'robots_disallowed';
+  | 'robots_disallowed'
+  | 'cloudflare_blocked';
+
+export type FetchLayer = 'l1_native' | 'l2_scrapingbee' | 'l3_playwright' | 'none';
 
 export interface DetailPageFetchResult {
   status: FetchStatus;
@@ -30,12 +37,31 @@ export interface DetailPageFetchResult {
   html: string | null;
   httpStatus: number | null;
   fetchedAt: string; // ISO
+  /** Which fetch layer produced this result (Z6+). */
+  layer?: FetchLayer;
+  /** Short response excerpt for cloudflare_blocked diagnostics (Z6+). */
+  blockedExcerpt?: string | null;
+  /** robots policy version that resolved this URL's strategy (Z6+). */
+  policyVersion?: string;
 }
 
-const USER_AGENT = 'PathfinderBot/1.0 (+https://unicron.systems/pathfinder)';
-const DEFAULT_TIMEOUT_MS = 5_000;
+export interface FetchDetailPageOptions {
+  /**
+   * Force the tiered bypass strategy for this URL even if the domain isn't
+   * in the whitelist. Used by --use-bypass-fetcher backfills and by tests.
+   */
+  forceBypass?: boolean;
+}
+
+const BROWSER_UA =
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
+const PATHFINDER_UA = 'PathfinderBot/1.0 (+https://unicron.systems/pathfinder)';
+const DEFAULT_TIMEOUT_MS = 8_000;
+const SCRAPINGBEE_TIMEOUT_MS = 25_000;
+const PLAYWRIGHT_TIMEOUT_MS = 30_000;
 const PER_HOST_DELAY_MS = 1_500;
-const MAX_HTML_BYTES = 2_000_000; // hard cap on memory per fetch; truncate, do not persist.
+const MAX_HTML_BYTES = 2_000_000;
+const BLOCKED_EXCERPT_CHARS = 600;
 
 const GATED_MARKERS: ReadonlyArray<RegExp> = [
   /please\s+(sign|log)\s*in/i,
@@ -46,8 +72,17 @@ const GATED_MARKERS: ReadonlyArray<RegExp> = [
   /your\s+session\s+has\s+expired/i,
 ];
 
-// Per-process state, intentionally minimal. The orchestrator + backfill
-// are single-process; sharing one rate-limit map is correct here.
+const CLOUDFLARE_MARKERS: ReadonlyArray<RegExp> = [
+  /cloudflare/i,
+  /<title>[^<]*Just a moment/i,
+  /<title>[^<]*Attention Required/i,
+  /cf-chl-bypass/i,
+  /cf-browser-verification/i,
+  /Checking your browser before accessing/i,
+  /Enable JavaScript and cookies to continue/i,
+  /Performance &amp;? Security by Cloudflare/i,
+];
+
 const lastHostFetchAt = new Map<string, number>();
 const robotsAllowCache = new Map<string, boolean>();
 
@@ -67,17 +102,20 @@ async function politeDelay(host: string): Promise<void> {
   lastHostFetchAt.set(host, Date.now());
 }
 
-async function fetchWithTimeout(url: string, timeoutMs: number): Promise<Response> {
+async function fetchWithTimeout(
+  url: string,
+  timeoutMs: number,
+  userAgent: string,
+): Promise<Response> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const headers: Record<string, string> = {
-      'User-Agent': USER_AGENT,
-      Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-      'Accept-Language': 'en-US,en;q=0.9',
-    };
     return await fetch(url, {
-      headers,
+      headers: {
+        'User-Agent': userAgent,
+        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+      },
       signal: controller.signal,
       redirect: 'follow',
     });
@@ -110,12 +148,27 @@ async function readBodyCapped(res: Response): Promise<string> {
 }
 
 function detectGated(html: string): boolean {
-  // Cheap heuristic: scan a 64KB window. Gated pages typically surface
-  // these markers in the visible markup; deeper SPA-rendered walls fall
-  // through and the extraction layer returns null fields.
   const sample = html.length > 65_536 ? html.slice(0, 65_536) : html;
   return GATED_MARKERS.some((re) => re.test(sample));
 }
+
+function detectCloudflare(html: string | null, httpStatus: number | null): boolean {
+  if (httpStatus === 403 || httpStatus === 503) {
+    if (!html) return true;
+  }
+  if (!html) return false;
+  const sample = html.length > 65_536 ? html.slice(0, 65_536) : html;
+  return CLOUDFLARE_MARKERS.some((re) => re.test(sample));
+}
+
+function excerptForLogging(html: string | null): string | null {
+  if (!html) return null;
+  return html.slice(0, BLOCKED_EXCERPT_CHARS).replace(/\s+/g, ' ').trim();
+}
+
+// ---------------------------------------------------------------------------
+// Robots — preserved verbatim from Z3.5 with a whitelist short-circuit.
+// ---------------------------------------------------------------------------
 
 async function isAllowedByRobots(url: string): Promise<boolean> {
   const host = hostOf(url);
@@ -125,9 +178,8 @@ async function isAllowedByRobots(url: string): Promise<boolean> {
 
   const robotsUrl = `${new URL(url).protocol}//${host}/robots.txt`;
   try {
-    const res = await fetchWithTimeout(robotsUrl, 3_000);
+    const res = await fetchWithTimeout(robotsUrl, 3_000, PATHFINDER_UA);
     if (!res.ok) {
-      // 404 / 5xx on robots.txt → permissive default per RFC 9309.
       robotsAllowCache.set(host, true);
       return true;
     }
@@ -142,8 +194,6 @@ async function isAllowedByRobots(url: string): Promise<boolean> {
 }
 
 function isPathDisallowed(robotsBody: string, path: string): boolean {
-  // Minimal parser: walk record blocks, find any matching our UA (or '*'),
-  // then test Disallow patterns. Allow lines override longer-match Disallow.
   const lines = robotsBody.split(/\r?\n/);
   type Record = { agents: string[]; rules: Array<{ kind: 'allow' | 'disallow'; pattern: string }> };
   const records: Record[] = [];
@@ -183,13 +233,11 @@ function isPathDisallowed(robotsBody: string, path: string): boolean {
   );
   if (matching.length === 0) return false;
 
-  // Longest-match wins per RFC 9309 §2.2.2.
   let verdict: 'allow' | 'disallow' | null = null;
   let bestLen = -1;
   for (const r of matching) {
     for (const rule of r.rules) {
       if (rule.pattern === '') {
-        // empty Disallow means "allow all"; empty Allow is meaningless.
         if (rule.kind === 'disallow' && bestLen < 0) verdict = 'allow';
         continue;
       }
@@ -203,7 +251,6 @@ function isPathDisallowed(robotsBody: string, path: string): boolean {
 }
 
 function matchesPattern(pattern: string, path: string): boolean {
-  // robots.txt supports '*' (any seq) and '$' (end-anchor). Build a regex.
   let re = '^';
   for (let i = 0; i < pattern.length; i++) {
     const c = pattern[i];
@@ -218,76 +265,337 @@ function matchesPattern(pattern: string, path: string): boolean {
   }
 }
 
-/**
- * Fetch a project detail page with the policies above. Idempotent at the
- * caller level via gc_metadata.fetched_at — this function does not cache
- * across calls beyond the polite per-host throttle.
- */
-export async function fetchDetailPage(sourceUrl: string | null): Promise<DetailPageFetchResult> {
-  const fetchedAt = new Date().toISOString();
+// ---------------------------------------------------------------------------
+// Layer 1 — native fetch with browser UA
+// ---------------------------------------------------------------------------
 
-  if (!sourceUrl || !/^https?:\/\//i.test(sourceUrl)) {
-    return { status: 'no_source_url', finalUrl: null, html: null, httpStatus: null, fetchedAt };
-  }
-
-  const host = hostOf(sourceUrl);
-  if (!host) {
-    return { status: 'http_error', finalUrl: sourceUrl, html: null, httpStatus: null, fetchedAt };
-  }
-
-  const allowed = await isAllowedByRobots(sourceUrl);
-  if (!allowed) {
-    return { status: 'robots_disallowed', finalUrl: sourceUrl, html: null, httpStatus: null, fetchedAt };
-  }
-
-  await politeDelay(host);
-
+async function tryLayer1Native(
+  sourceUrl: string,
+  userAgent: string,
+  fetchedAt: string,
+): Promise<DetailPageFetchResult> {
   let res: Response;
   try {
-    res = await fetchWithTimeout(sourceUrl, DEFAULT_TIMEOUT_MS);
+    res = await fetchWithTimeout(sourceUrl, DEFAULT_TIMEOUT_MS, userAgent);
   } catch (err) {
     const name = (err as Error & { name?: string }).name ?? '';
     if (name === 'AbortError') {
-      return { status: 'timeout', finalUrl: sourceUrl, html: null, httpStatus: null, fetchedAt };
+      return { status: 'timeout', finalUrl: sourceUrl, html: null, httpStatus: null, fetchedAt, layer: 'l1_native' };
     }
-    return { status: 'http_error', finalUrl: sourceUrl, html: null, httpStatus: null, fetchedAt };
+    return { status: 'http_error', finalUrl: sourceUrl, html: null, httpStatus: null, fetchedAt, layer: 'l1_native' };
   }
 
   if (res.status === 429) {
-    // Single backoff retry per spec (exponential = 2x polite delay).
     await new Promise((r) => setTimeout(r, PER_HOST_DELAY_MS * 2));
     try {
-      res = await fetchWithTimeout(sourceUrl, DEFAULT_TIMEOUT_MS);
+      res = await fetchWithTimeout(sourceUrl, DEFAULT_TIMEOUT_MS, userAgent);
     } catch {
-      return { status: 'http_error', finalUrl: sourceUrl, html: null, httpStatus: 429, fetchedAt };
+      return { status: 'http_error', finalUrl: sourceUrl, html: null, httpStatus: 429, fetchedAt, layer: 'l1_native' };
     }
   }
 
   const finalUrl = res.url || sourceUrl;
   if (!res.ok) {
-    if (res.status === 401 || res.status === 403) {
-      return { status: 'gated', finalUrl, html: null, httpStatus: res.status, fetchedAt };
+    // 403/503: read a short body to check for Cloudflare HTML
+    let bodyExcerpt: string | null = null;
+    try {
+      const body = await res.text();
+      bodyExcerpt = body.slice(0, MAX_HTML_BYTES);
+    } catch {
+      // ignore
     }
-    return { status: 'http_error', finalUrl, html: null, httpStatus: res.status, fetchedAt };
+    if (detectCloudflare(bodyExcerpt, res.status)) {
+      return {
+        status: 'cloudflare_blocked',
+        finalUrl,
+        html: null,
+        httpStatus: res.status,
+        fetchedAt,
+        layer: 'l1_native',
+        blockedExcerpt: excerptForLogging(bodyExcerpt),
+      };
+    }
+    if (res.status === 401 || res.status === 403) {
+      return { status: 'gated', finalUrl, html: null, httpStatus: res.status, fetchedAt, layer: 'l1_native' };
+    }
+    return { status: 'http_error', finalUrl, html: null, httpStatus: res.status, fetchedAt, layer: 'l1_native' };
   }
 
   const ct = (res.headers.get('content-type') ?? '').toLowerCase();
   if (ct && !ct.includes('html') && !ct.includes('xml') && !ct.includes('text')) {
-    return { status: 'http_error', finalUrl, html: null, httpStatus: res.status, fetchedAt };
+    return { status: 'http_error', finalUrl, html: null, httpStatus: res.status, fetchedAt, layer: 'l1_native' };
   }
 
   let html: string;
   try {
     html = await readBodyCapped(res);
   } catch {
-    return { status: 'http_error', finalUrl, html: null, httpStatus: res.status, fetchedAt };
+    return { status: 'http_error', finalUrl, html: null, httpStatus: res.status, fetchedAt, layer: 'l1_native' };
+  }
+
+  if (detectCloudflare(html, res.status)) {
+    return {
+      status: 'cloudflare_blocked',
+      finalUrl,
+      html: null,
+      httpStatus: res.status,
+      fetchedAt,
+      layer: 'l1_native',
+      blockedExcerpt: excerptForLogging(html),
+    };
   }
 
   if (detectGated(html)) {
-    return { status: 'gated', finalUrl, html: null, httpStatus: res.status, fetchedAt };
+    return { status: 'gated', finalUrl, html: null, httpStatus: res.status, fetchedAt, layer: 'l1_native' };
   }
 
-  return { status: 'ok', finalUrl, html, httpStatus: res.status, fetchedAt };
+  return { status: 'ok', finalUrl, html, httpStatus: res.status, fetchedAt, layer: 'l1_native' };
+}
+
+// ---------------------------------------------------------------------------
+// Layer 2 — ScrapingBee proxy
+// ---------------------------------------------------------------------------
+
+async function tryLayer2ScrapingBee(
+  sourceUrl: string,
+  fetchedAt: string,
+): Promise<DetailPageFetchResult | null> {
+  const apiKey = process.env.SCRAPINGBEE_API_KEY;
+  if (!apiKey) return null;
+
+  const params = new URLSearchParams({
+    api_key: apiKey,
+    url: sourceUrl,
+    render_js: 'true',
+    premium_proxy: 'true',
+    block_resources: 'false',
+    country_code: 'us',
+  });
+  const endpoint = `https://app.scrapingbee.com/api/v1/?${params.toString()}`;
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), SCRAPINGBEE_TIMEOUT_MS);
+  let res: Response;
+  try {
+    res = await fetch(endpoint, {
+      signal: controller.signal,
+      headers: { Accept: 'text/html,application/xhtml+xml,*/*;q=0.8' },
+    });
+  } catch (err) {
+    const name = (err as Error & { name?: string }).name ?? '';
+    if (name === 'AbortError') {
+      return { status: 'timeout', finalUrl: sourceUrl, html: null, httpStatus: null, fetchedAt, layer: 'l2_scrapingbee' };
+    }
+    return { status: 'http_error', finalUrl: sourceUrl, html: null, httpStatus: null, fetchedAt, layer: 'l2_scrapingbee' };
+  } finally {
+    clearTimeout(timer);
+  }
+
+  if (!res.ok) {
+    return { status: 'http_error', finalUrl: sourceUrl, html: null, httpStatus: res.status, fetchedAt, layer: 'l2_scrapingbee' };
+  }
+
+  let html: string;
+  try {
+    html = await readBodyCapped(res);
+  } catch {
+    return { status: 'http_error', finalUrl: sourceUrl, html: null, httpStatus: res.status, fetchedAt, layer: 'l2_scrapingbee' };
+  }
+
+  if (detectGated(html)) {
+    return { status: 'gated', finalUrl: sourceUrl, html: null, httpStatus: res.status, fetchedAt, layer: 'l2_scrapingbee' };
+  }
+
+  // ScrapingBee occasionally returns a 200 + cloudflare challenge page when
+  // the proxy IP is itself blocked; treat that as cloudflare_blocked.
+  if (detectCloudflare(html, res.status)) {
+    return {
+      status: 'cloudflare_blocked',
+      finalUrl: sourceUrl,
+      html: null,
+      httpStatus: res.status,
+      fetchedAt,
+      layer: 'l2_scrapingbee',
+      blockedExcerpt: excerptForLogging(html),
+    };
+  }
+
+  return { status: 'ok', finalUrl: sourceUrl, html, httpStatus: res.status, fetchedAt, layer: 'l2_scrapingbee' };
+}
+
+// ---------------------------------------------------------------------------
+// Layer 3 — Playwright (headless Chromium via @sparticuz/chromium)
+//
+// We dynamically import so absence of the optional dep doesn't break the
+// non-bypass code path or local tests. On Vercel we expect the module to
+// resolve; locally a developer who hasn't run `pnpm install` will simply
+// fall through to L4.
+// ---------------------------------------------------------------------------
+
+async function tryLayer3Playwright(
+  sourceUrl: string,
+  fetchedAt: string,
+): Promise<DetailPageFetchResult | null> {
+  type ChromiumModule = {
+    executablePath: () => Promise<string>;
+    args: string[];
+    headless: boolean;
+  };
+  let chromium: ChromiumModule | null = null;
+  let playwright: typeof import('playwright-core') | null = null;
+  try {
+    const chromiumMod = (await import('@sparticuz/chromium')) as unknown as
+      ChromiumModule & { default?: ChromiumModule };
+    chromium = chromiumMod.default ?? chromiumMod;
+    playwright = (await import('playwright-core')) as typeof import('playwright-core');
+  } catch {
+    // Modules not installed; signal "no Layer 3 available" to caller.
+    return null;
+  }
+  if (!chromium || !playwright) return null;
+
+  let browser: import('playwright-core').Browser | null = null;
+  try {
+    const execPath = await chromium.executablePath();
+    browser = await playwright.chromium.launch({
+      args: chromium.args,
+      executablePath: execPath,
+      headless: true,
+    });
+    const ctx = await browser.newContext({ userAgent: BROWSER_UA });
+    const page = await ctx.newPage();
+    await page.goto(sourceUrl, { timeout: PLAYWRIGHT_TIMEOUT_MS, waitUntil: 'domcontentloaded' });
+    // Give Cloudflare a beat to clear if it's a JS challenge.
+    await page.waitForTimeout(2_500);
+    const html = await page.content();
+    const finalUrl = page.url();
+    await ctx.close();
+
+    if (detectCloudflare(html, null)) {
+      return {
+        status: 'cloudflare_blocked',
+        finalUrl,
+        html: null,
+        httpStatus: null,
+        fetchedAt,
+        layer: 'l3_playwright',
+        blockedExcerpt: excerptForLogging(html),
+      };
+    }
+    if (detectGated(html)) {
+      return { status: 'gated', finalUrl, html: null, httpStatus: null, fetchedAt, layer: 'l3_playwright' };
+    }
+    const capped = html.length > MAX_HTML_BYTES ? html.slice(0, MAX_HTML_BYTES) : html;
+    return { status: 'ok', finalUrl, html: capped, httpStatus: 200, fetchedAt, layer: 'l3_playwright' };
+  } catch (err) {
+    const name = (err as Error & { name?: string }).name ?? '';
+    if (name === 'TimeoutError') {
+      return { status: 'timeout', finalUrl: sourceUrl, html: null, httpStatus: null, fetchedAt, layer: 'l3_playwright' };
+    }
+    return { status: 'http_error', finalUrl: sourceUrl, html: null, httpStatus: null, fetchedAt, layer: 'l3_playwright' };
+  } finally {
+    if (browser) {
+      try { await browser.close(); } catch { /* ignore */ }
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Public entry point
+// ---------------------------------------------------------------------------
+
+/**
+ * Fetch a project detail page with tiered fallback. Idempotent at the
+ * caller level via gc_metadata.fetched_at — this function does not cache
+ * across calls beyond the polite per-host throttle.
+ *
+ * Z6 changes:
+ *  - Honors per-domain whitelist from robots-policy.ts
+ *  - Browser UA + tiered L1→L4 fallback for whitelisted hosts
+ *  - Non-whitelisted hosts: Layer 1 only, robots honored (Z3.5 behavior)
+ */
+export async function fetchDetailPage(
+  sourceUrl: string | null,
+  options: FetchDetailPageOptions = {},
+): Promise<DetailPageFetchResult> {
+  const fetchedAt = new Date().toISOString();
+
+  if (!sourceUrl || !/^https?:\/\//i.test(sourceUrl)) {
+    return { status: 'no_source_url', finalUrl: null, html: null, httpStatus: null, fetchedAt, layer: 'none' };
+  }
+
+  const host = hostOf(sourceUrl);
+  if (!host) {
+    return { status: 'http_error', finalUrl: sourceUrl, html: null, httpStatus: null, fetchedAt, layer: 'none' };
+  }
+
+  const policy: DomainPolicy = policyForUrl(sourceUrl);
+  const useBypass = options.forceBypass || policy.bypassRobots;
+
+  if (!policy.bypassRobots && !options.forceBypass) {
+    const allowed = await isAllowedByRobots(sourceUrl);
+    if (!allowed) {
+      return {
+        status: 'robots_disallowed',
+        finalUrl: sourceUrl,
+        html: null,
+        httpStatus: null,
+        fetchedAt,
+        layer: 'none',
+        policyVersion: ROBOTS_POLICY_VERSION,
+      };
+    }
+  }
+
+  await politeDelay(host);
+
+  // Layer 1
+  const l1 = await tryLayer1Native(sourceUrl, useBypass ? BROWSER_UA : PATHFINDER_UA, fetchedAt);
+  l1.policyVersion = ROBOTS_POLICY_VERSION;
+  if (l1.status === 'ok' || !useBypass) {
+    return l1;
+  }
+  // Only escalate to L2/L3 on cloudflare_blocked, gated (sometimes JS-rendered
+  // wall), or 5xx-ish http_error. Timeouts at L1 also escalate — they often
+  // indicate a JS challenge dropping the connection.
+  const shouldEscalate =
+    l1.status === 'cloudflare_blocked' ||
+    l1.status === 'gated' ||
+    l1.status === 'timeout' ||
+    l1.status === 'http_error';
+  if (!shouldEscalate) return l1;
+
+  // Layer 2 — ScrapingBee (only if key present)
+  const l2 = await tryLayer2ScrapingBee(sourceUrl, fetchedAt);
+  if (l2) {
+    l2.policyVersion = ROBOTS_POLICY_VERSION;
+    if (l2.status === 'ok') return l2;
+  }
+
+  // Layer 3 — Playwright (only if modules available)
+  const l3 = await tryLayer3Playwright(sourceUrl, fetchedAt);
+  if (l3) {
+    l3.policyVersion = ROBOTS_POLICY_VERSION;
+    if (l3.status === 'ok') return l3;
+  }
+
+  // Layer 4 — cloudflare_blocked or whatever the last attempted layer returned.
+  const final = l3 ?? l2 ?? l1;
+  if (final.status !== 'cloudflare_blocked' && final.status !== 'ok') {
+    // Preserve the most informative blocked excerpt if any layer captured one.
+    const blockedExcerpt = l3?.blockedExcerpt ?? l2?.blockedExcerpt ?? l1.blockedExcerpt ?? null;
+    return {
+      status: 'cloudflare_blocked',
+      finalUrl: sourceUrl,
+      html: null,
+      httpStatus: final.httpStatus,
+      fetchedAt,
+      layer: final.layer ?? 'none',
+      blockedExcerpt,
+      policyVersion: ROBOTS_POLICY_VERSION,
+    };
+  }
+  return final;
 }
 
 /**
@@ -297,3 +605,6 @@ export function __resetDetailPageFetcherState(): void {
   lastHostFetchAt.clear();
   robotsAllowCache.clear();
 }
+
+/** Re-export for callers that want to introspect policy decisions. */
+export { policyForUrl };
