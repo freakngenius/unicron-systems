@@ -24,6 +24,8 @@ export interface RunSourceResult {
   inserted_ids: string[];
   dedup_skips: number;
   geofence_skips: number;
+  /** Sprint Z3 — rows dropped for missing title OR source_url (Wave 3 rule). */
+  invalid_skips: number;
   errors: string[];
   status: 'success' | 'empty' | 'failed';
 }
@@ -52,11 +54,29 @@ interface ProjectInsert {
   organization_id: string;
   project_stage: string;
   phase_confidence: number;
+  buy_window_open: boolean;
+  source_authority: string | null;
   score: number | null;
   rationale: string | null;
   raw_payload: Record<string, unknown>;
   verified: boolean;
 }
+
+// Sprint Z3 — map a source slug to its source_authority taxonomy value. The
+// adapter can override by stuffing `source_authority` into raw_payload; this
+// is the fallback when it doesn't.
+const SLUG_TO_AUTHORITY: Record<string, string> = {
+  'houston-obo': 'public_construction',
+  'houston-public-works': 'public_construction',
+  'houston-metro': 'public_construction',
+  'port-houston': 'public_construction',
+  'harris-county-bonfire': 'county_purchasing',
+  'fort-bend-county': 'county_purchasing',
+  'galveston-county': 'county_purchasing',
+  'brazoria-county': 'county_purchasing',
+  'hisd-ionwave': 'school_district',
+  'txdot-houston-district': 'state_dot',
+};
 
 async function logEvent(event: AgentLogInsert): Promise<void> {
   const admin = supabaseAdmin() as unknown as {
@@ -97,6 +117,7 @@ export async function runSource(slug: string, runId: number): Promise<RunSourceR
     inserted_ids: [],
     dedup_skips: 0,
     geofence_skips: 0,
+    invalid_skips: 0,
     errors: [],
     status: 'success',
   };
@@ -175,6 +196,30 @@ export async function runSource(slug: string, runId: number): Promise<RunSourceR
   // Geofence + projects insert.
   const admin = supabaseAdmin();
   for (const ev of events) {
+    // Sprint Z3 Wave 3 — reject rows missing title OR source_url. Per SPEC
+    // §"Wave 3: Verifier relaxation": we no longer reject solicitation-stage
+    // rows; the only structural floor is "must have a title and a link the
+    // rep can click." Anything weaker than that is page-nav noise.
+    const evSourceUrl = (ev.raw_payload?.source_url as string | null) ?? null;
+    const evTitle = (ev.title ?? '').trim();
+    if (!evTitle || !evSourceUrl) {
+      result.invalid_skips += 1;
+      await logEvent({
+        agent_name: 'zedcor-orchestrator-manual',
+        event_type: 'source_invalid_row',
+        event_data: {
+          run_id: runId,
+          source_slug: slug,
+          source_event_id: ev.source_event_id,
+          reason: !evTitle ? 'missing_title' : 'missing_source_url',
+        },
+        organization_id: ZEDCOR_ORG_ID,
+        runner: 'manual',
+        ts: new Date().toISOString(),
+        run_id: runId,
+      });
+      continue;
+    }
     const state = (ev.raw_payload?.state as string | null) ?? null;
     if (!inGeofence(state)) {
       result.geofence_skips += 1;
@@ -191,6 +236,13 @@ export async function runSource(slug: string, runId: number): Promise<RunSourceR
     });
 
     const projectId = projectIdFor(slug, ev.source_event_id);
+    // Sprint Z3 — adapters tag bid-lifecycle phase + buy_window_open into
+    // raw_payload (after detail-page enrichment). Promote to columns so
+    // the verifier + Notion writer don't have to re-parse jsonb.
+    const adapterStage = (ev.raw_payload?.project_stage as string | undefined) ?? null;
+    const adapterConfidence = (ev.raw_payload?.phase_confidence as number | undefined) ?? null;
+    const adapterBwo = (ev.raw_payload?.buy_window_open as boolean | undefined) ?? null;
+    const adapterAuthority = (ev.raw_payload?.source_authority as string | undefined) ?? null;
     const row: ProjectInsert = {
       id: projectId,
       source: slug,
@@ -203,8 +255,10 @@ export async function runSource(slug: string, runId: number): Promise<RunSourceR
       hub_id: HOUSTON_HUB_SLUG,
       agent_run_id: runId,
       organization_id: ZEDCOR_ORG_ID,
-      project_stage: 'unknown',
-      phase_confidence: 0,
+      project_stage: adapterStage ?? 'solicitation',
+      phase_confidence: adapterConfidence ?? 0.5,
+      buy_window_open: adapterBwo ?? false,
+      source_authority: adapterAuthority ?? SLUG_TO_AUTHORITY[slug] ?? 'other',
       score: null,
       rationale: null,
       raw_payload: ev.raw_payload,

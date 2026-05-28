@@ -141,7 +141,7 @@ describe('applyNonBranchFilters', () => {
     expect(out.map((x) => x.id)).toEqual(['b']);
   });
 
-  it('range=within drops projects beyond maxDistance + projects with unknown distance', () => {
+  it('range=within drops projects beyond maxDistance + keeps unknown-distance rows (PR #483 — PC writes pre-GeoMapper)', () => {
     const projects = [
       p({ id: 'near', distance_miles: 50 }),
       p({ id: 'far', distance_miles: 400 }),
@@ -155,7 +155,7 @@ describe('applyNonBranchFilters', () => {
       state: { range: 'within', minScore: 0 },
       maxDistance: 250,
     });
-    expect(out.map((x) => x.id)).toEqual(['near']);
+    expect(out.map((x) => x.id).sort()).toEqual(['near', 'unknown']);
   });
 
   it('minScore filters out below-floor projects', () => {
@@ -196,7 +196,7 @@ describe('applyNonBranchFilters', () => {
   describe('range filter with activeBranchIds (Gate 18E)', () => {
     const houstonOnly = new Set(['hou-002']);
 
-    it('within + activeBranchIds=Houston keeps only Houston-attached leads', () => {
+    it('within + activeBranchIds=Houston keeps Houston-attached leads + orphans (PR #483 — PC writes pre-GeoMapper)', () => {
       const projects = [
         p({ id: 'h', nearest_branch_id: 'hou-002', distance_miles: 50 }),
         p({ id: 'phx', nearest_branch_id: 'phx-005', distance_miles: 20 }),
@@ -211,7 +211,7 @@ describe('applyNonBranchFilters', () => {
         maxDistance: 300,
         activeBranchIds: houstonOnly,
       });
-      expect(out.map((x) => x.id)).toEqual(['h']);
+      expect(out.map((x) => x.id).sort()).toEqual(['h', 'orphan']);
     });
 
     it('outside + activeBranchIds=Houston keeps everything NOT attached to Houston', () => {
