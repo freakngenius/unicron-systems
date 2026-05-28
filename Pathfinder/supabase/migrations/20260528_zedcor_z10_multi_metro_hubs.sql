@@ -111,6 +111,51 @@ where not exists (
     and ds.metadata->>'sprint' = 'Z10'
 );
 
+-- ─────────────────────────────────────────────────────────────────────────
+-- 3. source_authority taxonomy — add Z10 city/airport categories
+-- ─────────────────────────────────────────────────────────────────────────
+-- The Z3 migration (20260528_zedcor_z3_source_authority.sql) enumerated
+-- portal / agency_direct / public_construction / county_purchasing /
+-- school_district etc. The new Z10 adapters cover city procurement
+-- (Arlington, Plano, Garland, Irving, San Antonio, Fort Worth, Corpus
+-- Christi, Laredo) and airport/port procurement (DFW Airport, Austin-
+-- Bergstrom, San Antonio Airport, Port of Corpus Christi). Add the two
+-- new categories additively so adapter inserts don't fail the CHECK.
+
+ALTER TABLE pathfinder.projects
+  DROP CONSTRAINT IF EXISTS projects_source_authority_check;
+
+ALTER TABLE pathfinder.projects
+  ADD CONSTRAINT projects_source_authority_check CHECK (
+    source_authority IS NULL OR source_authority = ANY (ARRAY[
+      -- Legacy values preserved for back-compat with pre-Z3 rows.
+      'portal'::text,
+      'agency_direct'::text,
+      'ariba_developer_api'::text,
+      -- Sprint Z3 bid-lifecycle taxonomy.
+      'public_construction'::text,
+      'federal_contract'::text,
+      'federal_spending'::text,
+      'state_dot'::text,
+      'county_purchasing'::text,
+      'school_district'::text,
+      'news_report'::text,
+      'other'::text,
+      -- Sprint Z10 additions for multi-metro expansion (cities, airports,
+      -- ports, K-12, university systems). Naming follows the adapter-author
+      -- conventions used across the 20 new Z10 adapter files.
+      'city_purchasing'::text,
+      'airport_procurement'::text,
+      'airport_authority'::text,
+      'port_procurement'::text,
+      'port_authority'::text,
+      'transit_procurement'::text,
+      'university_procurement'::text,
+      'state_university_system'::text,
+      'k12_purchasing'::text
+    ])
+  );
+
 commit;
 
 -- ─────────────────────────────────────────────────────────────────────────
