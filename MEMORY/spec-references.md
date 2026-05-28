@@ -1639,3 +1639,116 @@ OPTIONAL (route degrades gracefully when absent):
 **Implements:** SPEC-zedcor-z4-cross-pollination-pitch.md §"Backfill" — Z5b adds `--skip-anthropic` flag for Notion-only push of cached pitches. Loader switches to `pitch_metadata->pitch_hooks IS NOT NULL` (skips ~1748 rows with legacy stub pitch_metadata that lacks the hooks array). Per-row branch reads `pitch_hooks` / `cross_pollination` / `warm_intro_path` / `recommended_action` / `action_by_date` directly from the cached jsonb and pushes via `updateProjectPitchBySignature`, never calling Sonnet or `resolveCrossPollination`. Gate on ANTHROPIC_API_KEY relaxed when `--skip-anthropic` is set. Mutual exclusion with `--skip-notion` (combination would no-op).
 **Last verified against spec:** 2026-05-28.
 **Drift:** none — additive flag; default behaviour unchanged.
+
+---
+
+## Sprint Z10 — Multi-metro expansion (DFW, Austin, San Antonio, South Texas)
+
+**State:** PR #495 open against main on 2026-05-28. Spec: `Specs/SPEC-zedcor-z10-multi-metro.md`.
+
+### Adapters
+
+#### Pathfinder/lib/adapters/sources/index.ts (modified, Z10 additions)
+**Implements:** SPEC-zedcor-z10-multi-metro.md §"File ownership" — additive registry entries only. Adds 20 imports (one per new adapter), 20 registry entries under SOURCE_ADAPTERS, and a new `ZEDCOR_Z10_SOURCE_SLUGS` constant (20 slugs grouped by hub) + `ZedcorZ10SourceSlug` union. Z1A entries untouched.
+**Last verified against spec:** 2026-05-28.
+**Drift:** none — strictly additive.
+
+#### Pathfinder/lib/adapters/sources/fort-worth-city.ts
+**Implements:** SPEC-zedcor-z10-multi-metro.md DFW source `fort-worth-city`. Bonfire JSON primary (`fortworthtx.bonfirehub.com/PublicPortal/getOpenPublicOpportunitiesSectionData`) with HTML fallback (`fortworthtexas.gov/.../bids-current`). Top-5 by soonest DateClose get detail-page phase enrichment. source_authority=city_purchasing, Tarrant County / Fort Worth.
+**Last verified against spec:** 2026-05-28.
+**Drift:** none (new file).
+
+#### Pathfinder/lib/adapters/sources/tarrant-county.ts
+**Implements:** SPEC-zedcor-z10-multi-metro.md DFW source `tarrant-county`. Bonfire JSON only (`tarrantcounty.bonfirehub.com/PublicPortal/getOpenPublicOpportunitiesSectionData`). source_authority=county_purchasing, Tarrant County / Fort Worth.
+**Last verified against spec:** 2026-05-28.
+**Drift:** none (new file).
+
+#### Pathfinder/lib/adapters/sources/dallas-isd.ts
+**Implements:** SPEC-zedcor-z10-multi-metro.md DFW source `dallas-isd`. HTML scrape of `dallasisd.org/Page/2243`, positive-filter on `/cms/lib/` and RFP/RFQ/ITB/CSP/BID path tokens, top-5 enrichment skips PDF anchors. source_authority=school_district, Dallas County / Dallas.
+**Last verified against spec:** 2026-05-28.
+**Drift:** none (new file).
+
+#### Pathfinder/lib/adapters/sources/dfw-airport.ts
+**Implements:** SPEC-zedcor-z10-multi-metro.md DFW source `dfw-airport`. HTML scrape of `dfwairport.com/business/contracts-and-procurement/`, positive-filter on procurement keywords + vendor portal hosts (bonfirehub, periscope, ionwave, publicpurchase). source_authority=airport_authority, Tarrant County / DFW Airport.
+**Last verified against spec:** 2026-05-28.
+**Drift:** none (new file).
+
+#### Pathfinder/lib/adapters/sources/arlington-city.ts
+**Implements:** SPEC-zedcor-z10-multi-metro.md DFW source `arlington-city`. HTML scrape of `arlingtontx.gov/.../current_bids`, filters anchors to PDFs / BidNet / IonWave / Periscope / Bonfire / RFP-RFQ-IFB-ITB paths. source_authority=city_purchasing, Tarrant County / Arlington.
+**Last verified against spec:** 2026-05-28.
+**Drift:** none (new file).
+
+#### Pathfinder/lib/adapters/sources/plano-city.ts
+**Implements:** SPEC-zedcor-z10-multi-metro.md DFW source `plano-city`. Two-tier: primary CivicPlus scrape of `/189/Purchasing` scoped to `.fr-view`, fallback to `publicpurchase.com?syndicatedOrgId=5493&region=TX`. source_authority=city_purchasing, Collin County / Plano.
+**Last verified against spec:** 2026-05-28.
+**Drift:** none (new file).
+
+#### Pathfinder/lib/adapters/sources/garland-city.ts
+**Implements:** SPEC-zedcor-z10-multi-metro.md DFW source `garland-city`. CivicPlus scrape of `/162/Purchasing` scoped to `.fr-view`. source_authority=city_purchasing, Dallas County / Garland.
+**Last verified against spec:** 2026-05-28.
+**Drift:** none (new file).
+
+#### Pathfinder/lib/adapters/sources/irving-city.ts
+**Implements:** SPEC-zedcor-z10-multi-metro.md DFW source `irving-city`. CivicPlus scrape of `/372/Purchasing` with explicit recognition of `/DocumentCenter/View/{id}` PDF route (excluded from HTML enrichment). source_authority=city_purchasing, Dallas County / Irving.
+**Last verified against spec:** 2026-05-28.
+**Drift:** none (new file).
+
+#### Pathfinder/lib/adapters/sources/austin-eresponse.ts
+**Implements:** SPEC-zedcor-z10-multi-metro.md Austin source `austin-eresponse`. HTML scrape of the ColdFusion solicitations table at `financeonline.austintexas.gov/.../solicitations.cfm`. Detail URLs composed as `solicitation_details.cfm?sid=<SID>`. source_authority=city_purchasing, Travis County / Austin.
+**Last verified against spec:** 2026-05-28.
+**Drift:** none (new file).
+
+#### Pathfinder/lib/adapters/sources/austin-bergstrom.ts
+**Implements:** SPEC-zedcor-z10-multi-metro.md Austin source `austin-bergstrom`. HTML scrape of Drupal landing page, filters anchors by RFP/IFB/RFQ/RFI/Solicitation/Bid token. Often empty (returns []). source_authority=airport_procurement, Travis County / Austin.
+**Last verified against spec:** 2026-05-28.
+**Drift:** none (new file).
+
+#### Pathfinder/lib/adapters/sources/travis-county.ts
+**Implements:** SPEC-zedcor-z10-multi-metro.md Austin source `travis-county`. HTML scrape with header-driven column indexing (ref/title/posted/deadline) on `traviscountytx.gov/purchasing/solicitations`. source_authority=county_purchasing, Travis County / Austin.
+**Last verified against spec:** 2026-05-28.
+**Drift:** none (new file).
+
+#### Pathfinder/lib/adapters/sources/ut-system.ts
+**Implements:** SPEC-zedcor-z10-multi-metro.md Austin source `ut-system`. HTML scrape with two-shape support: rendered table OR `.views-row` fallback that regex-extracts `UTS-####` / `RFP-…` IDs. source_authority=state_university_system, Travis County / Austin.
+**Last verified against spec:** 2026-05-28.
+**Drift:** none (new file).
+
+#### Pathfinder/lib/adapters/sources/san-antonio-city.ts
+**Implements:** SPEC-zedcor-z10-multi-metro.md San Antonio source `san-antonio-city`. Scrapes `webapp1.sanantonio.gov/BidContractOpps/Default.aspx` ASP.NET GridView, harvests `Content.aspx?id=<ID>` anchors. source_authority=city_purchasing, Bexar County / San Antonio.
+**Last verified against spec:** 2026-05-28.
+**Drift:** none (new file).
+
+#### Pathfinder/lib/adapters/sources/bexar-county.ts
+**Implements:** SPEC-zedcor-z10-multi-metro.md San Antonio source `bexar-county`. Scrapes CivicPlus Bid Postings at `bexar.org/Bid` with stable `BidID=<n>` href pattern. Degrades to [] when index is empty. source_authority=county_purchasing, Bexar County / San Antonio.
+**Last verified against spec:** 2026-05-28.
+**Drift:** none (new file).
+
+#### Pathfinder/lib/adapters/sources/san-antonio-airport.ts
+**Implements:** SPEC-zedcor-z10-multi-metro.md San Antonio source `san-antonio-airport`. Scrapes `sanantonio.gov/aviation/about/contracting`, filters anchors by RFP/RFQ/IFB/Bid/Proposal/Solicitation regex within `<main>`. source_authority=airport_authority, Bexar County / San Antonio.
+**Last verified against spec:** 2026-05-28.
+**Drift:** none (new file).
+
+#### Pathfinder/lib/adapters/sources/northside-isd.ts
+**Implements:** SPEC-zedcor-z10-multi-metro.md San Antonio source `northside-isd`. Scrapes `nisd.net/departments/purchasing` with K-12 keyword filter (incl. CSP/competitive-sealed). Handles outbound PDF/TXSmartBuy/ESC links. source_authority=k12_purchasing, Bexar County / San Antonio.
+**Last verified against spec:** 2026-05-28.
+**Drift:** none (new file).
+
+#### Pathfinder/lib/adapters/sources/corpus-christi-city.ts
+**Implements:** SPEC-zedcor-z10-multi-metro.md South Texas source `corpus-christi-city`. Probes Bonfire `corpuschristi.bonfirehub.com/PublicPortal/getOpenPublicOpportunitiesSectionData` first; falls back to scraping `cctexas.com/departments/contracts-and-procurement`. source_authority=city_purchasing, Nueces County / Corpus Christi.
+**Last verified against spec:** 2026-05-28.
+**Drift:** none (new file).
+
+#### Pathfinder/lib/adapters/sources/nueces-county.ts
+**Implements:** SPEC-zedcor-z10-multi-metro.md South Texas source `nueces-county`. HTML scrape of `nuecesco.com/departments/purchasing`, keeps anchors matching `.pdf|/bids|/rfp|/rfq|/ifb|solicitation`, PDFs excluded from enrichment. source_authority=county_purchasing, Nueces County / Corpus Christi.
+**Last verified against spec:** 2026-05-28.
+**Drift:** none (new file).
+
+#### Pathfinder/lib/adapters/sources/port-corpus-christi.ts
+**Implements:** SPEC-zedcor-z10-multi-metro.md South Texas source `port-corpus-christi`. HTML scrape of `portofcc.com/about/procurement/`, matches PDF + procurement-subpage anchors. source_authority=port_authority, Nueces County / Corpus Christi.
+**Last verified against spec:** 2026-05-28.
+**Drift:** none (new file).
+
+#### Pathfinder/lib/adapters/sources/laredo-city.ts
+**Implements:** SPEC-zedcor-z10-multi-metro.md South Texas source `laredo-city`. HTML scrape of `cityoflaredo.com/purchasing`, anchor PDFs are the opportunities, PDFs skipped from enrichment. source_authority=city_purchasing, Webb County / Laredo.
+**Last verified against spec:** 2026-05-28.
+**Drift:** none (new file).
