@@ -1802,5 +1802,50 @@ OPTIONAL (route degrades gracefully when absent):
 
 #### Pathfinder/__tests__/adapters/zedcor-contact-resolver.test.ts
 **Implements:** unit coverage for the pure functions in `contact-cache.ts` (`normalizeCompanyName`) and `email-pattern-guesser.ts` (`inferDomainCandidates`, `generateEmailCandidates`). 7 tests, all passing 2026-05-28. Network-touching layers (Hunter / Apollo / DNS) are deferred to integration verification via the backfill smoke (`--cap=5 --dry-run`).
+
+### Sprint Z6 — Cloudflare/robots bypass + 5 new sources
+
+#### Pathfinder/lib/adapters/zedcor/robots-policy.ts
+**Implements:** SPEC-zedcor-z6-fetcher-sources.md §"Fetcher strategy — Robots policy". Per-domain whitelist (`*.bonfirehub.com`, `*.ionwave.net`, `*.workdayspend.com`, `*.demandstar.com`, `*.publicpurchase.com`, `*.bidcontract.com`, enumerated TX procurement subdomains). Exposes `policyForUrl(url)` resolving to `{bypassRobots, strategy, rationale}` and `ROBOTS_POLICY_VERSION` for audit-trail traceability.
+**Last verified against spec:** 2026-05-28.
+**Drift:** none.
+
+#### Pathfinder/lib/adapters/zedcor/detail-page-fetcher.ts (modified)
+**Implements:** SPEC-zedcor-z6-fetcher-sources.md §"Fetcher strategy (tiered fallback)". New tiered L1→L4 chain: native fetch with browser UA → ScrapingBee (`render_js=true&premium_proxy=true&block_resources=false`, gated on `SCRAPINGBEE_API_KEY`) → Playwright `@sparticuz/chromium` (dynamic import, graceful absence) → `fetch_status='cloudflare_blocked'` + `blockedExcerpt`. Cloudflare-challenge detection on 403/503 + HTML markers (cf-chl-bypass, "Just a moment", "Attention Required"). Non-whitelisted hosts preserve Z3.5 behavior (L1 only, robots honored).
+**Last verified against spec:** 2026-05-28.
+**Drift:** **minor.** Layer 3 Playwright path is wired but not exercised in local Wave-4 backfill (3/7 rows remained `cloudflare_blocked` because `SCRAPINGBEE_API_KEY` is absent and Chromium runtime was not bootstrapped locally). Vercel-runtime exercise + key provisioning are follow-ups; the L4 graceful fallback handles absence.
+
+#### Pathfinder/lib/adapters/zedcor/gc-extractor.ts (modified)
+**Implements:** Z6 plumbing — `EnrichInput.forceBypass?: boolean` and `fetchDetailPage(url, { forceBypass })` so the `--use-bypass-fetcher` backfill flag forces the tiered chain on all rows, not just whitelisted hosts. Layer 1 HTML / Layer 2 Anthropic / Layer 3 Perplexity behavior otherwise unchanged.
+**Last verified against spec:** 2026-05-28.
+**Drift:** none.
+
+#### Pathfinder/lib/adapters/sources/index.ts (modified)
+**Implements:** SPEC-zedcor-z6-fetcher-sources.md §"File ownership — Additive on shared". Appends 5 Z6 adapter registrations to the id-keyed `SOURCE_ADAPTERS` registry and adds `ZEDCOR_Z6_SOURCE_SLUGS` + `ZedcorZ6SourceSlug` type. Strictly additive; Funder, Internal, and Z1A entries untouched.
+**Last verified against spec:** 2026-05-28.
+**Drift:** none.
+
+#### Pathfinder/lib/adapters/sources/news-engineering-record.ts
+**Implements:** SPEC-zedcor-z6-fetcher-sources.md §"5 new sources" #1. ENR Awards topic feed at `/rss/topic/263-awards` with HTML fallback at `/topics/263-awards`. Texas filter via title+summary regex match against TX-state and Texas-city names. Per spec: `project_stage='awarded'`, `phase_confidence=0.9`, `buy_window_open=true` for every emitted row (post-aging logic still applies downstream).
+**Last verified against spec:** 2026-05-28.
+**Drift:** none.
+
+#### Pathfinder/lib/adapters/sources/texas-construction-industry.ts
+**Implements:** SPEC-zedcor-z6-fetcher-sources.md §"5 new sources" #2. WordPress-style `/feed/` RSS primary + HTML category landing fallback. Ships at `initialPhaseTagging()` default (`solicitation`, 0.5, `buy_window_open=false`).
+**Last verified against spec:** 2026-05-28.
+**Drift:** none.
+
+#### Pathfinder/lib/adapters/sources/demandstar-texas.ts
+**Implements:** SPEC-zedcor-z6-fetcher-sources.md §"5 new sources" #3. DemandStar `/api/v1/bids?state=TX&status=open&pageSize=50` JSON primary + `/search?state=TX` HTML listing fallback. Per-row `inferCountyFromText(title + agency + city)`. `source_authority='public_construction'`.
+**Last verified against spec:** 2026-05-28.
+**Drift:** **minor.** Endpoint shape is best-effort (the listing endpoint has historically shifted); HTML scrape fallback covers shape drift. Live row count on first orchestrator run will confirm.
+
+#### Pathfinder/lib/adapters/sources/houston-business-journal.ts
+**Implements:** SPEC-zedcor-z6-fetcher-sources.md §"5 new sources" #4. HBJ construction beat RSS + HTML scrape. Award-keyword filter (`awarded`, `wins`, `named ... contractor|prime`, `breaks ground`, `contract worth`). Award stories ship at `project_stage='awarded'`, `phase_confidence=0.85`, `buy_window_open=true`; non-award stories at solicitation default.
+**Last verified against spec:** 2026-05-28.
+**Drift:** none.
+
+#### Pathfinder/lib/adapters/sources/builders-exchange-texas.ts
+**Implements:** SPEC-zedcor-z6-fetcher-sources.md §"5 new sources" #5. BX Texas plan room HTML scrape at `https://www.bxtexas.org/projects`. Status badge + title parsing routes rows: `award*` → `awarded` (0.85 conf, buy_window_open), `sub[-]bid` → `gc_selected` (0.8 conf, buy_window_open), else `solicitation`.
 **Last verified against spec:** 2026-05-28.
 **Drift:** none.
