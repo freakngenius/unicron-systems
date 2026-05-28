@@ -127,11 +127,12 @@ All three pass the live CHECK constraints. The actual API routes will write iden
 
 ## Preview deploy state — live and reachable
 
-After Kyle disabled Vercel Deployment Protection and rebased the branch with verified author identity:
+After Kyle disabled Vercel Deployment Protection, rebased the branch with verified author identity, and merged Z1A onto main:
 
 - Branch alias: `pathfinder-git-feat-zedcor-tier1-ui-kekas-projects-89ac4317.vercel.app`
-- Latest deploy: `dpl_6wze1FDxaxz8oFGTyEuCCXSAsnzr` (commit `a99e321`), state READY.
-- The `/api/zedcor/` exclusion in `middleware.ts` was needed and added in `a99e321` (Z1A added the same exclusion independently in `a64cf003` — identical edits merge clean).
+- Local tip post-rebase: commit `987d74f`, force-pushed.
+- The `/api/zedcor` exclusion in `middleware.ts` is now `PUBLIC_PATH_PREFIXES` (Z1A's shape), serving the same effect as my matcher-regex exclusion. Identical-edit reconciliation, clean.
+- Five of the six API routes are now Z1A's real implementations; `recent-runs/route.ts` is the only one unique to Z1B.
 
 ## Live-preview smoke — green
 
