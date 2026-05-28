@@ -213,8 +213,14 @@ export const config = {
   // redirect URL from the user's email client, which won't carry Basic Auth
   // credentials. Auth is via Supabase OTP token_hash + operator_allowlist
   // enforcement inside the route handler (see app/auth/callback/route.ts).
+  // `/api/zedcor/` is excluded because each Zedcor route self-gates via
+  // `pf-access-token` cookie → supabase.auth.getUser → operator_allowlist
+  // (see lib/auth/require-operator.ts). Same pattern as /api/architect/.
+  // Without this exclusion, preview deploys without BASIC_AUTH_USER/PASS
+  // set return 503 'Auth not configured' before the operator gate ever
+  // gets a chance to enforce the real auth check. Sprint Z1B.
   matcher: [
     '/',
-    '/((?!_next/|favicon\\.ico|api/cron/|api/notifications/|api/slack/install/callback|api/slack/events|api/slack/actions|api/inngest|api/architect/|api/ingest|api/organizations|api/email/oauth/callback|api/email/webhooks/|api/connectors/slack/callback|api/connectors/slack/commands|api/connectors/slack/events|auth/callback).*)',
+    '/((?!_next/|favicon\\.ico|api/cron/|api/notifications/|api/slack/install/callback|api/slack/events|api/slack/actions|api/inngest|api/architect/|api/ingest|api/organizations|api/email/oauth/callback|api/email/webhooks/|api/connectors/slack/callback|api/connectors/slack/commands|api/connectors/slack/events|api/zedcor/|auth/callback).*)',
   ],
 };
