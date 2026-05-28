@@ -296,3 +296,82 @@ export async function updateProjectEnrichmentInNotion(
     };
   }).pages.update({ page_id: notionPageId, properties: props });
 }
+
+// ─────────────────────────────────────────────────────────────────────────
+// Sprint Z4 — additive pitch-metadata writer.
+//
+// New columns (already provisioned in the Notion DB):
+//   Cross-Pollination, Warm Intro Path,
+//   Pitch Hook 1, Pitch Hook 2, Pitch Hook 3,
+//   Recommended Action, Action By Date.
+//
+// This block ONLY adds new helpers + a new updatePitchOnNotion entry point.
+// It does not modify any existing function above. Safe to merge in parallel
+// with Z3 (phase mapping) and Z3.5 (GC mapping); see file-ownership notes
+// in SPEC-zedcor-z4-cross-pollination-pitch.md.
+// ─────────────────────────────────────────────────────────────────────────
+
+export interface NotionPitchInput {
+  cross_pollination: string | null;
+  warm_intro_path: string | null;
+  pitch_hooks: [string, string, string] | string[] | null;
+  recommended_action: string | null;
+  action_by_date: string | null;     // YYYY-MM-DD
+}
+
+export function pitchToNotionProperties(input: NotionPitchInput): Record<string, unknown> {
+  const hooks = Array.isArray(input.pitch_hooks) ? input.pitch_hooks : [];
+  return {
+    'Cross-Pollination': richText(input.cross_pollination),
+    'Warm Intro Path': richText(input.warm_intro_path),
+    'Pitch Hook 1': richText(hooks[0] ?? null),
+    'Pitch Hook 2': richText(hooks[1] ?? null),
+    'Pitch Hook 3': richText(hooks[2] ?? null),
+    'Recommended Action': richText(input.recommended_action),
+    'Action By Date': isoDate(input.action_by_date),
+  };
+}
+
+/**
+ * Update an existing Notion page with the Z4 pitch-metadata properties.
+ * Returns the page URL on success. Throws on Notion API error.
+ *
+ * Idempotent: re-runs overwrite the pitch fields with the latest values.
+ * Never touches Rep Status, Rep Notes, or any column outside the pitch set.
+ */
+export async function updateProjectPitchOnNotion(args: {
+  pageId: string;
+  pitch: NotionPitchInput;
+}): Promise<{ pageId: string }> {
+  const client = notionClient();
+  const properties = pitchToNotionProperties(args.pitch);
+  await (client as unknown as {
+    pages: {
+      update: (args: {
+        page_id: string;
+        properties: Record<string, unknown>;
+      }) => Promise<{ id: string }>;
+    };
+  }).pages.update({
+    page_id: args.pageId,
+    properties,
+  });
+  return { pageId: args.pageId };
+}
+
+/**
+ * Convenience: locate a Zedcor page by project signature and update its
+ * pitch metadata. Used by the Z4 backfill script. Returns null if no row.
+ */
+export async function updateProjectPitchBySignature(args: {
+  source: string;
+  source_id: string;
+  pitch: NotionPitchInput;
+}): Promise<{ pageId: string; notionPageUrl: string } | null> {
+  const client = notionClient();
+  const sig = `${args.source}:${args.source_id}`;
+  const existing = await findExisting(client, sig);
+  if (!existing) return null;
+  await updateProjectPitchOnNotion({ pageId: existing.id, pitch: args.pitch });
+  return { pageId: existing.id, notionPageUrl: existing.url };
+}

@@ -1481,3 +1481,39 @@ OPTIONAL (route degrades gracefully when absent):
 **Implements:** SPEC §"Acceptance criteria" #5 — Rep View displays GC Name + GC Contact Name as primary fields between Title and Stage. Page query now selects `gc_metadata`; row mapper extracts `gc_name` + `gc_contact_name`; list adds two sortable columns inserted between Title (now narrower) and Score, with em-dash fallback for null. Empty-state colspan updated.
 **Last verified against spec:** 2026-05-28.
 **Drift:** none.
+
+---
+
+## Sprint Z4 — Zedcor cross-pollination + pitch generation (feat/zedcor-z4-cross-pollination-pitch)
+
+**State:** PR #489 open. Branch off `main` at 9fd9933. Closes the "what to say / when to act" gap on Zedcor projects.
+
+#### Pathfinder/lib/adapters/zedcor/type-tag-inferrer.ts
+**Implements:** SPEC-zedcor-z4-cross-pollination-pitch.md §"Component 2" — inferred type tags. Pure utility mapping title+summary to `ZedcorTypeTag[]` via keyword patterns (linear_infrastructure, school, hospital, recreation, renovation, vertical_build). Output is consumed by the Sonnet pitch-hook generator.
+**Last verified against spec:** 2026-05-28. `pnpm typecheck` + `pnpm lint` + `pnpm build` (next build) all exit 0.
+**Drift:** none (new file, additive).
+
+#### Pathfinder/lib/adapters/zedcor/cross-pollination.ts
+**Implements:** SPEC-zedcor-z4-cross-pollination-pitch.md §"Component 1". Fuzzy-matches `gc_name` against `pathfinder.zedcor_customer_sites` for `customer_org_id='zedcor'`. Levenshtein-derived similarity + normalized-substring bonus + `parent_company_canonical` comparison. Warm intro threshold 0.8; 0.6-0.8 surfaced as `possible_cross_pollination`. Reuses `normalizeCustomerName` from `lib/normalization/customer-name.ts`.
+**Last verified against spec:** 2026-05-28.
+**Drift:** **minor.** Spec text references "pathfinder.customers WHERE organization_id=<uuid>"; actual table is `pathfinder.zedcor_customer_sites` keyed by `customer_org_id='zedcor'` (string slug). Module honors the spec's intent against the real schema. Documented in the file header.
+
+#### Pathfinder/lib/adapters/zedcor/pitch-generator.ts
+**Implements:** SPEC-zedcor-z4-cross-pollination-pitch.md §"Component 2" — Sonnet hook generator. claude-sonnet-4-6 (overridable via `ZEDCOR_PITCH_MODEL`) at temperature 0.7, max_tokens 600. System prompt anchored to Zedcor's exact catalog + reference projects. User prompt assembles title/agency/summary/value/location/stage/posted/GC + inferred type tags. Returns three single-sentence hooks (≤25 words each). Graceful degrade when `gc_name` absent → agency + title-only mode (still 3 hooks; `degraded: true` in result).
+**Last verified against spec:** 2026-05-28.
+**Drift:** **minor.** Spec calls for `claude-sonnet-4-5`; production gateway exposes `claude-sonnet-4-6` (latest). Default model upgraded to 4-6; override available via env.
+
+#### Pathfinder/lib/adapters/zedcor/recommended-action.ts
+**Implements:** SPEC-zedcor-z4-cross-pollination-pitch.md §"Component 3". Pure assembly + `action_by_date` precedence: sub_bid_deadline - 14d → gc_award_date + 21d → posted_date + 30d → today fallback. Clamps to today when computed date is in the past (spec hard rule: never set action_by_date in past unless TODAY is the intentional urgent fallback).
+**Last verified against spec:** 2026-05-28.
+**Drift:** none (new file, additive).
+
+#### Pathfinder/lib/notion/zedcor-writer.ts (modified — additive)
+**Implements:** SPEC-zedcor-z4-cross-pollination-pitch.md §"Notion writer integration". Appends `NotionPitchInput` interface, `pitchToNotionProperties()`, `updateProjectPitchOnNotion(pageId, pitch)`, and `updateProjectPitchBySignature(source, source_id, pitch)`. Maps to the seven Notion columns provisioned at Z4-spec time: Cross-Pollination, Warm Intro Path, Pitch Hook 1/2/3, Recommended Action, Action By Date. Existing `writeProjectToNotion()` and the Z1A property builder are untouched.
+**Last verified against spec:** 2026-05-28.
+**Drift:** none — append-only, parallel-safe with Z3 + Z3.5 per file-ownership section of the Z4 spec.
+
+#### Pathfinder/lib/orchestrator/orchestrator.ts (modified — additive)
+**Implements:** SPEC-zedcor-z4-cross-pollination-pitch.md §"File ownership" — adds pitch generation step after enrichment without modifying existing waves. Appends `runZedcorZ4PitchWave(runId)`. Loads pitch-eligible projects (`buy_window_open=true` OR `project_stage in (awarded, gc_selected, sub_bid, mobilization)`) with `ZEDCOR_PITCH_CAP_PER_RUN` cap (default 200). For each: cross-pollination → Sonnet hooks → recommended-action → write `pitch_metadata` jsonb + update Notion page. Gated on `ANTHROPIC_API_KEY` + `ZEDCOR_DISABLE_PITCH`/`ZEDCOR_DISABLE_ANTHROPIC` envs. Failures are logged as `zedcor_z4_pitch_generation_failed` / `zedcor_z4_notion_pitch_update_failed` and never halt the wave. `loadPitchEligibleProjects` uses `SELECT *` so missing optional columns (gc_metadata pre-Z3.5) don't break the query.
+**Last verified against spec:** 2026-05-28.
+**Drift:** none — append-only, existing Waves 1-3 untouched.
