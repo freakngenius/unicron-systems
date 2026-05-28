@@ -169,6 +169,7 @@ interface Summary {
   scanned: number;
   changed: number;
   warm_intro_gained: number;
+  warm_intros_present: number;
   notion_updates: number;
   notion_skipped_no_page: number;
   errors: string[];
@@ -187,6 +188,7 @@ async function main() {
     scanned: 0,
     changed: 0,
     warm_intro_gained: 0,
+    warm_intros_present: 0,
     notion_updates: 0,
     notion_skipped_no_page: 0,
     errors: [],
@@ -211,8 +213,13 @@ async function main() {
       continue;
     }
 
-    if (!result.changed) continue;
-    summary.changed += 1;
+    const isWarmIntro = result.matched_customer !== null && result.confidence >= 0.8;
+    if (isWarmIntro) summary.warm_intros_present += 1;
+    // Push Notion + DB whenever the row changed OR when --force is set and
+    // the result is a warm intro (idempotent re-push so re-runs after a
+    // partial Notion outage settle to the same state).
+    if (!result.changed && !(force && isWarmIntro)) continue;
+    if (result.changed) summary.changed += 1;
     if (result.warm_intro_gained) summary.warm_intro_gained += 1;
 
     if (dryRun) continue;
@@ -263,6 +270,7 @@ async function main() {
   console.log(`  scanned:             ${summary.scanned}`);
   console.log(`  changed:             ${summary.changed}`);
   console.log(`  warm intros gained:  ${summary.warm_intro_gained}`);
+  console.log(`  warm intros present: ${summary.warm_intros_present}`);
   console.log(`  notion updates:      ${summary.notion_updates}`);
   console.log(`  notion no-page:      ${summary.notion_skipped_no_page}`);
   if (summary.errors.length > 0) {
@@ -271,11 +279,11 @@ async function main() {
     if (summary.errors.length > 20) console.error(`  ... and ${summary.errors.length - 20} more`);
   }
 
-  if (!dryRun && summary.warm_intro_gained < 10) {
+  if (!dryRun && summary.warm_intros_present < 10) {
     console.warn(
-      `▸ WARN — warm intros gained ${summary.warm_intro_gained} < 10 ` +
+      `▸ WARN — warm intros present ${summary.warm_intros_present} < 10 ` +
       `(spec acceptance §3 expects ≥10). Either gc_name coverage is too thin ` +
-      `or the customer corpus doesn't overlap with the in-window GC set.`,
+      `or the customer corpus doesn't overlap with the candidate GC set.`,
     );
   }
   console.log('▸ done');
