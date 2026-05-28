@@ -1752,3 +1752,55 @@ OPTIONAL (route degrades gracefully when absent):
 **Implements:** SPEC-zedcor-z10-multi-metro.md South Texas source `laredo-city`. HTML scrape of `cityoflaredo.com/purchasing`, anchor PDFs are the opportunities, PDFs skipped from enrichment. source_authority=city_purchasing, Webb County / Laredo.
 **Last verified against spec:** 2026-05-28.
 **Drift:** none (new file).
+
+## Sprint Z7 — Contact resolver (Hunter / Apollo / pattern)
+
+**State:** PR #494 on `feat/zedcor-z7-contact-resolver`. Spec: `Specs/SPEC-zedcor-z7-contact-resolver.md` (also at `/Users/kylekesterson/Documents/Claude/Unicron/Specs/SPEC-zedcor-z7-contact-resolver.md`). Three-layer external contact resolution layered on top of Z3.5's gc_metadata: Hunter.io → Apollo.io → free email-pattern guesser with DNS MX validation. Strictly additive on `lib/orchestrator/orchestrator.ts` (new Wave 2.6 between Z3.5 enrichment and Wave 3 Notion writes); `lib/notion/zedcor-writer.ts` unchanged (existing gc_contact_* mapping already covers the resolved fields). Z6 / Z8 / Z10 territories untouched.
+
+### Migrations
+
+#### Pathfinder/supabase/migrations/20260528_zedcor_z7_contact_resolution_cache.sql
+**Implements:** SPEC-zedcor-z7-contact-resolver.md §"File ownership" — adds `pathfinder.contact_resolution_cache` (90-day cache, indexed on `lower(company_name), cached_at desc`) and `pathfinder.api_usage_log` (provider/units/called_at counter used by the monthly-quota throttle). Both `CREATE TABLE IF NOT EXISTS`, idempotent against rerun.
+**Last verified against spec:** 2026-05-28.
+**Drift:** none — purely additive; no existing rows rewritten.
+
+### Lib
+
+#### Pathfinder/lib/adapters/zedcor/contact-cache.ts
+**Implements:** SPEC-zedcor-z7-contact-resolver.md §"Soft caps" + cache layer for the three-layer resolver. `normalizeCompanyName()` strips corporate suffixes (inc, llc, llp, ltd, corp, co, company, holdings, group, construction, builders, building) iteratively + lowercases for stable cache keys. `readContactCache()` returns the most-recent cache row within 90 days; `writeContactCache()` persists on hits. `isProviderThrottled()` returns true at >=80% of Hunter's 25/mo or Apollo's 60/mo free-tier quota (read via `getMonthlyUsage()` summing `pathfinder.api_usage_log.units` since the first of the current UTC month).
+**Last verified against spec:** 2026-05-28.
+**Drift:** none (new file).
+
+#### Pathfinder/lib/adapters/zedcor/email-pattern-guesser.ts
+**Implements:** SPEC-zedcor-z7-contact-resolver.md §"Layer 3". `inferDomainCandidates()` derives plausible domains (joined / hyphenated / first-two / first-word stems × com/net/co TLDs, deduped). `generateEmailCandidates()` emits generic mailboxes (`contact@`, `info@`, `estimating@`, `projects@`, `office@`) since we don't know the real person. `guessContactEmail()` returns the first MX-validated candidate; confidence 0.3 (low) per spec.
+**Last verified against spec:** 2026-05-28.
+**Drift:** **minor.** Spec lists `firstname.lastname@`, `first.last@`, `firstinitial.lastname@`, `firstname@` patterns. We default to generic mailboxes since we don't have a person name at Layer 3; the resulting contact_name is "Project Manager" per spec ("Contact name defaults to 'Project Manager' / generic title since we don't know the real person"). When Layer 1/2 returned a person, those layers populate the name + role directly.
+
+#### Pathfinder/lib/adapters/zedcor/external-contact-resolver.ts
+**Implements:** SPEC-zedcor-z7-contact-resolver.md §"Three-layer resolver". Entry point `resolveExternalContact(companyName, context)`:
+- Cache lookup first (90-day TTL).
+- Layer 1 (`HUNTER_API_KEY`): `GET https://api.hunter.io/v2/domain-search?company=…&type=executive&limit=10`, role-filtered to PM/Construction/Procurement/Subcontract/Operations, ranked by role-match then confidence. Logs api_usage_log row regardless of hit/miss (Hunter counts both).
+- Layer 2 (`APOLLO_API_KEY`): `POST https://api.apollo.io/v1/mixed_people/search` with `q_organization_name` + `person_titles` filter; prefers `email_status=verified` rows.
+- Layer 3: pattern guesser. Always runs.
+- Both Hunter + Apollo skip gracefully when the env key is absent OR when the monthly throttle (80%) trips. On a successful resolve, writes back to `pathfinder.contact_resolution_cache`.
+**Last verified against spec:** 2026-05-28.
+**Drift:** none (new file).
+
+#### Pathfinder/lib/orchestrator/orchestrator.ts (modified — additive)
+**Implements:** SPEC-zedcor-z7-contact-resolver.md §"Hooks". New `runZedcorZ7ContactResolutionWave(runId, enrichedById)` inserted between Z3.5's `enrichEligibleProjects` try/catch and Wave 3's Notion writes. Iterates the in-memory `enrichedById: Map<string, GcMetadata>` produced by Z3.5; skips rows that already have `gc_contact_email`; calls `resolveExternalContact()` for each remaining row with `gc_name`. On a hit, merges the resolved fields into the GcMetadata object in place (so Wave 3's Notion writer reads them without re-querying) and persists the merged `gc_metadata` jsonb to `pathfinder.projects` (including `contact_resolution_layer` attribution — 1/2/3 or 'cache'). Soft cap `DEFAULT_CONTACT_RESOLUTION_CAP_PER_RUN=100`, overridable via `ZEDCOR_CONTACT_CAP`. Failures are logged as `zedcor_z7_contact_resolution_project_failed` and never halt the wave; wave-level failures log `zedcor_z7_contact_resolution_failed` and the orchestrator proceeds to Wave 3 with whatever Z3.5 produced.
+**Last verified against spec:** 2026-05-28.
+**Drift:** none — append-only; existing Waves 1-3 + Z4 pitch wave untouched.
+
+### Scripts
+
+#### Pathfinder/scripts/backfill-contact-resolution.ts
+**Implements:** SPEC-zedcor-z7-contact-resolver.md §"Acceptance criteria" + §"File ownership". Standalone walker that selects pathfinder.projects rows where `gc_metadata->>'gc_name' IS NOT NULL AND gc_metadata->>'gc_contact_email' IS NULL`, applies the same three-layer resolver, persists merged `gc_metadata`, and updates the corresponding Notion page via `updateProjectEnrichmentInNotion()`. Supports `--dry-run`, `--cap=N` (default 100; also honors `ZEDCOR_CONTACT_CAP`), and `--notion=false`. Reads env from `.env.production.local` → `.env.local` → `.env` in order.
+**Last verified against spec:** 2026-05-28.
+**Drift:** none (new file).
+
+### Tests
+
+#### Pathfinder/__tests__/adapters/zedcor-contact-resolver.test.ts
+**Implements:** unit coverage for the pure functions in `contact-cache.ts` (`normalizeCompanyName`) and `email-pattern-guesser.ts` (`inferDomainCandidates`, `generateEmailCandidates`). 7 tests, all passing 2026-05-28. Network-touching layers (Hunter / Apollo / DNS) are deferred to integration verification via the backfill smoke (`--cap=5 --dry-run`).
+**Last verified against spec:** 2026-05-28.
+**Drift:** none.
