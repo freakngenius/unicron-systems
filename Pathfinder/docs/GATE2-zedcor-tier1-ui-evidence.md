@@ -125,20 +125,44 @@ All three pass the live CHECK constraints. The actual API routes will write iden
 - `recent-runs` query: `WHERE organization_id = $1 AND runner = 'manual'`.
 - `run-status` query: filtered by both `id = ?run_id` AND `organization_id = $ZEDCOR` to prevent cross-tenant peeks.
 
-## Preview deploy state
+## Preview deploy state — live and reachable
 
-Vercel automatically deployed each push to `feat/zedcor-tier1-ui`. The most recent deploy for the schema-fix commit is:
+After Kyle disabled Vercel Deployment Protection and rebased the branch with verified author identity:
 
-- Deployment ID: `dpl_31krtrJdB6Qso6nmfqwhMXdvDnFu`
-- Inspector: https://vercel.com/kekas-projects-89ac4317/pathfinder/31krtrJdB6Qso6nmfqwhMXdvDnFu
 - Branch alias: `pathfinder-git-feat-zedcor-tier1-ui-kekas-projects-89ac4317.vercel.app`
-- State: `BLOCKED` (Vercel Deployment Protection / SSO)
+- Latest deploy: `dpl_6wze1FDxaxz8oFGTyEuCCXSAsnzr` (commit `a99e321`), state READY.
+- The `/api/zedcor/` exclusion in `middleware.ts` was needed and added in `a99e321` (Z1A added the same exclusion independently in `a64cf003` — identical edits merge clean).
 
-I cannot drive the preview UI directly — the protection layer enforces `_vercel_sso_nonce` and only allowlisted accounts get through. The Vercel MCP's `get_access_to_vercel_url` and `web_fetch_vercel_url` both returned `"Failed to create shareable URL: Response validation failed"` for this team.
+## Live-preview smoke — green
+
+```
+$ curl -sS -o /tmp/z1b-smoke/A.html -D /tmp/z1b-smoke/A.h -w "code=%{http_code} redirect=%{redirect_url}" \
+    "$PREVIEW/pathfinder/internal/zedcor/run"
+
+code=307 redirect=https://pathfinder-git-feat-zedcor-tier1-ui-kekas-projects-89ac4317.vercel.app/pathfinder/login
+HTTP/2 307
+location: /pathfinder/login
+
+NEXT_REDIRECT digest in body:
+NEXT_REDIRECT;replace;/login;307;
+```
+
+Confirms the `app/(authenticated)/layout.tsx` operator gate fires on the live preview before any page content is delivered. Auto-revert defense "Page renders but auth gate is bypassed" is verified on the production Vercel runtime.
+
+All 6 API routes uniformly 401 without a session:
+
+```
+GET  /api/zedcor/recent-runs          {"error":"no_session"} | code=401
+GET  /api/zedcor/run-status?run_id=1  {"error":"no_session"} | code=401
+POST /api/zedcor/toggle-scheduled     {"error":"no_session"} | code=401
+GET  /api/zedcor/digest-preview       {"error":"no_session"} | code=401
+POST /api/zedcor/run-orchestrator     {"error":"no_session"} | code=401
+POST /api/zedcor/send-digest          {"error":"no_session"} | code=401
+```
 
 ## What is left for the human-driven smoke pass
 
-These three steps need to be run by an account that can sign in to the preview deploy:
+The deterministic auth-gate proofs above cover smoke steps 1, 2, 8 (page render redirect / API gates / incognito). Steps 3-7 require an authenticated operator browser session (clicks + screenshots), which can only be Kyle since the magic-link sign-in flow is interactive. Pulling the four `pathfinder.agent_log` rows that those clicks generate is a one-call Supabase MCP query I'll run after the visual pass:
 
 1. **Operator sign-in.** Visit the branch alias above, request a magic link from `/pathfinder/login`, click the link in email.
 2. **Page render.** Land on `/pathfinder/internal/zedcor/run`. Screenshot header + Run button + toggle + digest panel + (initially empty) recent-runs table.
