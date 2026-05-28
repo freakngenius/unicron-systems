@@ -1893,3 +1893,60 @@ OPTIONAL (route degrades gracefully when absent):
 **Implements:** SPEC-zedcor-z12-gc-enrichment-fixes.md §"File ownership" → pass `projectTitle`/`projectSummary` to `resolveCrossPollination` so the Z12 construction gate activates in this script too.
 **Last verified against spec:** 2026-05-28.
 **Drift:** none.
+
+---
+
+## Sprint Z13 — Real Z6 build (fetcher bypass + 5 news adapters)
+
+**State:** PR opening at `feat/zedcor-z13-real-z6-fetcher-news` against `main` (post-Z12 squash `78a4e96`). One Supabase migration applied pre-merge.
+
+### Migration
+
+#### Pathfinder/supabase/migrations/20260528_zedcor_z13_news_data_sources.sql
+**Implements:** SPEC-zedcor-z13-real-z6-fetcher-news.md §"Registry + seed". INSERTs 5 new pathfinder.data_sources rows (one per Z13 news/aggregator adapter) scoped to the Zedcor org UUID. Idempotent via ON CONFLICT DO NOTHING.
+**Last verified against spec:** 2026-05-28.
+**Drift:** none.
+
+### Fetcher bypass
+
+#### Pathfinder/lib/adapters/zedcor/detail-page-fetcher.ts (upgraded)
+**Implements:** SPEC-zedcor-z13-real-z6-fetcher-news.md §"Fetcher bypass". 4-layer tiered chain: Layer 1 (native fetch w/ browser UA) → Layer 2 (ScrapingBee `render_js=true&premium_proxy=true&block_resources=false&wait=2000`, `SCRAPINGBEE_API_KEY`) → Layer 3 (Playwright via @sparticuz/chromium + playwright-core, 30s) → Layer 4 (log `fetch_status='cloudflare_blocked'` with response excerpt, continue). Adds `useBypassFetcher` opt + Cloudflare-challenge detector regex set. Result type extended with `fetchedVia` + `layerAttempts` + `cloudflareExcerpt` (back-compatible: existing callers ignore new fields). Honors the Z13 robots-policy whitelist (skips robots.txt for `*.bonfirehub.com`, `*.ionwave.net`, and the explicit per-host whitelist).
+**Last verified against spec:** 2026-05-28.
+**Drift:** none.
+
+#### Pathfinder/lib/adapters/zedcor/robots-policy.ts (new)
+**Implements:** SPEC-zedcor-z13-real-z6-fetcher-news.md §"Fetcher bypass". Pure-function helpers `isWhitelisted(url)` + `fetchStrategyFor(url)`. Whitelist scopes: `*.bonfirehub.com`, `*.ionwave.net`, `*.workdayspend.com`, `*.demandstar.com`, `*.publicpurchase.com`, `*.bidcontract.com`, plus 35 explicit Texas county/city/agency hosts.
+**Last verified against spec:** 2026-05-28.
+**Drift:** none (new file).
+
+### News adapters (mirror galveston-county.ts gold standard)
+
+#### Pathfinder/lib/adapters/sources/news-engineering-record.ts (new)
+**Implements:** SPEC-zedcor-z13-real-z6-fetcher-news.md §"5 new news adapters" → ENR Texas awards. Fetches `https://www.enr.com/topics/263-awards?topic=263&region=TX`, walks `.article-list-item / .article-card / article`, filters titles by award keywords, emits `project_stage='awarded'`, `phase_confidence=0.9`, `buy_window_open=true`, `source_authority='news_report'`.
+**Last verified against spec:** 2026-05-28.
+**Drift:** none (new file).
+
+#### Pathfinder/lib/adapters/sources/texas-construction-industry.ts (new)
+**Implements:** SPEC-zedcor-z13-real-z6-fetcher-news.md §"5 new news adapters" → TX construction industry digest. Tries RSS feed `https://www.txconstructionindustry.com/feed/` first, falls back to landing HTML. Per-row stage inference (breaks-ground→mobilization, completes→subs_selected, default→awarded).
+**Last verified against spec:** 2026-05-28.
+**Drift:** none (new file).
+
+#### Pathfinder/lib/adapters/sources/demandstar-texas.ts (new)
+**Implements:** SPEC-zedcor-z13-real-z6-fetcher-news.md §"5 new news adapters" → DemandStar TX. Primary path: `https://api.demandstar.com/v2/buyer/notices?state=TX&pageSize=100` (JSON). Fallback: scrape `https://www.demandstar.com/search?state=TX` notice-cards. All rows `source_authority='public_construction'`, `project_stage='solicitation'`, `buy_window_open=true`.
+**Last verified against spec:** 2026-05-28.
+**Drift:** none (new file).
+
+#### Pathfinder/lib/adapters/sources/houston-business-journal.ts (new)
+**Implements:** SPEC-zedcor-z13-real-z6-fetcher-news.md §"5 new news adapters" → HBJ construction news. Walks anchors under `https://www.bizjournals.com/houston/news/construction`, filters by award keywords. Deduplicates by source_event_id (template emits duplicate image+headline anchors per article). Title+deck only; detail pages are paywalled — the Z13 fetcher chain handles those at enrichment time.
+**Last verified against spec:** 2026-05-28.
+**Drift:** none (new file).
+
+#### Pathfinder/lib/adapters/sources/builders-exchange-texas.ts (new)
+**Implements:** SPEC-zedcor-z13-real-z6-fetcher-news.md §"5 new news adapters" → BX Texas project leads. Walks table or card layout at `https://www.bxtexas.org/projects`. All rows `source_authority='public_construction'`, `project_stage='solicitation'`, `phase_confidence=0.75`.
+**Last verified against spec:** 2026-05-28.
+**Drift:** none (new file).
+
+#### Pathfinder/lib/adapters/sources/index.ts (modified — additive)
+**Implements:** SOURCE_ADAPTERS registration of the 5 new Z13 adapters. Existing 40 adapter registrations untouched.
+**Last verified against spec:** 2026-05-28.
+**Drift:** none.

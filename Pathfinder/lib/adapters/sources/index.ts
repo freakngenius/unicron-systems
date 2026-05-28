@@ -52,6 +52,12 @@ import { hisdIonwaveAdapter } from './hisd-ionwave';
 import { txdotHoustonDistrictAdapter } from './txdot-houston-district';
 // Sprint Z12 — TxDOT Bid Tabulations (Socrata SODA, data.texas.gov).
 import { txBidTabsAdapter } from './tx-bid-tabs';
+// Sprint Z13 — 5 news + aggregator adapters. Strictly additive.
+import { newsEngineeringRecordAdapter } from './news-engineering-record';
+import { texasConstructionIndustryAdapter } from './texas-construction-industry';
+import { demandstarTexasAdapter } from './demandstar-texas';
+import { houstonBusinessJournalAdapter } from './houston-business-journal';
+import { buildersExchangeTexasAdapter } from './builders-exchange-texas';
 // Sprint Z10 — 20 adapters for the DFW, Austin, San Antonio, and South
 // Texas hubs. Strictly additive; Z1A Houston entries above are untouched.
 import { fortWorthCityAdapter } from './fort-worth-city';
@@ -105,6 +111,12 @@ export const SOURCE_ADAPTERS: Record<string, SourceAdapter> = {
   [txdotHoustonDistrictAdapter.id]: txdotHoustonDistrictAdapter,
   // Sprint Z12 — TxDOT Bid Tabulations (state DOT, mobilization rows).
   [txBidTabsAdapter.id]: txBidTabsAdapter,
+  // Sprint Z13 — 5 news + aggregator adapters.
+  [newsEngineeringRecordAdapter.id]: newsEngineeringRecordAdapter,
+  [texasConstructionIndustryAdapter.id]: texasConstructionIndustryAdapter,
+  [demandstarTexasAdapter.id]: demandstarTexasAdapter,
+  [houstonBusinessJournalAdapter.id]: houstonBusinessJournalAdapter,
+  [buildersExchangeTexasAdapter.id]: buildersExchangeTexasAdapter,
   // Zedcor Sprint Z10 adapters — DFW, Austin, San Antonio, South Texas.
   [fortWorthCityAdapter.id]: fortWorthCityAdapter,
   [tarrantCountyAdapter.id]: tarrantCountyAdapter,
