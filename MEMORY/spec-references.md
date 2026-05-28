@@ -1629,3 +1629,19 @@ OPTIONAL (route degrades gracefully when absent):
 **Implements:** client root for `/internal/zedcor/run`. Z5 wires `submitting` state (flipped true at click instant, false in finally) plus `lastSummary` state captured from the terminal poll. `handleRun` now opens with `setSubmitting(true)` and records `runStartedAtRef = Date.now()` before the POST so duration is measurable even when the run completes before polling starts. Polling interval bumped 2000ms → 1500ms per Z5 spec. On `finished=true`, captures the `orchestrator_run_summary` payload + computed `durationMs` into `lastSummary` for the LiveProgress banner.
 **Last verified against spec:** 2026-05-28.
 **Drift:** none — additive; existing in-flight polling + recent-runs refresh behavior unchanged.
+
+---
+
+## Sprint Z5.2 — Notion SDK v5 query migration (PR #493)
+
+**State:** PR #493 on `fix/zedcor-z5-2-notion-v5`. Fixes the silent prod bug where every Notion write since the `@notionhq/client` v5.22.0 upgrade has been swallowed as `notion_write_failed` because v5 removed `databases.query` (moved to `dataSources.query` keyed by `data_source_id`). Three consecutive prod runs (6675, 6680, 6685) reported `notion_writes: 0` despite inserting fresh rows. Migrates all 4 query call sites + adds a `--skip-anthropic` mode for re-syncing cached pitches post-merge without re-paying Sonnet tokens.
+
+#### Pathfinder/lib/notion/zedcor-writer.ts (modified — v5 migration)
+**Implements:** Notion SDK v5 query path. Adds `dataSourceId()` helper reading `ZEDCOR_NOTION_DATA_SOURCE_ID` env (default `39b001e3-fa1f-4fbf-aeea-219d4ef2b19a`, the stable UUID of the Zedcor Houston Lead Feed DB's single data source). `findExisting()` now calls `client.dataSources.query({ data_source_id })` instead of the v3-only `client.databases.query({ database_id })`. `pages.create({ parent: { database_id } })` continues to work in v5 (back-compat) and is unchanged.
+**Last verified against spec:** 2026-05-28. `pnpm typecheck` + `pnpm build` clean. `__tests__/lib/notion/zedcor-writer-v5-query.test.ts` (1/1 pass) asserts every query goes to `/v1/data_sources/{id}/query`.
+**Drift:** none. Single-line behavior change scoped to the query path; existing dedup-by-Project-ID + enrichment-write semantics are byte-identical.
+
+#### Pathfinder/lib/email/build-digest-data.ts (modified — v5 migration)
+**Implements:** Same v5 migration for the three queries in the email digest builder — `queryRepViewLeads`, `countNewToday`, `countClosingSoon`. Adds parallel `dataSourceId()` helper. The digest cron has been silently failing on the same v3 → v5 breakage; this re-enables it.
+**Last verified against spec:** 2026-05-28.
+**Drift:** none.
