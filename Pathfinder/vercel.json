@@ -1,3 +1,13 @@
 {
-  "crons": []
+  "crons": [],
+  "functions": {
+    "app/api/cron/zedcor-orchestrator/route.ts": {
+      "memory": 3009,
+      "maxDuration": 300
+    },
+    "app/api/zedcor/run-orchestrator/route.ts": {
+      "memory": 3009,
+      "maxDuration": 300
+    }
+  }
 }

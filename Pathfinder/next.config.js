@@ -27,6 +27,14 @@ const nextConfig = {
   basePath: '/pathfinder',
   assetPrefix: '/pathfinder',
   experimental: {
+    // Sprint Z13 — Playwright + @sparticuz/chromium are large native
+    // binaries that webpack can't bundle. Mark them as
+    // serverComponentsExternalPackages so Next.js leaves them as runtime
+    // CommonJS imports inside server routes. Without this the build
+    // either fails (webpack can't follow chromium's binary path
+    // resolution) or produces a 250MB+ lambda. (`serverExternalPackages`
+    // is the Next 15 name; this project is on 14.2.18.)
+    serverComponentsExternalPackages: ['@sparticuz/chromium', 'playwright-core'],
     serverActions: {
       allowedOrigins: ['localhost:3000', 'localhost:3001', 'unicron.systems', 'www.unicron.systems', 'funder.unicron.systems', 'internal.unicron.systems', 'zedcor.unicron.systems'],
     },
