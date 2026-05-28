@@ -48,6 +48,13 @@ export interface SourcePollOptions {
    *  must use this fetch implementation. The subscriber injects the
    *  real `globalThis.fetch` in production. */
   fetch?: typeof fetch;
+  // Z1A additions (Zedcor Houston manual-trigger orchestrator). Optional
+  // so existing Funder/Internal adapters compile unchanged.
+  /** pathfinder.agent_runs.id for the current orchestrator run; threaded into
+   *  agent_log events and projects.agent_run_id by the orchestrator wrapper. */
+  runId?: number;
+  /** Hub slug (e.g. 'houston'); used for geofence scoping + projects.hub_id. */
+  hubId?: string;
 }
 
 export interface SourceEvent {
