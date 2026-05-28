@@ -1630,6 +1630,16 @@ OPTIONAL (route degrades gracefully when absent):
 **Last verified against spec:** 2026-05-28.
 **Drift:** none — additive; existing in-flight polling + recent-runs refresh behavior unchanged.
 
+#### Pathfinder/lib/notion/zedcor-writer.ts (modified — v5 SDK migration)
+**Implements:** SPEC-zedcor-source-adapters.md §"Notion writer" + SPEC-zedcor-z4-cross-pollination-pitch.md §"Notion writer integration". Z5b migration: @notionhq/client@5.22.0 removed client.databases.query and changed pages.create's parent shape. Switched `findExisting()` from `databases.query({database_id})` to `dataSources.query({data_source_id})` and `writeProjectToNotion()`'s page-create from `parent: {database_id}` to `parent: {data_source_id}`. New `dataSourceId()` helper reads `ZEDCOR_NOTION_DATA_SOURCE_ID` env (default `39b001e3-fa1f-4fbf-aeea-219d4ef2b19a`, the single data_source on the Zedcor Houston Lead Feed DB verified via Notion MCP fetch on 2026-05-28). `pages.update` is unchanged — page_id-keyed calls were not affected by the v5 split.
+**Last verified against spec:** 2026-05-28.
+**Drift:** none — semantics identical; the SDK contract changed, the writer changed to match. Pre-Z5b code hit `TypeError: client.databases.query is not a function` on the first Notion call.
+
+#### Pathfinder/scripts/backfill-pitch-generation.ts (modified — Notion-only mode)
+**Implements:** SPEC-zedcor-z4-cross-pollination-pitch.md §"Backfill" — Z5b adds `--skip-anthropic` flag for Notion-only push of cached pitches. Loader switches to `pitch_metadata->pitch_hooks IS NOT NULL` (skips ~1748 rows with legacy stub pitch_metadata that lacks the hooks array). Per-row branch reads `pitch_hooks` / `cross_pollination` / `warm_intro_path` / `recommended_action` / `action_by_date` directly from the cached jsonb and pushes via `updateProjectPitchBySignature`, never calling Sonnet or `resolveCrossPollination`. Gate on ANTHROPIC_API_KEY relaxed when `--skip-anthropic` is set. Mutual exclusion with `--skip-notion` (combination would no-op).
+**Last verified against spec:** 2026-05-28.
+**Drift:** none — additive flag; default behaviour unchanged.
+
 ---
 
 ## Sprint Z10 — Multi-metro expansion (DFW, Austin, San Antonio, South Texas)
