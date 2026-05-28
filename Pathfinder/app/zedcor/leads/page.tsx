@@ -31,6 +31,8 @@ interface ProjectRow {
   ingested_at: string;
   nearest_zedcor_branch_id: string | null;
   zedcor_distance_miles: number | string | null;
+  // Sprint Z3.5 — enrichment fields surfaced in the rep view.
+  gc_metadata: Record<string, unknown> | null;
 }
 
 function num(v: number | string | null | undefined): number | null {
@@ -139,7 +141,7 @@ async function fetchData(): Promise<{
     admin
       .from('projects')
       .select(
-        'id, title, score, project_value, project_stage, source, ingested_at, nearest_zedcor_branch_id, zedcor_distance_miles',
+        'id, title, score, project_value, project_stage, source, ingested_at, nearest_zedcor_branch_id, zedcor_distance_miles, gc_metadata',
       )
       .not('score', 'is', null)
       .order('score', { ascending: false, nullsFirst: false })
@@ -160,6 +162,7 @@ async function fetchData(): Promise<{
 
   const rows: LeadListRow[] = ((projectsRes.data ?? []) as ProjectRow[]).map((p) => {
     const branch = p.nearest_zedcor_branch_id ? branchById.get(p.nearest_zedcor_branch_id) ?? null : null;
+    const gc = (p.gc_metadata ?? {}) as Record<string, unknown>;
     return {
       id: p.id,
       title: p.title ?? '(untitled)',
@@ -172,6 +175,8 @@ async function fetchData(): Promise<{
       branch_name: branch?.branch_name ?? null,
       branch_state: branch?.state ?? null,
       distance_miles: num(p.zedcor_distance_miles),
+      gc_name: typeof gc.gc_name === 'string' ? gc.gc_name : null,
+      gc_contact_name: typeof gc.gc_contact_name === 'string' ? gc.gc_contact_name : null,
     };
   });
 

@@ -34,9 +34,13 @@ export interface LeadListRow {
   branch_name: string | null;
   branch_state: string | null;
   distance_miles: number | null;
+  // Sprint Z3.5 — surfaced between Title and Stage so reps can scan
+  // who to call without opening the detail page.
+  gc_name?: string | null;
+  gc_contact_name?: string | null;
 }
 
-type SortKey = 'title' | 'score' | 'project_value' | 'distance_miles' | 'branch' | 'stage';
+type SortKey = 'title' | 'score' | 'project_value' | 'distance_miles' | 'branch' | 'stage' | 'gc_name' | 'gc_contact';
 type SortDir = 'asc' | 'desc';
 
 export interface ZedcorLeadListProps {
@@ -70,7 +74,11 @@ export function ZedcorLeadList({ initialRows, branches, loadError }: ZedcorLeadL
       setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
     } else {
       setSortKey(key);
-      setSortDir(key === 'title' || key === 'branch' || key === 'stage' ? 'asc' : 'desc');
+      setSortDir(
+        key === 'title' || key === 'branch' || key === 'stage' || key === 'gc_name' || key === 'gc_contact'
+          ? 'asc'
+          : 'desc',
+      );
     }
   };
 
@@ -137,6 +145,8 @@ export function ZedcorLeadList({ initialRows, branches, loadError }: ZedcorLeadL
           <thead>
             <tr style={{ background: 'rgba(255,255,255,0.03)', textAlign: 'left' }}>
               <Th col="title" sortKey={sortKey} sortDir={sortDir} onSort={onSort}>Title</Th>
+              <Th col="gc_name" sortKey={sortKey} sortDir={sortDir} onSort={onSort}>GC Name</Th>
+              <Th col="gc_contact" sortKey={sortKey} sortDir={sortDir} onSort={onSort}>GC Contact</Th>
               <Th col="score" sortKey={sortKey} sortDir={sortDir} onSort={onSort} align="right">Score</Th>
               <Th col="project_value" sortKey={sortKey} sortDir={sortDir} onSort={onSort} align="right">Value</Th>
               <Th col="distance_miles" sortKey={sortKey} sortDir={sortDir} onSort={onSort} align="right">Distance</Th>
@@ -147,7 +157,7 @@ export function ZedcorLeadList({ initialRows, branches, loadError }: ZedcorLeadL
           <tbody>
             {sorted.length === 0 && (
               <tr>
-                <td colSpan={6} style={{ padding: 24, textAlign: 'center', color: TEXT_MUTED }}>
+                <td colSpan={8} style={{ padding: 24, textAlign: 'center', color: TEXT_MUTED }}>
                   No leads match the current filter.
                 </td>
               </tr>
@@ -165,10 +175,20 @@ export function ZedcorLeadList({ initialRows, branches, loadError }: ZedcorLeadL
                     href={`/pathfinder/leads/${r.id}`}
                     style={{ color: TEXT, textDecoration: 'none' }}
                   >
-                    <span style={{ display: 'inline-block', maxWidth: 460, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', verticalAlign: 'bottom' }}>
+                    <span style={{ display: 'inline-block', maxWidth: 320, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', verticalAlign: 'bottom' }}>
                       {r.title}
                     </span>
                   </a>
+                </td>
+                <td style={{ padding: '10px 12px', color: r.gc_name ? TEXT : TEXT_MUTED, fontSize: 13 }}>
+                  <span style={{ display: 'inline-block', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', verticalAlign: 'bottom' }}>
+                    {r.gc_name ?? '—'}
+                  </span>
+                </td>
+                <td style={{ padding: '10px 12px', color: r.gc_contact_name ? TEXT : TEXT_MUTED, fontSize: 13 }}>
+                  <span style={{ display: 'inline-block', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', verticalAlign: 'bottom' }}>
+                    {r.gc_contact_name ?? '—'}
+                  </span>
                 </td>
                 <td style={{ padding: '10px 12px', textAlign: 'right', fontFamily: 'var(--font-jetbrains-mono), monospace' }}>
                   <ScorePill score={r.score} />
@@ -290,5 +310,9 @@ function sortValue(r: LeadListRow, key: SortKey): string | number | null {
       return r.branch_name?.toLowerCase() ?? null;
     case 'stage':
       return r.project_stage?.toLowerCase() ?? null;
+    case 'gc_name':
+      return r.gc_name?.toLowerCase() ?? null;
+    case 'gc_contact':
+      return r.gc_contact_name?.toLowerCase() ?? null;
   }
 }
