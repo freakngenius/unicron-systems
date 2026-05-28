@@ -365,6 +365,9 @@ async function extractGcNameFromSonar(projectTitle: string): Promise<SonarResult
 export interface EnrichInput {
   source_url: string | null;
   title: string;
+  /** Z6 — force the tiered L1→L4 bypass fetcher for this row even on
+   *  non-whitelisted hosts. Used by backfill --use-bypass-fetcher. */
+  forceBypass?: boolean;
 }
 
 /**
@@ -373,7 +376,9 @@ export interface EnrichInput {
  * Notion via lib/notion/zedcor-writer:enrichmentToNotionProperties.
  */
 export async function extractGcMetadata(input: EnrichInput): Promise<GcMetadata> {
-  const fetched = await fetchDetailPage(input.source_url);
+  const fetched = await fetchDetailPage(input.source_url, {
+    forceBypass: input.forceBypass ?? false,
+  });
   const base: Omit<GcMetadata, keyof ExtractableFields> = {
     fetched_at: fetched.fetchedAt,
     fetch_status: fetched.status,

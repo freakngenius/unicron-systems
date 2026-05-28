@@ -24,7 +24,13 @@
 //   pnpm tsx scripts/backfill-gc-enrichment.ts            # full backfill
 //   pnpm tsx scripts/backfill-gc-enrichment.ts --dry-run  # log only
 //   pnpm tsx scripts/backfill-gc-enrichment.ts --cap=50   # smoke
+//   pnpm tsx scripts/backfill-gc-enrichment.ts --limit=N  # alias for --cap=N
 //   pnpm tsx scripts/backfill-gc-enrichment.ts --notion=false  # DB only
+//   pnpm tsx scripts/backfill-gc-enrichment.ts --force    # Z6: re-process rows
+//                                                          that already have gc_metadata
+//   pnpm tsx scripts/backfill-gc-enrichment.ts --use-bypass-fetcher
+//                                                          # Z6: force the tiered L1→L4
+//                                                          fetcher even on non-whitelisted hosts
 
 import { config as dotenvConfig } from 'dotenv';
 import { createClient } from '@supabase/supabase-js';
@@ -72,8 +78,19 @@ if (!url || !serviceKey) {
 const flags = process.argv.slice(2);
 const dryRun = flags.includes('--dry-run');
 const writeNotion = !flags.includes('--notion=false');
-const capArg = flags.find((f) => f.startsWith('--cap='));
-const cap = capArg ? Math.max(1, Number.parseInt(capArg.slice('--cap='.length), 10) || DEFAULT_CAP) : DEFAULT_CAP;
+// Z6 — additive flags. --force re-processes rows that already have
+// gc_metadata; --use-bypass-fetcher tells the extractor to use the
+// tiered L1→L4 fetcher unconditionally (default behavior on
+// whitelisted procurement portals; this opts in for all rows).
+const forceReprocess = flags.includes('--force');
+const useBypassFetcher = flags.includes('--use-bypass-fetcher');
+const capArg = flags.find((f) => f.startsWith('--cap=')) ?? flags.find((f) => f.startsWith('--limit='));
+const capRaw = capArg
+  ? capArg.startsWith('--cap=')
+    ? capArg.slice('--cap='.length)
+    : capArg.slice('--limit='.length)
+  : '';
+const cap = capRaw ? Math.max(1, Number.parseInt(capRaw, 10) || DEFAULT_CAP) : DEFAULT_CAP;
 
 if (writeNotion && !process.env.NOTION_API_TOKEN) {
   console.error('Missing NOTION_API_TOKEN — set it in .env.production.local or pass --notion=false');
@@ -104,6 +121,9 @@ interface BackfillRow {
   raw_payload: Record<string, unknown> | null;
   project_stage: string | null;
   buy_window_open: boolean | null;
+  // Z6 — surfaces whether the row already has gc_metadata so the
+  // --force flag can decide whether to re-extract.
+  gc_metadata: Record<string, unknown> | null;
 }
 
 function priorityOf(slug: string): number {
@@ -131,7 +151,7 @@ async function loadEligibleProjects(): Promise<BackfillRow[]> {
   // supabase-js's .or() limits eq/in expression composition; fetch each
   // condition separately and de-dup in code. The dataset (~1.8K rows) is
   // small enough for a single round-trip per condition.
-  const select = 'id, source, source_id, title, posted_date, response_deadline, source_url, rationale, score, raw_payload, project_stage, buy_window_open';
+  const select = 'id, source, source_id, title, posted_date, response_deadline, source_url, rationale, score, raw_payload, project_stage, buy_window_open, gc_metadata';
 
   const stages = ['awarded', 'gc_selected', 'sub_bid', 'mobilization'];
   const stageReq = supabase
@@ -190,9 +210,20 @@ interface Stats {
 }
 
 async function main(): Promise<void> {
-  console.log(`backfill-gc-enrichment: cap=${cap} dryRun=${dryRun} writeNotion=${writeNotion}`);
-  const rows = await loadEligibleProjects();
-  console.log(`eligible rows after filter+order+cap: ${rows.length}`);
+  console.log(
+    `backfill-gc-enrichment: cap=${cap} dryRun=${dryRun} writeNotion=${writeNotion} ` +
+    `force=${forceReprocess} useBypassFetcher=${useBypassFetcher}`,
+  );
+  const allRows = await loadEligibleProjects();
+  // Z6 — without --force, skip rows that already have gc_metadata so the
+  // backfill doesn't burn Anthropic budget re-extracting unchanged rows.
+  const rows = forceReprocess
+    ? allRows
+    : allRows.filter((r) => !r.gc_metadata || Object.keys(r.gc_metadata).length === 0);
+  console.log(
+    `eligible rows after filter+order+cap: ${allRows.length} ` +
+    `(after --force filter: ${rows.length})`,
+  );
 
   if (dryRun) {
     for (const r of rows.slice(0, 10)) {
@@ -218,7 +249,11 @@ async function main(): Promise<void> {
     stats.attempted += 1;
     let meta: GcMetadata | null = null;
     try {
-      meta = await extractGcMetadata({ source_url: p.source_url, title: p.title });
+      meta = await extractGcMetadata({
+        source_url: p.source_url,
+        title: p.title,
+        forceBypass: useBypassFetcher,
+      });
       await persistGcMetadata(p.id, meta);
       stats.enriched += 1;
       stats.layerCounts[meta.extraction_layer] = (stats.layerCounts[meta.extraction_layer] ?? 0) + 1;

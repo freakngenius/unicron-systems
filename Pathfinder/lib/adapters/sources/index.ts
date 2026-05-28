@@ -72,6 +72,14 @@ import { corpusChristiCityAdapter } from './corpus-christi-city';
 import { nuecesCountyAdapter } from './nueces-county';
 import { portCorpusChristiAdapter } from './port-corpus-christi';
 import { laredoCityAdapter } from './laredo-city';
+// Sprint Z6 — 5 new high-quality sources: trade-press award announcements,
+// statewide procurement aggregator, and Texas trade-association plan room.
+// Strictly additive registration below; existing registrations untouched.
+import { newsEngineeringRecordAdapter } from './news-engineering-record';
+import { texasConstructionIndustryAdapter } from './texas-construction-industry';
+import { demandstarTexasAdapter } from './demandstar-texas';
+import { houstonBusinessJournalAdapter } from './houston-business-journal';
+import { buildersExchangeTexasAdapter } from './builders-exchange-texas';
 
 export type { SourceAdapter, SourceAdapterType, SourceEvent, SourcePollOptions } from './types';
 
@@ -122,7 +130,23 @@ export const SOURCE_ADAPTERS: Record<string, SourceAdapter> = {
   [nuecesCountyAdapter.id]: nuecesCountyAdapter,
   [portCorpusChristiAdapter.id]: portCorpusChristiAdapter,
   [laredoCityAdapter.id]: laredoCityAdapter,
+  // Zedcor Sprint Z6 — 5 new sources.
+  [newsEngineeringRecordAdapter.id]: newsEngineeringRecordAdapter,
+  [texasConstructionIndustryAdapter.id]: texasConstructionIndustryAdapter,
+  [demandstarTexasAdapter.id]: demandstarTexasAdapter,
+  [houstonBusinessJournalAdapter.id]: houstonBusinessJournalAdapter,
+  [buildersExchangeTexasAdapter.id]: buildersExchangeTexasAdapter,
 };
+
+/** Stable list of the 5 Z6 source slugs, in dispatch order. */
+export const ZEDCOR_Z6_SOURCE_SLUGS = [
+  'news-engineering-record',
+  'texas-construction-industry',
+  'demandstar-texas',
+  'houston-business-journal',
+  'builders-exchange-texas',
+] as const;
+export type ZedcorZ6SourceSlug = (typeof ZEDCOR_Z6_SOURCE_SLUGS)[number];
 
 /** Stable list of the 10 Z1A source slugs, in orchestrator dispatch order. */
 export const ZEDCOR_Z1A_SOURCE_SLUGS = [
