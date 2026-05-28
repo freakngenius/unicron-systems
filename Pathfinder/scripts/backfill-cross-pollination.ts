@@ -69,13 +69,49 @@ interface ProjectRow {
   gc_metadata: Record<string, unknown> | null;
   pitch_metadata: Record<string, unknown> | null;
   buy_window_open: boolean | null;
+  project_stage: string | null;
+  raw_payload: Record<string, unknown> | null;
 }
 
+const AWARDED_STAGES: ReadonlySet<string> = new Set([
+  'awarded', 'gc_selected', 'sub_bid', 'mobilization',
+]);
+
+const RAW_PAYLOAD_GC_KEYS: readonly string[] = [
+  'Recipient Name', 'recipient_name', 'Awardee', 'awardee', 'Vendor', 'vendor',
+  'prime_contractor', 'awarded_to', 'contractor', 'Contractor',
+];
+
+/**
+ * Resolve a GC name for cross-pollination matching. Preference order:
+ *   1. gc_metadata.gc_name (Z3.5 enrichment — authoritative when present)
+ *   2. raw_payload['Recipient Name'] / awardee / vendor (federal-spending,
+ *      sam.gov, Bonfire awarded rows — present without Z3.5 enrichment)
+ *   3. raw_payload.award.awardee.name nested shape (sam.gov)
+ *
+ * Z8 owns the raw_payload fallback so the customer-corpus wiring surfaces
+ * matches even when Z3.5/Z7 enrichment hasn't landed for a project.
+ */
 function readGcName(p: ProjectRow): string | null {
   const m = p.gc_metadata;
   if (m && typeof m === 'object') {
     const v = (m as Record<string, unknown>).gc_name;
     if (typeof v === 'string' && v.trim()) return v.trim();
+  }
+  const rp = p.raw_payload;
+  if (rp && typeof rp === 'object') {
+    for (const k of RAW_PAYLOAD_GC_KEYS) {
+      const v = (rp as Record<string, unknown>)[k];
+      if (typeof v === 'string' && v.trim()) return v.trim();
+    }
+    const award = (rp as Record<string, unknown>).award;
+    if (award && typeof award === 'object') {
+      const awardee = (award as Record<string, unknown>).awardee;
+      if (awardee && typeof awardee === 'object') {
+        const n = (awardee as Record<string, unknown>).name;
+        if (typeof n === 'string' && n.trim()) return n.trim();
+      }
+    }
   }
   return null;
 }
@@ -93,28 +129,33 @@ function readExistingCrossPoll(p: ProjectRow): {
   };
 }
 
-async function loadInWindowProjectsWithGc(): Promise<ProjectRow[]> {
+async function loadCandidateProjects(): Promise<ProjectRow[]> {
   const rows: ProjectRow[] = [];
   const PAGE = 500;
   let offset = 0;
-  // Prefer in-window leads (buy_window_open = true). When the column hasn't
-  // been backfilled yet we fall back to any project with gc_metadata; the
-  // engine is idempotent so re-running over a wider set is safe.
+  // Candidate filter: any project where we can resolve a GC name.
+  //   - buy_window_open=true (in-window) — Z3.5 gc_metadata when present
+  //   - project_stage in (awarded, gc_selected, sub_bid, mobilization) —
+  //     these have a known prime contractor in raw_payload (Recipient Name
+  //     from federal awards, Bonfire 'Awardee' on county solicitations
+  //     once awarded). Z8's readGcName() falls back to raw_payload when
+  //     gc_metadata is absent so we surface matches even before Z3.5/Z7
+  //     fully backfills the corpus.
   for (;;) {
     const { data, error } = await supabase
       .from('projects')
-      .select('id, source, source_id, gc_metadata, pitch_metadata, buy_window_open')
-      .not('gc_metadata', 'is', null)
+      .select('id, source, source_id, gc_metadata, pitch_metadata, buy_window_open, project_stage, raw_payload')
       .order('id', { ascending: true })
       .range(offset, offset + PAGE - 1);
     if (error) throw new Error(`projects read failed: ${error.message}`);
     const page = data as ProjectRow[] | null;
     if (!page || page.length === 0) break;
     for (const p of page) {
-      if (limit > 0 && rows.length >= limit * 4) break; // hard ceiling on scan
+      if (limit > 0 && rows.length >= limit * 4) break;
+      const eligible = p.buy_window_open === true ||
+        (p.project_stage !== null && AWARDED_STAGES.has(p.project_stage));
+      if (!eligible) continue;
       if (!readGcName(p)) continue;
-      // Prefer in-window when the column is populated; otherwise accept all.
-      if (p.buy_window_open === false) continue;
       rows.push(p);
     }
     if (page.length < PAGE) break;
@@ -139,8 +180,8 @@ async function main() {
     `limit=${limit} skipNotion=${skipNotion}`,
   );
 
-  const projects = await loadInWindowProjectsWithGc();
-  console.log(`▸ candidate in-window projects: ${projects.length}`);
+  const projects = await loadCandidateProjects();
+  console.log(`▸ candidate projects (in-window OR awarded/gc_selected/sub_bid/mobilization with resolvable GC): ${projects.length}`);
 
   const summary: Summary = {
     scanned: 0,
