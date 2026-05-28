@@ -115,6 +115,57 @@ function sourceTypeFor(sourceAuthority: string | null | undefined): NotionSource
   return SOURCE_TYPE_MAP[key] ?? 'Other';
 }
 
+// Sprint Z11 Fix 3 — pre-window eligibility. Pre-Z11, only rows that landed
+// at gc_selected/sub_bid/mobilization (or buy_window_open=true via the
+// adapter) ever showed up in Notion as Buy Window=Open. The vast majority
+// of public RFPs are still at 'solicitation' / 'owner_bid' and never get
+// surfaced even though they're the early-radar signal — Zedcor wants to
+// see them tagged Buy Window=Closed (pre-window tracking) so reps can
+// track ramps to GC selection.
+//
+// Eligibility rule:
+//   - project_stage ∈ {solicitation, owner_bid, rfp}
+//   - source_authority ∈ {public_construction, county_purchasing,
+//     school_district, state_dot}  (federal authorities stay out; their
+//     "solicitation" RFPs are too far upstream for the site-services sub
+//     window)
+//   - title matches at least one construction keyword
+//
+// Source-of-truth keyword list per Z11 spec: rehab, replacement,
+// construction, renovation, repair, improvement, expansion, infrastructure,
+// channel, bridge, road, paving, roof, HVAC, mechanical, demolition.
+// Word boundaries with simple stems (rehab\w* / construct\w* / etc.).
+const PRE_WINDOW_AUTHORITIES: ReadonlySet<string> = new Set([
+  'public_construction',
+  'county_purchasing',
+  'school_district',
+  'state_dot',
+]);
+const PRE_WINDOW_STAGES: ReadonlySet<string> = new Set([
+  'solicitation',
+  'owner_bid',
+  'rfp',
+]);
+const CONSTRUCTION_KEYWORD_RE =
+  /\b(rehab\w*|replac\w*|construct\w*|renovat\w*|repair\w*|improv\w*|expansion\w*|infrastructure|channel\w*|bridge\w*|road\w*|paving|pavement|roof\w*|hvac|mechanical|demolition|demo|levee|drainage|sidewalk|culvert|storm\s*water|water\s*line|sewer|wastewater|electrical|excavation|grading)\b/i;
+
+/** Sprint Z11 — true when the row is a pre-window construction solicitation
+ * that should be surfaced in Notion as a pre-Buy-Window tracking lead.
+ * Pure function; no side effects. */
+export function isPreWindowConstructionSolicitation(
+  title: string | null | undefined,
+  projectStage: string | null | undefined,
+  sourceAuthority: string | null | undefined,
+): boolean {
+  const stage = (projectStage ?? '').toLowerCase();
+  const authority = (sourceAuthority ?? '').toLowerCase();
+  if (!PRE_WINDOW_STAGES.has(stage)) return false;
+  if (!PRE_WINDOW_AUTHORITIES.has(authority)) return false;
+  const titleText = (title ?? '').trim();
+  if (titleText.length < 4) return false;
+  return CONSTRUCTION_KEYWORD_RE.test(titleText);
+}
+
 function notionClient(): Client {
   const token = process.env.NOTION_API_TOKEN;
   if (!token) throw new Error('NOTION_API_TOKEN is not set');
