@@ -25,6 +25,9 @@ import type { NotionPhase, NotionState } from '@/lib/notion/types';
 import { runSource, type RunSourceResult } from './run-source';
 import { tagPhaseWithConfidence, type Phase } from './tag-phase';
 import { scoreZedcorProject } from './zedcor-scorer';
+// Sprint Z3.5 — additive enrichment step (gc_metadata + Notion enrichment cols).
+import { enrichEligibleProjects } from './enrich-zedcor';
+import type { GcMetadata } from '@/lib/adapters/zedcor/gc-extractor';
 import {
   HOUSTON_HUB_SLUG,
   ORCHESTRATOR_AGENT_NAME,
@@ -51,6 +54,11 @@ export interface RunSummary {
   projects_deduped: number;
   notion_writes: number;
   notion_dedupes: number;
+  // Sprint Z3.5 — enrichment stats. Optional so the existing run-status
+  // UI tolerates summaries from runs predating this column.
+  enrichment_attempted?: number;
+  enrichment_succeeded?: number;
+  enrichment_failed?: number;
   errors: Array<{ source_slug: string; message: string }>;
 }
 
@@ -249,12 +257,47 @@ export async function runZedcorOrchestrator(): Promise<RunSummary> {
     await updateProjectScore(p.id, score, rationale);
   }
 
+  // Sprint Z3.5 Wave 2.5 — Detail-page enrichment (GC + contact extraction).
+  // Strictly additive; logs progress; on any failure the run continues and
+  // the project is written to Notion without GC fields. Spec §"No halts".
+  let enrichmentResult: { attempted: number; succeeded: number; failed: number; enrichedById: Map<string, GcMetadata> } = {
+    attempted: 0, succeeded: 0, failed: 0, enrichedById: new Map<string, GcMetadata>(),
+  };
+  try {
+    enrichmentResult = await enrichEligibleProjects(runId);
+    await logEvent({
+      agent_name: ORCHESTRATOR_AGENT_NAME,
+      event_type: 'enrichment_complete',
+      event_data: {
+        run_id: runId,
+        attempted: enrichmentResult.attempted,
+        succeeded: enrichmentResult.succeeded,
+        failed: enrichmentResult.failed,
+      },
+      organization_id: ZEDCOR_ORG_ID,
+      runner: 'manual',
+      ts: new Date().toISOString(),
+      run_id: runId,
+    });
+  } catch (err) {
+    await logEvent({
+      agent_name: ORCHESTRATOR_AGENT_NAME,
+      event_type: 'enrichment_failed',
+      event_data: { run_id: runId, error: (err as Error).message.slice(0, 500) },
+      organization_id: ZEDCOR_ORG_ID,
+      runner: 'manual',
+      ts: new Date().toISOString(),
+      run_id: runId,
+    });
+  }
+
   // Wave 3 — Notion writes (sequential, light rate-limit).
   let notionWrites = 0;
   let notionDedupes = 0;
   const refreshed = await loadRunProjects(runId);
   for (const p of refreshed) {
     try {
+      const enrichment = enrichmentResult.enrichedById.get(p.id) ?? null;
       const res = await writeProjectToNotion({
         source: p.source,
         source_id: p.source_id,
@@ -276,7 +319,7 @@ export async function runZedcorOrchestrator(): Promise<RunSummary> {
         county: (p.raw_payload?.county as string | null) ?? null,
         state: (p.raw_payload?.state as NotionState | string | null) ?? null,
         estimated_value: (p.raw_payload?.estimated_value as number | null) ?? null,
-      });
+      }, enrichment);
       if (res.alreadyExists) notionDedupes += 1;
       else notionWrites += 1;
       await updateProjectExternalRefs(p.id, {
@@ -348,6 +391,9 @@ export async function runZedcorOrchestrator(): Promise<RunSummary> {
     projects_deduped,
     notion_writes: notionWrites,
     notion_dedupes: notionDedupes,
+    enrichment_attempted: enrichmentResult.attempted,
+    enrichment_succeeded: enrichmentResult.succeeded,
+    enrichment_failed: enrichmentResult.failed,
     errors,
   };
 
