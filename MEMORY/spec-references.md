@@ -1804,3 +1804,37 @@ OPTIONAL (route degrades gracefully when absent):
 **Implements:** unit coverage for the pure functions in `contact-cache.ts` (`normalizeCompanyName`) and `email-pattern-guesser.ts` (`inferDomainCandidates`, `generateEmailCandidates`). 7 tests, all passing 2026-05-28. Network-touching layers (Hunter / Apollo / DNS) are deferred to integration verification via the backfill smoke (`--cap=5 --dry-run`).
 **Last verified against spec:** 2026-05-28.
 **Drift:** none.
+
+## Sprint Z8 — Zedcor customer import + cross-pollination backfill (PR #496)
+
+**State:** PR #496 open on `feat/zedcor-z8-customer-import`. Closes the Z4 cross-pollination corpus gap: imports Zedcor's 1,825 unique customer sites from `Customers/Zedcor/Zedcor - Unique Customer Sites 2026-04-29.xlsx` into `pathfinder.zedcor_customer_sites`, tags every site with its nearest Zedcor branch by haversine, and wires a retro re-run of Z4's cross-pollination engine across in-window leads. Spec: `Specs/SPEC-zedcor-z8-customer-import-cross-poll.md`.
+
+#### Pathfinder/lib/adapters/zedcor/customer-importer.ts
+**Implements:** SPEC-zedcor-z8-customer-import-cross-poll.md §"Customer import logic". Pure helper: `loadSourceJson()` reads the canonical extract; `prepareCustomerSiteInserts()` normalizes names via `normalizeCustomerName`, resolves parent companies via `resolveParentCompanies`, and tags `nearest_branch_id` + `distance_to_branch_miles` via haversine against the 34 `zedcor_branches`. `upsertCustomerSites()` is chunked (250/batch) with retry on transient fetch failures, using the existing `idx_zcs_dedupe` unique key `(customer_org_id, customer_name_raw, address, site_name)`.
+**Last verified against spec:** 2026-05-28.
+**Drift:** **minor.** Spec text references `pathfinder.customers WHERE organization_id=<uuid>`; actual table is `pathfinder.zedcor_customer_sites` keyed by `customer_org_id='zedcor'` (string slug). Module honors the spec's intent against the real schema. Same reconciliation `lib/adapters/zedcor/cross-pollination.ts` already documents.
+
+#### Pathfinder/scripts/import-zedcor-customers.ts
+**Implements:** SPEC-zedcor-z8-customer-import-cross-poll.md §"File ownership" — CLI importer. Resolves the source file from `scripts/data/zedcor-customer-sites.json` (committed, openpyxl-extracted from `Customers/Zedcor/Zedcor - Unique Customer Sites 2026-04-29.xlsx`) → `Customers/Zedcor/` adjacent to the worktree → spec-declared `/Users/.../Documents/.../Customers/Zedcor/` fallback. Enforces spec acceptance gates: exit 3 when fewer than 1,500 rows upserted; exit 4 when branch-tagged percentage falls below 80%.
+**Last verified against spec:** 2026-05-28. Live import on `anfihcusvekpovcchpoh`: source=1825, prepared=1825, with_parent=1391, branch-tagged=1825 (100%), upserted=1825.
+**Drift:** none (new file, additive).
+
+#### Pathfinder/scripts/backfill-cross-pollination.ts
+**Implements:** SPEC-zedcor-z8-customer-import-cross-poll.md §"Cross-pollination re-run" — walks projects with `gc_metadata` populated (prefers `buy_window_open=true`, accepts NULL), calls `reevaluateCrossPollination({ force })`, merges fresh `cross_pollination`, `warm_intro_path`, `matched_customer`, `cross_pollination_confidence`, `possible_cross_pollination`, `cross_pollination_reevaluated_at` into `projects.pitch_metadata`, then calls `updateProjectPitchBySignature` so the new values reach Notion. `--skip-notion` keeps the DB write but bypasses Notion. Warm-intro gain count is the spec's acceptance §3 signal.
+**Last verified against spec:** 2026-05-28. First run on prod observed candidate set = 0 because `gc_metadata->>'gc_name'` is currently null on all 7 projects with `gc_metadata` (Z3.5 extractor returned `extraction_layer='none'`). Script is idempotent; re-running after Z6/Z7 lands gc_name will flip the warm-intro counter.
+**Drift:** none (new file, additive). Spec acceptance §3 expected ≥10 warm intros — gated on upstream gc_name enrichment (Z6/Z7), documented in PR body.
+
+#### Pathfinder/lib/adapters/zedcor/cross-pollination.ts (modified — additive)
+**Implements:** SPEC-zedcor-z8-customer-import-cross-poll.md §"Additive on shared" — adds `reevaluateCrossPollination({ force, existingCrossPollination, existingMatchedCustomer })` and `ReevaluateResult` (`changed`, `warm_intro_gained`). When `force=false` and the existing value is already a warm intro, short-circuits without supabase reads. When `force=true`, always recomputes via `resolveCrossPollination` and diffs against the stored value. `resolveCrossPollination`, `CrossPollinationResult`, and `__internal` are untouched.
+**Last verified against spec:** 2026-05-28.
+**Drift:** none — append-only.
+
+#### Pathfinder/supabase/migrations/20260528_z8_customer_import.sql
+**Implements:** SPEC-zedcor-z8-customer-import-cross-poll.md §"File ownership" — additive: `nearest_branch_id uuid references pathfinder.zedcor_branches(id) on delete set null`, `distance_to_branch_miles numeric(7,1)`, partial index `idx_zcs_branch (customer_org_id, nearest_branch_id) where nearest_branch_id is not null`, partial index `idx_zcs_geo (customer_org_id, lat, lon)`. Spec's "indexes on (organization_id, normalized_company_name)" is already satisfied by the pre-existing `idx_zcs_normalized` from `0100_zedcor_data_foundation.sql` (documented in migration body).
+**Last verified against spec:** 2026-05-28. Applied to project `anfihcusvekpovcchpoh` via `mcp__claude_ai_Supabase__apply_migration`. Backfill UPDATE tagged the pre-existing 1,802 legacy seed rows with nearest_branch_id + distance via a lateral haversine query, bringing the corpus to 3,627 / 3,627 (100%) tagged.
+**Drift:** none — additive ALTER TABLE + CREATE INDEX, all `IF NOT EXISTS` guarded.
+
+#### Pathfinder/scripts/data/zedcor-customer-sites.json
+**Implements:** canonical extract of `Customers/Zedcor/Zedcor - Unique Customer Sites 2026-04-29.xlsx` (1,825 rows × 9 fields) committed as the source-of-truth for the importer. Shape matches `SourceCustomerRow` in `lib/adapters/zedcor/customer-importer.ts`. Extracted via Python `openpyxl` (read-only, data-only). Idempotent re-extraction documented at the top of the importer.
+**Last verified against spec:** 2026-05-28.
+**Drift:** none — fixture file.
