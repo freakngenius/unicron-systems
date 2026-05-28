@@ -1598,3 +1598,34 @@ OPTIONAL (route degrades gracefully when absent):
 **Implements:** SPEC-zedcor-z4-cross-pollination-pitch.md §"File ownership" — adds pitch generation step after enrichment without modifying existing waves. Appends `runZedcorZ4PitchWave(runId)`. Loads pitch-eligible projects (`buy_window_open=true` OR `project_stage in (awarded, gc_selected, sub_bid, mobilization)`) with `ZEDCOR_PITCH_CAP_PER_RUN` cap (default 200). For each: cross-pollination → Sonnet hooks → recommended-action → write `pitch_metadata` jsonb + update Notion page. Gated on `ANTHROPIC_API_KEY` + `ZEDCOR_DISABLE_PITCH`/`ZEDCOR_DISABLE_ANTHROPIC` envs. Failures are logged as `zedcor_z4_pitch_generation_failed` / `zedcor_z4_notion_pitch_update_failed` and never halt the wave. `loadPitchEligibleProjects` uses `SELECT *` so missing optional columns (gc_metadata pre-Z3.5) don't break the query.
 **Last verified against spec:** 2026-05-28.
 **Drift:** none — append-only, existing Waves 1-3 untouched.
+
+## Sprint Z5 — Backfill UX + adapter URL repair
+
+### Lib
+
+#### Pathfinder/lib/anthropic.ts (modified — bug fix)
+**Implements:** SPEC - Backend Architecture.md §5 (LLM gateway) — preserves legacy callers (`completeRationale`, `streamRationaleDeltas`, raw `anthropic()` accessor) while delegating to `lib/llm/run.ts` and wrapping `messages.create`/`messages.stream` with the `pathfinder.llm_calls` recorder. Z5 change: hoist `process.env.ANTHROPIC_API_KEY` read from module-load top-level into the `anthropic()` factory function so standalone `pnpm tsx scripts/*.ts` callers that load env via `dotenvConfig()` in the script body see the key. ES-module imports evaluate before the script body runs, so the old module-top read always saw `undefined` for backfill scripts — surfaced as 200/200 failures in the Z5 pitch backfill. Pattern now matches `lib/llm/run.ts:42-46` (anthropicClient) and `lib/adapters/zedcor/gc-extractor.ts:231` which already read lazily.
+**Last verified against spec:** 2026-05-28.
+**Drift:** none — semantics identical for cron handlers (env set before module imports under Vercel), behavior change is scoped to standalone-script invocations.
+
+#### Pathfinder/lib/adapters/sources/txdot-houston-district.ts (modified — doc only)
+**Implements:** SPEC-zedcor-source-adapters.md §"Per-orchestrator behavior" — no-op `poll()` returning `[]` for the Houston district. Z5 docstring update reflects the new `pathfinder.data_sources.candidate_url` migrated from `https://www.txdot.gov/about/districts/houston.html` (404) to `https://www.txdot.gov/business/road-bridge-maintenance/contract-letting.html` (200, statewide letting hub). Adapter behaviour unchanged; real-row extraction still gated on a Tableau Vizql client or PDF/FTP parser (Z4 deferral). The candidate_url repair is captured in the Supabase migration `zedcor_z5_repair_brazoria_txdot_candidate_urls` applied to production project `anfihcusvekpovcchpoh`.
+**Last verified against spec:** 2026-05-28.
+**Drift:** none — file is a deliberate stub. Z5 only updated the deferral-rationale comment.
+
+### Run page UI
+
+#### Pathfinder/app/internal/zedcor/run/components/RunButton.tsx (modified)
+**Implements:** internal Zedcor run-page button. Z5 adds `pending` prop (separate from `disabled`) that renders an animated SVG spinner inside the button and sets `aria-busy`. Allows the parent panel to flip the button into "Running…" state synchronously on click, before the synchronous POST to `/api/zedcor/run-orchestrator` returns — the previous version only disabled after the POST resolved, so for short runs (Run #6684 at 2.7s) the user saw no state change at all.
+**Last verified against spec:** 2026-05-28.
+**Drift:** none — new prop is additive; default UX unchanged when `pending=false`.
+
+#### Pathfinder/app/internal/zedcor/run/components/LiveProgress.tsx (modified)
+**Implements:** progress strip below the run button. Z5 adds `pending` prop and `lastSummary` prop. While `pending` is true (POST in flight), shows the same emerald-pulse + progress bar as `running`, even before `run_id` is known. When the run finishes and `currentRunId` clears, displays a one-line summary banner: "Run #N · X projects · Y sources · Zs" formatted with the live `orchestrator_run_summary` payload + measured wall-clock duration.
+**Last verified against spec:** 2026-05-28.
+**Drift:** none.
+
+#### Pathfinder/app/internal/zedcor/run/components/RunPanel.tsx (modified)
+**Implements:** client root for `/internal/zedcor/run`. Z5 wires `submitting` state (flipped true at click instant, false in finally) plus `lastSummary` state captured from the terminal poll. `handleRun` now opens with `setSubmitting(true)` and records `runStartedAtRef = Date.now()` before the POST so duration is measurable even when the run completes before polling starts. Polling interval bumped 2000ms → 1500ms per Z5 spec. On `finished=true`, captures the `orchestrator_run_summary` payload + computed `durationMs` into `lastSummary` for the LiveProgress banner.
+**Last verified against spec:** 2026-05-28.
+**Drift:** none — additive; existing in-flight polling + recent-runs refresh behavior unchanged.
