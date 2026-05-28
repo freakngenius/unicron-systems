@@ -96,7 +96,17 @@ const PUBLIC_HOSTS = new Set([
 // middleware, so a request for `/pathfinder/internal` arrives here as
 // `/internal`. Prefixes here MUST be basePath-stripped paths, not the
 // raw URL paths visible to the browser.
-const PUBLIC_PATH_PREFIXES = ['/internal'];
+//
+// `/api/zedcor` (Sprint Z1A): these endpoints are called by the
+// (authenticated)/internal/zedcor/run UI which is already gated by
+// app/(authenticated)/layout.tsx (Supabase session + operator_allowlist).
+// Every /api/zedcor/* route additionally fires getOperatorIdentity() at
+// the top of its handler. Adding the prefix here bypasses the basic-auth
+// middleware so the routes return real JSON (401 no_session for the
+// session check, or business data for an authed operator) instead of
+// the middleware's 503 "Auth not configured" when BASIC_AUTH_USER isn't
+// set in the preview env.
+const PUBLIC_PATH_PREFIXES = ['/internal', '/api/zedcor'];
 
 export function middleware(req: NextRequest) {
   const forwardedHost = req.headers.get('x-forwarded-host') ?? req.headers.get('host') ?? '';

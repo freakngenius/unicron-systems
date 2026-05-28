@@ -8,11 +8,24 @@
 //
 // Two source connectors only. Google News and the Harris County permits
 // browser automation are deferred — see docs/RUNTIME-ARCHITECTURE.md.
+//
+// SPRINT Z1A — manual_only guard. This handler is purely Zedcor (USAspending
+// + SAM.gov tuned for construction-surveillance lead extraction). When
+// pathfinder.organizations.config->>'manual_only' is true for Zedcor, skip
+// the whole cycle and log a cron_skipped_manual_only event. The cron is
+// currently inert via vercel.json (commit 92c9b5e); this is defense-in-depth
+// against accidental re-enablement.
+//
+// Multi-tenant cron handlers (ranker / verifier / outreach) are NOT guarded
+// here because per-org filtering inside their loops carries regression risk
+// for Funder + Internal paths. Follow-up Sprint Z1C owns the per-org guard
+// migration with dedicated multi-tenant testing.
 
 import { NextResponse } from 'next/server';
 
 import { supabaseAdmin } from '@/lib/supabase';
 import { runIngestorCycle, writeIngestorLog } from '@/lib/ingestor';
+import { skipIfManualOnly } from '@/lib/orchestrator/manual-only-guard';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -156,6 +169,12 @@ export async function GET(req: Request) {
   if (!isAuthorized(req)) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }
+
+  // Sprint Z1A — manual_only guard (defense-in-depth; vercel.json crons
+  // are already disabled). If the Zedcor org's config flag says
+  // manual-only, log + 204 without doing any ingest work.
+  const guard = await skipIfManualOnly('app/api/cron/ingestor');
+  if (guard) return guard;
 
   const start = Date.now();
 

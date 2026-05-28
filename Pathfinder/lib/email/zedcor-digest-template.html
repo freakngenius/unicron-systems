@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<meta name="color-scheme" content="light only"/>
+<meta name="supported-color-schemes" content="light"/>
+<title>Pathfinder Daily Digest — {{date_pretty}} · Houston</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400;1,6..72,500&display=swap" rel="stylesheet"/>
+<!--[if mso]>
+<style type="text/css">
+  table, td, div, h1, h2, p { font-family: Georgia, 'Times New Roman', serif !important; }
+</style>
+<![endif]-->
+<style type="text/css">
+  /* email-safe resets */
+  body, table, td, p, a { -webkit-text-size-adjust:100%; -ms-text-size-adjust:100%; }
+  table, td { mso-table-lspace:0pt; mso-table-rspace:0pt; border-collapse:collapse; }
+  img { border:0; outline:none; text-decoration:none; -ms-interpolation-mode:bicubic; }
+  body { margin:0; padding:0; width:100% !important; background:#E6E8EC; }
+  a { color:#1D2D4F; }
+
+  /* mobile */
+  @media only screen and (max-width:600px) {
+    .pf-outer { width:100% !important; }
+    .pf-shell { width:100% !important; }
+    .pf-pad-x { padding-left:22px !important; padding-right:22px !important; }
+    .pf-header-pad { padding-left:22px !important; padding-right:22px !important; padding-top:20px !important; padding-bottom:20px !important; }
+    .pf-meta-cell { display:block !important; width:100% !important; padding:6px 0 0 0 !important; text-align:left !important; }
+    .pf-meta-stack { padding-top:10px !important; }
+    .pf-stats-cell { display:block !important; width:100% !important; border-right:0 !important; border-bottom:1px solid #E2E5EB !important; padding:14px 0 !important; }
+    .pf-stats-cell:last-child { border-bottom:0 !important; }
+    .pf-title { font-size:30pt !important; line-height:1.05 !important; }
+    .pf-card-title { font-size:15px !important; }
+    .pf-cta-big { font-size:22pt !important; }
+    .pf-est-cell { display:block !important; width:100% !important; text-align:left !important; padding-top:8px !important; }
+  }
+
+  /* dark-mode safety: clients that auto-invert (gmail iOS in dark) keep the navy & cream */
+  @media (prefers-color-scheme: dark) {
+    body, .pf-canvas { background:#E6E8EC !important; }
+    .pf-surface { background:#FFFFFF !important; }
+    .pf-cream { background:#FBFAF6 !important; }
+    .pf-highlight { background:#F7F2E6 !important; }
+    .pf-navy { background:#1D2D4F !important; }
+    .pf-ink, .pf-ink * { color:#0B1530 !important; }
+    .pf-ink-md, .pf-ink-md * { color:#4A556F !important; }
+    .pf-ink-lo, .pf-ink-lo * { color:#7C87A0 !important; }
+    .pf-gold, .pf-gold * { color:#C39B4B !important; }
+    .pf-white, .pf-white * { color:#FFFFFF !important; }
+  }
+</style>
+</head>
+<body class="pf-canvas" bgcolor="#E6E8EC" style="margin:0;padding:0;background:#E6E8EC;font-family:'Geist','Inter Tight',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#0B1530;">
+
+<!-- preheader (hidden) -->
+<div style="display:none;max-height:0;overflow:hidden;opacity:0;visibility:hidden;mso-hide:all;font-size:1px;line-height:1px;color:#E6E8EC;">
+  {{new_leads_count}} new opportunities surfaced overnight across Houston metro and the 300-mile expansion zone. Sorted by relevance and response window.
+</div>
+
+<!-- outer canvas -->
+<table role="presentation" class="pf-outer" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#E6E8EC" style="background:#E6E8EC;">
+  <tr>
+    <td align="center" style="padding:24px 12px 40px 12px;">
+
+      <!-- shell -->
+      <table role="presentation" class="pf-shell" width="600" cellpadding="0" cellspacing="0" border="0" style="width:600px;max-width:600px;">
+
+        <!-- ============== HEADER BAND ============== -->
+        <tr>
+          <td class="pf-navy pf-header-pad" bgcolor="#1D2D4F" style="background:#1D2D4F;padding:22px 32px 0 32px;border-top-left-radius:2px;border-top-right-radius:2px;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+              <tr>
+                <!-- brand -->
+                <td valign="middle" style="vertical-align:middle;padding-right:28px;">
+                  <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                    <tr>
+                      <td valign="middle" style="vertical-align:middle;padding-right:12px;">
+                        <img src="{{logo_url}}" width="32" height="32" alt="Unicron Systems" style="display:block;width:32px;height:32px;border:0;outline:0;"/>
+                      </td>
+                      <td valign="middle" style="vertical-align:middle;line-height:1;">
+                        <div class="pf-white" style="font-family:'Geist','Inter Tight',-apple-system,sans-serif;font-size:12pt;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;color:#FFFFFF;white-space:nowrap;">Unicron Systems</div>
+                        <div style="font-family:'Geist Mono',ui-monospace,'SFMono-Regular',Menlo,monospace;font-size:7.5pt;letter-spacing:0.18em;text-transform:uppercase;color:#E7D2A0;margin-top:4px;font-weight:500;white-space:nowrap;">Pathfinder</div>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+                <!-- header meta cells -->
+                <td valign="middle" align="right" class="pf-meta-stack" style="vertical-align:middle;">
+                  <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                    <tr>
+                      <td class="pf-meta-cell" valign="top" style="padding-right:24px;vertical-align:top;font-family:'Geist Mono',ui-monospace,monospace;line-height:1.1;">
+                        <div style="font-family:'Geist Mono',ui-monospace,monospace;font-size:7pt;letter-spacing:0.16em;text-transform:uppercase;color:rgba(231,210,160,0.78);font-weight:500;margin-bottom:4px;">Ref</div>
+                        <div style="font-family:'Geist Mono',ui-monospace,monospace;font-size:9pt;letter-spacing:0.08em;text-transform:uppercase;color:#FFFFFF;font-weight:500;">ZED-HOU-{{run_id}}</div>
+                      </td>
+                      <td class="pf-meta-cell" valign="top" style="padding-right:24px;vertical-align:top;font-family:'Geist Mono',ui-monospace,monospace;line-height:1.1;">
+                        <div style="font-family:'Geist Mono',ui-monospace,monospace;font-size:7pt;letter-spacing:0.16em;text-transform:uppercase;color:rgba(231,210,160,0.78);font-weight:500;margin-bottom:4px;">Issued</div>
+                        <div style="font-family:'Geist Mono',ui-monospace,monospace;font-size:9pt;letter-spacing:0.08em;text-transform:uppercase;color:#FFFFFF;font-weight:500;">{{date_short}}</div>
+                      </td>
+                      <td class="pf-meta-cell" valign="top" style="vertical-align:top;font-family:'Geist Mono',ui-monospace,monospace;line-height:1.1;">
+                        <div style="font-family:'Geist Mono',ui-monospace,monospace;font-size:7pt;letter-spacing:0.16em;text-transform:uppercase;color:rgba(231,210,160,0.78);font-weight:500;margin-bottom:4px;">Edition</div>
+                        <div style="font-family:'Geist Mono',ui-monospace,monospace;font-size:9pt;letter-spacing:0.08em;text-transform:uppercase;color:#FFFFFF;font-weight:500;">Daily · {{edition_no}}</div>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+            </table>
+            <!-- spacer before gold rule -->
+            <div style="height:22px;line-height:22px;font-size:0;">&nbsp;</div>
+          </td>
+        </tr>
+        <!-- 3px gold rule -->
+        <tr>
+          <td bgcolor="#C39B4B" height="3" style="background:#C39B4B;height:3px;line-height:3px;font-size:0;">&nbsp;</td>
+        </tr>
+
+        <!-- ============== TITLE BLOCK ============== -->
+        <tr>
+          <td class="pf-surface pf-pad-x" bgcolor="#FFFFFF" style="background:#FFFFFF;padding:36px 36px 28px 36px;">
+            <!-- eyebrow -->
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+              <tr>
+                <td valign="middle" style="vertical-align:middle;font-family:'Geist Mono',ui-monospace,monospace;font-size:9pt;letter-spacing:0.22em;text-transform:uppercase;color:#C39B4B;font-weight:500;white-space:nowrap;padding-right:12px;">Daily Digest · Houston</td>
+                <td valign="middle" width="120" style="vertical-align:middle;width:120px;">
+                  <div style="height:1px;line-height:1px;font-size:0;background:#E2E5EB;border-top:1px solid #E2E5EB;">&nbsp;</div>
+                </td>
+                <td>&nbsp;</td>
+              </tr>
+            </table>
+
+            <!-- doc title -->
+            <h1 class="pf-title pf-ink" style="margin:18px 0 0 0;padding:0;font-family:'Newsreader','Georgia',serif;font-weight:500;font-size:34pt;line-height:1.05;letter-spacing:-0.012em;color:#0B1530;text-wrap:balance;">
+              <span style="color:#1D2D4F;">{{new_leads_count}}</span> new opportunities<br/>
+              <em style="font-style:italic;color:#1D2D4F;font-weight:500;">for review.</em>
+            </h1>
+
+            <!-- subtitle -->
+            <p class="pf-ink-md" style="margin:18px 0 0 0;padding:0;color:#4A556F;font-family:'Geist','Inter Tight',-apple-system,sans-serif;font-size:11pt;line-height:1.5;max-width:480px;">
+              Surfaced from <strong style="color:#0B1530;font-weight:600;">{{sources_polled_count}}</strong> public procurement sources across Houston metro and the 300-mile expansion zone. Sorted by relevance and response window.
+            </p>
+          </td>
+        </tr>
+
+        <!-- thin divider before stats -->
+        <tr>
+          <td class="pf-surface" bgcolor="#FFFFFF" style="background:#FFFFFF;padding:0 36px;">
+            <div style="border-top:1px solid #E2E5EB;height:0;line-height:0;font-size:0;">&nbsp;</div>
+          </td>
+        </tr>
+
+        <!-- ============== TOP-LINE STATS (3-col) ============== -->
+        <tr>
+          <td class="pf-surface pf-pad-x" bgcolor="#FFFFFF" style="background:#FFFFFF;padding:22px 36px 26px 36px;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+              <tr>
+                <td class="pf-stats-cell" width="33.33%" valign="top" style="width:33.33%;vertical-align:top;padding-right:20px;border-right:1px solid #E2E5EB;">
+                  <div style="font-family:'Geist Mono',ui-monospace,monospace;font-size:7.5pt;letter-spacing:0.18em;text-transform:uppercase;color:#7C87A0;font-weight:500;margin-bottom:8px;">New today</div>
+                  <div style="font-family:'Newsreader','Georgia',serif;font-size:24pt;font-weight:500;letter-spacing:-0.015em;color:#1D2D4F;line-height:1;">{{new_leads_count}}</div>
+                  <div style="font-family:'Geist','Inter Tight',sans-serif;font-size:9.5pt;color:#4A556F;margin-top:6px;">opportunities</div>
+                </td>
+                <td class="pf-stats-cell" width="33.33%" valign="top" style="width:33.33%;vertical-align:top;padding-left:20px;padding-right:20px;border-right:1px solid #E2E5EB;">
+                  <div style="font-family:'Geist Mono',ui-monospace,monospace;font-size:7.5pt;letter-spacing:0.18em;text-transform:uppercase;color:#7C87A0;font-weight:500;margin-bottom:8px;">Closing this week</div>
+                  <div style="font-family:'Newsreader','Georgia',serif;font-size:24pt;font-weight:500;letter-spacing:-0.015em;color:#1D2D4F;line-height:1;">{{closing_soon_count}}</div>
+                  <div style="font-family:'Geist','Inter Tight',sans-serif;font-size:9.5pt;color:#4A556F;margin-top:6px;">≤ 7 days to deadline</div>
+                </td>
+                <td class="pf-stats-cell" width="33.33%" valign="top" style="width:33.33%;vertical-align:top;padding-left:20px;">
+                  <div style="font-family:'Geist Mono',ui-monospace,monospace;font-size:7.5pt;letter-spacing:0.18em;text-transform:uppercase;color:#7C87A0;font-weight:500;margin-bottom:8px;">Highest score</div>
+                  <div style="font-family:'Newsreader','Georgia',serif;font-size:24pt;font-weight:500;letter-spacing:-0.015em;color:#1D2D4F;line-height:1;">{{highest_score}}<span style="font-family:'Geist Mono',ui-monospace,monospace;font-size:11pt;color:#7C87A0;letter-spacing:0.04em;margin-left:4px;vertical-align:6px;">/100</span></div>
+                  <div style="font-family:'Geist','Inter Tight',sans-serif;font-size:9.5pt;color:#4A556F;margin-top:6px;">{{highest_score_label}}</div>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <!-- ============== SECTION 01 — OPPORTUNITIES HEADER ============== -->
+        <tr>
+          <td class="pf-surface pf-pad-x" bgcolor="#FFFFFF" style="background:#FFFFFF;padding:14px 36px 4px 36px;">
+            <div style="border-top:1px solid #E2E5EB;height:0;line-height:0;font-size:0;margin-bottom:22px;">&nbsp;</div>
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+              <tr>
+                <td valign="baseline" style="vertical-align:baseline;padding-right:12px;font-family:'Geist Mono',ui-monospace,monospace;font-size:9pt;color:#C39B4B;font-weight:500;letter-spacing:0.06em;">01</td>
+                <td valign="baseline" style="vertical-align:baseline;font-family:'Geist','Inter Tight',sans-serif;font-size:13pt;font-weight:600;letter-spacing:-0.01em;color:#0B1530;white-space:nowrap;">Top opportunities</td>
+              </tr>
+            </table>
+            <p class="pf-ink-md" style="margin:8px 0 18px 0;padding:0;color:#4A556F;font-family:'Geist',sans-serif;font-size:10pt;line-height:1.5;">Ten highest-relevance leads from overnight ingestion. Open any title to review the full record in Pathfinder.</p>
+          </td>
+        </tr>
+
+        <!-- ============== LEAD CARDS ============== -->
+                <!-- LEAD CARD (repeated) -->
+        {{#each leads}}
+        <tr>
+          <td class="pf-surface pf-pad-x" bgcolor="#FFFFFF" style="background:#FFFFFF;padding:0 36px 14px 36px;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border:1px solid #E2E5EB;border-radius:6px;background:#FFFFFF;" bgcolor="#FFFFFF">
+              <tr>
+                <td style="padding:14px 16px 14px 16px;">
+                  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                    <tr>
+                      <td valign="top" style="vertical-align:top;padding-right:10px;">
+                        <a href="{{notion_url}}" style="text-decoration:none;color:#0B1530;"><span class="pf-card-title" style="font-family:'Geist','Inter Tight',sans-serif;font-size:16px;font-weight:600;color:#0B1530;line-height:1.3;letter-spacing:-0.005em;">{{title}}</span></a>
+                      </td>
+                      <td valign="top" align="right" width="120" style="vertical-align:top;width:120px;white-space:nowrap;">
+                        {{#if (eq phase "closing-soon")}}
+                        <span style="display:inline-block;padding:3px 9px 3px 9px;background:rgba(195,155,75,0.14);border:1px solid rgba(195,155,75,0.30);border-radius:999px;font-family:'Geist Mono',ui-monospace,monospace;font-size:7.5pt;letter-spacing:0.14em;text-transform:uppercase;color:#C39B4B;font-weight:500;line-height:1.6;">
+                          <span style="display:inline-block;width:4px;height:4px;background:#C39B4B;border-radius:50%;vertical-align:middle;margin-right:6px;"></span>Closing soon
+                        </span>
+                        {{else if (eq phase "open")}}
+                        <span style="display:inline-block;padding:3px 9px 3px 9px;background:rgba(29,45,79,0.10);border:1px solid rgba(29,45,79,0.25);border-radius:999px;font-family:'Geist Mono',ui-monospace,monospace;font-size:7.5pt;letter-spacing:0.14em;text-transform:uppercase;color:#1D2D4F;font-weight:500;line-height:1.6;">
+                          <span style="display:inline-block;width:4px;height:4px;background:#1D2D4F;border-radius:50%;vertical-align:middle;margin-right:6px;"></span>Open
+                        </span>
+                        {{else if (eq phase "pre-bid")}}
+                        <span style="display:inline-block;padding:3px 9px 3px 9px;background:rgba(124,135,160,0.10);border:1px solid rgba(124,135,160,0.25);border-radius:999px;font-family:'Geist Mono',ui-monospace,monospace;font-size:7.5pt;letter-spacing:0.14em;text-transform:uppercase;color:#7C87A0;font-weight:500;line-height:1.6;">
+                          <span style="display:inline-block;width:4px;height:4px;background:#7C87A0;border-radius:50%;vertical-align:middle;margin-right:6px;"></span>Pre-bid
+                        </span>
+                        {{else if (eq phase "awarded")}}
+                        <span style="display:inline-block;padding:3px 9px 3px 9px;background:rgba(34,134,80,0.10);border:1px solid rgba(34,134,80,0.22);border-radius:999px;font-family:'Geist Mono',ui-monospace,monospace;font-size:7.5pt;letter-spacing:0.14em;text-transform:uppercase;color:#1F7A4D;font-weight:500;line-height:1.6;">
+                          <span style="display:inline-block;width:4px;height:4px;background:#1F7A4D;border-radius:50%;vertical-align:middle;margin-right:6px;"></span>Awarded
+                        </span>
+                        {{else}}
+                        <span style="display:inline-block;padding:3px 9px 3px 9px;background:rgba(206,210,217,0.30);border:1px solid #E2E5EB;border-radius:999px;font-family:'Geist Mono',ui-monospace,monospace;font-size:7.5pt;letter-spacing:0.14em;text-transform:uppercase;color:#7C87A0;font-weight:500;line-height:1.6;">
+                          <span style="display:inline-block;width:4px;height:4px;background:#7C87A0;border-radius:50%;vertical-align:middle;margin-right:6px;"></span>Unknown
+                        </span>
+                        {{/if}}
+                      </td>
+                    </tr>
+                  </table>
+                  <div style="margin-top:8px;font-family:'Geist Mono',ui-monospace,monospace;font-size:9pt;letter-spacing:0.08em;text-transform:uppercase;color:#7C87A0;line-height:1.5;">
+                    Score {{score}} <span style="color:#C39B4B;">·</span> {{#if days_until_deadline}}Closes {{response_deadline_pretty}} <span style="color:#C39B4B;">·</span> {{days_until_deadline}} days{{else}}{{response_deadline_pretty}}{{/if}} <span style="color:#C39B4B;">·</span> {{county}}, {{state}}
+                  </div>
+                  <div style="margin-top:6px;font-family:'Geist',sans-serif;font-size:10pt;color:#0B1530;font-weight:500;">{{agency}}</div>
+                  <p style="margin:6px 0 0 0;padding:0;font-family:'Newsreader','Georgia',serif;font-style:italic;font-size:11pt;line-height:1.45;color:#4A556F;max-width:460px;">{{rationale}}</p>
+                  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:10px;">
+                    <tr>
+                      <td class="pf-est-cell" align="right" style="font-family:'Geist Mono',ui-monospace,monospace;font-size:8.5pt;letter-spacing:0.16em;text-transform:uppercase;color:#0B1530;font-weight:500;">
+                        {{#if estimated_value_pretty}}Est. <span style="color:#1D2D4F;font-weight:600;">{{estimated_value_pretty}}</span>{{else}}Est. <span style="color:#7C87A0;font-weight:500;">—</span>{{/if}}
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+        {{#unless @last}}
+        <tr><td class="pf-surface" bgcolor="#FFFFFF" style="background:#FFFFFF;padding:0 36px;"><div style="height:14px;line-height:14px;font-size:0;text-align:center;"><span style="display:inline-block;width:18px;height:1px;background:#C39B4B;vertical-align:middle;">&nbsp;</span></div></td></tr>
+        {{else}}
+        <tr><td class="pf-surface" bgcolor="#FFFFFF" style="background:#FFFFFF;padding:0 36px 8px 36px;">&nbsp;</td></tr>
+        {{/unless}}
+        {{/each}}
+
+        <!-- ============== CTA CALLOUT ============== -->
+        <tr>
+          <td class="pf-surface pf-pad-x" bgcolor="#FFFFFF" style="background:#FFFFFF;padding:6px 36px 36px 36px;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="pf-highlight" bgcolor="#F7F2E6" style="background:#F7F2E6;border-left:2px solid #C39B4B;">
+              <tr>
+                <td style="padding:20px 22px 22px 22px;">
+                  <div style="font-family:'Geist Mono',ui-monospace,monospace;font-size:8pt;letter-spacing:0.22em;text-transform:uppercase;color:#C39B4B;font-weight:500;margin-bottom:8px;">{{leads_remaining_count}} more in feed</div>
+                  <h2 class="pf-cta-big" style="margin:0;padding:0;font-family:'Newsreader','Georgia',serif;font-weight:500;font-size:24pt;line-height:1.08;letter-spacing:-0.012em;color:#0B1530;">View all <em style="font-style:italic;color:#1D2D4F;">{{new_leads_count}}</em> in Pathfinder.</h2>
+                  <p style="margin:8px 0 18px 0;padding:0;font-family:'Geist',sans-serif;font-size:10pt;color:#4A556F;line-height:1.5;max-width:420px;">Full lead records, source citations, decision-maker paths, and feedback workflow live in the Pathfinder Notion workspace.</p>
+                  <!-- bulletproof button -->
+                  <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                    <tr>
+                      <td bgcolor="#1D2D4F" style="background:#1D2D4F;border-radius:999px;">
+                        <a href="{{notion_db_url}}" style="display:inline-block;padding:11px 22px 11px 22px;font-family:'Geist',sans-serif;font-size:10.5pt;font-weight:600;color:#FFFFFF;text-decoration:none;letter-spacing:0.01em;line-height:1;">Open full lead feed&nbsp;&nbsp;→</a>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <!-- ============== FOOTER ============== -->
+        <tr>
+          <td class="pf-surface pf-pad-x" bgcolor="#FFFFFF" style="background:#FFFFFF;padding:0 36px 28px 36px;">
+            <div style="border-top:1px solid #E2E5EB;padding-top:14px;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td valign="middle" style="vertical-align:middle;font-family:'Geist Mono',ui-monospace,monospace;font-size:7.5pt;letter-spacing:0.16em;text-transform:uppercase;color:#7C87A0;font-weight:500;">Pathfinder · Zedcor Houston Pilot</td>
+                  <td valign="middle" align="right" style="vertical-align:middle;font-family:'Geist Mono',ui-monospace,monospace;font-size:7.5pt;letter-spacing:0.16em;text-transform:uppercase;color:#7C87A0;font-weight:500;">
+                    <span style="display:inline-block;width:5px;height:5px;background:#C39B4B;border-radius:50%;vertical-align:middle;margin-right:8px;"></span>Confidential · Unicron Systems · Daily Edition
+                  </td>
+                </tr>
+              </table>
+              <p style="margin:14px 0 0 0;padding:0;font-family:'Geist Mono',ui-monospace,monospace;font-size:7.5pt;letter-spacing:0.10em;text-transform:uppercase;color:#7C87A0;line-height:1.6;">
+                This digest is generated daily and reflects Pathfinder's current source coverage. Source attribution is internal.
+              </p>
+            </div>
+          </td>
+        </tr>
+
+        <!-- bottom canvas breathing room -->
+        <tr><td bgcolor="#E6E8EC" style="background:#E6E8EC;height:24px;line-height:24px;font-size:0;">&nbsp;</td></tr>
+
+      </table>
+      <!-- end shell -->
+
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>
