@@ -21,7 +21,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.32.1",
     "@googlemaps/markerclusterer": "^2.6.2",
-    "@notionhq/client": "^4.3.0",
+    "@notionhq/client": "^5.22.0",
     "@slack/web-api": "^7.5.0",
     "@supabase/supabase-js": "^2.45.4",
     "@vis.gl/react-google-maps": "^1.8.3",
