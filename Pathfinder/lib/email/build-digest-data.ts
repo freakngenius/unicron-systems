@@ -128,6 +128,15 @@ function databaseId(): string {
   return process.env.ZEDCOR_NOTION_DB_ID ?? '856b43a02b4d43649344c5e1a05d206d';
 }
 
+// Sprint Z5.2 — see zedcor-writer.ts comment. Notion SDK v5 query path uses
+// data_source_id, not database_id. Single-data-source DB; UUID is stable.
+function dataSourceId(): string {
+  return (
+    process.env.ZEDCOR_NOTION_DATA_SOURCE_ID ??
+    '39b001e3-fa1f-4fbf-aeea-219d4ef2b19a'
+  );
+}
+
 function readText(prop: unknown): string {
   const p = prop as { rich_text?: Array<{ plain_text?: string }>; title?: Array<{ plain_text?: string }> } | null;
   if (!p) return '';
@@ -158,9 +167,9 @@ function readUrl(prop: unknown): string | null {
 
 async function queryRepViewLeads(client: Client, maxCards: number): Promise<NotionPage[]> {
   const res = (await (client as unknown as {
-    databases: { query: (args: unknown) => Promise<{ results: NotionPage[] }> };
-  }).databases.query({
-    database_id: databaseId(),
+    dataSources: { query: (args: unknown) => Promise<{ results: NotionPage[] }> };
+  }).dataSources.query({
+    data_source_id: dataSourceId(),
     filter: {
       and: [
         { property: 'Phase', select: { does_not_equal: 'awarded' } },
@@ -180,9 +189,9 @@ async function queryRepViewLeads(client: Client, maxCards: number): Promise<Noti
 async function countNewToday(client: Client): Promise<number> {
   const todayStart = startOfTodayChicagoIso();
   const res = (await (client as unknown as {
-    databases: { query: (args: unknown) => Promise<{ results: NotionPage[]; has_more: boolean }> };
-  }).databases.query({
-    database_id: databaseId(),
+    dataSources: { query: (args: unknown) => Promise<{ results: NotionPage[]; has_more: boolean }> };
+  }).dataSources.query({
+    data_source_id: dataSourceId(),
     filter: {
       and: [
         { property: 'Ingested At', created_time: { on_or_after: todayStart } },
@@ -200,9 +209,9 @@ async function countClosingSoon(client: Client): Promise<number> {
   const start = now.toISOString().slice(0, 10);
   const end = new Date(now.getTime() + 7 * 86_400_000).toISOString().slice(0, 10);
   const res = (await (client as unknown as {
-    databases: { query: (args: unknown) => Promise<{ results: NotionPage[] }> };
-  }).databases.query({
-    database_id: databaseId(),
+    dataSources: { query: (args: unknown) => Promise<{ results: NotionPage[] }> };
+  }).dataSources.query({
+    data_source_id: dataSourceId(),
     filter: {
       and: [
         { property: 'Response Deadline', date: { on_or_after: start } },
