@@ -87,4 +87,5 @@ export interface NotionWriteResult {
   leadId: string;             // e.g. 'ZED-1234'
   notionPageUrl: string;      // canonical Notion page URL
   alreadyExists: boolean;     // true if dedupe found an existing row
+  notionPageId?: string;      // Sprint Z3.5 — page id for enrichment updates
 }

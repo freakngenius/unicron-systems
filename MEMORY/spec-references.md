@@ -1484,6 +1484,85 @@ OPTIONAL (route degrades gracefully when absent):
 **Implements:** SPEC-zedcor-z3-parser-phase-fix.md §"Wave 3: Verifier relaxation" + §"Wave 0: Foundation" source_authority promotion. Reject rows missing title OR source_url (the new structural floor — solicitation-stage rows pass through). Adapter-stage project_stage / phase_confidence / buy_window_open promoted from raw_payload to top-level columns. source_authority fallback table maps each slug to its taxonomy value.
 **Last verified against spec:** 2026-05-28.
 **Drift:** none (additive — geofence + dedup paths preserved).
+
+---
+
+## Sprint Z3.5 — Zedcor detail-page enrichment (GC + contact extraction)
+
+**State:** PR #490 on `feat/zedcor-z35-enrichment`. Spec: `Specs/SPEC-zedcor-z35-enrichment.md` (also at `/Users/kylekesterson/Documents/Claude/Unicron/Specs/SPEC-zedcor-z35-enrichment.md`). Parallel to Sprint Z3 (parser-phase) and Sprint Z4 (cross-poll pitch). Strictly additive on the two shared files (`lib/notion/zedcor-writer.ts`, `lib/orchestrator/orchestrator.ts`); Z3/Z4 territories untouched. Adds a three-layer extraction pipeline (cheerio → Anthropic Sonnet 4.6 → Perplexity Sonar fallback) and surfaces results in the rep list + 8 pre-existing Notion columns.
+
+### Migration
+
+#### Pathfinder/supabase/migrations/20260528_zedcor_z35_gc_metadata.sql
+**Implements:** SPEC-zedcor-z35-enrichment.md §"Schema additions" — additive `pathfinder.projects.gc_metadata jsonb DEFAULT '{}'`. Two indices: one on `gc_metadata->>'gc_name'` (partial — `WHERE gc_metadata ? 'gc_name'`), one on `(gc_metadata->>'fetched_at')::timestamptz desc nulls last` (partial — `WHERE gc_metadata ? 'fetched_at'`).
+**Last verified against spec:** 2026-05-28.
+**Drift:** none. Idempotent (`IF NOT EXISTS`). Hard rule from spec §"Hard rules" enforced by code (no raw HTML in column): comment documents the constraint.
+**Live state:** not applied yet — operator applies via Supabase MCP on merge.
+
+### Lib
+
+#### Pathfinder/lib/adapters/zedcor/detail-page-fetcher.ts
+**Implements:** SPEC §"Detail-page fetch policy" — `fetchDetailPage(sourceUrl)`. 5s per-request timeout, 1.5s per-host throttle, `PathfinderBot/1.0 (+https://unicron.systems/pathfinder)` UA, RFC 9309 robots.txt awareness (per-host cache), 429 backoff (single retry at 2× polite delay), gated detection (login-wall heuristic on body window + 401/403 short-circuit). Caps body read at 2 MB. Returns `{status, finalUrl, html, httpStatus, fetchedAt}`; never persists raw HTML beyond the caller's extraction pass.
+**Last verified against spec:** 2026-05-28.
+**Drift:** none.
+
+#### Pathfinder/lib/adapters/zedcor/contact-extractor.ts
+**Implements:** SPEC §"Extraction strategy" Layer 1 contact fields — `extractContactFromHtml(html)`. Generic-mailbox filter (`info@`, `support@`, etc. excluded); US phone normalizer to `+1-XXX-XXX-XXXX`; "Name, Role" parser for award notice contact blocks. Pure function over HTML; no network.
+**Last verified against spec:** 2026-05-28.
+**Drift:** none. US-only by design (normalizeUsPhone rejects non-US shapes — Zedcor is Houston-area construction so this is correct for the entire eligible corpus).
+
+#### Pathfinder/lib/adapters/zedcor/gc-extractor.ts
+**Implements:** SPEC §"Extraction strategy" Layers 1–3 + §"Hard rules". Public `extractGcMetadata({source_url, title})` fetches the detail page, runs Layer 1 (cheerio award-notice scan via `extractGcFieldsFromHtml` + `extractContactFromHtml`), Layer 2 (Anthropic Sonnet 4.6 structured JSON with the verbatim system prompt from the spec; temperature 0, max_tokens 800, page text capped at ~24K chars), and Layer 3 (Perplexity Sonar fallback for `gc_name` only, OpenAI-compatible chat-completions endpoint; skipped cleanly when `PERPLEXITY_API_KEY` is unset). Returns the full `GcMetadata` bundle with `fetched_at`, `fetch_status`, `extraction_layer` ('html'|'anthropic'|'sonar'|'mixed'|'none'), `source_citation`. Layer-2 skipped when Layer 1 already has gc_name + (email or phone) per `isComplete` heuristic.
+**Last verified against spec:** 2026-05-28.
+**Drift:** none. `claude-sonnet-4-6` used (overridable via `ZEDCOR_ENRICHMENT_MODEL`); spec said "claude-sonnet-4-5 (or current)".
+
+#### Pathfinder/lib/orchestrator/enrich-zedcor.ts
+**Implements:** SPEC §"Soft cap" + §"Backfill scope" eligibility — `enrichEligibleProjects(runId)`. Eligibility filter: `buy_window_open=true OR project_stage IN ('awarded','gc_selected','sub_bid')`. Soft cap `ZEDCOR_ENRICHMENT_CAP` (default 200). Ordering: `buy_window_open=true` first → `posted_date desc` → `score desc`. Per-project persistence to `pathfinder.projects.gc_metadata`. Returns `{attempted, succeeded, failed, enrichedById, errors}` for the orchestrator's run summary.
+**Last verified against spec:** 2026-05-28.
+**Drift:** none.
+
+### Lib (additive modifications)
+
+#### Pathfinder/lib/notion/zedcor-writer.ts (additive)
+**Implements:** SPEC §"Notion writer integration" — three new exports plus an additive arg on the existing writer.
+- `enrichmentToNotionProperties(meta)` → maps `gc_metadata` to the 8 pre-existing Notion property shapes (`GC Name` rich_text, `GC Award Date` date, `GC Contact Name/Role` rich_text, `GC Contact Email` email, `GC Contact Phone` phone_number, `Sub-Bid Deadline` date, `Subcontract Package URL` url). Empty object when meta is null/undefined.
+- `findExistingProjectInNotion(source, source_id)` → returns `{leadId, notionPageUrl, notionPageId}` or null using the same dedup signature as `writeProjectToNotion`.
+- `updateProjectEnrichmentInNotion(notionPageId, meta)` → `pages.update` of only the 8 enrichment columns. Never touches Rep Status / Rep Notes (rep-owned).
+- `writeProjectToNotion(input, enrichment?)` second arg appends enrichment props on the create path.
+**Last verified against spec:** 2026-05-28.
+**Drift:** none. Existing property mappings and dedup-by-Project-ID behavior unchanged.
+
+#### Pathfinder/lib/notion/types.ts (additive)
+**Implements:** Optional `notionPageId?: string` on `NotionWriteResult` so the backfill's update-in-place path has the page id to call `pages.update` against. Field is optional; all existing callers compile.
+**Last verified against spec:** 2026-05-28.
+**Drift:** none.
+
+#### Pathfinder/lib/orchestrator/orchestrator.ts (additive)
+**Implements:** SPEC §"Notion writer integration" — new enrichment step between Wave 2 (phase tagging + scoring) and Wave 3 (Notion writes). Calls `enrichEligibleProjects(runId)` inside a try/catch (logs `enrichment_complete` / `enrichment_failed` events; never aborts the run per spec §"No halts"). Passes the resulting `enrichedById.get(p.id)` as the second arg of the existing `writeProjectToNotion` call. `RunSummary` gains optional `enrichment_{attempted,succeeded,failed}` counters so older clients tolerate the new shape.
+**Last verified against spec:** 2026-05-28.
+**Drift:** none. Wave 1/2/3 of the original orchestrator are unmodified; the new step is purely insertional.
+
+### Scripts
+
+#### Pathfinder/scripts/backfill-gc-enrichment.ts
+**Implements:** SPEC §"Backfill scope" — one-shot backfill of `extractGcMetadata` + Notion update against existing Zedcor projects. Filter: `project_stage IN ('awarded','gc_selected','sub_bid','mobilization') OR buy_window_open=true`. Cap default 500 (`--cap=N` override). Skip rows without `source_url`. Order: source authority class (public_construction → county_purchasing → school_district → federal-deprioritized) then `buy_window_open` → `posted_date desc` → `score desc`. Update-in-place for existing Notion rows; create new for absent. `--dry-run` for log-only inspection; `--notion=false` for DB-only smoke. Final stats line reports gc_name % coverage, contact % coverage, extraction-layer attribution, fetch-status breakdown (PR evidence).
+**Last verified against spec:** 2026-05-28.
+**Drift:** none. `source_authority` doesn't exist as a column today; the script encodes the priority mapping in `SOURCE_PRIORITY` keyed by source slug.
+
+### Tests
+
+#### Pathfinder/__tests__/adapters/zedcor-extractors.test.ts
+**Implements:** Unit smoke for the pure-function (no-network) layer-1 + helper paths. 16 tests covering `normalizeUsPhone` (assorted US formats; rejection of non-US and 0-leading area codes), `parseNameAndRole` (Name+Role pairs, name-only, rejection of single tokens), `extractContactFromHtml` (label-block extraction, generic mailbox skip, mailto/tel link fallback, null-on-nothing), `toIsoDate`, `parseJsonFromAnthropic` (fenced and unfenced output), and the full `extractGcFieldsFromHtml` against a synthetic award-notice fixture. Network + Anthropic + Perplexity paths are covered by the live backfill smoke documented in PR #490.
+**Last verified against spec:** 2026-05-28. 16/16 pass locally; CI green for this file (pre-existing dashboard-filters and onboarding-connectors failures are unrelated).
+**Drift:** none.
+
+### UI
+
+#### Pathfinder/app/zedcor/leads/page.tsx + Pathfinder/components/zedcor/ZedcorLeadList.tsx (additive)
+**Implements:** SPEC §"Acceptance criteria" #5 — Rep View displays GC Name + GC Contact Name as primary fields between Title and Stage. Page query now selects `gc_metadata`; row mapper extracts `gc_name` + `gc_contact_name`; list adds two sortable columns inserted between Title (now narrower) and Score, with em-dash fallback for null. Empty-state colspan updated.
+**Last verified against spec:** 2026-05-28.
+**Drift:** none.
+
 ---
 
 ## Sprint Z4 — Zedcor cross-pollination + pitch generation (feat/zedcor-z4-cross-pollination-pitch)
