@@ -1,4 +1,9 @@
+# pnpm-workspace.yaml — build-script allowlist (pnpm v10+).
+# Pathfinder is a single-package project (no actual workspace), but pnpm v10
+# requires explicit allowBuild entries for packages that ship install scripts.
+# All three below ship platform-specific binaries that Next.js + linked tooling
+# legitimately need at install time.
 allowBuilds:
-  esbuild: set this to true or false
-  protobufjs: set this to true or false
-  unrs-resolver: set this to true or false
+  esbuild: true
+  protobufjs: true
+  unrs-resolver: true
