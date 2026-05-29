@@ -30,7 +30,10 @@ import type { SourceAdapter, SourceEvent } from './types';
 import { buildEvent, hashId, parseLooseDate } from './_zedcor-shared';
 import { extractGcNameFromNewsSnippet } from '../zedcor/news-gc-extractor';
 
-const VBX_FEED_URL = process.env.VBX_FEED_URL ?? 'https://www.virtualbx.com/feed';
+// Trailing slash on /feed/ matters — /feed (no slash) returns a 301 to
+// /feed/. Node fetch follows redirects by default but skipping the
+// redirect hop is faster + avoids any env where the fetch impl doesn't.
+const VBX_FEED_URL = process.env.VBX_FEED_URL ?? 'https://www.virtualbx.com/feed/';
 
 const BROWSER_UA =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';

@@ -155,6 +155,38 @@ export const ZEDCOR_Z1A_SOURCE_SLUGS = [
 ] as const;
 export type ZedcorZ1aSourceSlug = (typeof ZEDCOR_Z1A_SOURCE_SLUGS)[number];
 
+/**
+ * Sprint Z14.2 — live news / aggregator adapters wired into the Houston-hub
+ * polling list. Excludes texas-construction-industry (paused in Z14.1 —
+ * upstream DNS dead, no working replacement yet).
+ *
+ * Each slug here is registered in SOURCE_ADAPTERS above and has a
+ * corresponding live row in pathfinder.data_sources (seeded by the Z13
+ * migration; the Z14.1 migration repointed builders-exchange-texas to
+ * Virtual Builders Exchange's RSS feed without changing the slug).
+ */
+export const ZEDCOR_NEWS_SOURCE_SLUGS = [
+  'news-engineering-record',
+  'houston-business-journal',
+  'demandstar-texas',
+  'builders-exchange-texas',
+] as const;
+export type ZedcorNewsSourceSlug = (typeof ZEDCOR_NEWS_SOURCE_SLUGS)[number];
+
+/**
+ * Sprint Z14.2 — combined Houston-hub polling list, used by the orchestrator.
+ * Equals Z1A (10) + Z14-news (4) = 14 sources per Run Zedcor invocation.
+ *
+ * Z10 multi-metro (DFW / Austin / SA / South TX) and Z12 tx-bid-tabs are
+ * registered in SOURCE_ADAPTERS but intentionally NOT wired here — they
+ * belong to their own hub lists when those hubs land in the orchestrator.
+ */
+export const ZEDCOR_HOUSTON_HUB_SOURCE_SLUGS = [
+  ...ZEDCOR_Z1A_SOURCE_SLUGS,
+  ...ZEDCOR_NEWS_SOURCE_SLUGS,
+] as const;
+export type ZedcorHoustonHubSourceSlug = (typeof ZEDCOR_HOUSTON_HUB_SOURCE_SLUGS)[number];
+
 /** Stable list of the 20 Z10 source slugs, grouped by hub.
  *  Dispatch order is hub-then-source so a partial run still covers each metro. */
 export const ZEDCOR_Z10_SOURCE_SLUGS = [
