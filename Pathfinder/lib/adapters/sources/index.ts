@@ -173,22 +173,10 @@ export const ZEDCOR_NEWS_SOURCE_SLUGS = [
 ] as const;
 export type ZedcorNewsSourceSlug = (typeof ZEDCOR_NEWS_SOURCE_SLUGS)[number];
 
-/**
- * Sprint Z14.2 — combined Houston-hub polling list, used by the orchestrator.
- * Equals Z1A (10) + Z14-news (4) = 14 sources per Run Zedcor invocation.
- *
- * Z10 multi-metro (DFW / Austin / SA / South TX) and Z12 tx-bid-tabs are
- * registered in SOURCE_ADAPTERS but intentionally NOT wired here — they
- * belong to their own hub lists when those hubs land in the orchestrator.
- */
-export const ZEDCOR_HOUSTON_HUB_SOURCE_SLUGS = [
-  ...ZEDCOR_Z1A_SOURCE_SLUGS,
-  ...ZEDCOR_NEWS_SOURCE_SLUGS,
-] as const;
-export type ZedcorHoustonHubSourceSlug = (typeof ZEDCOR_HOUSTON_HUB_SOURCE_SLUGS)[number];
-
 /** Stable list of the 20 Z10 source slugs, grouped by hub.
- *  Dispatch order is hub-then-source so a partial run still covers each metro. */
+ *  Dispatch order is hub-then-source so a partial run still covers each metro.
+ *  Declared above ZEDCOR_HOUSTON_HUB_SOURCE_SLUGS so the spread below resolves
+ *  at module init time (TDZ-safe). */
 export const ZEDCOR_Z10_SOURCE_SLUGS = [
   // DFW (8)
   'fort-worth-city',
@@ -216,6 +204,23 @@ export const ZEDCOR_Z10_SOURCE_SLUGS = [
   'laredo-city',
 ] as const;
 export type ZedcorZ10SourceSlug = (typeof ZEDCOR_Z10_SOURCE_SLUGS)[number];
+
+/**
+ * Sprint Z14.2 — combined Houston-hub polling list, used by the orchestrator.
+ * Sprint Z16 — additively spread the 20 Z10 multi-metro slugs into the same
+ * list to activate the dormant adapters. Adapters were already shipped and
+ * registered above; they just weren't polled. Total = Z1A (10) + Z14-news (4)
+ * + Z10 multi-metro (20) = 34 sources per Run Zedcor invocation.
+ *
+ * Z12 tx-bid-tabs remains registered but unwired (state DOT bid tabulations
+ * belong to a separate hub once that lands).
+ */
+export const ZEDCOR_HOUSTON_HUB_SOURCE_SLUGS = [
+  ...ZEDCOR_Z1A_SOURCE_SLUGS,
+  ...ZEDCOR_NEWS_SOURCE_SLUGS,
+  ...ZEDCOR_Z10_SOURCE_SLUGS,
+] as const;
+export type ZedcorHoustonHubSourceSlug = (typeof ZEDCOR_HOUSTON_HUB_SOURCE_SLUGS)[number];
 
 /** Look up an adapter by source id. Returns null when unregistered. */
 export function getSourceAdapter(id: string): SourceAdapter | null {
