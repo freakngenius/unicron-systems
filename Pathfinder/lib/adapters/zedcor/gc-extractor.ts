@@ -23,7 +23,7 @@ import { fetchDetailPage, type FetchStatus } from './detail-page-fetcher';
 import { extractContactFromHtml, normalizeUsPhone } from './contact-extractor';
 
 
-export type ExtractionLayer = 'html' | 'anthropic' | 'sonar' | 'mixed' | 'none';
+export type ExtractionLayer = 'html' | 'anthropic' | 'sonar' | 'mixed' | 'none' | 'prime_contractor_field';
 
 export interface GcMetadata {
   gc_name: string | null;

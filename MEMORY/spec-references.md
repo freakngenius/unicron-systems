@@ -1950,3 +1950,25 @@ OPTIONAL (route degrades gracefully when absent):
 **Implements:** SOURCE_ADAPTERS registration of the 5 new Z13 adapters. Existing 40 adapter registrations untouched.
 **Last verified against spec:** 2026-05-28.
 **Drift:** none.
+
+### Sprint Z14 — RSS news adapters + free GC enrichment path
+
+#### Pathfinder/lib/adapters/zedcor/news-gc-extractor.ts (new)
+**Implements:** SPEC-zedcor-z14-rss-news-free-contact-path.md §"News adapter RSS conversion" → two-layer GC-name extractor for RSS-feed snippets. Layer 1: regex (5 patterns covering award-verb frames + "general contractor X" + "team led by X" + "awarded to X"). Layer 2: Anthropic Sonnet fallback gated on `ANTHROPIC_API_KEY` (graceful no-op when absent). Stop-word list rejects owner-side titles ("Owner", "Authority", "City", "County", etc.). Critically: regexes do NOT use the `/i` flag because that turns `[A-Z]` into `[A-Za-z]` and breaks the capitalized-token guarantee; case alternation is inlined per verb.
+**Last verified against spec:** 2026-05-28.
+**Drift:** none (new file).
+
+#### Pathfinder/lib/adapters/sources/news-engineering-record.ts (rewrite)
+**Implements:** SPEC-zedcor-z14-rss-news-free-contact-path.md §"News adapter RSS conversion" → ENR RSS adapter. Swapped from Z13's HTML scrape (Cloudflare-shielded `/topics/263-awards`) to the public RSS at `https://www.enr.com/rss/articles` (verified live 200 OK with desktop-Chrome User-Agent — ENR has no per-topic/per-region feeds, so Texas/Gulf-state filtering is done post-fetch by scanning title+description). Award keywords + geofence keywords gate each item. Surviving items go through news-gc-extractor to populate `raw_payload.gc_name` at ingest time. Phase=awarded, confidence=0.9, buy_window_open=true. Per-item state inferred from text (defaults TX so geofence doesn't drop the row).
+**Last verified against spec:** 2026-05-28.
+**Drift:** Z13's `region=TX` filter URL is replaced — no Texas-filtered RSS exists. Post-fetch geofence approximates the same effect.
+
+#### Pathfinder/lib/adapters/sources/houston-business-journal.ts (rewrite)
+**Implements:** SPEC-zedcor-z14-rss-news-free-contact-path.md §"News adapter RSS conversion" → HBJ RSS adapter. Swapped from Z13's HTML scrape to the public RSS feed at `https://www.bizjournals.com/houston/news/construction/feed` (configurable via `HBJ_FEED_URL` env). Award keywords AND construction keywords both required (titles like "X wins lawsuit" pass the award gate but should not surface as construction projects). Surviving items go through news-gc-extractor to populate `raw_payload.gc_name`. State=TX, City=Houston. Per-item stage inference (breaks-ground→mobilization, completes→subs_selected, default→awarded).
+**Last verified against spec:** 2026-05-28.
+**Drift:** Verified locally that the construction/feed path returns 404 from this network (Cloudflare); URL is now env-configurable so Vercel can override without code change.
+
+#### Pathfinder/lib/adapters/zedcor/gc-extractor.ts (modified — additive)
+**Implements:** SPEC-zedcor-z14-rss-news-free-contact-path.md §"New backfill" → extended `ExtractionLayer` union with `'prime_contractor_field'` literal so the new Z14 backfill can tag gc_metadata.extraction_layer without a type assertion. Existing layers (`html`, `anthropic`, `sonar`, `mixed`, `none`) untouched.
+**Last verified against spec:** 2026-05-28.
+**Drift:** none.
