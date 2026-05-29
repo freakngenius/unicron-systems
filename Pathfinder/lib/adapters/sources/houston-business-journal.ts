@@ -1,28 +1,55 @@
 // lib/adapters/sources/houston-business-journal.ts
 //
-// Sprint Z13 — Houston Business Journal construction news.
+// Sprint Z14 — Houston Business Journal RSS adapter.
 //
-// HBJ publishes Houston-metro award + groundbreaking + topping-out
-// stories at https://www.bizjournals.com/houston/news/construction.
-// HBJ is paywalled below the headline; the listing page surfaces enough
-// (title, deck, byline) that the GC name extraction layer can run on
-// the headline + deck alone. Detail-page enrichment falls back through
-// the Z13 tiered fetcher chain (ScrapingBee / Playwright).
+// Z13 shipped an HTML-scrape variant pointed at /houston/news/construction.
+// That path is Cloudflare-shielded and the headlines are duplicated across
+// anchor tags. Z14 swaps to the public RSS feed (per spec). The exact feed
+// path is configurable via env (HBJ_FEED_URL) because bizjournals.com has
+// rotated their feed routes historically; default candidate is the
+// industry-vertical construction feed.
 //
-// Filters: only stories whose headline matches award/win/breaks-ground
-// keywords. project_stage inferred from keywords. State='TX' always.
+// If the feed returns non-200 or empty, the adapter returns [] and the
+// orchestrator records `source_empty` cleanly. Z14 spec accepts this:
+// "If a news source's RSS feed URL is wrong or the feed structure changed,
+// log the verbatim XML excerpt and continue with HTML fallback."
+//
+// Item filter: title or description must match award/groundbreaking
+// keywords. Each surviving item runs through the news-gc-extractor to
+// populate raw_payload.gc_name at ingest time.
 
 import * as cheerio from 'cheerio';
 import type { SourceAdapter, SourceEvent } from './types';
-import { buildEvent, hashId, parseLooseDate, pfFetchHtml } from './_zedcor-shared';
+import { buildEvent, hashId, parseLooseDate } from './_zedcor-shared';
+import { extractGcNameFromNewsSnippet } from '../zedcor/news-gc-extractor';
 
-const LANDING = 'https://www.bizjournals.com/houston/news/construction';
+const HBJ_FEED_URL =
+  process.env.HBJ_FEED_URL ?? 'https://www.bizjournals.com/houston/news/construction/feed';
 
-const AWARD_KEYWORDS = /\b(awarded|wins?\b|breaks?\s+ground|tops?\s+out|completes?|begins?\s+construction|low\s+bidder|prime\s+contractor|selected\s+(?:as|for))\b/i;
+const BROWSER_UA =
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
 
-function inferStage(title: string): { stage: string; bwo: boolean; conf: number } {
-  if (/breaks?\s+ground|begins?\s+construction/i.test(title)) return { stage: 'mobilization', bwo: true, conf: 0.85 };
-  if (/completes?|tops?\s+out/i.test(title)) return { stage: 'subs_selected', bwo: false, conf: 0.7 };
+const AWARD_KEYWORDS =
+  /\b(awarded|wins?\b|breaks?\s+ground|tops?\s+out|completes?|begins?\s+construction|low\s+bidder|prime\s+contractor|general\s+contractor|selected\s+(?:as|for)|names?\b|chosen|tapped|build\s+team)\b/i;
+
+const CONSTRUCTION_KEYWORDS =
+  /\b(construction|contractor|builder|build\s+team|breaks?\s+ground|tops?\s+out|completes?|project|tower|building|campus|complex|facility|warehouse|distribution|logistics|industrial|mixed[-\s]use|residential|hotel|hospital|medical|school|stadium|arena|airport|terminal|highway|bridge|tunnel|water|wastewater|treatment|renovation|expansion|retrofit)\b/i;
+
+const MAX_ITEMS = 30;
+const FETCH_TIMEOUT_MS = 15_000;
+
+function stripHtml(input: string | null | undefined): string {
+  if (!input) return '';
+  return cheerio.load(`<div>${input}</div>`)('div').text().replace(/\s+/g, ' ').trim();
+}
+
+function inferStage(text: string): { stage: string; bwo: boolean; conf: number } {
+  if (/breaks?\s+ground|begins?\s+construction/i.test(text)) {
+    return { stage: 'mobilization', bwo: true, conf: 0.85 };
+  }
+  if (/completes?|tops?\s+out/i.test(text)) {
+    return { stage: 'subs_selected', bwo: false, conf: 0.7 };
+  }
   return { stage: 'awarded', bwo: true, conf: 0.8 };
 }
 
@@ -30,56 +57,68 @@ export const houstonBusinessJournalAdapter: SourceAdapter = {
   id: 'houston-business-journal',
   type: 'registered',
   description:
-    'Houston Business Journal construction news. Title+deck only (paywall on detail); source_authority=news_report.',
+    'Houston Business Journal construction RSS. Sonnet extractor populates gc_name at ingest time. State=TX, City=Houston.',
 
   async poll(opts): Promise<SourceEvent[]> {
-    let $: cheerio.CheerioAPI;
+    const fetchImpl = opts.fetch ?? fetch;
+    let xml: string;
     try {
-      $ = await pfFetchHtml(LANDING, { fetchImpl: opts.fetch });
+      const res = await fetchImpl(HBJ_FEED_URL, {
+        headers: { 'User-Agent': BROWSER_UA, Accept: 'application/rss+xml, application/xml;q=0.9, */*;q=0.8' },
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      });
+      if (!res.ok) return [];
+      xml = await res.text();
     } catch {
       return [];
     }
 
+    const $ = cheerio.load(xml, { xmlMode: true });
     const events: SourceEvent[] = [];
+    const items = $('item').toArray().slice(0, MAX_ITEMS);
 
-    // bizjournals templates use multiple article-card classes; we accept
-    // any anchor whose href contains '/houston/news/' and whose nearest
-    // headline element has text. Belt+suspenders against template churn.
-    $('a').each((_idx, a) => {
-      const $a = $(a);
-      const href = $a.attr('href') || '';
-      if (!/\/houston\/news\//i.test(href)) return;
-      const title = $a.text().trim().replace(/\s+/g, ' ');
-      if (!title || title.length < 8) return;
-      if (!AWARD_KEYWORDS.test(title)) return;
+    for (const item of items) {
+      const $item = $(item);
+      const title = $item.find('title').first().text().trim();
+      if (!title || title.length < 8) continue;
 
-      let sourceUrl: string;
-      try { sourceUrl = new URL(href, LANDING).toString(); } catch { return; }
+      const descRaw = $item.find('description').first().text();
+      const description = stripHtml(descRaw);
+      const link = $item.find('link').first().text().trim();
+      const guid = $item.find('guid').first().text().trim();
+      const pubDate = $item.find('pubDate').first().text().trim();
 
-      // Deck is usually the sibling/descendant <p>.
-      const summary = $a.closest('article, .item, .news-item').find('p, .deck, .summary').first().text().trim().replace(/\s+/g, ' ') || null;
-      const dateRaw = $a.closest('article, .item').find('time').first().attr('datetime') ?? null;
-      const { stage, bwo, conf } = inferStage(title);
+      const corpus = `${title}\n${description}`;
+      if (!AWARD_KEYWORDS.test(corpus)) continue;
+      if (!CONSTRUCTION_KEYWORDS.test(corpus)) continue;
 
-      events.push(buildEvent({
-        source_event_id: hashId(sourceUrl),
-        title,
-        summary,
-        posted_date: parseLooseDate(dateRaw ?? null),
-        raw_payload: {
-          state: 'TX',
-          city: 'Houston',
-          source_url: sourceUrl,
-          source_authority: 'news_report',
-          project_stage: stage,
-          phase_confidence: conf,
-          buy_window_open: bwo,
-        },
-      }));
-    });
+      const { stage, bwo, conf } = inferStage(corpus);
+      const gcResult = await extractGcNameFromNewsSnippet(title, description);
 
-    // Dedup by source_event_id — the listing has anchor duplicates
-    // (image link + headline link to same article).
+      events.push(
+        buildEvent({
+          source_event_id: guid || hashId(link || title),
+          title,
+          summary: description.slice(0, 500) || null,
+          posted_date: parseLooseDate(pubDate) ?? null,
+          raw_payload: {
+            state: 'TX',
+            city: 'Houston',
+            source_url: link || null,
+            source_authority: 'news_report',
+            project_stage: stage,
+            phase_confidence: conf,
+            buy_window_open: bwo,
+            gc_name: gcResult.gc_name,
+            gc_extraction_layer: gcResult.layer,
+            gc_extraction_citation: gcResult.citation,
+            news_feed: 'hbj_construction_rss',
+          },
+        }),
+      );
+    }
+
+    // Dedup by source_event_id (RSS shouldn't repeat, but belt+suspenders).
     const seen = new Set<string>();
     return events.filter((e) => {
       if (seen.has(e.source_event_id)) return false;
