@@ -1989,3 +1989,25 @@ OPTIONAL (route degrades gracefully when absent):
 **Implements:** Z14.1 surface PatternSkip array so backfill scripts can aggregate skip counts. resolveViaPattern emits `[pattern-guesser] skipped <candidate> (<reason>) for "<company>"` per skip — caller (backfill-contact-resolution.ts) hooks console.log to total + group by reason.
 **Last verified against spec:** 2026-05-29.
 **Drift:** none.
+
+### Sprint Z14.2 — wire news adapters into orchestrator polling
+
+#### Pathfinder/lib/adapters/sources/index.ts (modified — additive)
+**Implements:** Z14.2 wire-in. Adds `ZEDCOR_NEWS_SOURCE_SLUGS` (4 live news adapters; texas-construction-industry excluded — paused in Z14.1) and `ZEDCOR_HOUSTON_HUB_SOURCE_SLUGS` (combined Z1A 10 + news 4 = 14). Existing `ZEDCOR_Z1A_SOURCE_SLUGS` constant + `ZEDCOR_Z10_SOURCE_SLUGS` constant untouched. SOURCE_ADAPTERS registry untouched.
+**Last verified against spec:** 2026-05-29.
+**Drift:** none.
+
+#### Pathfinder/lib/orchestrator/orchestrator.ts (modified — swap import)
+**Implements:** Z14.2 wire-in. Swapped import + 4 in-file references from `ZEDCOR_Z1A_SOURCE_SLUGS` to `ZEDCOR_HOUSTON_HUB_SOURCE_SLUGS`. Net effect: `sources_polled` jumps from 10 to 14 per Run Zedcor invocation. Verified live (run_id 6694, 6695: `sources_polled=14`). No other orchestrator logic touched — same Wave 1 parallel poll, same Wave 2-3 scoring + Notion writes downstream.
+**Last verified against spec:** 2026-05-29.
+**Drift:** none.
+
+#### Pathfinder/lib/orchestrator/run-source.ts (modified — additive)
+**Implements:** Z14.2 observability — stamps `pathfinder.data_sources.last_polled_at` (always) and `last_event_at` (when adapter produced ≥1 candidate) at adapter completion. Pre-Z14.2 the orchestrator never wrote these columns (verified: every row had `last_polled_at = NULL`). New `bumpDataSourceTimestamps(slug, candidatesFound)` helper called from all 3 reachable-adapter return paths (poll-threw, empty, normal end); silently no-ops on Supabase errors so observability writes never block runs. Resolves the data_sources row by `metadata->>'source_slug'` (canonical adapter slug). Verified live: all 4 news adapters + Z1A sources show `last_polled_at` at 2026-05-29T02:39:55Z after run_id 6695.
+**Last verified against spec:** 2026-05-29.
+**Drift:** none.
+
+#### Pathfinder/lib/adapters/sources/builders-exchange-texas.ts (modified — bugfix)
+**Implements:** Z14.2 bugfix — default `VBX_FEED_URL` now uses trailing-slash `/feed/` instead of `/feed` because virtualbx.com 301-redirects the latter. Node `fetch` follows redirects by default but skipping the hop is faster and avoids edge cases where env-overridden values may not follow. Verified live: HTTP 301 → 200 on /feed/ direct. Note: Node 26 local fetch fails on virtualbx.com cert chain (`UNABLE_TO_VERIFY_LEAF_SIGNATURE`); Vercel Node runtime expected to succeed.
+**Last verified against spec:** 2026-05-29.
+**Drift:** none.

@@ -16,7 +16,7 @@
 // Spec: Specs/SPEC-zedcor-tier1-manual.md §"Orchestrator endpoint contract".
 
 import { supabaseAdmin } from '@/lib/supabase';
-import { ZEDCOR_Z1A_SOURCE_SLUGS } from '@/lib/adapters/sources';
+import { ZEDCOR_HOUSTON_HUB_SOURCE_SLUGS } from '@/lib/adapters/sources';
 import {
   writeProjectToNotion,
   updateProjectPitchOnNotion,
@@ -223,11 +223,11 @@ export async function runZedcorOrchestrator(): Promise<RunSummary> {
   // Wave 1 — adapters in parallel (each bounded by per-adapter fetch timeout).
   // Wrap each adapter so a step_progress event fires as it completes — Z1B's
   // UI polls run-status and reads the latest step_label/percent from these.
-  const total = ZEDCOR_Z1A_SOURCE_SLUGS.length;
+  const total = ZEDCOR_HOUSTON_HUB_SOURCE_SLUGS.length;
   let completed = 0;
   let runningProjectCount = 0;
   const sourceResults: RunSourceResult[] = await Promise.all(
-    ZEDCOR_Z1A_SOURCE_SLUGS.map(async (slug) => {
+    ZEDCOR_HOUSTON_HUB_SOURCE_SLUGS.map(async (slug) => {
       const result = await runSource(slug, runId);
       completed += 1;
       runningProjectCount += result.projects_inserted;
@@ -411,8 +411,8 @@ export async function runZedcorOrchestrator(): Promise<RunSummary> {
     run_id: runId,
     started_at: startedAt,
     completed_at: completedAt,
-    status: sources_failed === ZEDCOR_Z1A_SOURCE_SLUGS.length ? 'failed' : sources_failed > 0 ? 'partial_failure' : 'success',
-    sources_polled: ZEDCOR_Z1A_SOURCE_SLUGS.length,
+    status: sources_failed === ZEDCOR_HOUSTON_HUB_SOURCE_SLUGS.length ? 'failed' : sources_failed > 0 ? 'partial_failure' : 'success',
+    sources_polled: ZEDCOR_HOUSTON_HUB_SOURCE_SLUGS.length,
     sources_hit,
     sources_empty,
     sources_failed,

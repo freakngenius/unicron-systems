@@ -108,6 +108,34 @@ function capEvents(events: SourceEvent[]): { kept: SourceEvent[]; deferred: numb
   };
 }
 
+/**
+ * Sprint Z14.2 — stamp last_polled_at (always) and last_event_at (when
+ * the adapter produced ≥1 candidate) on the matching pathfinder.data_sources
+ * row. Resolves the row by metadata->>'source_slug' since that is the
+ * canonical slug used everywhere (id is a UUID). Silently no-ops when no
+ * row matches (some adapters may not have a seeded data_sources row).
+ */
+async function bumpDataSourceTimestamps(slug: string, candidatesFound: number): Promise<void> {
+  try {
+    const admin = supabaseAdmin();
+    const now = new Date().toISOString();
+    const patch: { last_polled_at: string; last_event_at?: string } = { last_polled_at: now };
+    if (candidatesFound > 0) patch.last_event_at = now;
+    await (admin as unknown as {
+      from: (t: string) => {
+        update: (p: typeof patch) => {
+          eq: (col: string, val: string) => Promise<{ error: { message: string } | null }>;
+        };
+      };
+    })
+      .from('data_sources')
+      .update(patch)
+      .eq('metadata->>source_slug', slug);
+  } catch {
+    // Observability write — never blocks the run.
+  }
+}
+
 export async function runSource(slug: string, runId: number): Promise<RunSourceResult> {
   const adapter = SOURCE_ADAPTERS[slug];
   const result: RunSourceResult = {
@@ -162,6 +190,7 @@ export async function runSource(slug: string, runId: number): Promise<RunSourceR
       ts: new Date().toISOString(),
       run_id: runId,
     });
+    await bumpDataSourceTimestamps(slug, 0);
     return result;
   }
 
@@ -190,6 +219,7 @@ export async function runSource(slug: string, runId: number): Promise<RunSourceR
       ts: new Date().toISOString(),
       run_id: runId,
     });
+    await bumpDataSourceTimestamps(slug, 0);
     return result;
   }
 
@@ -298,5 +328,6 @@ export async function runSource(slug: string, runId: number): Promise<RunSourceR
     }
   }
 
+  await bumpDataSourceTimestamps(slug, result.candidates_found);
   return result;
 }
