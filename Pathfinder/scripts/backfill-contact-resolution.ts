@@ -112,6 +112,25 @@ async function persistMerge(
   if (error) throw new Error(`update gc_metadata failed: ${error.message}`);
 }
 
+// Z14.1 — tap stdout to aggregate the per-skip lines emitted by
+// resolveViaPattern. Keeps the lib pure (no module-level counter) while
+// still giving the backfill a single summary line in its final output.
+let patternGuesserSkippedCount = 0;
+const patternGuesserSkippedByReason: Record<string, number> = {};
+const originalConsoleLog = console.log.bind(console);
+console.log = (...args: unknown[]) => {
+  const first = args[0];
+  if (typeof first === 'string' && first.startsWith('[pattern-guesser] skipped')) {
+    patternGuesserSkippedCount += 1;
+    const reasonMatch = first.match(/\((\w+)\)/);
+    if (reasonMatch) {
+      const reason = reasonMatch[1];
+      patternGuesserSkippedByReason[reason] = (patternGuesserSkippedByReason[reason] ?? 0) + 1;
+    }
+  }
+  originalConsoleLog(...args);
+};
+
 async function main(): Promise<void> {
   const candidates = await loadCandidates();
   console.log(`backfill-contact-resolution: ${candidates.length} candidate(s); cap=${cap}; dryRun=${dryRun}`);
@@ -189,6 +208,10 @@ async function main(): Promise<void> {
   console.log('---');
   console.log(`attempted=${attempted} succeeded=${succeeded} failed=${failed}`);
   console.log(`by_layer: hunter=${byLayer[1] ?? 0} apollo=${byLayer[2] ?? 0} pattern=${byLayer[3] ?? 0} cache=${byLayer.cache ?? 0}`);
+  // Z14.1 — surface the aggregate pattern-guesser quality-filter skip
+  // count from the console hook above. Per-skip lines also remain in
+  // stdout for forensic review.
+  console.log(`pattern_guesser_skipped_total=${patternGuesserSkippedCount} (by_reason: ${JSON.stringify(patternGuesserSkippedByReason)})`);
 }
 
 main().catch((err) => {

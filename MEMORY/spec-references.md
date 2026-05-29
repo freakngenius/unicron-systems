@@ -1972,3 +1972,20 @@ OPTIONAL (route degrades gracefully when absent):
 **Implements:** SPEC-zedcor-z14-rss-news-free-contact-path.md §"New backfill" → extended `ExtractionLayer` union with `'prime_contractor_field'` literal so the new Z14 backfill can tag gc_metadata.extraction_layer without a type assertion. Existing layers (`html`, `anthropic`, `sonar`, `mixed`, `none`) untouched.
 **Last verified against spec:** 2026-05-28.
 **Drift:** none.
+
+### Sprint Z14.1 — adapter URL cleanup + pattern-guesser quality filter
+
+#### Pathfinder/lib/adapters/sources/builders-exchange-texas.ts (rewrite)
+**Implements:** Z14.1 cleanup → bxtexas.org DNS dead (verified 2026-05-29). Repointed adapter to https://www.virtualbx.com — "Virtual Builders Exchange — Commercial Construction Leads for Texas". WordPress RSS at /feed (~10 fresh items per refresh, real TX commercial lead content verified live). Same RSS-parse + news-gc-extractor pattern as Z14 ENR/HBJ adapters. Per-item stage inference (breaks-ground → mobilization, completes → subs_selected, awarded/wins → awarded, default → solicitation). VBX_FEED_URL env override available. Adapter id stays `builders-exchange-texas` for downstream lineage stability.
+**Last verified against spec:** 2026-05-29.
+**Drift:** none.
+
+#### Pathfinder/lib/adapters/zedcor/email-pattern-guesser.ts (modified — additive)
+**Implements:** Z14.1 quality filter. New `rejectLowQualityDomain` (rejects stop-word roots {the, and, of, inc, llc, co} + roots with <3 alpha chars) and `rejectLowQualityEmail` (rejects `contact@<root-where-len<6>`). Both gate before MX lookup to avoid wasted DNS calls on parked domains. `PatternGuessResult` gains a `skipped: PatternSkip[]` field — additive, existing callers unaffected. Reason: Z14 backfill produced `contact@the.com`, `contact@ma.com`, `contact@opr.com` because the suffix-stripper left bare stopwords / 2-letter initials as domain roots and those domains have valid MX records (parked).
+**Last verified against spec:** 2026-05-29.
+**Drift:** none.
+
+#### Pathfinder/lib/adapters/zedcor/external-contact-resolver.ts (modified — additive)
+**Implements:** Z14.1 surface PatternSkip array so backfill scripts can aggregate skip counts. resolveViaPattern emits `[pattern-guesser] skipped <candidate> (<reason>) for "<company>"` per skip — caller (backfill-contact-resolution.ts) hooks console.log to total + group by reason.
+**Last verified against spec:** 2026-05-29.
+**Drift:** none.
