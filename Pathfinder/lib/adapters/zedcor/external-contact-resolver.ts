@@ -200,6 +200,11 @@ async function resolveViaApollo(
 
 async function resolveViaPattern(companyName: string): Promise<ResolvedContact | null> {
   const guess = await guessContactEmail(companyName);
+  // Z14.1 — surface quality-filter skips so callers (backfill script) can
+  // aggregate skip counts in their summary output.
+  for (const skip of guess.skipped) {
+    console.log(`[pattern-guesser] skipped ${skip.candidate} (${skip.reason}) for "${companyName}"`);
+  }
   if (!guess.email) return null;
   return {
     contact_name: 'Project Manager',

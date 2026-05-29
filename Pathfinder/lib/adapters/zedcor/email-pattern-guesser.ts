@@ -8,19 +8,89 @@
 // that survives MX validation wins.
 //
 // Spec: Specs/SPEC-zedcor-z7-contact-resolver.md §"Layer 3".
+//
+// Sprint Z14.1 — added quality filter. Z14 backfill surfaced
+// low-signal outputs like contact@the.com, contact@ma.com,
+// contact@of.com because the suffix-stripper left the bare token
+// "the" / "of" / two-letter initials as the domain root. Those
+// domains do exist + have MX records (registered as defensive /
+// parked), so the MX gate alone wasn't enough. The filter rejects:
+//   • local-part='contact' AND domain root <6 chars
+//   • domain root in stop-word set {the, and, of, inc, llc, co}
+//   • domain root <3 alpha chars
+// PatternGuessResult now carries a `skipped` list so callers can
+// aggregate skip counts + reasons across a backfill run.
 
 import { promises as dns } from 'node:dns';
+
+export interface PatternSkip {
+  candidate: string;
+  reason: 'stop_word_domain' | 'short_domain' | 'contact_with_short_domain';
+}
 
 export interface PatternGuessResult {
   email: string | null;
   domain: string | null;
   pattern: string | null;
   confidence: number;
+  /** Candidates rejected by the quality filter before / during MX check. */
+  skipped: PatternSkip[];
 }
 
 const PATTERN_CONFIDENCE = 0.3;
 
 const GENERIC_FIRST_NAMES = ['contact', 'info', 'estimating', 'projects', 'office'];
+
+// Z14.1 stop-word set. Lowercase, alphanumeric only.
+const STOP_WORD_DOMAIN_ROOTS: ReadonlySet<string> = new Set([
+  'the', 'and', 'of', 'inc', 'llc', 'co',
+]);
+
+// Z14.1 thresholds.
+const MIN_DOMAIN_ROOT_ALPHA_CHARS = 3;
+const SHORT_DOMAIN_ROOT_THRESHOLD = 6; // used in combination with local='contact'
+
+/**
+ * Extract the part of a domain before the TLD. `the.com` → `the`,
+ * `acme-construction.net` → `acme-construction`.
+ */
+export function domainRoot(domain: string): string {
+  const i = domain.lastIndexOf('.');
+  return i > 0 ? domain.slice(0, i) : domain;
+}
+
+/**
+ * Z14.1 — sanity check on a domain. Returns the rejection reason or null
+ * when the domain is acceptable. We apply this before the MX check so
+ * we don't waste DNS lookups (and don't accidentally accept registered
+ * parked domains like the.com).
+ */
+export function rejectLowQualityDomain(domain: string): PatternSkip['reason'] | null {
+  const root = domainRoot(domain).toLowerCase();
+  if (STOP_WORD_DOMAIN_ROOTS.has(root)) return 'stop_word_domain';
+  const alphaCount = (root.match(/[a-z]/g) ?? []).length;
+  if (alphaCount < MIN_DOMAIN_ROOT_ALPHA_CHARS) return 'short_domain';
+  return null;
+}
+
+/**
+ * Z14.1 — final email check. Rejects the contact@<short-root> case
+ * even when the domain itself passes rejectLowQualityDomain (e.g.
+ * `contact@kfc.com` — 3-letter root, real domain, but the generic
+ * `contact@` local is not high-enough signal to ship without human
+ * review).
+ */
+export function rejectLowQualityEmail(email: string): PatternSkip['reason'] | null {
+  const at = email.indexOf('@');
+  if (at < 0) return null;
+  const local = email.slice(0, at).toLowerCase();
+  const domain = email.slice(at + 1);
+  const root = domainRoot(domain);
+  if (local === 'contact' && root.length < SHORT_DOMAIN_ROOT_THRESHOLD) {
+    return 'contact_with_short_domain';
+  }
+  return null;
+}
 
 /**
  * Domain candidates derived from the GC name. We try increasingly
@@ -91,23 +161,41 @@ export function __resetMxCacheForTests(): void {
 }
 
 /**
- * Layer 3 entry point. Returns the first MX-validated email candidate
- * for the company, or a null result if no candidate domain has MX.
+ * Layer 3 entry point. Returns the first MX-validated, quality-filtered
+ * email candidate for the company, or a null result if no candidate
+ * domain passes both gates.
  */
 export async function guessContactEmail(companyName: string): Promise<PatternGuessResult> {
+  const skipped: PatternSkip[] = [];
   const domains = inferDomainCandidates(companyName);
   for (const domain of domains) {
+    const domainSkip = rejectLowQualityDomain(domain);
+    if (domainSkip) {
+      skipped.push({ candidate: domain, reason: domainSkip });
+      continue;
+    }
     if (!(await hasMx(domain))) continue;
     const candidates = generateEmailCandidates(domain);
-    // First candidate wins — we don't have a way to validate the local
-    // part without sending mail. Spec accepts this as low-confidence.
-    const email = candidates[0];
+    // Find the first candidate that passes the email-level quality
+    // filter. If none pass, fall through to the next domain.
+    let chosen: string | null = null;
+    for (const candidate of candidates) {
+      const emailSkip = rejectLowQualityEmail(candidate);
+      if (emailSkip) {
+        skipped.push({ candidate, reason: emailSkip });
+        continue;
+      }
+      chosen = candidate;
+      break;
+    }
+    if (!chosen) continue;
     return {
-      email,
+      email: chosen,
       domain,
       pattern: 'generic@domain',
       confidence: PATTERN_CONFIDENCE,
+      skipped,
     };
   }
-  return { email: null, domain: null, pattern: null, confidence: 0 };
+  return { email: null, domain: null, pattern: null, confidence: 0, skipped };
 }
