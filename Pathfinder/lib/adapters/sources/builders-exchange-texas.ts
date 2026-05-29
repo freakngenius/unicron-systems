@@ -70,16 +70,39 @@ export const buildersExchangeTexasAdapter: SourceAdapter = {
 
   async poll(opts): Promise<SourceEvent[]> {
     const fetchImpl = opts.fetch ?? fetch;
+    const headers = { 'User-Agent': BROWSER_UA, Accept: 'application/rss+xml, application/xml;q=0.9, */*;q=0.8' };
     let xml: string;
     try {
       const res = await fetchImpl(VBX_FEED_URL, {
-        headers: { 'User-Agent': BROWSER_UA, Accept: 'application/rss+xml, application/xml;q=0.9, */*;q=0.8' },
+        headers,
         signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
       });
       if (!res.ok) return [];
       xml = await res.text();
-    } catch {
-      return [];
+    } catch (err) {
+      // Sprint Z14.2 — virtualbx.com's HTTPS chain is missing its Sectigo
+      // intermediate (openssl: "Verify return code: 21 (unable to verify
+      // the first certificate)"). Browsers AIA-fetch the missing cert;
+      // Node's undici fetch hard-fails with UNABLE_TO_VERIFY_LEAF_SIGNATURE.
+      // The same vhost serves the identical RSS feed over plain HTTP
+      // (Apache 200 OK, Content-Type: application/rss+xml). Retry over
+      // HTTP only on the specific TLS-chain failure so a real outage
+      // still returns []. RSS bodies are public + filtered downstream.
+      const cause = (err as { cause?: { code?: string } }).cause;
+      if (cause?.code !== 'UNABLE_TO_VERIFY_LEAF_SIGNATURE' || !VBX_FEED_URL.startsWith('https://')) {
+        return [];
+      }
+      try {
+        const httpUrl = VBX_FEED_URL.replace(/^https:\/\//, 'http://');
+        const res2 = await fetchImpl(httpUrl, {
+          headers,
+          signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+        });
+        if (!res2.ok) return [];
+        xml = await res2.text();
+      } catch {
+        return [];
+      }
     }
 
     const $ = cheerio.load(xml, { xmlMode: true });

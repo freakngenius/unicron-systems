@@ -26,6 +26,22 @@ import { extractGcNameFromNewsSnippet } from '../zedcor/news-gc-extractor';
 const HBJ_FEED_URL =
   process.env.HBJ_FEED_URL ?? 'https://www.bizjournals.com/houston/news/construction/feed';
 
+// Sprint Z14.2 — bizjournals.com sits behind Cloudflare; every direct RSS
+// path (/houston/news/construction/feed, /houston/news/rss,
+// /houston/industries/commercial-real-estate/feed, feeds.bizjournals.com)
+// returns 403 with a Cloudflare challenge page when fetched from a
+// datacenter IP (verified 2026-05-29 from this network and from Vercel:
+// agent_log shows 12 consecutive source_empty events with no source_failed,
+// matching the !res.ok → return [] branch). Google News indexes the same
+// bizjournals.com/houston construction stream as a public, unauthenticated
+// RSS feed at news.google.com/rss/search with a `site:` filter. Items
+// carry the bizjournals headline + a google.com/articles redirect link;
+// titles are real Texas construction announcements (e.g. "NewQuest breaks
+// ground on $400M Texas Heritage Marketplace"). Override via env.
+const HBJ_GOOGLE_NEWS_URL =
+  process.env.HBJ_GOOGLE_NEWS_URL ??
+  'https://news.google.com/rss/search?q=site%3Abizjournals.com%2Fhouston+construction+OR+awarded+OR+%22breaks+ground%22+texas&hl=en-US&gl=US&ceid=US:en';
+
 const BROWSER_UA =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
 
@@ -61,17 +77,29 @@ export const houstonBusinessJournalAdapter: SourceAdapter = {
 
   async poll(opts): Promise<SourceEvent[]> {
     const fetchImpl = opts.fetch ?? fetch;
-    let xml: string;
-    try {
-      const res = await fetchImpl(HBJ_FEED_URL, {
-        headers: { 'User-Agent': BROWSER_UA, Accept: 'application/rss+xml, application/xml;q=0.9, */*;q=0.8' },
-        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-      });
-      if (!res.ok) return [];
-      xml = await res.text();
-    } catch {
-      return [];
+    const headers = { 'User-Agent': BROWSER_UA, Accept: 'application/rss+xml, application/xml;q=0.9, */*;q=0.8' };
+
+    // Sprint Z14.2 — primary path: bizjournals.com construction feed (HTML+RSS).
+    // Fall back to Google News RSS for the same site when bizjournals returns
+    // a Cloudflare challenge (any non-2xx) so we still pick up Texas
+    // construction stories even when the direct feed is shielded.
+    async function fetchFeed(url: string): Promise<string | null> {
+      try {
+        const res = await fetchImpl(url, { headers, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
+        if (!res.ok) return null;
+        return await res.text();
+      } catch {
+        return null;
+      }
     }
+
+    let xml = await fetchFeed(HBJ_FEED_URL);
+    let viaGoogleNews = false;
+    if (!xml) {
+      xml = await fetchFeed(HBJ_GOOGLE_NEWS_URL);
+      viaGoogleNews = xml !== null;
+    }
+    if (!xml) return [];
 
     const $ = cheerio.load(xml, { xmlMode: true });
     const events: SourceEvent[] = [];
@@ -79,7 +107,12 @@ export const houstonBusinessJournalAdapter: SourceAdapter = {
 
     for (const item of items) {
       const $item = $(item);
-      const title = $item.find('title').first().text().trim();
+      const titleRaw = $item.find('title').first().text().trim();
+      // Google News appends " - The Business Journals" to every headline;
+      // strip it so downstream pretty-print + dedup keys stay clean.
+      const title = viaGoogleNews
+        ? titleRaw.replace(/\s*-\s*The\s+Business\s+Journals\s*$/i, '').trim()
+        : titleRaw;
       if (!title || title.length < 8) continue;
 
       const descRaw = $item.find('description').first().text();
@@ -89,7 +122,9 @@ export const houstonBusinessJournalAdapter: SourceAdapter = {
       const pubDate = $item.find('pubDate').first().text().trim();
 
       const corpus = `${title}\n${description}`;
-      if (!AWARD_KEYWORDS.test(corpus)) continue;
+      // Google News query already restricts to construction + Texas; skip the
+      // award gate there so awarded-but-not-yet-broken-ground stories survive.
+      if (!viaGoogleNews && !AWARD_KEYWORDS.test(corpus)) continue;
       if (!CONSTRUCTION_KEYWORDS.test(corpus)) continue;
 
       const { stage, bwo, conf } = inferStage(corpus);
@@ -112,7 +147,7 @@ export const houstonBusinessJournalAdapter: SourceAdapter = {
             gc_name: gcResult.gc_name,
             gc_extraction_layer: gcResult.layer,
             gc_extraction_citation: gcResult.citation,
-            news_feed: 'hbj_construction_rss',
+            news_feed: viaGoogleNews ? 'hbj_google_news_rss' : 'hbj_construction_rss',
           },
         }),
       );
