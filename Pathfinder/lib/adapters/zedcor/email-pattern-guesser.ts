@@ -20,12 +20,40 @@
 //   • domain root <3 alpha chars
 // PatternGuessResult now carries a `skipped` list so callers can
 // aggregate skip counts + reasons across a backfill run.
+//
+// Contact Cleanup (post-Z14.1) — the Z14.1 filter only screened
+// local='contact'. The resolver's fallthrough to info@/estimating@/
+// projects@/office@ produced a second class of garbage (info@walsh.net,
+// info@cdm.com, info@bccga.com) that re-populated rows we had just
+// cleared. The parked-domain problem also extends to wrong-TLD
+// guesses (american.net, record.co, healtheon.co), digit-prefix
+// acronym roots (a3technology.com), and joint-venture entity names
+// (HURLEY JV, LLP → hurley.com — owned by a different company).
+// The filter is extended via rejectLowQualityCatchall, which both
+// this module's guesser and the contact-cleanup script import:
+//   • generic-catchall local (contact/info/estimating/projects/office)
+//     AND domain root <6 chars (was: only 'contact')
+//   • generic-catchall local AND TLD ∉ {com} — every Class-B legit
+//     corporate catchall in the observed Zedcor set is .com; .net/.co
+//     correlates with a parked-domain miss
+//   • generic-catchall local AND domain root contains a digit — legit
+//     roots are pure alpha; digits indicate acronym/serial guesses
+//   • generic-catchall local AND companyName carries a JV marker —
+//     joint ventures rarely own a standalone domain, so the firstWord
+//     fallback lands on a different company
 
 import { promises as dns } from 'node:dns';
 
 export interface PatternSkip {
   candidate: string;
-  reason: 'stop_word_domain' | 'short_domain' | 'contact_with_short_domain';
+  reason:
+    | 'stop_word_domain'
+    | 'short_domain'
+    | 'contact_with_short_domain'
+    | 'generic_local_with_short_domain'
+    | 'generic_local_with_noncom_tld'
+    | 'generic_local_with_digit_in_domain'
+    | 'generic_local_for_joint_venture';
 }
 
 export interface PatternGuessResult {
@@ -40,6 +68,7 @@ export interface PatternGuessResult {
 const PATTERN_CONFIDENCE = 0.3;
 
 const GENERIC_FIRST_NAMES = ['contact', 'info', 'estimating', 'projects', 'office'];
+const GENERIC_FIRST_NAMES_SET: ReadonlySet<string> = new Set(GENERIC_FIRST_NAMES);
 
 // Z14.1 stop-word set. Lowercase, alphanumeric only.
 const STOP_WORD_DOMAIN_ROOTS: ReadonlySet<string> = new Set([
@@ -48,7 +77,16 @@ const STOP_WORD_DOMAIN_ROOTS: ReadonlySet<string> = new Set([
 
 // Z14.1 thresholds.
 const MIN_DOMAIN_ROOT_ALPHA_CHARS = 3;
-const SHORT_DOMAIN_ROOT_THRESHOLD = 6; // used in combination with local='contact'
+const SHORT_DOMAIN_ROOT_THRESHOLD = 6; // used in combination with generic local
+
+// Allowed TLDs for generic-catchall emails. Observed Class-B legit
+// corporate catchalls in the Zedcor dataset are 100% .com; .net/.co
+// guesses correlate with the resolver landing on a parked-domain miss.
+const ALLOWED_CATCHALL_TLDS: ReadonlySet<string> = new Set(['com']);
+
+// Joint-venture / partnership entity markers in the company name.
+const JOINT_VENTURE_TOKENS: ReadonlySet<string> = new Set(['jv']);
+const JOINT_VENTURE_PHRASES: readonly string[] = ['joint venture'];
 
 /**
  * Extract the part of a domain before the TLD. `the.com` → `the`,
@@ -74,11 +112,16 @@ export function rejectLowQualityDomain(domain: string): PatternSkip['reason'] | 
 }
 
 /**
- * Z14.1 — final email check. Rejects the contact@<short-root> case
- * even when the domain itself passes rejectLowQualityDomain (e.g.
- * `contact@kfc.com` — 3-letter root, real domain, but the generic
- * `contact@` local is not high-enough signal to ship without human
- * review).
+ * Z14.1 — final email check. Rejects generic-catchall locals (the
+ * full GENERIC_FIRST_NAMES set: contact/info/estimating/projects/office)
+ * paired with a short domain root. Originally only screened
+ * local==='contact', which let the resolver's info@/estimating@ fallback
+ * re-populate cleared rows with the same parked-domain miss
+ * (info@cdm.com after contact@cdm.com was cleared).
+ *
+ * Still emits `contact_with_short_domain` when local==='contact' so the
+ * pre-extension reason string stays comparable in skip-count telemetry;
+ * other generic locals emit `generic_local_with_short_domain`.
  */
 export function rejectLowQualityEmail(email: string): PatternSkip['reason'] | null {
   const at = email.indexOf('@');
@@ -86,10 +129,77 @@ export function rejectLowQualityEmail(email: string): PatternSkip['reason'] | nu
   const local = email.slice(0, at).toLowerCase();
   const domain = email.slice(at + 1);
   const root = domainRoot(domain);
-  if (local === 'contact' && root.length < SHORT_DOMAIN_ROOT_THRESHOLD) {
-    return 'contact_with_short_domain';
+  if (!GENERIC_FIRST_NAMES_SET.has(local)) return null;
+  if (root.length < SHORT_DOMAIN_ROOT_THRESHOLD) {
+    return local === 'contact' ? 'contact_with_short_domain' : 'generic_local_with_short_domain';
   }
   return null;
+}
+
+/**
+ * Contact Cleanup predicate — the single source of truth for whether a
+ * pattern-guessed catchall email should ship. Composes rejectLowQualityDomain
+ * and rejectLowQualityEmail with three additional gates that only matter
+ * for generic-catchall locals:
+ *
+ *   • TLD must be .com — every Class-B legit corporate catchall observed
+ *     in the Zedcor set is .com; .net/.co correlates with parked-domain
+ *     misses (info@walsh.net, contact@american.net, contact@record.co).
+ *   • Domain root must be pure alpha — digits in the root indicate the
+ *     resolver landed on an acronym/serial guess (contact@a3technology.com).
+ *   • When the companyName carries a joint-venture marker (JV, "joint
+ *     venture"), no catchall is acceptable — JV entities rarely own a
+ *     standalone domain, so the firstWord fallback ("HURLEY JV, LLP" →
+ *     hurley.com) lands on a different company entirely.
+ *
+ * Importers MUST be this function (not a parallel copy) — guarantees the
+ * cleanup script and the live resolver share one definition of "bad."
+ */
+export function rejectLowQualityCatchall(
+  email: string,
+  options: { companyName?: string } = {},
+): PatternSkip['reason'] | null {
+  const at = email.indexOf('@');
+  if (at < 0) return null;
+  const local = email.slice(0, at).toLowerCase();
+  const domain = email.slice(at + 1).toLowerCase();
+
+  // Existing Z14.1 gates first — keeps reason-string parity for the
+  // rows that were already cleared.
+  const domainReason = rejectLowQualityDomain(domain);
+  if (domainReason) return domainReason;
+  const emailReason = rejectLowQualityEmail(email);
+  if (emailReason) return emailReason;
+
+  // Beyond this point the extensions only fire for generic locals.
+  if (!GENERIC_FIRST_NAMES_SET.has(local)) return null;
+
+  const root = domainRoot(domain);
+  const tld = domain.slice(domain.lastIndexOf('.') + 1);
+  if (!ALLOWED_CATCHALL_TLDS.has(tld)) return 'generic_local_with_noncom_tld';
+  if (/[0-9]/.test(root)) return 'generic_local_with_digit_in_domain';
+
+  if (options.companyName && isJointVenture(options.companyName)) {
+    return 'generic_local_for_joint_venture';
+  }
+  return null;
+}
+
+/**
+ * True when the GC name's tokens or phrasing indicate a joint-venture
+ * entity. Matches "X JV, LLP" (token-level "jv") and "BCCG A JOINT
+ * VENTURE" (phrase-level). Case-insensitive.
+ */
+export function isJointVenture(companyName: string): boolean {
+  const lower = companyName.toLowerCase();
+  for (const phrase of JOINT_VENTURE_PHRASES) {
+    if (lower.includes(phrase)) return true;
+  }
+  const tokens = lower.replace(/[.,'"`]/g, '').split(/\s+/).filter(Boolean);
+  for (const token of tokens) {
+    if (JOINT_VENTURE_TOKENS.has(token)) return true;
+  }
+  return false;
 }
 
 /**
@@ -176,11 +286,11 @@ export async function guessContactEmail(companyName: string): Promise<PatternGue
     }
     if (!(await hasMx(domain))) continue;
     const candidates = generateEmailCandidates(domain);
-    // Find the first candidate that passes the email-level quality
-    // filter. If none pass, fall through to the next domain.
+    // Find the first candidate that passes the extended catchall filter.
+    // If none pass, fall through to the next domain.
     let chosen: string | null = null;
     for (const candidate of candidates) {
-      const emailSkip = rejectLowQualityEmail(candidate);
+      const emailSkip = rejectLowQualityCatchall(candidate, { companyName });
       if (emailSkip) {
         skipped.push({ candidate, reason: emailSkip });
         continue;
