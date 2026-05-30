@@ -65,8 +65,11 @@ describe('LeadChatLauncher', () => {
     );
     const btn = screen.getByTestId('lead-chat-launcher');
     expect(btn).toBeInTheDocument();
-    expect(btn).toHaveAttribute('aria-label', 'Open Lead Chat');
-    expect(btn).toHaveTextContent(/CHAT/);
+    expect(btn).toHaveAttribute('aria-label', 'Open chat');
+    expect(btn).toHaveAttribute('aria-expanded', 'false');
+    // No text label; the glyph is a chat SVG inlined from lucide.
+    expect(btn.textContent ?? '').toBe('');
+    expect(btn.querySelector('[data-launcher-icon="chat"]')).not.toBeNull();
   });
 
   it('opens the panel on click and shows the scoped Viewing chip', async () => {
