@@ -32,17 +32,18 @@ Stream C adds these files:
 2. `Pathfinder/components/catalog/modules/OutreachComposer.tsx` — slot `detail.outreach` real component (claim).
 3. `Pathfinder/components/catalog/modules/HubspotSync.tsx` — slot `detail.outreach` action-affordance.
 4. `Pathfinder/components/catalog/modules/WarmIntroPanel.tsx` — slot `detail.relationships` real component (active + pending layouts).
-5. `Pathfinder/lib/catalog/scoring/internalScoreComponents.ts` — derives the six weighted contributions from observable signals so the breakdown reconciles to the displayed score.
+5. `Pathfinder/lib/catalog/internalSignals.ts` — extracts the per-signal evidence strings (NOT numeric contributions) from `CompanyLeadView` + `raw_payload`. Pure function used by `CompanyDetail.tsx`.
 6. `Pathfinder/components/catalog/CatalogDetailRenderer.tsx` — server component that calls `resolveAllSlots` and renders the three detail slots (`detail.body`, `detail.outreach`, `detail.relationships`). Pure orchestration.
-7. Tests: `Pathfinder/__tests__/catalog/internalDetail.test.tsx`, `Pathfinder/__tests__/catalog/internalScoreComponents.test.ts`.
+7. Tests: `Pathfinder/__tests__/catalog/internalDetail.test.tsx`, `Pathfinder/__tests__/catalog/internalSignals.test.ts`.
 
 Stream C edits these files:
 - `Pathfinder/lib/catalog/floor-stubs.tsx`. Replace the four loader thunks for `company-detail`, `outreach-composer`, `hubspot-sync`, `warm-intro-panel`. Keep the other seven stubs intact. The file's intent is exactly this swap; Stream A's comments call it out.
+- `Pathfinder/lib/catalog/registry.ts`. Remove `score_components` from `company-detail`'s dependencies per the updated SPEC's SCORE-COMPONENTS NOTE. Single-line change; everything else in the file is unchanged.
 - `Pathfinder/app/[slug]/leads/[projectId]/page.tsx`. Add catalog branching: when `architecture.modules` is present, mount the catalog renderer instead of `<CompanyDetailContents>`. For every other org (no modules block, e.g. Zedcor, Realberry, Funder) the existing path runs unchanged.
-- `MEMORY/spec-references.md`. Append entries for new `lib/` and `lib/catalog/` files Stream C adds (per repo CI convention).
+- `MEMORY/spec-references.md`. Append entries for new `lib/` files Stream C adds (per repo CI convention).
 
 Stream C does NOT touch:
-- `lib/catalog/types.ts`, `lib/catalog/registry.ts`, `lib/catalog/renderer.ts`, `lib/catalog/gating.ts`, `lib/catalog/validation.ts`, `lib/catalog/index.ts`. These are Stream A's contracts.
+- `lib/catalog/types.ts`, `lib/catalog/renderer.ts`, `lib/catalog/gating.ts`, `lib/catalog/validation.ts`, `lib/catalog/index.ts`. These are Stream A's contracts. (Registry is touched for the one-line score_components removal per the updated SPEC.)
 - `components/design/*`. Imports only.
 - `components/lead/CompanyDetailContents.tsx`, `components/lead/LeadDetail.tsx`, `components/lead/LeadDetailShell.tsx`, `components/lead/FunderDetailContents.tsx`. These are Zedcor / Funder / pre-catalog Internal surfaces. Keeping them untouched is what guarantees no regression.
 - The dashboard route, the pipeline route, the digest cron. Stream B and D scope.
@@ -54,15 +55,15 @@ Stream C does NOT touch:
 
 Component file: `Pathfinder/components/catalog/modules/CompanyDetail.tsx`. Default export matches `ModuleComponentProps`. Sections, top to bottom, in a vertical stack of `Card` shells with `SectionHeader`s:
 
-1. Header. Company name (font `xl`, semi), `ScoreBadge` top-right with `label` true. Below: `WhyLine` accent tone summarizing rationale in one sentence (truncated if needed). Mono eyebrow shows source + posted-date.
-2. Score breakdown. Six rows, one per weighted signal. Each row: label, weight badge (mono micro), contribution value (mono), contribution-to-total bar. Footer row: "Total" with sum, asserted equal to displayed score. The contribution math is documented inline and unit-tested.
+1. Header. Company name (font `xl`, semi), `ScoreBadge` top-right with `label` true (the real total score, prominently). Below: `WhyLine` accent tone summarizing rationale in one sentence (truncated if needed). Mono eyebrow shows source + posted-date.
+2. Signals panel (the SPEC's qualitative replacement for a numeric breakdown). Six rows, one per weighted signal. Each row: label (e.g. "Federal signal"), mono weight badge (e.g. "15%"), and a `WhyLine` summarizing the real stored evidence that fired the signal (e.g. "SAM registered, federal awardee"). When a signal has no evidence in this company's data, the row reads its evidence cell as a soft empty marker (`-`) rather than fabricating a value. NEVER displays a derived or calibrated numeric contribution. Documented inline.
 3. Rationale. Prose with preserved line breaks. `EmptyState` when missing.
 4. Qualifying signals. Bullet list of concrete evidence pulled from raw_payload (sales-team postings, federal awardee, association memberships, footprint breadth). `EmptyState` when none surfaced.
 5. Enriched data. Two-column key-value grid: Service category, Sales motion, Operating footprint, Headquarters, Contractor licensure, Federal registration, Size, Trade associations, Website (linked), LinkedIn (linked). Each label is the architecture `display_label`, never the field key. Missing fields are dropped, not zero-padded.
 6. Sources. List of per-company source records (id, type, posted_date, url if any). `EmptyState` when absent (soft gate).
 7. Timeline. Chronological list of activity events on this company (verified-at, enriched-at, scored-at, outreach-sent). Pulled from the row's timestamp columns plus `raw_payload.internal_timeline` if present. `EmptyState` when none.
 
-Hard gating note. `enriched_record` resolves true when `raw_payload.internal_enrichment` is non-null and non-empty. `score_components` resolves true when both `row.score` is non-null AND we can derive six contributions from observable signals (always true once score is non-null, by design of the derivation). When either hard gate is unmet the slot falls back to floor.
+Hard gating note. Per the updated SPEC, `company-detail`'s only hard dep is `enriched_record` (the `score_components` hard dep is dropped). `enriched_record` resolves true when `raw_payload.internal_enrichment` is non-null and non-empty. When unmet the slot falls back to floor.
 
 ### Module 2: outreach-composer (slot `detail.outreach`)
 
@@ -126,34 +127,36 @@ The branching keys on `architecture.modules` presence + the body slot resolving 
 
 `CatalogDetailRenderer` is the small server component that takes the three relevant slot resolutions and mounts the resolved modules, passing the standard `ModuleComponentProps`. It does NOT touch the dashboard / pipeline slots; this is a detail-route surface only.
 
-## Score-components reconciliation
+## Signals panel (qualitative, no derivation)
 
-The architecture defines weights and thresholds but no per-company score-component values are stored anywhere I can find. To honor the SPEC's revert trigger ("the score breakdown not reconciling to the total") I implement a deterministic derivation in `Pathfinder/lib/catalog/scoring/internalScoreComponents.ts`:
+Per the updated SPEC's SCORE-COMPONENTS NOTE (b72f4eb): "Do NOT fabricate them or apply a calibration scalar. company-detail renders the six signals qualitatively: each signal with its architecture weight and the real stored evidence that fired it, plus the real total score prominently. No fabricated point contributions, so there is nothing to reconcile."
 
-- For each of the six signals, derive a normalized contribution in `[0, 1]` from observable fields in `raw_payload` + `CompanyLeadView`:
-  - `sales_motion_strength`: `active-outbound` → 1.0, `hiring-bd` → 0.7, `inbound-only` → 0.3, `unknown` → 0.0.
-  - `operational_footprint`: count of `operating_states` mapped to `[0, 1]` (1 state → 0.25, 2-3 → 0.5, 4-6 → 0.75, 7+ → 1.0). HQ-only → 0.1.
-  - `federal_signal`: `both` → 1.0, `federal-awardee` → 0.8, `sam-registered` → 0.5, `none`/null → 0.0.
-  - `project_driven_fit`: SERVICE_CATEGORY mapped to a high/mid/low band reflecting project-driven revenue intensity.
-  - `recency`: posted_date age in days, decayed.
-  - `association_presence`: `min(1.0, associations.length / 3)`.
-- Multiply each by its weight and report.
-- The total of the six weighted contributions reconciles to a 0-100 score. To make this match the displayed `row.score` exactly, the helper accepts the displayed score and computes one calibration scalar applied to all six contributions: `contributions_i = raw_i * weight_i * (displayed_score / raw_total)` (when `raw_total > 0`). When `raw_total === 0` the helper renders six zero contributions and a one-line note "Score predates breakdown; six contributions cannot be derived."
-- The breakdown is the most-honest reconstruction available given the data on hand. The math is documented inline and surfaced in a one-line note under the breakdown so the operator can read what they're looking at.
+`Pathfinder/lib/catalog/internalSignals.ts` exports a pure helper `extractInternalSignals(lead, raw_payload)` that returns one entry per weighted signal with the architecture weight and a short evidence string. NO numeric contribution. Examples (subject to refinement during implementation against real fixture data):
 
-If Kyle wants stored-not-derived breakdown the right place is the ranker, which is out of scope; the helper interface is built so a future ranker upgrade swaps the derivation for a read of stored components without a UI change.
+- `sales_motion_strength` (weight 25%): evidence is the `lead.sales_motion` display label and, when present, the qualifier hint (`raw_payload.internal_sales_motion_signal`). When neither is present, evidence is empty.
+- `operational_footprint` (weight 20%): evidence is the count and list of `operating_states` from `raw_payload.internal_geo`. When only HQ is known, evidence is the HQ state. When neither, empty.
+- `federal_signal` (weight 15%): evidence is the `lead.federal_registration` display label. When `none` or null, empty.
+- `project_driven_fit` (weight 15%): evidence is the `lead.service_category` display label and, when present, the qualifier hint (`raw_payload.internal_inferred_service_category`).
+- `recency` (weight 15%): evidence is the formatted `posted_date` (e.g. "Posted 2026-05-22"). When null, empty.
+- `association_presence` (weight 10%): evidence is the count and first two `lead.associations` (e.g. "2 memberships: ABC, AGC"). When empty, empty.
+
+The component renders the six rows in weight-descending order. The signals panel is descriptive of what the ranker considered, not a re-derivation of how it scored. The real total score is shown in the header `ScoreBadge` with `label` true so the operator never has to do arithmetic.
+
+This is the most-honest surface we can build given persisted-data on hand. Switching to a stored breakdown later is a ranker change that swaps `internalSignals.ts`'s implementation without changing the consumer.
 
 ## Tests
 
-`Pathfinder/__tests__/catalog/internalScoreComponents.test.ts`:
-- For a representative Internal company (e.g. Thalle Construction Co Inc), the six derived contributions sum to exactly the displayed score.
-- Edge cases: zero raw_total → six zeros and the note; null `posted_date` → recency 0; missing `associations` → association_presence 0; unknown `sales_motion` → 0.
-- Snapshot of the SERVICE_CATEGORY → project_driven_fit mapping to make tuning changes visible in review.
+`Pathfinder/__tests__/catalog/internalSignals.test.ts`:
+- For a representative Internal company fixture: extractInternalSignals returns exactly six entries in weight-descending order with correct weight percentages and the expected evidence strings drawn from observable fields.
+- No entry exposes a numeric contribution field.
+- Edge cases: null `posted_date` → recency evidence empty; missing `associations` → association_presence evidence empty; unknown `sales_motion` → sales_motion evidence empty; missing `internal_geo` → footprint evidence empty.
+- Snapshot test to catch unintended evidence-string changes during review.
 
 `Pathfinder/__tests__/catalog/internalDetail.test.tsx` (RTL):
 - Detail route renders for the Internal fixture (slug `internal`, a fixture company). Asserts:
   - Header shows the company name and the displayed score badge.
-  - Score breakdown renders six rows whose values sum (via DOM text) to the displayed score.
+  - Signals panel renders six rows in weight-descending order, each with a weight badge (e.g. "25%", "20%", ...).
+  - No fabricated point contribution appears anywhere in the DOM (assert via querying for forbidden patterns like calibration text or numeric contribution columns).
   - At least one display_label (e.g. `Service category`) appears verbatim; no field key (e.g. `service_category`) leaks into rendered text.
   - Back-link target via `orgPaths.dashboard('internal')` is `/internal`.
 - Gating matrix:
@@ -179,15 +182,13 @@ If Kyle wants stored-not-derived breakdown the right place is the ranker, which 
 - Pathfinder Vercel preview (post-push): green.
 - No em-dashes or en-dashes anywhere in the diff (grep before commit).
 
-## Open question for Kyle (non-blocking)
+## Auto-merge + auto-revert posture (per updated SPEC)
 
-The score-components derivation strategy is the one operator-facing call I cannot infer from the SPEC alone. The SPEC requires the breakdown to reconcile to the displayed score, but per-signal components are not stored. The plan derives + calibrates from observable signals so the sum equals the total exactly, with a footer note explaining the derivation. If you want this stored at ranker-time instead, that is a backend change outside Stream C scope; flag and I will adjust the module to read stored components when they appear.
+Operator-authorized self-merge for this batch (SPEC b72f4eb AUTHORITY block). When the gate passes I merge directly to main.
 
-## Auto-revert posture (per launch prompt)
-
-After PR merges and Vercel deploys:
+After merge + Vercel deploy:
 - Watch Pathfinder Vercel deployment for green.
-- Smoke-load `/pathfinder/internal/leads/<a real company id>` and confirm: score breakdown renders, six rows sum to displayed score, no raw schema keys appear, back-link returns to `/pathfinder/internal`.
-- If the deploy fails OR the breakdown does not reconcile OR a raw key leaks: open a revert PR for the merge commit, move the four kanban cards to Bug Fixes with evidence.
+- Smoke-load `/pathfinder/internal/leads/<a real company id>` and confirm: signals panel renders six rows with weights and evidence, no fabricated point contributions appear, no raw schema keys appear, back-link returns to `/pathfinder/internal`.
+- If the deploy fails OR a fabricated contribution leaks OR a raw key leaks OR Zedcor / Realberry / Funder are visibly changed: `git revert` the merge commit (never destructive reset), push, move the four kanban cards to Bug Fixes with evidence.
 
-Cards stay in Review until merge (operator-controlled), then move to Deployed on green Vercel. Never Verified.
+Cards move to Deployed on green merge + green Vercel. Never Verified.
