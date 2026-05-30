@@ -39,7 +39,6 @@ import type { InternalFilters, RawCompanyRow } from '@/lib/catalog/modules/filte
 
 type AnalyticsRow = RawCompanyRow & { ranked_at?: string | null; verified?: boolean | null };
 import type { LeadUnitSchema } from '@/lib/catalog/modules/ranked-feed/labels';
-import { LeadChatLauncher } from '@/components/internal/lead-chat';
 
 void React;
 
