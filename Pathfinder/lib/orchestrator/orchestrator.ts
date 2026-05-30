@@ -20,8 +20,15 @@ import { ZEDCOR_HOUSTON_HUB_SOURCE_SLUGS } from '@/lib/adapters/sources';
 import {
   writeProjectToNotion,
   updateProjectPitchOnNotion,
+  updateProjectEnrichmentInNotion,
+  findExistingProjectInNotion,
+  shouldWriteToZedcorNotion,
 } from '@/lib/notion/zedcor-writer';
 import type { NotionPhase, NotionState } from '@/lib/notion/types';
+// Z17 — gc-extractor used inline by the in-run backfill wave to enrich
+// pre-existing un-pitched construction rows that the original orchestrator
+// run never reached.
+import { extractGcMetadata } from '@/lib/adapters/zedcor/gc-extractor';
 import { runSource, type RunSourceResult } from './run-source';
 import { tagPhaseWithConfidence } from './tag-phase';
 import { scoreZedcorProject } from './zedcor-scorer';
@@ -63,6 +70,19 @@ export interface RunSummary {
   enrichment_attempted?: number;
   enrichment_succeeded?: number;
   enrichment_failed?: number;
+  // Z17 — per-stage counts so the spec's "single-run completeness"
+  // acceptance criterion can be read off run_metadata directly. All
+  // optional for back-compat with pre-Z17 summaries.
+  scored?: number;
+  gc_resolved?: number;
+  contact_resolved?: number;
+  hooks_generated?: number;
+  notion_withheld?: number;
+  backfill_attempted?: number;
+  backfill_scored?: number;
+  backfill_gc_resolved?: number;
+  backfill_hooks_generated?: number;
+  backfill_notion_writes?: number;
   errors: Array<{ source_slug: string; message: string }>;
 }
 
@@ -158,6 +178,7 @@ interface ProjectRow {
   source: string;
   source_id: string;
   title: string;
+  summary: string | null;
   posted_date: string | null;
   response_deadline: string | null;
   source_url: string | null;
@@ -168,6 +189,12 @@ interface ProjectRow {
   project_stage: string | null;
   buy_window_open: boolean | null;
   source_authority: string | null;
+  // Z17 — needed by the Notion-write gate (isReadyForNotion) so we can
+  // withhold rows that are still missing pitch hooks / recommended action
+  // and skip rows whose enrichment has already been persisted.
+  gc_metadata: Record<string, unknown> | null;
+  pitch_metadata: Record<string, unknown> | null;
+  external_refs: Record<string, unknown> | null;
 }
 
 async function loadRunProjects(runId: number): Promise<ProjectRow[]> {
@@ -178,23 +205,69 @@ async function loadRunProjects(runId: number): Promise<ProjectRow[]> {
   };
   const { data } = await admin
     .from('projects')
-    .select('id, source, source_id, title, posted_date, response_deadline, source_url, rationale, score, raw_payload, project_stage, buy_window_open, source_authority')
+    .select('id, source, source_id, title, summary, posted_date, response_deadline, source_url, rationale, score, raw_payload, project_stage, buy_window_open, source_authority, gc_metadata, pitch_metadata, external_refs')
     .eq('agent_run_id', runId);
   return data ?? [];
+}
+
+// Z17 — Notion-write gate. The Lead Feed must only receive enriched rows,
+// never bare shells. A row is ready when:
+//   1. shouldWriteToZedcorNotion() says yes (Z12 expanded eligibility)
+//   2. score is present (the deterministic Wave 2 ran successfully)
+//   3. for in-window rows (buy_window_open=true), the pitch wave also
+//      produced pitch_hooks + recommended_action.
+// Pre-window construction rows (Z12 expansion) only need score; pitch is
+// not generated for them so requiring it would withhold them forever.
+
+// Z17 — diagnostic escape hatch (NOT for production). When this is set the
+// orchestrator's Notion writes (Wave 4 + backfill) and the pitch wave's
+// in-place Notion update are skipped. Lets the diagnose-z17 script verify
+// the score / enrichment / pitch / gate / backfill chain end-to-end against
+// the live DB without requiring NOTION_API_TOKEN (a Vercel-only secret).
+function notionDisabled(): boolean {
+  return process.env.ZEDCOR_Z17_SKIP_NOTION === 'true';
+}
+function isReadyForNotion(p: Pick<ProjectRow,
+  'title' | 'summary' | 'source_authority' | 'project_stage' | 'buy_window_open' | 'score' | 'pitch_metadata'>): boolean {
+  if (!shouldWriteToZedcorNotion({
+    title: p.title,
+    source_authority: p.source_authority,
+    project_stage: p.project_stage,
+    buy_window_open: p.buy_window_open,
+    summary: p.summary ?? null,
+  })) return false;
+  if (p.score === null || p.score === undefined) return false;
+  if (p.buy_window_open === true) {
+    const pm = p.pitch_metadata as { pitch_hooks?: unknown; recommended_action?: unknown } | null;
+    const hooks = pm?.pitch_hooks;
+    const action = pm?.recommended_action;
+    if (!Array.isArray(hooks) || hooks.length === 0) return false;
+    if (!action || typeof action !== 'string' || !action.trim()) return false;
+  }
+  return true;
 }
 
 async function updateProjectScore(id: string, score: number | null, rationale: string): Promise<void> {
   const admin = supabaseAdmin() as unknown as {
     from: (t: string) => {
-      update: (row: Record<string, unknown>) => { eq: (col: string, val: string) => Promise<{ error: unknown }> };
+      update: (row: Record<string, unknown>) => {
+        eq: (col: string, val: string) => Promise<{ error: { message: string } | null }>;
+      };
     };
   };
-  await admin.from('projects').update({
+  // Z17 root-cause fix — pathfinder.projects has no `ranked_by` column. The
+  // pre-Z17 update silently failed on every call (Supabase returned
+  // {error:'column "ranked_by" of relation "projects" does not exist'} and
+  // the result was never inspected), so every manual-orchestrator row landed
+  // with score=null + rationale=null and the Notion writer downstream stamped
+  // '(scoring disabled)' on the Rationale property. Drop the bogus column and
+  // surface any future write error to the caller.
+  const { error } = await admin.from('projects').update({
     score,
     rationale,
     ranked_at: new Date().toISOString(),
-    ranked_by: 'zedcor-z1a-deterministic',
   }).eq('id', id);
+  if (error) throw new Error(`updateProjectScore ${id} failed: ${error.message}`);
 }
 
 async function updateProjectExternalRefs(id: string, refs: Record<string, unknown>): Promise<void> {
@@ -240,17 +313,42 @@ export async function runZedcorOrchestrator(): Promise<RunSummary> {
   // Sprint Z3 — bid-lifecycle project_stage is now set by the adapter +
   // run-source.ts (from raw_payload, with detail-page enrichment). The
   // legacy date-based tag-phase is preserved ONLY for Notion's date-based
-  // Phase property in Wave 3 below; it no longer overwrites project_stage.
+  // Phase property in Wave 4 below; it no longer overwrites project_stage.
   const projects = await loadRunProjects(runId);
+  let scoredCount = 0;
+  let scoreFailures = 0;
   for (const p of projects) {
-    const { score, rationale } = scoreZedcorProject({
-      response_deadline: p.response_deadline,
-      estimated_value: (p.raw_payload?.estimated_value as number | null) ?? null,
-      county: (p.raw_payload?.county as string | null) ?? null,
-      agency: (p.raw_payload?.agency as string | null) ?? null,
-    });
-    await updateProjectScore(p.id, score, rationale);
+    try {
+      const { score, rationale } = scoreZedcorProject({
+        response_deadline: p.response_deadline,
+        estimated_value: (p.raw_payload?.estimated_value as number | null) ?? null,
+        county: (p.raw_payload?.county as string | null) ?? null,
+        agency: (p.raw_payload?.agency as string | null) ?? null,
+      });
+      await updateProjectScore(p.id, score, rationale);
+      if (score !== null) scoredCount += 1;
+    } catch (err) {
+      scoreFailures += 1;
+      await logEvent({
+        agent_name: ORCHESTRATOR_AGENT_NAME,
+        event_type: 'score_failed',
+        event_data: { run_id: runId, project_id: p.id, error: (err as Error).message.slice(0, 500) },
+        organization_id: ZEDCOR_ORG_ID,
+        runner: 'manual',
+        ts: new Date().toISOString(),
+        run_id: runId,
+      });
+    }
   }
+  await logEvent({
+    agent_name: ORCHESTRATOR_AGENT_NAME,
+    event_type: 'score_wave_complete',
+    event_data: { run_id: runId, scored: scoredCount, failed: scoreFailures, total: projects.length },
+    organization_id: ZEDCOR_ORG_ID,
+    runner: 'manual',
+    ts: new Date().toISOString(),
+    run_id: runId,
+  });
 
   // Sprint Z3.5 Wave 2.5 — Detail-page enrichment (GC + contact extraction).
   // Strictly additive; logs progress; on any failure the run continues and
@@ -318,11 +416,66 @@ export async function runZedcorOrchestrator(): Promise<RunSummary> {
     });
   }
 
-  // Wave 3 — Notion writes (sequential, light rate-limit).
+  // Z17 — Wave 3: pitch generation BEFORE Notion writes so the Notion
+  // writer can gate in-window rows on hooks + recommended_action being
+  // present. Previously the pitch wave ran AFTER Wave 3 Notion writes,
+  // which meant the first Notion landing for any in-window row was a
+  // bare shell (no hooks, no recommended action) — exactly the bug the
+  // spec is closing. Pitch wave's own Notion-update path still runs
+  // best-effort for rows whose page already exists (re-triggers); for
+  // fresh rows Wave 4 below creates the page and immediately updates it
+  // with pitch_metadata.
+  const pitchResult = await runZedcorZ4PitchWave(runId).catch(async (err) => {
+    await logEvent({
+      agent_name: ORCHESTRATOR_AGENT_NAME,
+      event_type: 'zedcor_z4_pitch_wave_failed',
+      event_data: { run_id: runId, error: (err as Error).message.slice(0, 500) },
+      organization_id: ZEDCOR_ORG_ID,
+      runner: 'manual',
+      ts: new Date().toISOString(),
+      run_id: runId,
+    });
+    return { eligible: 0, generated: 0, failures: 0, skipped: 0 };
+  });
+
+  // Z17 — Wave 4: Notion writes (sequential, light rate-limit), gated by
+  // isReadyForNotion(). Rows missing a score (Wave 2 silently failed
+  // pre-Z17) or, for in-window rows, missing pitch_hooks +
+  // recommended_action are withheld so the Lead Feed never receives a
+  // bare shell. Re-running the trigger picks up withheld rows once the
+  // missing stage produces output.
   let notionWrites = 0;
   let notionDedupes = 0;
+  let notionWithheld = 0;
   const refreshed = await loadRunProjects(runId);
+  const skipNotion = notionDisabled();
   for (const p of refreshed) {
+    if (skipNotion) {
+      // Diagnostic mode: still count gate decisions so run_metadata accurately
+      // reflects what WOULD have been written / withheld.
+      if (isReadyForNotion(p)) notionWrites += 1;
+      else notionWithheld += 1;
+      continue;
+    }
+    if (!isReadyForNotion(p)) {
+      notionWithheld += 1;
+      await logEvent({
+        agent_name: ORCHESTRATOR_AGENT_NAME,
+        event_type: 'notion_withheld',
+        event_data: {
+          run_id: runId,
+          project_id: p.id,
+          buy_window_open: p.buy_window_open,
+          has_score: p.score !== null,
+          has_pitch_hooks: Array.isArray((p.pitch_metadata as { pitch_hooks?: unknown } | null)?.pitch_hooks),
+        },
+        organization_id: ZEDCOR_ORG_ID,
+        runner: 'manual',
+        ts: new Date().toISOString(),
+        run_id: runId,
+      });
+      continue;
+    }
     try {
       const enrichment = enrichmentResult.enrichedById.get(p.id) ?? null;
       const res = await writeProjectToNotion({
@@ -356,6 +509,41 @@ export async function runZedcorOrchestrator(): Promise<RunSummary> {
         notion_page_url: res.notionPageUrl,
         notion_written_at: new Date().toISOString(),
       });
+      // Z17 — if pitch_metadata carries hooks, immediately mirror them
+      // onto the (just-created or pre-existing) Notion page so the Lead
+      // Feed row reaches the rep with hooks + recommended action in a
+      // single trigger.
+      const pm = p.pitch_metadata as {
+        pitch_hooks?: unknown;
+        recommended_action?: string | null;
+        action_by_date?: string | null;
+        cross_pollination?: string | null;
+        warm_intro_path?: string | null;
+      } | null;
+      if (pm && Array.isArray(pm.pitch_hooks) && pm.pitch_hooks.length > 0 && res.notionPageId) {
+        try {
+          await updateProjectPitchOnNotion({
+            pageId: res.notionPageId,
+            pitch: {
+              cross_pollination: pm.cross_pollination ?? null,
+              warm_intro_path: pm.warm_intro_path ?? null,
+              pitch_hooks: pm.pitch_hooks as string[],
+              recommended_action: pm.recommended_action ?? null,
+              action_by_date: pm.action_by_date ?? null,
+            },
+          });
+        } catch (notionPitchErr) {
+          await logEvent({
+            agent_name: ORCHESTRATOR_AGENT_NAME,
+            event_type: 'notion_pitch_update_failed',
+            event_data: { run_id: runId, project_id: p.id, error: (notionPitchErr as Error).message.slice(0, 500) },
+            organization_id: ZEDCOR_ORG_ID,
+            runner: 'manual',
+            ts: new Date().toISOString(),
+            run_id: runId,
+          });
+        }
+      }
       // Polite delay against Notion rate-limit (~3 req/s burst).
       await new Promise((r) => setTimeout(r, 350));
     } catch (err) {
@@ -371,27 +559,37 @@ export async function runZedcorOrchestrator(): Promise<RunSummary> {
     }
   }
 
-  // Sprint Z4 — Wave 4: pitch metadata. Runs after Notion writes complete.
-  // Gated on env so it can be disabled without removing the wiring.
-  // Degrades gracefully when Z3.5's gc_metadata isn't populated yet.
-  const pitchResult = await runZedcorZ4PitchWave(runId).catch(async (err) => {
+  // Z17 — Wave 5: in-run backfill of pre-existing un-enriched
+  // construction-relevant rows. Without this, every prior run's bare
+  // shells would stay bare forever (the pitch wave only scoops rows
+  // from THIS run via agent_run_id). Capped per-run to keep the
+  // function inside Vercel's wall budget; re-triggers chip away until
+  // the in-window construction set approaches 100% enriched per spec.
+  const backfillResult = await runZedcorZ17Backfill(runId).catch(async (err) => {
     await logEvent({
       agent_name: ORCHESTRATOR_AGENT_NAME,
-      event_type: 'zedcor_z4_pitch_wave_failed',
+      event_type: 'zedcor_z17_backfill_failed',
       event_data: { run_id: runId, error: (err as Error).message.slice(0, 500) },
       organization_id: ZEDCOR_ORG_ID,
       runner: 'manual',
       ts: new Date().toISOString(),
       run_id: runId,
     });
-    return { eligible: 0, generated: 0, failures: 0, skipped: 0 };
+    return { attempted: 0, scored: 0, gc_resolved: 0, hooks_generated: 0, notion_writes: 0, notion_dedupes: 0, failures: 0 };
   });
 
   // Emit a final step_progress=100 so the UI's percent_complete settles.
   await logEvent({
     agent_name: ORCHESTRATOR_AGENT_NAME,
     event_type: 'step_progress',
-    event_data: { step_label: 'Writing to Notion complete', percent: 100, run_id: runId, pitch: pitchResult },
+    event_data: {
+      step_label: 'Pipeline complete',
+      percent: 100,
+      run_id: runId,
+      pitch: pitchResult,
+      backfill: backfillResult,
+      notion_withheld: notionWithheld,
+    },
     organization_id: ZEDCOR_ORG_ID,
     runner: 'manual',
     ts: new Date().toISOString(),
@@ -423,6 +621,18 @@ export async function runZedcorOrchestrator(): Promise<RunSummary> {
     enrichment_attempted: enrichmentResult.attempted,
     enrichment_succeeded: enrichmentResult.succeeded,
     enrichment_failed: enrichmentResult.failed,
+    // Z17 — per-stage counts so the spec's "single-run completeness"
+    // acceptance criterion is readable straight off run_metadata.
+    scored: scoredCount,
+    gc_resolved: enrichmentResult.succeeded,
+    contact_resolved: contactResolutionSummary.succeeded,
+    hooks_generated: pitchResult.generated,
+    notion_withheld: notionWithheld,
+    backfill_attempted: backfillResult.attempted,
+    backfill_scored: backfillResult.scored,
+    backfill_gc_resolved: backfillResult.gc_resolved,
+    backfill_hooks_generated: backfillResult.hooks_generated,
+    backfill_notion_writes: backfillResult.notion_writes,
     errors,
   };
 
@@ -482,8 +692,13 @@ interface PitchProjectRow {
 }
 
 function isPitchEnabled(): boolean {
+  // Z17 — drop the legacy ZEDCOR_DISABLE_ANTHROPIC kill-switch. Per spec
+  // (§"Hard rules"): no paid-key dependence for core stages (score / phase
+  // / pitch). Score + phase are deterministic; pitch genuinely needs the
+  // platform's core LLM, so it requires ANTHROPIC_API_KEY but is no longer
+  // gated by the cost-control flag that was used to silence the whole
+  // chain. ZEDCOR_DISABLE_PITCH stays for the targeted demo kill-switch.
   if (process.env.ZEDCOR_DISABLE_PITCH === 'true') return false;
-  if (process.env.ZEDCOR_DISABLE_ANTHROPIC === 'true') return false;
   return Boolean(process.env.ANTHROPIC_API_KEY);
 }
 
@@ -817,6 +1032,315 @@ export async function runZedcorZ7ContactResolutionWave(
       });
     }
   }
+
+  return summary;
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Z17 — Wave 5: in-run backfill of pre-existing un-enriched
+// construction-relevant rows.
+//
+// Without this wave, every prior run's bare shells would stay bare
+// forever — the regular pitch + enrichment waves only scoop rows
+// matching agent_run_id=runId, so historical rows missed by Wave 2's
+// silent-write bug never recover. Wave 5 loads existing construction
+// rows that are still missing score or pitch hooks, runs them through
+// the same kernel (score → GC → pitch → Notion-gated), and chips away
+// at the backlog. Capped per-run via ZEDCOR_Z17_BACKFILL_CAP so the
+// orchestrator fits inside the Vercel function wall budget.
+//
+// Federal sam.gov / usaspending rows are excluded — per spec these are
+// post-award reporting noise, not construction-relevant leads.
+// ─────────────────────────────────────────────────────────────────────────
+
+const DEFAULT_BACKFILL_CAP_PER_RUN = 30;
+
+const FEDERAL_NOISE_SOURCES: ReadonlySet<string> = new Set(['sam.gov', 'usaspending']);
+const Z17_PITCH_ELIGIBLE_STAGES: ReadonlySet<string> = new Set([
+  'awarded', 'gc_selected', 'sub_bid', 'mobilization',
+]);
+
+interface BackfillSummary {
+  attempted: number;
+  scored: number;
+  gc_resolved: number;
+  hooks_generated: number;
+  notion_writes: number;
+  notion_dedupes: number;
+  failures: number;
+}
+
+function backfillCap(): number {
+  const raw = process.env.ZEDCOR_Z17_BACKFILL_CAP;
+  const n = raw ? Number(raw) : NaN;
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : DEFAULT_BACKFILL_CAP_PER_RUN;
+}
+
+function isPitchEligibleRow(p: Pick<ProjectRow, 'project_stage' | 'buy_window_open'>): boolean {
+  if (p.buy_window_open === true) return true;
+  return Z17_PITCH_ELIGIBLE_STAGES.has((p.project_stage ?? '').toLowerCase());
+}
+
+function backfillNeedsWork(p: ProjectRow): boolean {
+  if (p.score === null || p.score === undefined) return true;
+  if (isPitchEligibleRow(p)) {
+    const pm = p.pitch_metadata as { pitch_hooks?: unknown; recommended_action?: unknown } | null;
+    if (!pm) return true;
+    if (!Array.isArray(pm.pitch_hooks) || pm.pitch_hooks.length === 0) return true;
+    if (!pm.recommended_action || typeof pm.recommended_action !== 'string' || !pm.recommended_action.trim()) return true;
+  }
+  return false;
+}
+
+async function loadBackfillCandidates(cap: number): Promise<ProjectRow[]> {
+  // Load construction-relevant rows (organization=Zedcor, source not in
+  // federal-noise sources) ordered by in-window first, then most recent
+  // posted_date. Overscan by 4× cap so we can JS-filter for the precise
+  // backfill-needed predicate without paying for a per-row roundtrip.
+  const admin = supabaseAdmin();
+  const fetchCap = Math.max(cap * 4, 80);
+  const federalCsv = Array.from(FEDERAL_NOISE_SOURCES).join(',');
+  const res = await (admin.from('projects') as unknown as {
+    select: (cols: string) => {
+      eq: (col: string, val: string) => {
+        not: (col: string, op: string, val: string) => {
+          order: (col: string, opts: { ascending: boolean; nullsFirst: boolean }) => {
+            order: (col2: string, opts2: { ascending: boolean; nullsFirst: boolean }) => {
+              limit: (n: number) => Promise<{ data: ProjectRow[] | null; error: { message: string } | null }>;
+            };
+          };
+        };
+      };
+    };
+  })
+    .select('id, source, source_id, title, summary, posted_date, response_deadline, source_url, rationale, score, raw_payload, project_stage, buy_window_open, source_authority, gc_metadata, pitch_metadata, external_refs')
+    .eq('organization_id', ZEDCOR_ORG_ID)
+    .not('source', 'in', `(${federalCsv})`)
+    .order('buy_window_open', { ascending: false, nullsFirst: false })
+    .order('posted_date', { ascending: false, nullsFirst: false })
+    .limit(fetchCap);
+  if (res.error) throw new Error(`backfill candidate load failed: ${res.error.message}`);
+  const all = res.data ?? [];
+  return all.filter(backfillNeedsWork).slice(0, cap);
+}
+
+async function persistGcMetadataDirect(projectId: string, meta: GcMetadata): Promise<void> {
+  const admin = supabaseAdmin() as unknown as {
+    from: (t: string) => {
+      update: (row: Record<string, unknown>) => {
+        eq: (col: string, val: string) => Promise<{ error: { message: string } | null }>;
+      };
+    };
+  };
+  const { error } = await admin.from('projects')
+    .update({ gc_metadata: meta as unknown as Record<string, unknown> })
+    .eq('id', projectId);
+  if (error) throw new Error(`backfill persist gc_metadata failed: ${error.message}`);
+}
+
+export async function runZedcorZ17Backfill(runId: number): Promise<BackfillSummary> {
+  const summary: BackfillSummary = {
+    attempted: 0, scored: 0, gc_resolved: 0, hooks_generated: 0,
+    notion_writes: 0, notion_dedupes: 0, failures: 0,
+  };
+
+  const cap = backfillCap();
+  const candidates = await loadBackfillCandidates(cap);
+
+  await logEvent({
+    agent_name: ORCHESTRATOR_AGENT_NAME,
+    event_type: 'zedcor_z17_backfill_started',
+    event_data: { run_id: runId, candidates: candidates.length, cap },
+    organization_id: ZEDCOR_ORG_ID,
+    runner: 'manual', ts: new Date().toISOString(), run_id: runId,
+  });
+
+  if (candidates.length === 0) return summary;
+
+  const supabase = supabaseAdmin() as unknown as Parameters<typeof resolveCrossPollination>[0]['supabase'];
+  const pitchEnabled = isPitchEnabled();
+
+  for (const p of candidates) {
+    summary.attempted += 1;
+    try {
+      // (a) Score — deterministic.
+      if (p.score === null || p.score === undefined) {
+        const { score, rationale } = scoreZedcorProject({
+          response_deadline: p.response_deadline,
+          estimated_value: (p.raw_payload?.estimated_value as number | null) ?? null,
+          county: (p.raw_payload?.county as string | null) ?? null,
+          agency: (p.raw_payload?.agency as string | null) ?? null,
+        });
+        await updateProjectScore(p.id, score, rationale);
+        if (score !== null) {
+          p.score = score;
+          p.rationale = rationale;
+          summary.scored += 1;
+        }
+      }
+
+      // (b) GC enrich — only when missing a real GC name.
+      let gcMeta: GcMetadata | null = (p.gc_metadata as GcMetadata | null) ?? null;
+      const hasGcName = gcMeta && typeof gcMeta.gc_name === 'string' && gcMeta.gc_name.length > 0;
+      if (!hasGcName) {
+        try {
+          gcMeta = await extractGcMetadata({ source_url: p.source_url, title: p.title });
+          await persistGcMetadataDirect(p.id, gcMeta);
+          if (gcMeta.gc_name) summary.gc_resolved += 1;
+          p.gc_metadata = gcMeta as unknown as Record<string, unknown>;
+        } catch (gcErr) {
+          await logEvent({
+            agent_name: ORCHESTRATOR_AGENT_NAME,
+            event_type: 'zedcor_z17_backfill_gc_failed',
+            event_data: { run_id: runId, project_id: p.id, error: (gcErr as Error).message.slice(0, 500) },
+            organization_id: ZEDCOR_ORG_ID,
+            runner: 'manual', ts: new Date().toISOString(), run_id: runId,
+          });
+        }
+      }
+
+      // (c) Pitch — only for pitch-eligible rows with the LLM key present.
+      if (pitchEnabled && isPitchEligibleRow(p)) {
+        const meta = (gcMeta ?? {}) as GcMetadata;
+        const gcName = meta.gc_name ?? null;
+        const typeTags = inferTypeTags({ title: p.title, summary: p.summary });
+        const cp = gcName
+          ? await resolveCrossPollination({
+              gcName, supabase,
+              projectTitle: p.title, projectSummary: p.summary,
+            })
+          : { cross_pollination: null, warm_intro_path: null, matched_customer: null, confidence: 0, possible_cross_pollination: [] };
+        const pr = await generatePitchHooks({
+          title: p.title,
+          agency: (p.raw_payload?.agency as string | null) ?? null,
+          summary: p.summary,
+          project_value: (p.raw_payload?.estimated_value as number | null) ?? null,
+          city: (p.raw_payload?.city as string | null) ?? null,
+          county: (p.raw_payload?.county as string | null) ?? null,
+          state: (p.raw_payload?.state as string | null) ?? null,
+          project_stage: p.project_stage,
+          posted_date: p.posted_date,
+          gc_name: gcName,
+          inferred_type_tags: typeTags,
+        }, { agentRunId: runId });
+        const action = assembleRecommendedAction({
+          title: p.title,
+          gc_name: gcName,
+          gc_contact_name: meta.gc_contact_name ?? null,
+          gc_contact_role: meta.gc_contact_role ?? null,
+          gc_contact_phone: meta.gc_contact_phone ?? null,
+          cross_pollination: cp.cross_pollination,
+          hooks: pr.hooks,
+          sub_bid_deadline: meta.sub_bid_deadline ?? null,
+          gc_award_date: meta.gc_award_date ?? null,
+          posted_date: p.posted_date,
+        });
+        const pitchMetadata = {
+          cross_pollination: cp.cross_pollination,
+          warm_intro_path: cp.warm_intro_path,
+          matched_customer: cp.matched_customer,
+          match_confidence: cp.confidence,
+          possible_cross_pollination: cp.possible_cross_pollination,
+          pitch_hooks: [pr.hooks.hook_1, pr.hooks.hook_2, pr.hooks.hook_3],
+          pitch_model: pr.model,
+          recommended_action: action.recommended_action,
+          action_by_date: action.action_by_date,
+          type_tags: typeTags,
+          degraded: pr.degraded,
+          generated_at: pr.generated_at,
+        };
+        await writeProjectPitchMetadata(p.id, pitchMetadata);
+        p.pitch_metadata = pitchMetadata as unknown as Record<string, unknown>;
+        summary.hooks_generated += 1;
+      }
+
+      // (d) Notion — gated by isReadyForNotion. The Lead Feed receives the
+      // row only when the row is enriched per spec; otherwise the next
+      // trigger picks it up.
+      if (!isReadyForNotion(p)) {
+        await new Promise((r) => setTimeout(r, 100));
+        continue;
+      }
+      if (notionDisabled()) {
+        // Diagnostic mode — count what WOULD have been written.
+        summary.notion_writes += 1;
+        continue;
+      }
+
+      const res = await writeProjectToNotion({
+        source: p.source, source_id: p.source_id, title: p.title,
+        posted_date: p.posted_date, response_deadline: p.response_deadline,
+        source_url: p.source_url, rationale: p.rationale, score: p.score,
+        phase: (tagPhaseWithConfidence({ response_deadline: p.response_deadline, posted_date: p.posted_date }).phase as NotionPhase),
+        agency: (p.raw_payload?.agency as string | null) ?? null,
+        city: (p.raw_payload?.city as string | null) ?? null,
+        county: (p.raw_payload?.county as string | null) ?? null,
+        state: (p.raw_payload?.state as NotionState | string | null) ?? null,
+        estimated_value: (p.raw_payload?.estimated_value as number | null) ?? null,
+        project_stage: p.project_stage,
+        buy_window_open: p.buy_window_open,
+        source_authority: p.source_authority,
+      }, (gcMeta ?? null) as unknown as Parameters<typeof writeProjectToNotion>[1]);
+
+      if (res.alreadyExists) summary.notion_dedupes += 1;
+      else summary.notion_writes += 1;
+
+      await updateProjectExternalRefs(p.id, {
+        notion_lead_id: res.leadId,
+        notion_page_url: res.notionPageUrl,
+        notion_written_at: new Date().toISOString(),
+      });
+
+      // For existing pages, refresh enrichment columns (writeProjectToNotion
+      // only writes them on create).
+      if (res.alreadyExists && gcMeta && res.notionPageId) {
+        try {
+          await updateProjectEnrichmentInNotion(res.notionPageId, gcMeta as unknown as Parameters<typeof updateProjectEnrichmentInNotion>[1]);
+        } catch { /* best-effort */ }
+      }
+
+      const pm = p.pitch_metadata as {
+        pitch_hooks?: unknown;
+        recommended_action?: string | null;
+        action_by_date?: string | null;
+        cross_pollination?: string | null;
+        warm_intro_path?: string | null;
+      } | null;
+      if (pm && Array.isArray(pm.pitch_hooks) && pm.pitch_hooks.length > 0 && res.notionPageId) {
+        try {
+          await updateProjectPitchOnNotion({
+            pageId: res.notionPageId,
+            pitch: {
+              cross_pollination: pm.cross_pollination ?? null,
+              warm_intro_path: pm.warm_intro_path ?? null,
+              pitch_hooks: pm.pitch_hooks as string[],
+              recommended_action: pm.recommended_action ?? null,
+              action_by_date: pm.action_by_date ?? null,
+            },
+          });
+        } catch { /* best-effort */ }
+      }
+
+      await new Promise((r) => setTimeout(r, 250));
+    } catch (err) {
+      summary.failures += 1;
+      await logEvent({
+        agent_name: ORCHESTRATOR_AGENT_NAME,
+        event_type: 'zedcor_z17_backfill_project_failed',
+        event_data: { run_id: runId, project_id: p.id, error: (err as Error).message.slice(0, 500) },
+        organization_id: ZEDCOR_ORG_ID,
+        runner: 'manual', ts: new Date().toISOString(), run_id: runId,
+      });
+    }
+  }
+
+  await logEvent({
+    agent_name: ORCHESTRATOR_AGENT_NAME,
+    event_type: 'zedcor_z17_backfill_complete',
+    event_data: { run_id: runId, ...summary },
+    organization_id: ZEDCOR_ORG_ID,
+    runner: 'manual', ts: new Date().toISOString(), run_id: runId,
+  });
 
   return summary;
 }

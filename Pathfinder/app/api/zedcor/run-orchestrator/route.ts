@@ -8,7 +8,13 @@ import { NextResponse } from 'next/server';
 import { runZedcorOrchestrator } from '@/lib/orchestrator/orchestrator';
 
 export const runtime = 'nodejs';
-export const maxDuration = 60; // Vercel hobby; Pro can raise this.
+// Z17 — the orchestrator now runs the full chain end-to-end in a single
+// HTTP invocation (ingest → score → enrich → contact → pitch → Notion-gated
+// → backfill). The pitch wave plus backfill blow past 60s once any
+// in-window/awarded rows show up; bump to 300s (Vercel Pro ceiling). Hobby
+// plans cap at 60s and would 504 — that is the right signal to upgrade
+// rather than silently truncate the run.
+export const maxDuration = 300;
 export const dynamic = 'force-dynamic';
 
 export async function POST(): Promise<NextResponse> {

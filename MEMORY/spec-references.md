@@ -389,7 +389,6 @@ Stream P1 total cost-to-date: **$0.12** of $8 cap. All cost on Haiku coord-extra
 
 #### Pathfinder/package.json (modified)
 **Drift note:** Added `jszip` (3.10.x) for Teams `.zip` packaging and `js-yaml` (4.1.x, +`@types/js-yaml`) for Slack manifest YAML serialization. Both are small, widely-used libs (combined transitive footprint ~50KB minified) — Vercel function bundle stays well under the 50MB Lambda limit per dispatch halt criteria.
-<<<<<<< HEAD
 
 ---
 
@@ -457,7 +456,7 @@ Stream P1 total cost-to-date: **$0.12** of $8 cap. All cost on Haiku coord-extra
 
 #### Pathfinder/app/api/connectors/instances/[connectorId]/hubspot/sync/route.ts
 **Implements:** Operator-gated endpoint. POST kicks off `runBulkSync` synchronously (`maxDuration=300`); GET returns the `hubspot_sync_state` row. Cross-checks `connector.customer_org_id === resolveOrgId(req)` before any work. Rejects when connector is not HubSpot or status != 'connected'.
-=======
+
 ---
 
 ## Stream C-2A — Microsoft Teams OAuth + Bot Framework + Adaptive Cards
@@ -521,18 +520,19 @@ Stream P1 total cost-to-date: **$0.12** of $8 cap. All cost on Haiku coord-extra
 - `message` with `conversationType=personal` → DM handler (chat-bridge)
 - `message` channel/group → @-mention handler (parses command, replies with cards)
 - `invoke` / `messageBack` → Adaptive Card Action.Submit handler (writes `lead_feedback` for thumb actions, dismisses, queues outreach)
->>>>>>> 263eec4 (feat(connectors): C-2A Microsoft Teams OAuth + Bot Framework + Adaptive Cards)
 
-### Tests
+### Tests (C-3A HubSpot)
 
 | File | Tests | Covers |
-<<<<<<< HEAD
 |---|---|---|
 | `tests/connectors/hubspot-oauth.test.ts` | 13 | buildAuthorizeUrl host/scope/redirect/state; exchangeCode body shape, error mapping, expires_in; refreshToken grant_type; introspection failure tolerance |
 | `tests/connectors/hubspot-bulk-sync.test.ts` | 10 | previewSync read-only behavior; pagination via `after`; ON CONFLICT upsert correctness on re-run; sync_state running flags + final counts; maxObjects truncation; 429 retry; error path writes last_error |
 
 23 new tests; full suite remains 782/782 green; lint clean; build clean.
-=======
+
+### Tests (C-2A Teams)
+
+| File | Tests | Covers |
 |------|-------|--------|
 | tests/connectors/teams-commands.test.ts | 18 | parser verbs, mention stripping, thumb synonyms |
 | tests/connectors/teams-adaptive-cards.test.ts | 10 | card shape, action ids, truncation, attachment wrap, 28KB guard |
@@ -540,7 +540,6 @@ Stream P1 total cost-to-date: **$0.12** of $8 cap. All cost on Haiku coord-extra
 | tests/connectors/teams-signature.test.ts | 11 | RS256 happy path, every JWT failure mode, prod escape-hatch hard-off |
 
 Total new: 50 tests. All green; full Pathfinder suite remains 809 passing.
->>>>>>> 263eec4 (feat(connectors): C-2A Microsoft Teams OAuth + Bot Framework + Adaptive Cards)
 
 ---
 
@@ -2150,5 +2149,19 @@ Stream A is plumbing only. The catalog renderer is not yet wired into `app/[slug
 
 #### Pathfinder/vercel.json (modified — additive)
 **Implements:** SPEC §STREAM D digest cron registration. Appended `{ path: '/api/cron/internal-digest', schedule: '0 14 * * 1,2,3,4,5' }` (Mon–Fri 14:00 UTC, weekday morning US Pacific). Numeric day-of-week per CLAUDE.md and per SPEC ("If a cron schedule is touched, use a numeric day-of-week"). Existing `functions` block untouched.
+
+---
+
+## Sprint Z17 — Manual trigger runs full pipeline (no cron dependency)
+
+**State:** PR #508 on `z17-manual-full-pipeline`. Spec: `Company Docs/Specs/SPEC-zedcor-Z17.md`. Restores end-to-end completion to the manual `runZedcorOrchestrator()` path so a single trigger of Run Zedcor produces fully-enriched Notion Lead Feed rows with Vercel crons disabled. Closes the silent-write bug in `updateProjectScore` that had been dropping every manually-ingested row's score on the floor.
+
+#### Pathfinder/lib/orchestrator/orchestrator.ts (modified — bugfix + additive)
+**Implements:** SPEC-zedcor-Z17.md §"Diagnosis sequence" + §"Fix" + §"Acceptance criteria". Drops the non-existent `ranked_by` column from `updateProjectScore` (UPDATE was silently 42703-erroring against the live schema; `error` field never inspected). Surfaces write failures via a thrown Error. Reorders waves so pitch generation runs BEFORE Notion writes so the Notion gate can withhold in-window rows that lack pitch hooks. Adds `isReadyForNotion()` gate calling the already-exported `shouldWriteToZedcorNotion` (Z12) plus a score-present check and an in-window pitch-hooks-required check. Adds `runZedcorZ17Backfill()` Wave 5 that pulls pre-existing un-enriched construction-relevant rows (non-federal) and runs them through score → GC → pitch → Notion-gated; capped at `ZEDCOR_Z17_BACKFILL_CAP=30` per run. Drops the legacy `ZEDCOR_DISABLE_ANTHROPIC` kill-switch from `isPitchEnabled` (per spec hard rules: no paid-key dependence for core stages). Adds per-stage counts to `run_metadata`: `scored, gc_resolved, contact_resolved, hooks_generated, notion_withheld, backfill_attempted/scored/gc_resolved/hooks_generated/notion_writes`. Adds `ZEDCOR_Z17_SKIP_NOTION` diagnostic escape hatch read by the new `notionDisabled()` helper so `scripts/diagnose-z17-full-pipeline.ts` can verify the chain against the live DB without the Vercel-only `NOTION_API_TOKEN` secret; the hatch is unset in production.
+**Last verified against spec:** 2026-05-30. Live runs 6716, 6717, 6718 against `pathfinder.projects` (Zedcor org) confirmed acceptance criteria 1-6 — full evidence in `Pathfinder/docs/Z17-DOSSIER.md`.
+**Drift:** none.
+
+#### Pathfinder/lib/orchestrator/zedcor-scorer.ts (modified — bugfix)
+**Implements:** SPEC-zedcor-Z17.md §"Hard rules" → no paid-key dependence for core stages. Removes the misnamed `anthropicEnabled()` gate that had wrapped the scorer's deterministic 0..100 arithmetic — none of the math calls Anthropic, so returning `{ score: null, rationale: '(scoring disabled)' }` when `ZEDCOR_DISABLE_ANTHROPIC=true` (or `ANTHROPIC_API_KEY` unset) was a trap that caused the Notion writer to stamp the `(scoring disabled)` sentinel on every row regardless of why the score was null. Scorer now always produces a real score.
 **Last verified against spec:** 2026-05-30.
 **Drift:** none.
