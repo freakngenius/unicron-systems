@@ -64,7 +64,13 @@ export const FLOOR_STUB_LOADERS = {
     import('./modules/pipeline-kanban/PipelineKanbanModule').then((m) => ({
       default: m.default as unknown as React.ComponentType<ModuleComponentProps>,
     })),
-  'filter-rail': () => Promise.resolve({ default: FilterRailStub }),
+  // Stream B Module 2: replaced floor stub with the real filter-rail
+  // component. Soft-gates per spec (drops a filter whose backing schema
+  // field is absent for the org).
+  'filter-rail': () =>
+    import('./modules/filter-rail/FilterRail').then((m) => ({
+      default: m.default as unknown as React.ComponentType<ModuleComponentProps>,
+    })),
   'warm-intro-panel': () => Promise.resolve({ default: WarmIntroPanelStub }),
   'kpi-strip': () => Promise.resolve({ default: KpiStripStub }),
   'analytics-charts': () => Promise.resolve({ default: AnalyticsChartsStub }),
