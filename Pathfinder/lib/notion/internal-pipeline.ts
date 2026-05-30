@@ -159,20 +159,21 @@ export interface CreateDatabaseResult {
 }
 
 export async function createInternalPipelineDatabase(parentPageId: string): Promise<CreateDatabaseResult> {
-  const res = await notionClient().databases.create({
+  const client = notionClient();
+  const res = await (client as unknown as {
+    databases: {
+      create: (args: {
+        parent: { type: 'page_id'; page_id: string };
+        title: Array<{ type: 'text'; text: { content: string } }>;
+        properties: Record<string, unknown>;
+      }) => Promise<{ id: string; url?: string }>;
+    };
+  }).databases.create({
     parent: { type: 'page_id', page_id: parentPageId },
-    title: [
-      {
-        type: 'text',
-        text: { content: 'Internal Pipeline' },
-      },
-    ],
-    properties: databaseSchemaProperties() as Parameters<
-      ReturnType<typeof notionClient>['databases']['create']
-    >[0]['properties'],
+    title: [{ type: 'text', text: { content: 'Internal Pipeline' } }],
+    properties: databaseSchemaProperties() as Record<string, unknown>,
   });
-  const url = (res as { url?: string }).url ?? '';
-  return { databaseId: res.id, url };
+  return { databaseId: res.id, url: res.url ?? '' };
 }
 
 // Look up a Notion page id by deal id via the mapping table. Returns
@@ -243,11 +244,16 @@ export async function updateNotionStage(dealId: string, toStage: DealPipelineSta
   if (!pageId) {
     return { updated: false, reason: 'no mapping for deal' };
   }
-  await notionClient().pages.update({
+  const client = notionClient();
+  await (client as unknown as {
+    pages: {
+      update: (args: { page_id: string; properties: Record<string, unknown> }) => Promise<unknown>;
+    };
+  }).pages.update({
     page_id: pageId,
     properties: {
       [PROP.stage]: { select: { name: dealStageToNotion(toStage) } },
-    } as Parameters<ReturnType<typeof notionClient>['pages']['update']>[0]['properties'],
+    },
   });
   await recordMapping(dealId, pageId, 'app');
   return { updated: true };

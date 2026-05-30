@@ -159,11 +159,17 @@ async function main(): Promise<void> {
       continue;
     }
 
-    const page = await notionClient().pages.create({
+    const client = notionClient();
+    const page = await (client as unknown as {
+      pages: {
+        create: (args: {
+          parent: { type: 'database_id'; database_id: string };
+          properties: Record<string, unknown>;
+        }) => Promise<{ id: string }>;
+      };
+    }).pages.create({
       parent: { type: 'database_id', database_id: databaseId },
-      properties: pagePropertiesFor(snapshot, BASE_PATHFINDER_URL) as Parameters<
-        ReturnType<typeof notionClient>['pages']['create']
-      >[0]['properties'],
+      properties: pagePropertiesFor(snapshot, BASE_PATHFINDER_URL) as Record<string, unknown>,
     });
     await recordMapping(row.id, page.id, 'seed');
     created++;
