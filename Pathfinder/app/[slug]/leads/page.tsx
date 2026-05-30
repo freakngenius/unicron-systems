@@ -1,26 +1,49 @@
 // app/[slug]/leads/page.tsx
 //
-// Org-scoped opportunity list. Renders all projects for the org as
-// LeadCardList entries projected through `projectFunderLead`. Same
-// header + nav shape as the dashboard so the funder customer sees a
-// consistent surface across tabs.
+// Org-scoped opportunity list. Same header + nav shape as the dashboard
+// so the funder customer sees a consistent surface across tabs.
 //
-// Zedcor is unaffected — Zedcor uses its own /zedcor/leads route.
+// Stream E (Internal V2 cards + companies): Internal-shaped orgs
+// (architecture.lead_unit.name === 'company', slug='internal') project
+// rows through projectToCompanyLeadView and pass the lead_unit schema
+// to LeadCardList so the cards render real values with human labels
+// (no more raw COMPANY_NAME / SERVICE_CATEGORY / FOOTPRINT /
+// SALES_MOTION uppercase keys with blank values). Sort controls
+// (?sort=score|name|category|recent) replace the implicit score-desc
+// ordering. The Funder/Realberry/Zedcor path stays byte-identical: the
+// projection, the LeadCard markup, and the absence of sort controls all
+// match production today.
 
 import Link from 'next/link';
 import { supabaseAdmin } from '@/lib/supabase';
 import type { Organization, Project } from '@/lib/types';
 import { resolveArchitecture } from '@/lib/config/resolveArchitecture';
 import { projectFunderLead } from '@/lib/agents/funder/leadView';
+import {
+  projectToCompanyLeadView,
+  type CompanyLeadView,
+} from '@/lib/agents/internal/companyLeadView';
+import { parseSortKey, sortCompanies, type SortKey } from '@/lib/agents/internal/sortCompanies';
 import { LeadCardList, type LeadLike } from '@/components/LeadCard';
+import { CompaniesSortControl } from '@/components/internal/CompaniesSortControl';
+import type { LeadUnitSchema } from '@/lib/catalog/modules/ranked-feed/labels';
 
-type Props = { params: Promise<{ slug: string }> };
+type Props = {
+  params: Promise<{ slug: string }>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+};
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-export default async function OrgLeadsPage({ params }: Props) {
+function pickFirst(v: string | string[] | undefined): string | undefined {
+  if (Array.isArray(v)) return v[0];
+  return v;
+}
+
+export default async function OrgLeadsPage({ params, searchParams }: Props) {
   const { slug } = await params;
+  const sp = (await searchParams) ?? {};
 
   const adminAny = supabaseAdmin() as unknown as { from: (t: string) => any };
   const { data: org } = (await adminAny
@@ -34,23 +57,44 @@ export default async function OrgLeadsPage({ params }: Props) {
   const vocab = architecture.vocabulary ?? {};
   const leadsPlural = (vocab.leads as string | undefined) ?? 'leads';
 
-  // Pull all org-scoped projects, top scored first; verified first.
-  let leads: LeadLike[] = [];
+  const isInternalShape = architecture.lead_unit?.name === 'company';
+  const sortKey: SortKey = isInternalShape ? parseSortKey(pickFirst(sp.sort)) : 'score';
+
+  // Pull all org-scoped projects. Internal sorts in JS after projection so
+  // the visible "Category" label (display string) drives ordering; Funder
+  // keeps the existing SQL ordering byte-identical to today.
+  let funderLeads: LeadLike[] = [];
+  let internalLeads: CompanyLeadView[] = [];
   let total = 0;
   let verifiedCount = 0;
+
   if (org?.id) {
     const projectsClient = supabaseAdmin() as unknown as { from: (t: string) => any };
-    const { data: rows, count } = (await projectsClient
-      .from('projects')
-      .select('*', { count: 'exact' })
-      .eq('organization_id', org.id)
-      .order('verified', { ascending: false, nullsFirst: false })
-      .order('score', { ascending: false, nullsFirst: false })
-      .limit(200)) as { data: Project[] | null; count: number | null };
-    if (Array.isArray(rows)) {
-      leads = rows.map((r) => projectFunderLead(r) as unknown as LeadLike);
+
+    if (isInternalShape) {
+      const { data: rows, count } = (await projectsClient
+        .from('projects')
+        .select('*', { count: 'exact' })
+        .eq('organization_id', org.id)
+        .limit(500)) as { data: Project[] | null; count: number | null };
+      if (Array.isArray(rows)) {
+        internalLeads = sortCompanies(rows.map(r => projectToCompanyLeadView(r)), sortKey);
+      }
+      total = count ?? internalLeads.length;
+    } else {
+      const { data: rows, count } = (await projectsClient
+        .from('projects')
+        .select('*', { count: 'exact' })
+        .eq('organization_id', org.id)
+        .order('verified', { ascending: false, nullsFirst: false })
+        .order('score', { ascending: false, nullsFirst: false })
+        .limit(200)) as { data: Project[] | null; count: number | null };
+      if (Array.isArray(rows)) {
+        funderLeads = rows.map(r => projectFunderLead(r) as unknown as LeadLike);
+      }
+      total = count ?? funderLeads.length;
     }
-    total = count ?? leads.length;
+
     const { count: vc } = (await projectsClient
       .from('projects')
       .select('id', { count: 'exact', head: true })
@@ -58,6 +102,10 @@ export default async function OrgLeadsPage({ params }: Props) {
       .eq('verified', true)) as { count: number | null };
     verifiedCount = vc ?? 0;
   }
+
+  const internalSchema: LeadUnitSchema = isInternalShape
+    ? ((architecture.lead_unit?.schema ?? undefined) as LeadUnitSchema)
+    : undefined;
 
   return (
     <div
@@ -113,12 +161,37 @@ export default async function OrgLeadsPage({ params }: Props) {
         ))}
       </nav>
 
-      {leads.length === 0 ? (
+      {isInternalShape ? (
+        <>
+          <CompaniesSortControl
+            slug={slug}
+            current={sortKey}
+            preserve={{
+              service_category: pickFirst(sp.service_category),
+              sales_motion: pickFirst(sp.sales_motion),
+              federal_registration: pickFirst(sp.federal_registration),
+              source: pickFirst(sp.source),
+            }}
+          />
+          {internalLeads.length === 0 ? (
+            <div style={{ color: '#666', fontSize: '0.9rem', padding: '2rem', background: '#111', border: '1px dashed #2a2a2a', borderRadius: 6, textAlign: 'center' }}>
+              No {leadsPlural} yet.
+            </div>
+          ) : (
+            <InternalCompanyGrid
+              slug={slug}
+              leads={internalLeads}
+              layout={uiPlan.lead_card_layout}
+              schema={internalSchema}
+            />
+          )}
+        </>
+      ) : funderLeads.length === 0 ? (
         <div style={{ color: '#666', fontSize: '0.9rem', padding: '2rem', background: '#111', border: '1px dashed #2a2a2a', borderRadius: 6, textAlign: 'center' }}>
           No {leadsPlural} yet.
         </div>
       ) : (
-        <FunderLeadGrid slug={slug} leads={leads} layout={uiPlan.lead_card_layout} />
+        <FunderLeadGrid slug={slug} leads={funderLeads} layout={uiPlan.lead_card_layout} />
       )}
     </div>
   );
@@ -164,5 +237,43 @@ function FunderLeadGrid({
         })}
       </div>
     </>
+  );
+}
+
+function InternalCompanyGrid({
+  slug,
+  leads,
+  layout,
+  schema,
+}: {
+  slug: string;
+  leads: CompanyLeadView[];
+  layout: NonNullable<ReturnType<typeof resolveArchitecture>['ui_plan']>['lead_card_layout'];
+  schema: LeadUnitSchema;
+}) {
+  return (
+    <div
+      data-internal-company-grid
+      style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+        gap: '0.75rem',
+      }}
+    >
+      {leads.map((lead) => (
+        <Link
+          key={lead.id}
+          href={`/${slug}/leads/${encodeURIComponent(lead.id)}`}
+          style={{ textDecoration: 'none', color: 'inherit' }}
+        >
+          <LeadCardList
+            leads={[lead as unknown as LeadLike]}
+            layout={layout}
+            schema={schema}
+            placeholder="-"
+          />
+        </Link>
+      ))}
+    </div>
   );
 }
