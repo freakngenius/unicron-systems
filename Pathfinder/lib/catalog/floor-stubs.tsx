@@ -72,7 +72,14 @@ export const FLOOR_STUB_LOADERS = {
       default: m.default as unknown as React.ComponentType<ModuleComponentProps>,
     })),
   'warm-intro-panel': () => Promise.resolve({ default: WarmIntroPanelStub }),
-  'kpi-strip': () => Promise.resolve({ default: KpiStripStub }),
+  // Stream B Module 3: replaced floor stub with the real kpi-strip
+  // component. Null-valued metrics are DROPPED so the strip never renders
+  // a misleading zero (eliminates the "Active outbound motion 0%" red
+  // flag the dispatch prompt calls out).
+  'kpi-strip': () =>
+    import('./modules/kpi-strip/KpiStrip').then((m) => ({
+      default: m.default as unknown as React.ComponentType<ModuleComponentProps>,
+    })),
   'analytics-charts': () => Promise.resolve({ default: AnalyticsChartsStub }),
   // Stream D replaces the daily-digest stub with a non-visual module that
   // declares the catalog metadata; the actual delivery runs through the
