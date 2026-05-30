@@ -32,7 +32,8 @@ describe('Stream C floor-stub wiring', () => {
   it.each(STREAM_C_IDS)('loads a real component for %s', async (id) => {
     const loader = FLOOR_STUB_LOADERS[id];
     const mod = await loader();
-    const name = mod.default.displayName ?? mod.default.name ?? '';
+    const def = mod.default as { displayName?: string; name?: string };
+    const name = def.displayName ?? def.name ?? '';
     expect(name).not.toMatch(/^FloorStub\(/);
     // Defensive: the real components export the matching default. Names
     // can be minified in production; this assertion is intentionally
@@ -42,7 +43,8 @@ describe('Stream C floor-stub wiring', () => {
   it.each(STREAM_A_REMAINING_IDS)('still resolves to a FloorStub marker for %s', async (id) => {
     const loader = FLOOR_STUB_LOADERS[id];
     const mod = await loader();
-    const name = mod.default.displayName ?? mod.default.name ?? '';
+    const def = mod.default as { displayName?: string; name?: string };
+    const name = def.displayName ?? def.name ?? '';
     expect(name).toMatch(new RegExp(`^FloorStub\\(${id}\\)$`));
   });
 });
