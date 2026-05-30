@@ -59,8 +59,12 @@ export const MODULE_REGISTRY: Record<ModuleId, ModuleDefinition> = {
     title: 'Company detail',
     component: FLOOR_STUB_LOADERS['company-detail'],
     dependencies: [
+      // SCORE-COMPONENTS NOTE (Stream C, per SPEC b72f4eb): the ranker does
+      // not persist per-signal contributions and they are not faithfully
+      // re-derivable, so company-detail renders the six signals
+      // qualitatively (name + weight + stored evidence) rather than as a
+      // numeric breakdown. `score_components` is therefore not a dependency.
       dep('data_signal', 'enriched_record', 'hard'),
-      dep('data_signal', 'score_components', 'hard'),
       dep('data_signal', 'sources', 'soft'),
     ],
     configSchema: NoConfig,
