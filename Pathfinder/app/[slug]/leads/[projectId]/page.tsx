@@ -31,6 +31,7 @@ import { LeadDetailShell } from '@/components/lead/LeadDetailShell';
 import { FunderDetailContents } from '@/components/lead/FunderDetailContents';
 import { CompanyDetailContents } from '@/components/lead/CompanyDetailContents';
 import { CatalogDetailRenderer } from '@/components/catalog/CatalogDetailRenderer';
+import { LeadChatLauncher } from '@/components/internal/lead-chat';
 
 type Props = { params: Promise<{ slug: string; projectId: string }> };
 
@@ -77,6 +78,11 @@ export default async function OrgLeadDetailPage({ params }: Props) {
     // a modules block (Zedcor, Realberry, Funder) keep the existing
     // CompanyDetailContents path so their surfaces stay byte-identical.
     if (architecture.modules) {
+      // Stream H: mount the Internal Lead Chat Agent scoped to this
+      // company. Gated on slug='internal' so the launcher never appears
+      // on Zedcor, Realberry, or Funder surfaces even if a future org
+      // adopts a modules block.
+      const showLeadChat = org.slug === 'internal';
       return (
         <LeadDetailShell
           slug={slug}
@@ -93,6 +99,15 @@ export default async function OrgLeadDetailPage({ params }: Props) {
             lead={lead}
             project={row}
           />
+          {showLeadChat ? (
+            <LeadChatLauncher
+              orgSlug={org.slug}
+              orgId={org.id}
+              companyId={lead.id}
+              companyName={lead.company_name}
+              scopeLabel={lead.company_name}
+            />
+          ) : null}
         </LeadDetailShell>
       );
     }

@@ -27,6 +27,7 @@ import type { InternalFilters, RawCompanyRow } from '@/lib/catalog/modules/filte
 
 type AnalyticsRow = RawCompanyRow & { ranked_at?: string | null; verified?: boolean | null };
 import type { LeadUnitSchema } from '@/lib/catalog/modules/ranked-feed/labels';
+import { LeadChatLauncher } from '@/components/internal/lead-chat';
 
 void React;
 
@@ -148,6 +149,13 @@ export async function InternalDashboard({ org, architecture, filters }: Internal
 
       {/* Secondary analytics, below the hero */}
       <AnalyticsChartsView byCategory={byCategory} byDay={byDay} schema={schema} />
+
+      {/* Stream H: Internal Lead Chat Agent (additive, Internal-only mount). */}
+      <LeadChatLauncher
+        orgSlug={org.slug}
+        orgId={org.id}
+        scopeLabel={`All ${displayName} companies`}
+      />
     </div>
   );
 }
