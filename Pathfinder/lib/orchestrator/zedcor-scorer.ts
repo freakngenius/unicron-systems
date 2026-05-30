@@ -7,10 +7,15 @@
 // follow-up. Z1A ships a small, honest, deterministic score so the
 // orchestrator chain works end-to-end today.
 //
-// Anthropic escape hatch:
-//   - ZEDCOR_DISABLE_ANTHROPIC=true → returns { score: null, rationale: '(scoring disabled)' }
-//   - ANTHROPIC_API_KEY absent      → same behavior
-//   - otherwise                      → deterministic 0..100 score + template rationale
+// Z17: the prior `anthropicEnabled()` gate was wrong — none of the
+// arithmetic below calls Anthropic, so returning
+// { score: null, rationale: '(scoring disabled)' } when
+// ZEDCOR_DISABLE_ANTHROPIC=true (or ANTHROPIC_API_KEY absent) was a
+// trap: the orchestrator then wrote bare rows to Notion where the
+// Notion writer (lib/notion/zedcor-writer.ts) surfaced "(scoring
+// disabled)" in the Rationale property. The scorer now always
+// computes its deterministic 0..100 score; a future Anthropic-backed
+// rationale upgrade lands as a separate stage if/when it ships.
 //
 // Score components (caps at 100):
 //   - 50 baseline
@@ -18,9 +23,6 @@
 //   - +15 if city/county is in Greater Houston (Harris/Fort Bend/Galveston/Brazoria/Montgomery)
 //   - +10 if estimated_value within Zedcor sweet-spot ($75k – $2M)
 //   - -10 if estimated_value above $5M (likely prime contractor only) or below $25k
-//
-// Rationale: short template referencing the deciding factors. Sprint
-// Z2 swaps this for a real Anthropic-backed rationale.
 
 const HOUSTON_COUNTIES: ReadonlySet<string> = new Set([
   'Harris County', 'Fort Bend County', 'Galveston County',
@@ -39,12 +41,6 @@ export interface ZedcorScoreResult {
   rationale: string;
 }
 
-function anthropicEnabled(): boolean {
-  if (process.env.ZEDCOR_DISABLE_ANTHROPIC === 'true') return false;
-  if (!process.env.ANTHROPIC_API_KEY) return false;
-  return true;
-}
-
 function daysUntil(dateISO: string | null | undefined): number | null {
   if (!dateISO) return null;
   const t = new Date(dateISO).getTime();
@@ -53,10 +49,6 @@ function daysUntil(dateISO: string | null | undefined): number | null {
 }
 
 export function scoreZedcorProject(input: ZedcorScoreInput): ZedcorScoreResult {
-  if (!anthropicEnabled()) {
-    return { score: null, rationale: '(scoring disabled)' };
-  }
-
   let score = 50;
   const reasons: string[] = [];
 
