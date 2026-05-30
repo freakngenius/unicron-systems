@@ -18,15 +18,18 @@ import { FLOOR_STUB_LOADERS } from '@/lib/catalog/floor-stubs';
 import { MODULE_REGISTRY } from '@/lib/catalog/registry';
 
 const STREAM_C_IDS = ['company-detail', 'outreach-composer', 'hubspot-sync', 'warm-intro-panel'] as const;
-const STREAM_A_REMAINING_IDS = [
+// All other wired module ids (Stream B + Stream D) after they merged ahead
+// of Stream C. Stream C tests assert these no longer resolve to floor stubs.
+const STREAM_B_D_WIRED_IDS = [
   'ranked-feed',
-  'pipeline-kanban',
   'filter-rail',
   'kpi-strip',
   'analytics-charts',
+  'pipeline-kanban',
   'daily-digest',
-  'geo-map',
 ] as const;
+// The last remaining floor stub. No org enables geo-map (Stream A).
+const STREAM_A_STUB_IDS = ['geo-map'] as const;
 
 describe('Stream C floor-stub wiring', () => {
   it.each(STREAM_C_IDS)('loads a real component for %s', async (id) => {
@@ -40,7 +43,15 @@ describe('Stream C floor-stub wiring', () => {
     // a negative check on the stub marker.
   });
 
-  it.each(STREAM_A_REMAINING_IDS)('still resolves to a FloorStub marker for %s', async (id) => {
+  it.each(STREAM_B_D_WIRED_IDS)('loads a real component for %s (Stream B/D)', async (id) => {
+    const loader = FLOOR_STUB_LOADERS[id];
+    const mod = await loader();
+    const def = mod.default as { displayName?: string; name?: string };
+    const name = def.displayName ?? def.name ?? '';
+    expect(name).not.toMatch(/^FloorStub\(/);
+  });
+
+  it.each(STREAM_A_STUB_IDS)('still resolves to a FloorStub marker for %s', async (id) => {
     const loader = FLOOR_STUB_LOADERS[id];
     const mod = await loader();
     const def = mod.default as { displayName?: string; name?: string };
