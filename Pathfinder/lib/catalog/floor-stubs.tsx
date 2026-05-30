@@ -48,7 +48,13 @@ export const GeoMapStub = makeStub('geo-map');
  * with real `() => import('./real-component')` thunks.
  */
 export const FLOOR_STUB_LOADERS = {
-  'ranked-feed': () => Promise.resolve({ default: RankedFeedStub }),
+  // Stream B Module 1: replaced floor stub with the real ranked-feed
+  // component. The renderer awaits the dynamic import at module activation
+  // time, matching the loader shape the other stubs preserve.
+  'ranked-feed': () =>
+    import('./modules/ranked-feed/RankedFeed').then((m) => ({
+      default: m.default as unknown as React.ComponentType<ModuleComponentProps>,
+    })),
   'company-detail': () => Promise.resolve({ default: CompanyDetailStub }),
   'outreach-composer': () => Promise.resolve({ default: OutreachComposerStub }),
   'hubspot-sync': () => Promise.resolve({ default: HubspotSyncStub }),
