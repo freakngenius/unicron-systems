@@ -5,14 +5,16 @@
 //
 // Stream E (Internal V2 cards + companies): Internal-shaped orgs
 // (architecture.lead_unit.name === 'company', slug='internal') project
-// rows through projectToCompanyLeadView and pass the lead_unit schema
-// to LeadCardList so the cards render real values with human labels
-// (no more raw COMPANY_NAME / SERVICE_CATEGORY / FOOTPRINT /
-// SALES_MOTION uppercase keys with blank values). Sort controls
-// (?sort=score|name|category|recent) replace the implicit score-desc
-// ordering. The Funder/Realberry/Zedcor path stays byte-identical: the
-// projection, the LeadCard markup, and the absence of sort controls all
-// match production today.
+// rows through projectToCompanyLeadView and render via the shared
+// CompanyLeadCard so the cards show real values with human labels and
+// the one-line "why" from the rationale (no more raw COMPANY_NAME /
+// SERVICE_CATEGORY / FOOTPRINT / SALES_MOTION uppercase keys with
+// blank values). The Companies list, the Dashboard ranked feed (Stream
+// B), and the Pipeline kanban (Stream G) all render through the same
+// CompanyLeadCard. Sort controls (?sort=score|name|category|recent)
+// replace the implicit score-desc ordering. The Funder/Realberry/Zedcor
+// path stays byte-identical: it still projects through projectFunderLead
+// and renders through LeadCard with the original SQL ordering.
 
 import Link from 'next/link';
 import { supabaseAdmin } from '@/lib/supabase';
@@ -25,7 +27,9 @@ import {
 } from '@/lib/agents/internal/companyLeadView';
 import { parseSortKey, sortCompanies, type SortKey } from '@/lib/agents/internal/sortCompanies';
 import { LeadCardList, type LeadLike } from '@/components/LeadCard';
+import { CompanyLeadCard } from '@/components/catalog/cards/CompanyLeadCard';
 import { CompaniesSortControl } from '@/components/internal/CompaniesSortControl';
+import { space } from '@/lib/design/tokens';
 import type { LeadUnitSchema } from '@/lib/catalog/modules/ranked-feed/labels';
 
 type Props = {
@@ -181,7 +185,6 @@ export default async function OrgLeadsPage({ params, searchParams }: Props) {
             <InternalCompanyGrid
               slug={slug}
               leads={internalLeads}
-              layout={uiPlan.lead_card_layout}
               schema={internalSchema}
             />
           )}
@@ -243,12 +246,10 @@ function FunderLeadGrid({
 function InternalCompanyGrid({
   slug,
   leads,
-  layout,
   schema,
 }: {
   slug: string;
   leads: CompanyLeadView[];
-  layout: NonNullable<ReturnType<typeof resolveArchitecture>['ui_plan']>['lead_card_layout'];
   schema: LeadUnitSchema;
 }) {
   return (
@@ -256,23 +257,18 @@ function InternalCompanyGrid({
       data-internal-company-grid
       style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-        gap: '0.75rem',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+        gap: space.md,
       }}
     >
       {leads.map((lead) => (
-        <Link
+        <CompanyLeadCard
           key={lead.id}
-          href={`/${slug}/leads/${encodeURIComponent(lead.id)}`}
-          style={{ textDecoration: 'none', color: 'inherit' }}
-        >
-          <LeadCardList
-            leads={[lead as unknown as LeadLike]}
-            layout={layout}
-            schema={schema}
-            placeholder="-"
-          />
-        </Link>
+          view={lead}
+          slug={slug}
+          schema={schema}
+          testIdPrefix="companies-card"
+        />
       ))}
     </div>
   );
