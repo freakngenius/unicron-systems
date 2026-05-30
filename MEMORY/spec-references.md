@@ -2330,3 +2330,67 @@ Defect: Internal `/[slug]/leads` projected rows through `projectFunderLead`, so 
 #### Pathfinder/lib/catalog/modules/ranked-feed/RankedFeed.tsx (modified, "one card" delegation)
 **Implements:** SPEC-Internal-Rework-V2.md Stream E "one fixed card". The inner card component was extracted to `Pathfinder/components/catalog/cards/CompanyLeadCard.tsx`. `RankedFeed` is now a thin projector + iterator that delegates each row to `CompanyLeadCard` with `testIdPrefix="ranked-feed"` so every Stream B selector (`ranked-feed-card-*`, `ranked-feed-link-*`, `ranked-feed-why-*`, `ranked-feed-score-*`, `ranked-feed-rank-eyebrow-*`) keeps its identity. The visual contract is unchanged.
 **Last verified against spec:** 2026-05-30.
+**Drift:** none.
+
+---
+
+## Stream H, Lead Chat Agent (Internal rework V2)
+
+**State:** PR pending on `feat/stream-h-lead-chat`. Spec: `Pathfinder/docs/SPEC-Internal-Rework-V2.md` §Stream H. Plan: `Pathfinder/docs/PLAN-stream-h.md`. Operator-authorized self-merge per the SHARED AUTHORITY block; never Verified.
+
+Adds an Internal-only pop-up chat agent that lets a salesperson reason about the Internal companies dataset, draft outreach, and run live Perplexity Sonar research. Additive. The existing customer-facing Pathfinder chat at `/api/chat` and `components/chat/*` keeps serving Zedcor untouched. Zedcor, Realberry, and Funder remain byte-identical (no mount, no shared component edited).
+
+### New lib/ files
+
+#### Pathfinder/lib/chat/lead-chat-types.ts (new)
+**Implements:** SPEC-Internal-Rework-V2.md §Stream H types layer. Exports `LeadChatScope`, `LeadChatRole`, `LeadChatMessageRow`, `LeadChatSseEvent`, `LeadChatPostBody`. Kept separate from `lib/types.ts` chat types (which are Zedcor-shaped: Project, Branch, Customer, contextKey) so the two paths stay decoupled.
+**Last verified against spec:** 2026-05-30.
+**Drift:** none.
+
+#### Pathfinder/lib/chat/lead-chat-context.ts (new)
+**Implements:** SPEC-Internal-Rework-V2.md §Stream H "Answers from the org's real lead data" + SCORE-COMPONENTS qualitative rule. `buildLeadChatSystemPrompt` constructs the Sonar system prompt grounded in a CompanyLeadView projection (`projectToCompanyLeadView`) plus the six qualitative weighted signals from `lib/catalog/internalSignals`. Never emits fabricated numeric point contributions; signal evidence is either a real stored string or the literal "no observable evidence". Style rules mirror the existing chat: no em-dashes, no fabricated values, plain spoken. `projectBundle` wraps the projection + signal extraction for one row.
+**Last verified against spec:** 2026-05-30.
+**Drift:** none.
+
+#### Pathfinder/lib/chat/lead-chat-persist.ts (new)
+**Implements:** SPEC-Internal-Rework-V2.md §Stream H "Persisted history" wrappers. `appendLeadChatMessage` inserts into `pathfinder.lead_chat_messages` (migration `20260530_lead_chat_messages.sql`) keyed by (org_id, company_id, thread_id, user_email). `listLeadChatMessagesByThread` returns the thread for hydration on open. `listLeadChatThreads` returns prior threads in scope for the optional thread chip row. Casts through `InsertOne<TPayload, TRow>` mirror the existing pattern in `app/api/chat/route.ts` and `app/api/refresh/route.ts` because Supabase 2.45 strict typing was generated before this table existed.
+**Last verified against spec:** 2026-05-30.
+**Drift:** none.
+
+### New API route
+
+#### Pathfinder/app/api/internal/chat/route.ts (new)
+**Implements:** SPEC-Internal-Rework-V2.md §Stream H "REUSE + mirror, do not rebuild" + "Built-in Perplexity Sonar research tool" + LIVE-VERIFICATION constraints. POST streams Sonar via `streamSonar` from `lib/chat/sonar.ts` (the same surface the existing chat uses), grounding the response in real Internal data via `buildLeadChatSystemPrompt`. SSE event types: `meta`, `researching` (new explicit chip signal), `delta`, `sources`, `done`, `error`. Persists user and assistant turns to `pathfinder.lead_chat_messages`. GET returns prior messages for `(org_slug, company_id?, thread_id)` or, with `list_threads=1`, recent thread summaries in scope. Internal-only: refuses any `org_slug !== 'internal'` with 403; refuses any unknown company_id with 404. Basic-auth `userEmail` gates per-user retrieval.
+**Last verified against spec:** 2026-05-30.
+**Drift:** none.
+
+### New surface components
+
+#### Pathfinder/components/internal/lead-chat/LeadChatPanel.tsx (new)
+**Implements:** SPEC-Internal-Rework-V2.md §Stream H "slide-in panel that does not navigate away, can be minimized, scope shown in context indicator, streaming responses, copy-to-clipboard, Researching with Perplexity state". Mirrors the existing `IntelligenceChat` shape (420px, slides via translateX, Escape closes) but is its own client component so the existing chat at `components/chat/*` is not modified. Reuses `ChatContextIndicator` directly. Stable thread_id is stored per (orgSlug, companyId) in `localStorage` so reloads continue the same thread (the SPEC's "persisted history" requirement, complemented by the server table).
+**Last verified against spec:** 2026-05-30.
+**Drift:** none.
+
+#### Pathfinder/components/internal/lead-chat/LeadChatLauncher.tsx (new)
+**Implements:** SPEC-Internal-Rework-V2.md §Stream H "floating launcher (small button, bottom-right)". `position: fixed`, bottom-right, z-index 70. Mounts the `LeadChatPanel` and owns the open/closed state.
+**Last verified against spec:** 2026-05-30.
+**Drift:** none.
+
+### Modified app/ files (mount points only, Internal-only)
+
+#### Pathfinder/app/[slug]/InternalDashboard.tsx (modified, additive)
+**Implements:** SPEC-Internal-Rework-V2.md §Stream H "mount on the Internal dashboard". Appends `<LeadChatLauncher>` at the end of the rendered JSX with the dashboard scope label. The route gate `shouldUseInternalDashboard` already restricts this component to Internal-shaped orgs, so Zedcor / Realberry / Funder never reach this mount point.
+**Last verified against spec:** 2026-05-30.
+**Drift:** none.
+
+#### Pathfinder/app/[slug]/leads/[projectId]/page.tsx (modified, additive)
+**Implements:** SPEC-Internal-Rework-V2.md §Stream H "on a lead detail page it opens scoped to that company". Inside the `leadUnitName === 'company' && architecture.modules` branch (Internal), and only when `org.slug === 'internal'` (extra safety belt so a future org with `modules` does not start surfacing the chat), appends `<LeadChatLauncher>` scoped to the open company. Funder and Zedcor branches remain untouched.
+**Last verified against spec:** 2026-05-30.
+**Drift:** none.
+
+### New migration
+
+#### Pathfinder/supabase/migrations/20260530_lead_chat_messages.sql (new)
+**Implements:** SPEC-Internal-Rework-V2.md §Stream H "a new table (e.g. pathfinder.lead_chat_messages) keyed by org and optionally company" + LIVE-VERIFICATION "the history table must be APPLIED to the production Supabase project and confirmed by query". Creates `pathfinder.lead_chat_messages` with FK to `pathfinder.organizations.id` (uuid) and nullable FK to `pathfinder.projects.id` (text). Indexes on (org_id, company_id, created_at DESC), (thread_id, created_at), and (user_email, created_at DESC). RLS enabled; service_role bypasses; anon / authenticated denied by default (the API route runs under service role and scopes by `userEmail` in app code). Applied to prod project ref `anfihcusvekpovcchpoh` via Supabase MCP `apply_migration`; confirmation query result is captured in the PR body.
+**Last verified against spec:** 2026-05-30.
+**Drift:** none.
