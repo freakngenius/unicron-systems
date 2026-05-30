@@ -186,15 +186,24 @@ async function loadRunProjects(runId: number): Promise<ProjectRow[]> {
 async function updateProjectScore(id: string, score: number | null, rationale: string): Promise<void> {
   const admin = supabaseAdmin() as unknown as {
     from: (t: string) => {
-      update: (row: Record<string, unknown>) => { eq: (col: string, val: string) => Promise<{ error: unknown }> };
+      update: (row: Record<string, unknown>) => {
+        eq: (col: string, val: string) => Promise<{ error: { message: string } | null }>;
+      };
     };
   };
-  await admin.from('projects').update({
+  // Z17 root-cause fix — pathfinder.projects has no `ranked_by` column. The
+  // pre-Z17 update silently failed on every call (Supabase returned
+  // {error:'column "ranked_by" of relation "projects" does not exist'} and
+  // the result was never inspected), so every manual-orchestrator row landed
+  // with score=null + rationale=null and the Notion writer downstream stamped
+  // '(scoring disabled)' on the Rationale property. Drop the bogus column and
+  // surface any future write error to the caller.
+  const { error } = await admin.from('projects').update({
     score,
     rationale,
     ranked_at: new Date().toISOString(),
-    ranked_by: 'zedcor-z1a-deterministic',
   }).eq('id', id);
+  if (error) throw new Error(`updateProjectScore ${id} failed: ${error.message}`);
 }
 
 async function updateProjectExternalRefs(id: string, refs: Record<string, unknown>): Promise<void> {
