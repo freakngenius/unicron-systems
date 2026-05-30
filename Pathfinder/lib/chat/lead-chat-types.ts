@@ -41,8 +41,12 @@ export interface LeadChatMessageRow {
   cleared_at: string | null;
 }
 
+export type LeadChatToolName = 'pathfinder_leads' | 'perplexity_sonar';
+
 export type LeadChatSseEvent =
   | { type: 'meta'; threadId: string; scopeLabel: string }
+  | { type: 'tool_start'; name: LeadChatToolName; summary?: string }
+  | { type: 'tool_done'; name: LeadChatToolName; ok: boolean }
   | { type: 'researching'; provider: 'perplexity-sonar' }
   | { type: 'delta'; text: string }
   | { type: 'sources'; items: ChatSourceCitation[] }

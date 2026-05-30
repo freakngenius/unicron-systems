@@ -1,13 +1,12 @@
 // __tests__/internal-chat/lead-chat-route.test.ts
 //
 // Guardrail tests on the Internal Lead Chat Agent route. The route mixes
-// SSE streaming, Supabase, and Sonar, all of which are awkward to stand
-// up in vitest without a real network or DB. We exercise the source-level
-// invariants the SPEC pins (Internal-only, basic-auth, Sonar reuse, the
-// 'researching' chip event, persistence of user AND assistant turns) so
-// drift trips a unit test instead of a live-app regression. The dynamic
-// integration is verified live on internal.unicron.systems per SPEC's
-// LIVE-VERIFICATION block, evidence captured in the PR body.
+// SSE streaming, Supabase, and a two-tool agent (Claude + Sonar), all of
+// which are awkward to stand up in vitest without a real network or DB.
+// We exercise the source-level invariants the SPEC pins (Internal-only,
+// basic-auth, agent orchestrator usage, persistence). Drift trips a unit
+// test instead of a live-app regression. Dynamic integration is verified
+// live per the SPEC's LIVE-VERIFICATION block; evidence in the PR body.
 
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
@@ -36,47 +35,35 @@ describe('app/api/internal/chat/route.ts source invariants', () => {
     expect(ROUTE).toContain('userEmailFromRequest');
   });
 
-  it('reuses the existing Sonar stream surface (no new LLM client)', () => {
-    expect(ROUTE).toContain("import {");
-    expect(ROUTE).toContain('streamSonar');
-    expect(ROUTE).toContain("from '@/lib/chat/sonar'");
-    // Must not introduce a sibling LLM client; reuse only.
-    expect(ROUTE).not.toMatch(/from '@\/lib\/llm\/\w+'/);
+  it('dispatches through the two-tool orchestrator, not Sonar directly', () => {
+    expect(ROUTE).toContain("from '@/lib/chat/internal-chat-agent'");
+    expect(ROUTE).toContain('runInternalChatAgent(');
+    // Sonar is reached through the agent tool now, never imported directly
+    // by the route. The agent file is the one place that imports Sonar.
+    expect(ROUTE).not.toContain("from '@/lib/chat/sonar'");
+    expect(ROUTE).not.toMatch(/\bstreamSonar\(/);
   });
 
-  it('emits the "researching" SSE event before any Sonar delta', () => {
-    const researchingIdx = ROUTE.indexOf("type: 'researching'");
-    const streamSonarIdx = ROUTE.indexOf('streamSonar(');
-    expect(researchingIdx).toBeGreaterThan(0);
-    expect(streamSonarIdx).toBeGreaterThan(0);
-    // The 'researching' emit must appear before the for-await over the
-    // Sonar stream so the panel shows the chip before any delta lands.
-    expect(researchingIdx).toBeLessThan(streamSonarIdx);
-  });
-
-  it('persists the user turn before streaming, and the assistant turn after', () => {
+  it('persists the user turn before invoking the agent', () => {
     const userAppendIdx = ROUTE.indexOf("role: 'user'");
-    const sonarStartIdx = ROUTE.indexOf('streamSonar(');
-    const assistantAppendIdx = ROUTE.indexOf("role: 'assistant'");
+    const agentInvokeIdx = ROUTE.indexOf('runInternalChatAgent(');
     expect(userAppendIdx).toBeGreaterThan(0);
-    expect(sonarStartIdx).toBeGreaterThan(0);
-    expect(assistantAppendIdx).toBeGreaterThan(0);
-    expect(userAppendIdx).toBeLessThan(sonarStartIdx);
+    expect(agentInvokeIdx).toBeGreaterThan(0);
+    expect(userAppendIdx).toBeLessThan(agentInvokeIdx);
   });
 
-  it('writes to pathfinder.lead_chat_messages via appendLeadChatMessage', () => {
+  it('writes assistant, tool, and (on failure) error rows to lead_chat_messages', () => {
     expect(ROUTE).toContain("from '@/lib/chat/lead-chat-persist'");
-    expect(ROUTE).toContain('appendLeadChatMessage(');
+    expect(ROUTE).toContain("role: 'assistant'");
+    expect(ROUTE).toContain("role: 'tool'");
+    expect(ROUTE).toContain("kind: 'error'");
   });
 
   it('contains no em-dashes or en-dashes (SPEC SHARED rule)', () => {
     expect(/[—–]/.test(ROUTE)).toBe(false);
   });
 
-  it('does not modify the existing /api/chat surface', () => {
-    // Sanity guard: the Internal route should not reach into the existing
-    // chat route's persistence path (chat_threads, chat_messages). Those
-    // live in 0009_chat.sql and back Zedcor only.
+  it('does not modify the existing /api/chat surface (Zedcor)', () => {
     expect(ROUTE).not.toContain("from('chat_threads')");
     expect(ROUTE).not.toContain("from('chat_messages')");
   });
@@ -97,5 +84,39 @@ describe('lib/chat/lead-chat-persist.ts', () => {
   it('scopes thread reads to (thread_id, user_email) so users cannot read each other', () => {
     expect(PERSIST).toMatch(/eq\('thread_id'/);
     expect(PERSIST).toMatch(/eq\('user_email'/);
+  });
+});
+
+const AGENT = readFileSync(
+  path.resolve(__dirname, '../../lib/chat/internal-chat-agent.ts'),
+  'utf8',
+);
+
+describe('lib/chat/internal-chat-agent.ts source invariants', () => {
+  it('registers both tools with the orchestrator LLM', () => {
+    expect(AGENT).toContain("name: 'pathfinder_leads'");
+    expect(AGENT).toContain("name: 'perplexity_research'");
+  });
+
+  it('describes pathfinder_leads as the PRIMARY tool', () => {
+    expect(AGENT).toMatch(/PRIMARY tool: `pathfinder_leads`|PRIMARY[\s\S]{0,40}pathfinder_leads|pathfinder_leads[\s\S]{0,40}PRIMARY/);
+  });
+
+  it('emits researching only when perplexity_research is the active tool', () => {
+    expect(AGENT).toContain("'perplexity-sonar'");
+    expect(AGENT).toMatch(/block\.name === 'perplexity_research'/);
+  });
+
+  it('hard-caps tool-call rounds (no infinite loop)', () => {
+    expect(AGENT).toMatch(/MAX_TOOL_ROUNDS\s*=\s*\d+/);
+  });
+
+  it('contains no em-dashes or en-dashes', () => {
+    expect(/[—–]/.test(AGENT)).toBe(false);
+  });
+
+  it('reuses the existing Sonar wrapper rather than re-implementing the call', () => {
+    expect(AGENT).toContain("from '@/lib/chat/sonar'");
+    expect(AGENT).toContain('completeSonar');
   });
 });
