@@ -618,9 +618,19 @@ export async function runZedcorOrchestrator(): Promise<RunSummary> {
     projects_deduped,
     notion_writes: notionWrites,
     notion_dedupes: notionDedupes,
-    enrichment_attempted: enrichmentResult.attempted,
-    enrichment_succeeded: enrichmentResult.succeeded,
-    enrichment_failed: enrichmentResult.failed,
+    // Z17.1 — `enrichment_attempted` / `enrichment_succeeded` now reflect
+    // total enrichment work this run (this-run inserts via Wave 2.5 + ALL
+    // in-scope backlog rows via Wave 5), not just inserts. This is the
+    // metric on-call reads to confirm "did the trigger do enrichment
+    // work?" — pre-Z17.1 it stayed at 0 for any re-run with no new ingests
+    // even though Wave 5 was draining the backlog under different fields.
+    // Per-source breakdown stays available below (scored, gc_resolved,
+    // hooks_generated, backfill_*).
+    enrichment_attempted: enrichmentResult.attempted + backfillResult.attempted,
+    enrichment_succeeded:
+      enrichmentResult.succeeded +
+      Math.max(0, backfillResult.attempted - backfillResult.failures),
+    enrichment_failed: enrichmentResult.failed + backfillResult.failures,
     // Z17 — per-stage counts so the spec's "single-run completeness"
     // acceptance criterion is readable straight off run_metadata.
     scored: scoredCount,
@@ -1053,7 +1063,23 @@ export async function runZedcorZ7ContactResolutionWave(
 // post-award reporting noise, not construction-relevant leads.
 // ─────────────────────────────────────────────────────────────────────────
 
-const DEFAULT_BACKFILL_CAP_PER_RUN = 30;
+// Z17.1 — raised from 30 to 200 so a single trigger clears the typical
+// construction backlog instead of needing 6+ triggers. Capacity is gated
+// by Vercel maxDuration (300s on Pro): score is deterministic (<1ms each),
+// GC extraction is HTTP-bound and now batched in parallel (8 concurrent),
+// pitch is sequential and Sonnet-rate-limited (~5s each). For an org with
+// ~190 construction rows where ~10 need pitch and ~170 need GC, parallel
+// GC clears in ~45s and the pitch work finishes in ~50s — well inside
+// the function wall budget. Env override (`ZEDCOR_Z17_BACKFILL_CAP`) is
+// still honored for emergency throttling.
+const DEFAULT_BACKFILL_CAP_PER_RUN = 200;
+
+// Z17.1 — concurrency for the GC-extraction phase of the backlog wave.
+// GC extraction is per-row HTTP fetch + parse, no shared rate limit, so
+// running a batch in parallel collapses an N×2s sequential pass into
+// ⌈N/CONCURRENCY⌉×2s. Pitch stays sequential because Sonnet's per-key
+// rate limit makes naive parallelism a wash or worse.
+const GC_BACKFILL_CONCURRENCY = 8;
 
 const FEDERAL_NOISE_SOURCES: ReadonlySet<string> = new Set(['sam.gov', 'usaspending']);
 const Z17_PITCH_ELIGIBLE_STAGES: ReadonlySet<string> = new Set([
@@ -1088,8 +1114,77 @@ function backfillNeedsWork(p: ProjectRow): boolean {
     if (!pm) return true;
     if (!Array.isArray(pm.pitch_hooks) || pm.pitch_hooks.length === 0) return true;
     if (!pm.recommended_action || typeof pm.recommended_action !== 'string' || !pm.recommended_action.trim()) return true;
+  } else {
+    // Z17.1 — pre-window construction rows still need a tracking action so
+    // reps know what to do with a watched opportunity. Without this the
+    // backfill loop only fires for rows missing score; once scored, the
+    // pre-window row never gets the tracking action that spec §"ZED-58
+    // sanity" requires.
+    const pm = p.pitch_metadata as { recommended_action?: unknown } | null;
+    if (!pm
+      || typeof pm.recommended_action !== 'string'
+      || !pm.recommended_action.trim()) return true;
   }
   return false;
+}
+
+// Z17.1 — Deterministic tracking action for pre-window construction rows.
+// Solicitation / owner_bid rows have no GC yet, so a Sonnet-quality pitch
+// isn't earnable. What the rep needs instead is a short "what to do with
+// this lead today" string: monitor for stage advancement, or note the bid
+// response deadline. Pure string assembly, no API calls.
+function buildPreWindowTrackingAction(input: {
+  title: string;
+  project_stage: string | null;
+  response_deadline: string | null;
+  posted_date: string | null;
+  source_authority: string | null;
+}): { recommended_action: string; action_by_date: string | null; kind: string } {
+  const stage = (input.project_stage ?? 'unknown').toLowerCase();
+  const titleSnippet = input.title.length > 80
+    ? input.title.slice(0, 77).trimEnd() + '…'
+    : input.title;
+
+  // Action-by date: bias toward the response deadline, fall back to a
+  // 7-day touch-base from posted_date for awarded/late-stage rows.
+  let actionByDate: string | null = null;
+  if (input.response_deadline) {
+    actionByDate = input.response_deadline.slice(0, 10);
+  } else if (input.posted_date) {
+    const t = new Date(input.posted_date).getTime();
+    if (Number.isFinite(t)) {
+      actionByDate = new Date(t + 7 * 86_400_000).toISOString().slice(0, 10);
+    }
+  }
+  const byClause = actionByDate ? ` Touch base by ${actionByDate}.` : '';
+
+  if (stage === 'solicitation' || stage === 'owner_bid' || stage === 'rfp') {
+    const verb = input.response_deadline
+      ? `Owner bids are open through ${input.response_deadline.slice(0, 10)}.`
+      : 'Owner bids are open.';
+    return {
+      recommended_action:
+        `Watch list. ${verb} Identify the GC the moment the contract is awarded — then re-pitch as a sub-bid. Reference: "${titleSnippet}".${byClause}`,
+      action_by_date: actionByDate,
+      kind: 'watch_pre_award',
+    };
+  }
+  if (stage === 'unknown' || stage === '' || !stage) {
+    return {
+      recommended_action:
+        `Stage unclear. Skim the source page for award status; flag for re-poll if it moves to GC-selected. Reference: "${titleSnippet}".${byClause}`,
+      action_by_date: actionByDate,
+      kind: 'watch_unclear',
+    };
+  }
+  // Fallback for any non-pitch-eligible stage we forgot to enumerate
+  // (e.g. cancelled, subs_selected). Conservative: monitor, no outreach.
+  return {
+    recommended_action:
+      `Monitor. Current stage: ${stage}. Re-evaluate if stage changes. Reference: "${titleSnippet}".${byClause}`,
+    action_by_date: actionByDate,
+    kind: 'monitor',
+  };
 }
 
 async function loadBackfillCandidates(cap: number): Promise<ProjectRow[]> {
@@ -1160,44 +1255,70 @@ export async function runZedcorZ17Backfill(runId: number): Promise<BackfillSumma
   const supabase = supabaseAdmin() as unknown as Parameters<typeof resolveCrossPollination>[0]['supabase'];
   const pitchEnabled = isPitchEnabled();
 
+  // Z17.1 — Phase A: score every candidate that needs one (deterministic,
+  // negligible time). Phase B: GC-extract any row missing a gc_name, in
+  // parallel batches. Phase C: per-row pitch + Notion write (sequential).
+  // Splitting the row-loop lets us keep pitch/Notion per-row error
+  // isolation while still parallelizing the slow HTTP work.
+
+  // Phase A — scoring
+  for (const p of candidates) {
+    if (p.score !== null && p.score !== undefined) continue;
+    try {
+      const { score, rationale } = scoreZedcorProject({
+        response_deadline: p.response_deadline,
+        estimated_value: (p.raw_payload?.estimated_value as number | null) ?? null,
+        county: (p.raw_payload?.county as string | null) ?? null,
+        agency: (p.raw_payload?.agency as string | null) ?? null,
+      });
+      await updateProjectScore(p.id, score, rationale);
+      if (score !== null) {
+        p.score = score;
+        p.rationale = rationale;
+        summary.scored += 1;
+      }
+    } catch (scoreErr) {
+      await logEvent({
+        agent_name: ORCHESTRATOR_AGENT_NAME,
+        event_type: 'zedcor_z17_backfill_score_failed',
+        event_data: { run_id: runId, project_id: p.id, error: (scoreErr as Error).message.slice(0, 500) },
+        organization_id: ZEDCOR_ORG_ID,
+        runner: 'manual', ts: new Date().toISOString(), run_id: runId,
+      });
+    }
+  }
+
+  // Phase B — GC extraction in parallel batches.
+  const gcNeeded = candidates.filter((p) => {
+    const m = p.gc_metadata as GcMetadata | null;
+    return !m || typeof m.gc_name !== 'string' || m.gc_name.length === 0;
+  });
+  for (let i = 0; i < gcNeeded.length; i += GC_BACKFILL_CONCURRENCY) {
+    const batch = gcNeeded.slice(i, i + GC_BACKFILL_CONCURRENCY);
+    await Promise.all(batch.map(async (p) => {
+      try {
+        const gcMeta = await extractGcMetadata({ source_url: p.source_url, title: p.title });
+        await persistGcMetadataDirect(p.id, gcMeta);
+        p.gc_metadata = gcMeta as unknown as Record<string, unknown>;
+        if (gcMeta.gc_name) summary.gc_resolved += 1;
+      } catch (gcErr) {
+        await logEvent({
+          agent_name: ORCHESTRATOR_AGENT_NAME,
+          event_type: 'zedcor_z17_backfill_gc_failed',
+          event_data: { run_id: runId, project_id: p.id, error: (gcErr as Error).message.slice(0, 500) },
+          organization_id: ZEDCOR_ORG_ID,
+          runner: 'manual', ts: new Date().toISOString(), run_id: runId,
+        });
+      }
+    }));
+  }
+
+  // Phase C — per-row pitch + Notion (sequential).
   for (const p of candidates) {
     summary.attempted += 1;
     try {
-      // (a) Score — deterministic.
-      if (p.score === null || p.score === undefined) {
-        const { score, rationale } = scoreZedcorProject({
-          response_deadline: p.response_deadline,
-          estimated_value: (p.raw_payload?.estimated_value as number | null) ?? null,
-          county: (p.raw_payload?.county as string | null) ?? null,
-          agency: (p.raw_payload?.agency as string | null) ?? null,
-        });
-        await updateProjectScore(p.id, score, rationale);
-        if (score !== null) {
-          p.score = score;
-          p.rationale = rationale;
-          summary.scored += 1;
-        }
-      }
-
-      // (b) GC enrich — only when missing a real GC name.
-      let gcMeta: GcMetadata | null = (p.gc_metadata as GcMetadata | null) ?? null;
-      const hasGcName = gcMeta && typeof gcMeta.gc_name === 'string' && gcMeta.gc_name.length > 0;
-      if (!hasGcName) {
-        try {
-          gcMeta = await extractGcMetadata({ source_url: p.source_url, title: p.title });
-          await persistGcMetadataDirect(p.id, gcMeta);
-          if (gcMeta.gc_name) summary.gc_resolved += 1;
-          p.gc_metadata = gcMeta as unknown as Record<string, unknown>;
-        } catch (gcErr) {
-          await logEvent({
-            agent_name: ORCHESTRATOR_AGENT_NAME,
-            event_type: 'zedcor_z17_backfill_gc_failed',
-            event_data: { run_id: runId, project_id: p.id, error: (gcErr as Error).message.slice(0, 500) },
-            organization_id: ZEDCOR_ORG_ID,
-            runner: 'manual', ts: new Date().toISOString(), run_id: runId,
-          });
-        }
-      }
+      // Score + GC already attempted above; load current GC view for pitch use.
+      const gcMeta: GcMetadata | null = (p.gc_metadata as GcMetadata | null) ?? null;
 
       // (c) Pitch — only for pitch-eligible rows with the LLM key present.
       if (pitchEnabled && isPitchEligibleRow(p)) {
@@ -1252,6 +1373,36 @@ export async function runZedcorZ17Backfill(runId: number): Promise<BackfillSumma
         await writeProjectPitchMetadata(p.id, pitchMetadata);
         p.pitch_metadata = pitchMetadata as unknown as Record<string, unknown>;
         summary.hooks_generated += 1;
+      } else {
+        // Z17.1 — Phase D: pre-window construction rows (not pitch-eligible)
+        // still need a "tracking action" per spec §"ZED-58 sanity" so reps
+        // know what to do with a watched-but-not-actionable opportunity.
+        // Pure-deterministic; no LLM call (those rows aren't worth a Sonnet
+        // hit because there's no GC yet). Persist into pitch_metadata so
+        // the rest of the chain reads it from a single place; pitch_hooks
+        // stays empty (correct — pre-window rows shouldn't carry hooks).
+        const existingPitchMeta = (p.pitch_metadata as Record<string, unknown> | null) ?? {};
+        const hasRealTracking = typeof existingPitchMeta.recommended_action === 'string'
+          && (existingPitchMeta.recommended_action as string).trim().length > 0;
+        if (!hasRealTracking) {
+          const trackingAction = buildPreWindowTrackingAction({
+            title: p.title,
+            project_stage: p.project_stage,
+            response_deadline: p.response_deadline,
+            posted_date: p.posted_date,
+            source_authority: p.source_authority,
+          });
+          const trackingMetadata = {
+            ...existingPitchMeta,
+            pitch_hooks: [],
+            recommended_action: trackingAction.recommended_action,
+            action_by_date: trackingAction.action_by_date,
+            tracking_action_kind: trackingAction.kind,
+            generated_at: new Date().toISOString(),
+          };
+          await writeProjectPitchMetadata(p.id, trackingMetadata);
+          p.pitch_metadata = trackingMetadata as unknown as Record<string, unknown>;
+        }
       }
 
       // (d) Notion — gated by isReadyForNotion. The Lead Feed receives the
