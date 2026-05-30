@@ -48,7 +48,13 @@ export const GeoMapStub = makeStub('geo-map');
  * with real `() => import('./real-component')` thunks.
  */
 export const FLOOR_STUB_LOADERS = {
-  'ranked-feed': () => Promise.resolve({ default: RankedFeedStub }),
+  // Stream B Module 1: replaced floor stub with the real ranked-feed
+  // component. The renderer awaits the dynamic import at module activation
+  // time, matching the loader shape the other stubs preserve.
+  'ranked-feed': () =>
+    import('./modules/ranked-feed/RankedFeed').then((m) => ({
+      default: m.default as unknown as React.ComponentType<ModuleComponentProps>,
+    })),
   'company-detail': () => Promise.resolve({ default: CompanyDetailStub }),
   'outreach-composer': () => Promise.resolve({ default: OutreachComposerStub }),
   'hubspot-sync': () => Promise.resolve({ default: HubspotSyncStub }),
@@ -58,10 +64,29 @@ export const FLOOR_STUB_LOADERS = {
     import('./modules/pipeline-kanban/PipelineKanbanModule').then((m) => ({
       default: m.default as unknown as React.ComponentType<ModuleComponentProps>,
     })),
-  'filter-rail': () => Promise.resolve({ default: FilterRailStub }),
+  // Stream B Module 2: replaced floor stub with the real filter-rail
+  // component. Soft-gates per spec (drops a filter whose backing schema
+  // field is absent for the org).
+  'filter-rail': () =>
+    import('./modules/filter-rail/FilterRail').then((m) => ({
+      default: m.default as unknown as React.ComponentType<ModuleComponentProps>,
+    })),
   'warm-intro-panel': () => Promise.resolve({ default: WarmIntroPanelStub }),
-  'kpi-strip': () => Promise.resolve({ default: KpiStripStub }),
-  'analytics-charts': () => Promise.resolve({ default: AnalyticsChartsStub }),
+  // Stream B Module 3: replaced floor stub with the real kpi-strip
+  // component. Null-valued metrics are DROPPED so the strip never renders
+  // a misleading zero (eliminates the "Active outbound motion 0%" red
+  // flag the dispatch prompt calls out).
+  'kpi-strip': () =>
+    import('./modules/kpi-strip/KpiStrip').then((m) => ({
+      default: m.default as unknown as React.ComponentType<ModuleComponentProps>,
+    })),
+  // Stream B Module 4: replaced floor stub with the real analytics-charts
+  // component. Soft-gated per chart: empty series renders the designed
+  // EmptyState, never a broken chart.
+  'analytics-charts': () =>
+    import('./modules/analytics-charts/AnalyticsCharts').then((m) => ({
+      default: m.default as unknown as React.ComponentType<ModuleComponentProps>,
+    })),
   // Stream D replaces the daily-digest stub with a non-visual module that
   // declares the catalog metadata; the actual delivery runs through the
   // /api/cron/internal-digest route (see lib/catalog/modules/daily-digest).

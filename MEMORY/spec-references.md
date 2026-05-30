@@ -2165,3 +2165,88 @@ Stream A is plumbing only. The catalog renderer is not yet wired into `app/[slug
 **Implements:** SPEC-zedcor-Z17.md §"Hard rules" → no paid-key dependence for core stages. Removes the misnamed `anthropicEnabled()` gate that had wrapped the scorer's deterministic 0..100 arithmetic — none of the math calls Anthropic, so returning `{ score: null, rationale: '(scoring disabled)' }` when `ZEDCOR_DISABLE_ANTHROPIC=true` (or `ANTHROPIC_API_KEY` unset) was a trap that caused the Notion writer to stamp the `(scoring disabled)` sentinel on every row regardless of why the score was null. Scorer now always produces a real score.
 **Last verified against spec:** 2026-05-30.
 **Drift:** none.
+
+---
+
+## Stream B , Internal Dashboard surface
+
+**State:** PR open on branch `feat/stream-b-dashboard` at `37afc8c` (2026-05-30). Pending Kyle merge per Pathfinder/CLAUDE.md "Never merge your own PR".
+
+### Module 1 , ranked-feed (slot dashboard.hero)
+
+#### Pathfinder/lib/catalog/modules/ranked-feed/labels.ts (new)
+**Implements:** SPEC-Internal-Parallel-Build.md §Stream B "real values with human labels, never raw schema keys". Single chokepoint Stream B modules call to translate a schema key into the user-facing label. Reads `architecture.lead_unit.schema[key].display_label` and falls back to a humanized key form when the entry is missing.
+**Last verified against spec:** 2026-05-30 (4/4 unit tests).
+**Drift:** none.
+
+#### Pathfinder/lib/catalog/modules/ranked-feed/data.ts (new)
+**Implements:** SPEC-Internal-Parallel-Build.md §Stream B `ranked-feed` data layer. Queries `pathfinder.projects` scoped to one org with `score IS NOT NULL`, score desc, default cap 50; applies the shared filter narrowing from `filter-rail/applyFilters` so ranked-feed and filter-rail agree on the visible set. Returns empty array on Supabase error so the renderer falls back to the designed EmptyState.
+**Last verified against spec:** 2026-05-30 (5/5 unit tests, including the score-desc invariant).
+**Drift:** none.
+
+#### Pathfinder/lib/catalog/modules/ranked-feed/RankedFeed.tsx (new)
+**Implements:** SPEC-Internal-Parallel-Build.md §Stream B `ranked-feed` renderer. Reuses `lib/agents/internal/companyLeadView.projectToCompanyLeadView` so the same Internal projection backs both the dashboard and the existing detail view. Each card surfaces company name, service category, operating footprint, sales motion, score badge top-right, and a one-line "why" clamped from the rationale. Wraps each card in `next/link` with `href` built via `lib/nav/orgPath.buildOrgPath` so the org slug is never dropped.
+**Last verified against spec:** 2026-05-30 (7/7 render tests via jsdom).
+**Drift:** none.
+
+### Module 2 , filter-rail (slot dashboard.filters)
+
+#### Pathfinder/lib/catalog/modules/filter-rail/applyFilters.ts (new)
+**Implements:** SPEC-Internal-Parallel-Build.md §Stream B `filter-rail` narrowing helper, shared with `ranked-feed/data.ts`. Reads enum slugs out of `raw_payload.internal_enrichment.service_category`, `raw_payload.internal_enrichment.sales_motion`, `raw_payload.internal_federal_registration`, and the top-level `Project.source` column. Missing nested fields count as non-match so the user's "filter by active-outbound" intent does not surface rows where sales_motion is absent.
+**Last verified against spec:** 2026-05-30 (8/8 unit tests).
+**Drift:** none.
+
+#### Pathfinder/lib/catalog/modules/filter-rail/FilterRail.tsx (new)
+**Implements:** SPEC-Internal-Parallel-Build.md §Stream B `filter-rail` per-element soft-gate. Drops a filter whose backing schema field is absent from `architecture.lead_unit.schema`; never renders a disabled control left behind. Persists selection to URL search params via `useRouter().replace` so the slug page server component re-renders with narrowed `fetchRankedCompanies({ filters })` on next paint.
+**Last verified against spec:** 2026-05-30 (6/6 render tests via jsdom + next/navigation mock).
+**Drift:** none.
+
+### Module 3 , kpi-strip (slot dashboard.kpi)
+
+#### Pathfinder/lib/catalog/modules/kpi-strip/metrics.ts (new)
+**Implements:** SPEC-Internal-Parallel-Build.md §Stream B `kpi-strip` resolution semantics. Each resolver returns `number | null`; null means DROP this KPI so the strip never renders a misleading zero. Resolution table per `docs/PLAN-stream-b-dashboard.md`:
+- `verified_count_1d`: real zero is meaningful, renders `0`.
+- `active_motion_pct`: returns null when (a) zero verified rows, (b) schema lacks `sales_motion`, or (c) schema enum has no outbound-semantic member. Fixes the false-zero in `lib/metrics/kpiQueries.ts:117`.
+- `avg_score`: returns null when no scored rows; rounded mean otherwise.
+- `sources_live`: count of `architecture.sources` where `type='registered'`; real zero is meaningful.
+**Last verified against spec:** 2026-05-30 (11/11 unit tests).
+**Drift:** none.
+
+#### Pathfinder/lib/catalog/modules/kpi-strip/KpiStrip.tsx (new)
+**Implements:** SPEC-Internal-Parallel-Build.md §Stream B `kpi-strip` "slim and secondary, not the hero". `KpiStripView` is a pure renderer over already-resolved metrics; filters nulls before composing the strip; when every metric drops, the strip itself is absent (no empty chrome). Server-component `KpiStrip` shell calls `resolveMetrics` then hands off to the pure view.
+**Last verified against spec:** 2026-05-30 (5/5 render tests).
+**Drift:** none.
+
+### Module 4 , analytics-charts (slot dashboard.charts)
+
+#### Pathfinder/lib/catalog/modules/analytics-charts/charts.ts (new)
+**Implements:** SPEC-Internal-Parallel-Build.md §Stream B `analytics-charts` data shapers. `byServiceCategory` reads `raw_payload.internal_enrichment.service_category` with fallback to `raw_payload.internal_inferred_service_category` and sorts desc; drops rows with no resolvable category rather than bucketing as "unknown". `verifiedOverTime` produces one entry per UTC day in the lookback window (default 14d) so the line chart has a continuous axis even at zero counts.
+**Last verified against spec:** 2026-05-30 (7/7 unit tests).
+**Drift:** none.
+
+#### Pathfinder/lib/catalog/modules/analytics-charts/AnalyticsCharts.tsx (new)
+**Implements:** SPEC-Internal-Parallel-Build.md §Stream B `analytics-charts` renderer. Bar chart (companies by service category) and line chart (verified companies over time) both inline-SVG to keep bundle small. Soft-gated per chart: an empty bar series renders the designed `EmptyState`; an all-zero line series likewise. Categories on the bar are humanized via `humanizeKey` so raw slugs never leak.
+**Last verified against spec:** 2026-05-30 (5/5 render tests).
+**Drift:** none.
+
+### Integration
+
+#### Pathfinder/app/[slug]/internalDashboardBranch.ts (new)
+**Implements:** SPEC-Internal-Parallel-Build.md §Stream B route integration. `shouldUseInternalDashboard(arch)` is true iff `architecture.modules` is a non-empty plain object. Stream A's migration introduced this block on Internal (#4) only; Zedcor, Realberry, and Funder continue to take the legacy rendering path so their dashboards are byte-identical to today.
+**Last verified against spec:** 2026-05-30 (6/6 unit tests).
+**Drift:** none.
+
+#### Pathfinder/app/[slug]/InternalDashboard.tsx (new)
+**Implements:** SPEC-Internal-Parallel-Build.md §Stream B layout composition: header + Dashboard / Companies / Pipeline nav (via `buildOrgPath`), slim secondary `KpiStrip` at top, hero grid (`FilterRail` left + `RankedFeed` right so the feed is the visual hero), `AnalyticsCharts` secondary below. `min-height: 100vh`, no overflow-clipping container, page scrolls. Fetches via `supabaseAdmin()` so behaviour matches the existing `app/[slug]/page.tsx` data layer.
+**Last verified against spec:** 2026-05-30.
+**Drift:** none.
+
+#### Pathfinder/lib/catalog/floor-stubs.tsx (modified, additive)
+**Implements:** SPEC-Internal-Parallel-Build.md §Stream B "replace four floor stubs". The four `FLOOR_STUB_LOADERS` entries for `ranked-feed`, `filter-rail`, `kpi-strip`, `analytics-charts` now dynamic-import the real components. The seven other entries stay as floor stubs until Streams C and D land.
+**Last verified against spec:** 2026-05-30.
+**Drift:** none.
+
+#### Pathfinder/app/[slug]/page.tsx (modified, additive)
+**Implements:** SPEC-Internal-Parallel-Build.md §Stream B route integration branch. Single early return inserted after the org load: if `shouldUseInternalDashboard(rawArch)`, render `<InternalDashboard>`; else fall through to the existing layout verbatim. Existing rendering block unchanged byte-for-byte.
+**Last verified against spec:** 2026-05-30 (regression confirmed via `git stash` retest of pre-existing test failures; 0 new regressions in scope).
+**Drift:** none.

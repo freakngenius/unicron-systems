@@ -32,16 +32,26 @@ import { FilterSidebar } from '@/components/FilterSidebar';
 import { FunderChartGrid } from '@/components/Chart';
 import { LeadCardList, type LeadLike } from '@/components/LeadCard';
 import { projectFunderLead } from '@/lib/agents/funder/leadView';
+// Stream B Dashboard: branch helper + new Internal dashboard composition.
+// Orgs whose architecture lacks a modules block (Zedcor, Realberry,
+// Funder) take the existing legacy rendering path below, byte-identical.
+import { shouldUseInternalDashboard } from './internalDashboardBranch';
+import { InternalDashboard } from './InternalDashboard';
+import type { InternalFilters } from '@/lib/catalog/modules/filter-rail/applyFilters';
 
-type Props = { params: Promise<{ slug: string }> };
+type Props = {
+  params: Promise<{ slug: string }>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+};
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 const DASHBOARD_LEAD_LIMIT = 6;
 
-export default async function OrgPage({ params }: Props) {
+export default async function OrgPage({ params, searchParams }: Props) {
   const { slug } = await params;
+  const sp = (await searchParams) ?? {};
 
   const adminAny = supabaseAdmin() as unknown as { from: (t: string) => any };
   const { data: org } = (await adminAny
@@ -51,6 +61,29 @@ export default async function OrgPage({ params }: Props) {
     .maybeSingle()) as { data: (Organization & { status?: string | null }) | null; error: unknown };
 
   const rawArch = (org?.architecture ?? null) as Record<string, unknown> | null;
+
+  // Stream B Dashboard branch: Internal-shaped orgs go through the new
+  // catalog-driven page. Zedcor, Realberry, Funder fall through to the
+  // legacy block below and render exactly as they do today.
+  if (org && shouldUseInternalDashboard(rawArch)) {
+    const filters: InternalFilters = {
+      service_category: pickFirst(sp.service_category),
+      sales_motion: pickFirst(sp.sales_motion),
+      federal_registration: pickFirst(sp.federal_registration),
+      source: pickFirst(sp.source),
+    };
+    // Per Stream A, flip operator_viewed for the first-render even on the
+    // new path. Keeps the lifecycle invariant identical for Internal.
+    await flipToOperatorViewed(org.id, org.status ?? null);
+    return (
+      <InternalDashboard
+        org={{ id: org.id, slug: org.slug ?? slug, name: org.name ?? slug }}
+        architecture={(rawArch ?? {}) as Parameters<typeof InternalDashboard>[0]['architecture']}
+        filters={filters}
+      />
+    );
+  }
+
   const architecture = resolveArchitecture(rawArch);
   const uiPlan = architecture.ui_plan!;
   const vocab = architecture.vocabulary ?? {};
@@ -191,6 +224,11 @@ export default async function OrgPage({ params }: Props) {
 function titleCase(s: string): string {
   if (!s) return s;
   return s[0].toUpperCase() + s.slice(1);
+}
+
+function pickFirst(v: string | string[] | undefined): string | undefined {
+  if (Array.isArray(v)) return v[0];
+  return v;
 }
 
 // Wrap LeadCardList so each card links to the org-scoped detail page.
