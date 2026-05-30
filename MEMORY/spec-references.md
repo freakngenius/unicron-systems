@@ -2011,3 +2011,81 @@ OPTIONAL (route degrades gracefully when absent):
 **Implements:** Z14.2 bugfix — default `VBX_FEED_URL` now uses trailing-slash `/feed/` instead of `/feed` because virtualbx.com 301-redirects the latter. Node `fetch` follows redirects by default but skipping the hop is faster and avoids edge cases where env-overridden values may not follow. Verified live: HTTP 301 → 200 on /feed/ direct. Note: Node 26 local fetch fails on virtualbx.com cert chain (`UNABLE_TO_VERIFY_LEAF_SIGNATURE`); Vercel Node runtime expected to succeed.
 **Last verified against spec:** 2026-05-29.
 **Drift:** none.
+
+---
+
+## Stream A, Foundation (Internal rework)
+
+**State:** PR open against `main` at branch `feat/stream-a-foundation` (2026-05-30). Auto-merge gate: human-merged per project CLAUDE.md "Never merge your own PR". Plan: `Pathfinder/docs/PLAN-stream-a-foundation.md`.
+
+Stream A is plumbing only. The catalog renderer is not yet wired into `app/[slug]/page.tsx` or `app/[slug]/leads/[projectId]/page.tsx`. Surface streams B/C/D wire the renderer in and replace the floor stubs with real components.
+
+### Catalog (Pathfinder/lib/catalog/)
+
+#### Pathfinder/lib/catalog/types.ts (new)
+**Implements:** PLAN-stream-a-foundation.md Slot grammar + Dependency grammar + ModuleDefinition + OrgModuleEntry + ValidationResult + SlotResolution + GateContext. Defines the eleven-entry `ModuleId` union.
+**Last verified against spec:** 2026-05-30.
+**Drift:** none.
+
+#### Pathfinder/lib/catalog/registry.ts (new)
+**Implements:** PLAN section "Module registry, eleven entries". Registers `ranked-feed`, `company-detail`, `outreach-composer`, `hubspot-sync` (slotMode=action-affordance), `pipeline-kanban`, `filter-rail`, `warm-intro-panel`, `kpi-strip`, `analytics-charts`, `daily-digest`, `geo-map`. Component refs delegate to `floor-stubs`. Config schemas: `KpiStripConfig` (metrics min-1), `AnalyticsChartsConfig` (emphasis enum), `FilterRailConfig` (optional fields list), `NoConfig` elsewhere.
+**Last verified against spec:** 2026-05-30.
+**Drift:** none. Slot-collision resolution for hubspot-sync uses `slotMode: 'action-affordance'` so `validateOrgModules` exempts it from the one-module-one-slot check.
+
+#### Pathfinder/lib/catalog/floor-stubs.tsx (new)
+**Implements:** PLAN "Component refs are lazy stubs that render the floor for now". Each module id has a `data-module-stub` marker component returned via `() => Promise.resolve({default: Stub})` so the registry's loader contract is stable while stubs ship.
+**Last verified against spec:** 2026-05-30.
+**Drift:** none.
+
+#### Pathfinder/lib/catalog/validation.ts (new)
+**Implements:** PLAN "PART 2, validateOrgModules" and the shared `checkSyncDep` helper. Codes: `unknown_module_id`, `slot_collision`, `pinned_version_missing`, `config_schema_failure`, `hard_gate_unmet`. Synchronous hard-gate enforcement for `integration` + `schema_field` + `agent`; defers `data_signal` to render-time `resolveGate`.
+**Last verified against spec:** 2026-05-30.
+**Drift:** none.
+
+#### Pathfinder/lib/catalog/gating.ts (new)
+**Implements:** PLAN "resolveGate" + `resolveAllGates` + production `makeSupabaseGateContext`. Sentinel `__configured_filters__` and `__configured_metrics__` expand per per-org config. Production gate context's `SIGNAL_QUERIES` map starts conservative (unknown ref falls closed to false).
+**Last verified against spec:** 2026-05-30.
+**Drift:** none.
+
+#### Pathfinder/lib/catalog/renderer.ts (new)
+**Implements:** PLAN "Renderer slot resolution" + `resolveAllSlots` convenience. Modes: `active` | `inactive` | `floor` | `hidden`. Never crashes on misconfiguration; logs via injectable `log` hook (defaults to `console.warn`) and degrades. Action-affordance modules with met gates are resolved inside `SlotResolution.affordances` for the slot owner.
+**Last verified against spec:** 2026-05-30.
+**Drift:** none.
+
+#### Pathfinder/lib/catalog/index.ts (new)
+**Implements:** single-import surface for surface streams. Re-exports types + registry + validation + gating + renderer.
+**Last verified against spec:** 2026-05-30.
+**Drift:** none.
+
+### Org-context navigation helper
+
+#### Pathfinder/lib/nav/orgPath.ts (new)
+**Implements:** PLAN PART 4 "buildOrgPath" helper. Always prefixes `/${slug}`, URL-encodes segments unless `{ raw: true }`, strips leading slashes, throws on empty slug. Convenience wrappers `orgPaths.dashboard|leads|leadDetail|pipeline`. Surface streams import this for every internal link so org slug is never dropped.
+**Last verified against spec:** 2026-05-30.
+**Drift:** none.
+
+### Design tokens
+
+#### Pathfinder/lib/design/tokens.ts (new)
+**Implements:** PLAN PART 5 design tokens. Palette captured from `components/zedcor/ZedcorLeadList.tsx` so the rework surfaces match Zedcor calibration: `bg #0e1116`, `border rgba(91,127,255,0.20)`, `accent #5B7FFF`, `scoreHi #FFB454`, `scoreMid #3DDC97`, mono `var(--font-jetbrains-mono)`. `scoreColor(n)` threshold helper (>=80 hi, >=60 mid, else low) matches the Zedcor `ScorePill`.
+**Last verified against spec:** 2026-05-30.
+**Drift:** none.
+
+### Additive edits to existing lib/ files
+
+#### Pathfinder/lib/types/architecture.ts (modified, additive)
+**Implements:** PLAN "Additive edits". Added optional `modules?: import('@/lib/catalog/types').OrgModulesBlock` to `OrgArchitecture`. Inline type import keeps `lib/types` agnostic of `lib/catalog` at module-graph level.
+**Last verified against spec:** 2026-05-30.
+**Drift:** none. Pre-existing `ui_plan` shape and every other field untouched. Architect agent emissions remain valid.
+
+#### Pathfinder/lib/config/resolveArchitecture.ts (modified, additive)
+**Implements:** PLAN "Additive edits". Pass-through of `partial.modules` into the resolved architecture so persisted org modules surface to the renderer. Cloned, never base-merged (modules are wholly per-org).
+**Last verified against spec:** 2026-05-30.
+**Drift:** none. Existing tests in `__tests__/config/resolveArchitecture.test.ts` continue to pass unchanged (verified locally).
+
+### Migration
+
+#### Pathfinder/supabase/migrations/20260530_internal_modules_block.sql (new)
+**Implements:** PLAN PART 3. `jsonb_set` adds top-level `modules` key into `pathfinder.organizations.architecture` WHERE `slug='internal'`. WHERE clause is the physical guarantee Zedcor / Realberry / Funder are untouched. Verification script: `scripts/verify-orgs-byte-unchanged.ts`.
+**Last verified against spec:** 2026-05-30 (statically reviewed; applied to live DB after PR merge).
+**Drift:** none.

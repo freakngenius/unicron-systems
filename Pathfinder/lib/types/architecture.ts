@@ -26,6 +26,12 @@ export interface OrgArchitecture {
   // existing orgs persisted before the v4 prompt — resolveArchitecture
   // falls back to the BASE_ARCHITECTURE default ui_plan when missing.
   ui_plan?: UIPlan;
+  // Stream A Foundation: optional per-org module enablement block. Read by
+  // the catalog renderer in lib/catalog/renderer. Absent on Zedcor (#1),
+  // Realberry (#2), Funder (#3). Present on Internal (#4) after the
+  // additive migration 20260530_internal_modules_block.sql. The type
+  // lives in lib/catalog/types to keep this module agnostic.
+  modules?: import('@/lib/catalog/types').OrgModulesBlock;
 }
 
 export interface LeadUnitConfig {
