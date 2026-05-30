@@ -218,6 +218,15 @@ async function loadRunProjects(runId: number): Promise<ProjectRow[]> {
 //      produced pitch_hooks + recommended_action.
 // Pre-window construction rows (Z12 expansion) only need score; pitch is
 // not generated for them so requiring it would withhold them forever.
+
+// Z17 — diagnostic escape hatch (NOT for production). When this is set the
+// orchestrator's Notion writes (Wave 4 + backfill) and the pitch wave's
+// in-place Notion update are skipped. Lets the diagnose-z17 script verify
+// the score / enrichment / pitch / gate / backfill chain end-to-end against
+// the live DB without requiring NOTION_API_TOKEN (a Vercel-only secret).
+function notionDisabled(): boolean {
+  return process.env.ZEDCOR_Z17_SKIP_NOTION === 'true';
+}
 function isReadyForNotion(p: Pick<ProjectRow,
   'title' | 'summary' | 'source_authority' | 'project_stage' | 'buy_window_open' | 'score' | 'pitch_metadata'>): boolean {
   if (!shouldWriteToZedcorNotion({
@@ -439,7 +448,15 @@ export async function runZedcorOrchestrator(): Promise<RunSummary> {
   let notionDedupes = 0;
   let notionWithheld = 0;
   const refreshed = await loadRunProjects(runId);
+  const skipNotion = notionDisabled();
   for (const p of refreshed) {
+    if (skipNotion) {
+      // Diagnostic mode: still count gate decisions so run_metadata accurately
+      // reflects what WOULD have been written / withheld.
+      if (isReadyForNotion(p)) notionWrites += 1;
+      else notionWithheld += 1;
+      continue;
+    }
     if (!isReadyForNotion(p)) {
       notionWithheld += 1;
       await logEvent({
@@ -1242,6 +1259,11 @@ export async function runZedcorZ17Backfill(runId: number): Promise<BackfillSumma
       // trigger picks it up.
       if (!isReadyForNotion(p)) {
         await new Promise((r) => setTimeout(r, 100));
+        continue;
+      }
+      if (notionDisabled()) {
+        // Diagnostic mode — count what WOULD have been written.
+        summary.notion_writes += 1;
         continue;
       }
 
