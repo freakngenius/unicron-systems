@@ -2166,6 +2166,7 @@ Stream A is plumbing only. The catalog renderer is not yet wired into `app/[slug
 **Last verified against spec:** 2026-05-30.
 **Drift:** none.
 
+<<<<<<< HEAD
 ---
 
 ## Stream B , Internal Dashboard surface
@@ -2276,4 +2277,13 @@ Replaces the four detail-surface floor stubs (`company-detail`, `outreach-compos
 #### Pathfinder/lib/catalog/floor-stubs.tsx (modified — Stream C swap)
 **Implements:** Stream C swap point. The four detail-surface loader thunks now point at the real components under `components/catalog/modules/`: `company-detail` → `CompanyDetail`, `outreach-composer` → `OutreachComposer`, `hubspot-sync` → `HubspotSync`, `warm-intro-panel` → `WarmIntroPanel`. After the post-B / post-D rebase the file is the union of all three stream swaps: ranked-feed / filter-rail / kpi-strip / analytics-charts via Stream B (`lib/catalog/modules/<id>/<Component>.tsx`), pipeline-kanban / daily-digest via Stream D (`lib/catalog/modules/<id>/<Component>.tsx`), and the four Stream C entries above. Only `geo-map` remains Stream A's invisible marker (no org enables it). The real Stream C components consume per-page data via the `CompanyDetailContext` provider mounted by `CatalogDetailRenderer`; the file header comment notes that calling the Stream C loaders outside that provider throws with a clear message.
 **Last verified against spec:** 2026-05-30.
+**Drift:** none.
+
+### Sprint Z17.1 — Enrich the existing backlog on every trigger (corrective to Z17)
+
+**State:** PR pending on `z17.1-enrich-backlog`. Spec: `Company Docs/Specs/SPEC-zedcor-Z17.1.md`. Corrective follow-up to Z17 (#508). Z17 added `runZedcorZ17Backfill()` but reported its counts under `backfill_*` fields, leaving the original `enrichment_attempted` / `enrichment_succeeded` at 0 on every re-run with no new ingests — anyone reading the canonical metric saw 0 and concluded the backlog was untouched. Z17.1 folds backlog work into the canonical fields, raises the per-trigger cap so one trigger clears the typical backlog, and parallelizes the HTTP-bound GC stage.
+
+#### Pathfinder/lib/orchestrator/orchestrator.ts (modified — additive)
+**Implements:** SPEC-zedcor-Z17.1.md §"The fix" + §"Acceptance criteria". `enrichment_attempted` / `enrichment_succeeded` / `enrichment_failed` in `RunSummary` now sum Wave 2.5 (this-run inserts) + Wave 5 (backlog) so a single trigger's enrichment work is readable off the canonical field; per-source breakdown stays (`scored`, `gc_resolved`, `hooks_generated`, `backfill_*`). `DEFAULT_BACKFILL_CAP_PER_RUN` raised 30 → 200 so one trigger clears the typical ~190-row construction backlog instead of needing 6+ triggers. `runZedcorZ17Backfill()` restructured into Phase A (score, deterministic) + Phase B (GC extract, parallel batches of `GC_BACKFILL_CONCURRENCY=8`) + Phase C (pitch + Notion, sequential). HTTP-bound GC work collapses from N×2s sequential to ⌈N/8⌉×2s parallel; pitch stays sequential because Sonnet's per-key rate limit makes naive parallelism a wash. Pre-window construction rows (solicitation / owner_bid / rfp / unknown / fallback) that are not pitch-eligible now receive a deterministic tracking action via `buildPreWindowTrackingAction()` written to `pitch_metadata.recommended_action` (with `pitch_hooks: []` and a `tracking_action_kind` tag), so spec §"ZED-58 sanity" — score + phase + tracking action with no hooks and no GC required — is satisfied on the first trigger. `backfillNeedsWork()` counts "missing tracking action" as work, so the deterministic step runs once per row and then idempotently skips.
+**Last verified against spec:** 2026-05-30. Live verification runs 6722 (enrichment_attempted=144, backfill_scored=144, hooks_generated=19, notion_writes=44) + 6723 (enrichment_attempted=0, idempotency) against `pathfinder.projects`; aggregates moved construction_with_score 46→190 (100%) and construction_with_hooks 35→45.
 **Drift:** none.

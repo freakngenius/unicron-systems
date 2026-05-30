@@ -1114,8 +1114,77 @@ function backfillNeedsWork(p: ProjectRow): boolean {
     if (!pm) return true;
     if (!Array.isArray(pm.pitch_hooks) || pm.pitch_hooks.length === 0) return true;
     if (!pm.recommended_action || typeof pm.recommended_action !== 'string' || !pm.recommended_action.trim()) return true;
+  } else {
+    // Z17.1 — pre-window construction rows still need a tracking action so
+    // reps know what to do with a watched opportunity. Without this the
+    // backfill loop only fires for rows missing score; once scored, the
+    // pre-window row never gets the tracking action that spec §"ZED-58
+    // sanity" requires.
+    const pm = p.pitch_metadata as { recommended_action?: unknown } | null;
+    if (!pm
+      || typeof pm.recommended_action !== 'string'
+      || !pm.recommended_action.trim()) return true;
   }
   return false;
+}
+
+// Z17.1 — Deterministic tracking action for pre-window construction rows.
+// Solicitation / owner_bid rows have no GC yet, so a Sonnet-quality pitch
+// isn't earnable. What the rep needs instead is a short "what to do with
+// this lead today" string: monitor for stage advancement, or note the bid
+// response deadline. Pure string assembly, no API calls.
+function buildPreWindowTrackingAction(input: {
+  title: string;
+  project_stage: string | null;
+  response_deadline: string | null;
+  posted_date: string | null;
+  source_authority: string | null;
+}): { recommended_action: string; action_by_date: string | null; kind: string } {
+  const stage = (input.project_stage ?? 'unknown').toLowerCase();
+  const titleSnippet = input.title.length > 80
+    ? input.title.slice(0, 77).trimEnd() + '…'
+    : input.title;
+
+  // Action-by date: bias toward the response deadline, fall back to a
+  // 7-day touch-base from posted_date for awarded/late-stage rows.
+  let actionByDate: string | null = null;
+  if (input.response_deadline) {
+    actionByDate = input.response_deadline.slice(0, 10);
+  } else if (input.posted_date) {
+    const t = new Date(input.posted_date).getTime();
+    if (Number.isFinite(t)) {
+      actionByDate = new Date(t + 7 * 86_400_000).toISOString().slice(0, 10);
+    }
+  }
+  const byClause = actionByDate ? ` Touch base by ${actionByDate}.` : '';
+
+  if (stage === 'solicitation' || stage === 'owner_bid' || stage === 'rfp') {
+    const verb = input.response_deadline
+      ? `Owner bids are open through ${input.response_deadline.slice(0, 10)}.`
+      : 'Owner bids are open.';
+    return {
+      recommended_action:
+        `Watch list. ${verb} Identify the GC the moment the contract is awarded — then re-pitch as a sub-bid. Reference: "${titleSnippet}".${byClause}`,
+      action_by_date: actionByDate,
+      kind: 'watch_pre_award',
+    };
+  }
+  if (stage === 'unknown' || stage === '' || !stage) {
+    return {
+      recommended_action:
+        `Stage unclear. Skim the source page for award status; flag for re-poll if it moves to GC-selected. Reference: "${titleSnippet}".${byClause}`,
+      action_by_date: actionByDate,
+      kind: 'watch_unclear',
+    };
+  }
+  // Fallback for any non-pitch-eligible stage we forgot to enumerate
+  // (e.g. cancelled, subs_selected). Conservative: monitor, no outreach.
+  return {
+    recommended_action:
+      `Monitor. Current stage: ${stage}. Re-evaluate if stage changes. Reference: "${titleSnippet}".${byClause}`,
+    action_by_date: actionByDate,
+    kind: 'monitor',
+  };
 }
 
 async function loadBackfillCandidates(cap: number): Promise<ProjectRow[]> {
@@ -1304,6 +1373,36 @@ export async function runZedcorZ17Backfill(runId: number): Promise<BackfillSumma
         await writeProjectPitchMetadata(p.id, pitchMetadata);
         p.pitch_metadata = pitchMetadata as unknown as Record<string, unknown>;
         summary.hooks_generated += 1;
+      } else {
+        // Z17.1 — Phase D: pre-window construction rows (not pitch-eligible)
+        // still need a "tracking action" per spec §"ZED-58 sanity" so reps
+        // know what to do with a watched-but-not-actionable opportunity.
+        // Pure-deterministic; no LLM call (those rows aren't worth a Sonnet
+        // hit because there's no GC yet). Persist into pitch_metadata so
+        // the rest of the chain reads it from a single place; pitch_hooks
+        // stays empty (correct — pre-window rows shouldn't carry hooks).
+        const existingPitchMeta = (p.pitch_metadata as Record<string, unknown> | null) ?? {};
+        const hasRealTracking = typeof existingPitchMeta.recommended_action === 'string'
+          && (existingPitchMeta.recommended_action as string).trim().length > 0;
+        if (!hasRealTracking) {
+          const trackingAction = buildPreWindowTrackingAction({
+            title: p.title,
+            project_stage: p.project_stage,
+            response_deadline: p.response_deadline,
+            posted_date: p.posted_date,
+            source_authority: p.source_authority,
+          });
+          const trackingMetadata = {
+            ...existingPitchMeta,
+            pitch_hooks: [],
+            recommended_action: trackingAction.recommended_action,
+            action_by_date: trackingAction.action_by_date,
+            tracking_action_kind: trackingAction.kind,
+            generated_at: new Date().toISOString(),
+          };
+          await writeProjectPitchMetadata(p.id, trackingMetadata);
+          p.pitch_metadata = trackingMetadata as unknown as Record<string, unknown>;
+        }
       }
 
       // (d) Notion — gated by isReadyForNotion. The Lead Feed receives the
