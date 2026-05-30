@@ -2166,7 +2166,6 @@ Stream A is plumbing only. The catalog renderer is not yet wired into `app/[slug
 **Last verified against spec:** 2026-05-30.
 **Drift:** none.
 
-<<<<<<< HEAD
 ---
 
 ## Stream B , Internal Dashboard surface
@@ -2394,3 +2393,61 @@ Adds an Internal-only pop-up chat agent that lets a salesperson reason about the
 **Implements:** SPEC-Internal-Rework-V2.md §Stream H "a new table (e.g. pathfinder.lead_chat_messages) keyed by org and optionally company" + LIVE-VERIFICATION "the history table must be APPLIED to the production Supabase project and confirmed by query". Creates `pathfinder.lead_chat_messages` with FK to `pathfinder.organizations.id` (uuid) and nullable FK to `pathfinder.projects.id` (text). Indexes on (org_id, company_id, created_at DESC), (thread_id, created_at), and (user_email, created_at DESC). RLS enabled; service_role bypasses; anon / authenticated denied by default (the API route runs under service role and scopes by `userEmail` in app code). Applied to prod project ref `anfihcusvekpovcchpoh` via Supabase MCP `apply_migration`; confirmation query result is captured in the PR body.
 **Last verified against spec:** 2026-05-30.
 **Drift:** none.
+
+---
+
+## Stream F, Dashboard and Search (Internal rework V2)
+
+**State:** Open against `main` from branch `stream-f-dashboard-search` (2026-05-30). Operator-authorized self-merge per `Pathfinder/docs/SPEC-Internal-Rework-V2.md` SHARED AUTHORITY block for this batch. Plan: `Pathfinder/docs/PLAN-stream-f-dashboard-search.md`. Rebased onto post-Stream-E + post-Stream-H main mid-session: my refactor of `InternalDashboard.tsx` (tab strip + section components) keeps Stream H's `<LeadChatLauncher>` mount in the top-level dashboard JSX so the chat launcher stays present across the Feed and Metrics tabs.
+
+Defect: the live Internal dashboard rendered four dead text inputs (`Pathfinder/components/FilterSidebar.tsx` from the legacy floor) and a misleading `Active outbound motion 0%` from the legacy `Pathfinder/lib/metrics/kpiQueries.ts`. Stream F replaces the four inputs with one smart search bar plus four real dropdown refinements, and ships a separate Metrics tab where every KPI is legible to a salesperson with a plain-language tooltip. The active outbound motion tile no longer renders a bare misleading zero: when most rows are Unknown, the tile surfaces the honest breakdown ("Confirmed active: 10 of 229; 219 Unknown") with a tooltip explaining that Unknown means enrichment has not yet confirmed motion, not that no motion exists.
+
+### New lib/ files
+
+#### Pathfinder/lib/catalog/modules/smart-search/applySearch.ts (new)
+**Implements:** SPEC Stream F feed-first landing, "typing a company name, service category, state, or score filters and surfaces matching companies". Pure tokenized-AND helper. Tokens match against company name (from `raw_payload.internal_enrichment.company_name`, falling back to `row.title`), service_category (slug AND humanized label), sales_motion (slug AND humanized label), `hq_location` (raw substring + the 50 US state name-to-abbrev aliases so `Texas` and `TX` both match), and the stringified `row.score`. Two-letter all-caps tokens also match a state abbreviation extracted from `hq_location`.
+**Last verified against spec:** 2026-05-30.
+**Drift:** none.
+
+#### Pathfinder/lib/catalog/modules/smart-search/SmartSearch.tsx (new, client)
+**Implements:** SPEC Stream F feed-first landing, one smart search bar that replaces the four dead text inputs, with optional dropdown refinements beside. Client component. Debounced (200ms) writes of `?q=` via `router.replace`; dropdown changes write the same URL params the prior `FilterRail` used (`service_category`, `sales_motion`, `federal_registration`, `source`). A filter whose backing schema field is absent is dropped from the dropdown row entirely (matches FilterRail soft-gate semantics). A `Clear` button removes `q` and the four field params in one click.
+**Last verified against spec:** 2026-05-30.
+**Drift:** none.
+
+#### Pathfinder/lib/catalog/modules/metrics-view/labels.ts (new)
+**Implements:** SPEC Stream F metrics-view tooltip requirement. One file with the plain-language label and tooltip text for each tile so a copy change is single-file.
+**Last verified against spec:** 2026-05-30.
+**Drift:** none.
+
+#### Pathfinder/lib/catalog/modules/metrics-view/metrics.ts (new)
+**Implements:** SPEC Stream F PR-blocker "every metric reconciles to a real query; a metric that cannot resolve is dropped, not shown as zero" and "compute Active outbound motion honestly from the sales_motion signal". Each resolver returns a `MetricTile { id, label, value, suffix?, subText?, tooltip }` shape. `active_outbound_motion` buckets rows into Confirmed (`active-outbound` OR `hiring-bd`), Unknown (`unknown` OR missing), and Other; when `unknown / total >= 0.25` OR `confirmed == 0` the tile sets `value = null` and renders the breakdown subtext, NEVER a bare misleading 0. `avg_score_out_of_100` labels the suffix as `/100` (not bare `%`). `sources_live` names the live sources in subText so the rep sees which two are running.
+**Last verified against spec:** 2026-05-30.
+**Drift:** none. Note: this set is parallel to `Pathfinder/lib/catalog/modules/kpi-strip/metrics.ts` (Stream B) by design; the Stream B strip stays untouched and dormant. Removing the kpi-strip resolvers would have changed the byte-unchanged guarantees for any future caller, so Stream F kept them in place.
+
+#### Pathfinder/lib/catalog/modules/metrics-view/MetricsView.tsx (new, server)
+**Implements:** SPEC Stream F metrics-view, KPI cards with tooltip glyph and optional breakdown subtext. Server component resolves tiles via `resolveMetricTiles`, renders responsive grid of `Card`s. Each card has an info glyph with `title` + `aria-label` carrying the tooltip text. A tile whose resolver returns null is absent from the DOM entirely.
+**Last verified against spec:** 2026-05-30.
+**Drift:** none.
+
+### Modified files
+
+#### Pathfinder/lib/catalog/modules/filter-rail/applyFilters.ts (modified, additive)
+**Implements:** SPEC Stream F search composition. `InternalFilters` gains an optional `q?: string` field; when empty (today's behavior) the function short-circuits to the prior result; when non-empty the row set is piped through `applySearchQuery` after the dropdown narrowing. The existing dropdown semantics (slug equality, AND combine, empty string means "all") are byte-identical.
+**Last verified against spec:** 2026-05-30.
+**Drift:** none.
+
+#### Pathfinder/app/[slug]/InternalDashboard.tsx (rebuilt, Internal-only path)
+**Implements:** SPEC Stream F feed-first landing AND separate metrics view. Adds a `view` prop driven by `?view=feed|metrics` from the page. On `feed` (default) renders `SmartSearch` then `RankedFeed` (full width, no sidebar). On `metrics` renders `MetricsView` then `AnalyticsChartsView`. The Stream B `KpiStrip` and `FilterRail` are no longer mounted from this file but their components remain untouched. Tab strip uses `next/link` so deep links preserve `q` and the four field params across the tab toggle.
+**Last verified against spec:** 2026-05-30.
+**Drift:** none. Zedcor, Realberry, Funder do NOT enter this branch (see `internalDashboardBranch.ts`); they continue to render via `Pathfinder/app/[slug]/page.tsx` legacy block byte-identically.
+
+#### Pathfinder/app/[slug]/page.tsx (modified, additive params)
+**Implements:** SPEC Stream F URL plumbing for the new dashboard. The Internal branch now also reads `q` and `view` from `searchParams` and passes them through to `InternalDashboard`. Empty / missing values preserve Stream B behavior unchanged. The legacy floor branch (Zedcor, Realberry, Funder) is untouched.
+**Last verified against spec:** 2026-05-30.
+**Drift:** none.
+
+### Live-verification
+
+- `pathfinder.organizations.architecture.modules` block confirmed present on the Internal row in prod (Supabase ref `anfihcusvekpovcchpoh`); zedcor, funder, and realberry-* rows have no `modules` key.
+- `Pathfinder/scripts/verify-orgs-byte-unchanged.ts` run from the worktree: `OK: internal has expected modules block; zedcor / realberry / funder have no modules key.` (Realberry warning is pre-existing; that slug is absent from prod.)
+- Live data shape that drove the honesty fix (from `pathfinder.projects` GROUP BY sales_motion against the Internal org): 219 unknown, 9 hiring-bd, 1 active-outbound (total 229). The metrics-view tile therefore renders the subtext `Confirmed active: 10 of 229; 219 Unknown` with `value = null` instead of a bare 0%.

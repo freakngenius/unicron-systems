@@ -66,12 +66,18 @@ export default async function OrgPage({ params, searchParams }: Props) {
   // catalog-driven page. Zedcor, Realberry, Funder fall through to the
   // legacy block below and render exactly as they do today.
   if (org && shouldUseInternalDashboard(rawArch)) {
+    // Stream F: also pass through the smart-search `q` token. Empty / missing
+    // q preserves Stream B's behavior unchanged (applyFilters short-circuits
+    // when q is empty).
     const filters: InternalFilters = {
       service_category: pickFirst(sp.service_category),
       sales_motion: pickFirst(sp.sales_motion),
       federal_registration: pickFirst(sp.federal_registration),
       source: pickFirst(sp.source),
+      q: pickFirst(sp.q),
     };
+    const viewParam = pickFirst(sp.view);
+    const view: 'feed' | 'metrics' = viewParam === 'metrics' ? 'metrics' : 'feed';
     // Per Stream A, flip operator_viewed for the first-render even on the
     // new path. Keeps the lifecycle invariant identical for Internal.
     await flipToOperatorViewed(org.id, org.status ?? null);
@@ -80,6 +86,7 @@ export default async function OrgPage({ params, searchParams }: Props) {
         org={{ id: org.id, slug: org.slug ?? slug, name: org.name ?? slug }}
         architecture={(rawArch ?? {}) as Parameters<typeof InternalDashboard>[0]['architecture']}
         filters={filters}
+        view={view}
       />
     );
   }

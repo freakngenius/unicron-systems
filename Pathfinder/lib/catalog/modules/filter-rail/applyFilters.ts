@@ -1,4 +1,14 @@
 // lib/catalog/modules/filter-rail/applyFilters.ts, Stream B Dashboard.
+// Stream F extension: optional `q` free-text search runs after the
+// dropdown narrowing via lib/catalog/modules/smart-search/applySearch.
+//
+// Importing applySearchQuery at the top is safe because the helper is a
+// pure function with no module-level side effects. A previous draft used
+// a runtime require() to keep the import lazy; that broke the ESM build
+// (module: esnext, see tsconfig.json), so we use a static ES import.
+
+import { applySearchQuery } from '@/lib/catalog/modules/smart-search/applySearch';
+
 //
 // Pure narrowing helper shared by Module 1 (ranked-feed) and Module 2
 // (filter-rail). Works against the raw Project row shape so the filter
@@ -30,6 +40,11 @@ export interface InternalFilters {
   sales_motion?: string;
   federal_registration?: string;
   source?: string;
+  // Stream F smart search: optional free-text token AND across company name,
+  // service category (slug + label), sales motion (slug + label), hq state
+  // (name or abbrev), and stringified score. Empty / missing means no
+  // narrowing. The match runs after the dropdown narrowing below.
+  q?: string;
 }
 
 function readNestedString(row: RawCompanyRow, path: readonly string[]): string | null {
@@ -46,24 +61,32 @@ export function applyFilters(rows: readonly RawCompanyRow[], filters: InternalFi
   const sm = filters.sales_motion?.trim() ?? '';
   const fr = filters.federal_registration?.trim() ?? '';
   const src = filters.source?.trim() ?? '';
-  if (!sc && !sm && !fr && !src) return [...rows];
+  const q = filters.q?.trim() ?? '';
 
-  return rows.filter((row) => {
-    if (sc) {
-      const v = readNestedString(row, ['internal_enrichment', 'service_category']);
-      if (v !== sc) return false;
-    }
-    if (sm) {
-      const v = readNestedString(row, ['internal_enrichment', 'sales_motion']);
-      if (v !== sm) return false;
-    }
-    if (fr) {
-      const v = readNestedString(row, ['internal_federal_registration']);
-      if (v !== fr) return false;
-    }
-    if (src) {
-      if ((row.source ?? '') !== src) return false;
-    }
-    return true;
-  });
+  let pass: RawCompanyRow[];
+  if (!sc && !sm && !fr && !src) {
+    pass = [...rows];
+  } else {
+    pass = rows.filter((row) => {
+      if (sc) {
+        const v = readNestedString(row, ['internal_enrichment', 'service_category']);
+        if (v !== sc) return false;
+      }
+      if (sm) {
+        const v = readNestedString(row, ['internal_enrichment', 'sales_motion']);
+        if (v !== sm) return false;
+      }
+      if (fr) {
+        const v = readNestedString(row, ['internal_federal_registration']);
+        if (v !== fr) return false;
+      }
+      if (src) {
+        if ((row.source ?? '') !== src) return false;
+      }
+      return true;
+    });
+  }
+
+  if (q === '') return pass;
+  return applySearchQuery(pass, q);
 }
