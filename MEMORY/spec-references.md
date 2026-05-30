@@ -2465,3 +2465,23 @@ Defect: the live Internal dashboard rendered four dead text inputs (`Pathfinder/
 **Implements:** Z17.2 §"Free agency-contact fallback". Hardcoded `Record<sourceSlug, AgencyContact>` for the 15 Texas/Houston-area procurement sources we poll (Harris County Purchasing, City of Houston OBO, METRO, Port Houston, Fort Bend / Galveston / Brazoria County, Houston ISD, TxDOT Houston, City of Austin, San Antonio, Port of Corpus Christi, Fort Worth). Every entry is department-level only (no individual names) and copied from each agency's public procurement web page (the `source_url` field on each entry preserves the citation). News-source slugs are intentionally absent — those rows mention the GC by name in the article body, so the right fallback is a `news-gc-extractor` improvement, not an agency contact. Exports `getAgencyContact(slug)` and `agencyContactSnippet(slug)` (one-line "Agency · Phone · Email" used by the orchestrator's pre-window tracking action).
 **Last verified against spec:** 2026-05-30.
 **Drift:** none.
+
+---
+
+## Stream G, Pipeline + Internal Pipeline Notion two-way sync (Internal rework)
+
+**State:** branch `stream-g-pipeline-notion` off post-Z17.1 main at `aa9794a`. Plan: `Pathfinder/docs/PLAN-stream-g.md`. Operator-authorized self-merge of this branch only (the autonomous launch prompt overrides the Pathfinder CLAUDE.md never-self-merge default for this branch). Diagnosis: the Stream A modules-block migration was committed but never applied to prod, so `resolveSlot('pipeline.board')` returned inactive for Internal and the static Funder fallback in `app/[slug]/pipeline/page.tsx` rendered with its hardcoded `STAGE_COLORS.contacted='#22c55e'` (the "stray green dot" symptom) and bucketed every project into `stages[0]='new-outreach-ready'` (the "all 229 in New / Outreach Ready" symptom). The draggable kanban code from Stream D was already complete. Stream G applies the Stream A migration to prod, seeds 228 missing deals so the 229 projects each render as a card, and adds Internal-only Notion two-way sync against a new dedicated database.
+
+### New lib/ files
+
+#### Pathfinder/lib/notion/internal-pipeline.ts (new)
+**Implements:** Stream G launch-prompt §"Notion two-way sync, CREATE a new Notion database". Bidirectional stage map `INTERNAL_STAGE_TO_NOTION` / `NOTION_STAGE_TO_INTERNAL` (Select options "New / Outreach Ready" / "Contacted" / "In Conversation" / "Demo Scheduled" / "Proposal" / "Won" / "Lost"); helper `dealStageToNotion(DealPipelineStage)` and `notionStageToDeal(name)`; `databaseSchemaProperties()` returns the `notion.databases.create` properties shape (title Company, number Score, select Service category, select Stage, rich_text HQ / Source / Deal ID, url Detail); `pagePropertiesFor(deal, basePathfinderUrl)` renders one Notion page's properties from a `DealSnapshot`; `createInternalPipelineDatabase(parentPageId)` calls `notion.databases.create`; `updateNotionStage(dealId, toStage)` looks up the page id via the mapping table and writes a single Stage property update; `findNotionPageId` / `findDealIdByNotionPage` / `recordMapping` operate on `pathfinder.notion_pipeline_pages`. Reuses `INTERNAL_TO_DEAL` / `DEAL_TO_INTERNAL` from `lib/catalog/modules/pipeline-kanban/internalStageMap.ts`. Notion client is lazy-constructed so import does not crash without `NOTION_API_KEY`. Does NOT touch `lib/kanban-writer.ts` or `lib/notion/zedcor-writer.ts`.
+**Last verified against spec:** 2026-05-30.
+**Drift:** none.
+
+### Modified lib/ files
+
+#### Pathfinder/lib/deals.ts (modified — additive)
+**Implements:** Stream G app→Notion propagation path. `MoveDealStageInput` gains optional `notionSyncSource?: 'app' | 'notion'`. After a successful non-noop stage update, when `notionSyncSource !== 'notion'` and `NOTION_DB_INTERNAL_PIPELINE` is set, `moveDealStage()` dynamically imports `lib/notion/internal-pipeline` and calls `updateNotionStage(dealId, toStage)`. Failures and "no mapping for deal" cases log via console.warn and do NOT throw — the deal move is still authoritative. The dynamic import keeps the Notion client out of code paths that never sync (Zedcor, Realberry, Funder, or server-only callers without `NOTION_API_KEY`). All existing semantics (idempotent noop on same-stage, activity row write, error shape) are unchanged.
+**Last verified against spec:** 2026-05-30.
+**Drift:** none.

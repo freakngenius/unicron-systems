@@ -147,6 +147,11 @@ export interface MoveDealStageInput {
   toStage: DealPipelineStage;
   actorEmail?: string | null;
   payload?: Record<string, unknown>;
+  // Stream G: when the inbound caller is the Notion webhook receiver
+  // (a Notion-side stage edit), set this to 'notion' so the on-update
+  // hook does NOT propagate the same stage back to Notion. Without this
+  // guard the two systems would ping-pong on every edit.
+  notionSyncSource?: 'app' | 'notion';
 }
 
 export interface MoveDealStageResult {
@@ -220,6 +225,26 @@ export async function moveDealStage(input: MoveDealStageInput): Promise<MoveDeal
     actorEmail: input.actorEmail ?? null,
     payload: input.payload ?? {},
   });
+
+  // Stream G: propagate app-side moves to the Internal Pipeline Notion
+  // database. Skip when the source is Notion to break the loop. Dynamic
+  // import keeps the Notion client out of code paths that never touch
+  // sync (other orgs, server-only callers without NOTION_API_KEY).
+  if (input.notionSyncSource !== 'notion' && process.env.NOTION_DB_INTERNAL_PIPELINE) {
+    try {
+      const { updateNotionStage } = await import('@/lib/notion/internal-pipeline');
+      const result = await updateNotionStage(input.dealId, input.toStage);
+      if (!result.updated && result.reason && result.reason !== 'no mapping for deal') {
+        // eslint-disable-next-line no-console
+        console.warn(`[moveDealStage] notion propagate skipped: ${result.reason}`);
+      }
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[moveDealStage] notion propagate failed for ${input.dealId}: ${e instanceof Error ? e.message : String(e)}`,
+      );
+    }
+  }
 
   return { deal: updated, activity, noop: false };
 }
