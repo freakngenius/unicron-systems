@@ -62,6 +62,12 @@ export function resolveArchitecture(
   if (p.compliance) out.compliance = [...p.compliance];
   if (p.integrations) out.integrations = [...p.integrations];
   if (p.business_summary) out.business_summary = { ...p.business_summary };
+  if (p.modules) {
+    // Stream A Foundation: pass-through. The modules block is per-org and
+    // never base-merged, so partials simply overwrite. Validation lives in
+    // lib/catalog/validation; resolveArchitecture stays a pure data merge.
+    (out as { modules?: typeof p.modules }).modules = { ...p.modules };
+  }
   if (p.ui_plan) {
     // Build-Out Pass Slice 1 (Spec: SPEC - Pathfinder Build-Out Pass.md).
     // Shallow-merge ui_plan with the base default so partial overrides
