@@ -2451,3 +2451,17 @@ Defect: the live Internal dashboard rendered four dead text inputs (`Pathfinder/
 - `pathfinder.organizations.architecture.modules` block confirmed present on the Internal row in prod (Supabase ref `anfihcusvekpovcchpoh`); zedcor, funder, and realberry-* rows have no `modules` key.
 - `Pathfinder/scripts/verify-orgs-byte-unchanged.ts` run from the worktree: `OK: internal has expected modules block; zedcor / realberry / funder have no modules key.` (Realberry warning is pre-existing; that slug is absent from prod.)
 - Live data shape that drove the honesty fix (from `pathfinder.projects` GROUP BY sales_motion against the Internal org): 219 unknown, 9 hiring-bd, 1 active-outbound (total 229). The metrics-view tile therefore renders the subtext `Confirmed active: 10 of 229; 219 Unknown` with `value = null` instead of a bare 0%.
+
+### Sprint Z17.2 — Notion catch-up + free agency-contact fallback
+
+**State:** PR pending on `z17.2-notion-catchup`. Corrective follow-up to Z17.1. Z17 + Z17.1 enriched the DB to 100% of construction rows but the Lead Feed in Notion showed 161 missing pages + 31 stale-pre-Z17 pages because `backfillNeedsWork()` returned false for any row already DB-enriched, so the production triggers never told the Notion writer about them. Z17.2 closes the loop and adds a free agency-contact fallback for pre-window rows that have no GC.
+
+#### Pathfinder/lib/orchestrator/orchestrator.ts (modified — additive)
+**Implements:** Z17.2 §"Notion catch-up". `backfillNeedsWork()` extended with `notionNeedsSync(p)` — true when (no `external_refs.notion_page_url`) OR (`notion_written_at` predates the latest `pitch_metadata.generated_at` / `gc_metadata.fetched_at`). Backfill then writes/updates Notion for the 161+31 stragglers. Both Notion pitch-update call sites (Wave 4 this-run + Wave 5 backlog) broadened: pre-Z17.2 they only fired when `pitch_hooks.length > 0`, so pre-window rows (which have an action but no hooks by design) never got their Recommended Action column populated. Now fires when EITHER hooks OR a non-empty `recommended_action` is present; `pitchToNotionProperties` already handles empty hooks gracefully. `buildPreWindowTrackingAction()` takes an optional `source` slug and embeds `agencyContactSnippet(source)` so the Recommended Action text carries a callable procurement contact for pre-window rows.
+**Last verified against spec:** 2026-05-30 (typecheck + lint clean; live verification deferred to post-merge prod trigger because NOTION_API_TOKEN is a Vercel-only secret).
+**Drift:** none.
+
+#### Pathfinder/lib/adapters/zedcor/agency-contact-fallback.ts (new)
+**Implements:** Z17.2 §"Free agency-contact fallback". Hardcoded `Record<sourceSlug, AgencyContact>` for the 15 Texas/Houston-area procurement sources we poll (Harris County Purchasing, City of Houston OBO, METRO, Port Houston, Fort Bend / Galveston / Brazoria County, Houston ISD, TxDOT Houston, City of Austin, San Antonio, Port of Corpus Christi, Fort Worth). Every entry is department-level only (no individual names) and copied from each agency's public procurement web page (the `source_url` field on each entry preserves the citation). News-source slugs are intentionally absent — those rows mention the GC by name in the article body, so the right fallback is a `news-gc-extractor` improvement, not an agency contact. Exports `getAgencyContact(slug)` and `agencyContactSnippet(slug)` (one-line "Agency · Phone · Email" used by the orchestrator's pre-window tracking action).
+**Last verified against spec:** 2026-05-30.
+**Drift:** none.

@@ -39,6 +39,11 @@ import type { GcMetadata } from '@/lib/adapters/zedcor/gc-extractor';
 // Runs after Z3.5 enrichment and before Wave 3 Notion writes so any
 // contact info we resolve flows into the existing Notion-writes path.
 import { resolveExternalContact } from '@/lib/adapters/zedcor/external-contact-resolver';
+// Z17.2 — free agency-contact fallback for pre-window solicitation rows
+// where no GC is selected yet. Hardcoded public procurement contacts per
+// source slug; rep gets a callable name + phone in the Recommended Action
+// even when GC extraction returns nothing.
+import { agencyContactSnippet } from '@/lib/adapters/zedcor/agency-contact-fallback';
 import {
   HOUSTON_HUB_SLUG,
   ORCHESTRATOR_AGENT_NAME,
@@ -513,6 +518,10 @@ export async function runZedcorOrchestrator(): Promise<RunSummary> {
       // onto the (just-created or pre-existing) Notion page so the Lead
       // Feed row reaches the rep with hooks + recommended action in a
       // single trigger.
+      // Z17.2 — also fire when only a recommended_action is present (no
+      // hooks). Pre-window solicitation rows are intentionally hook-less
+      // but DO carry a deterministic tracking action that must reach
+      // Notion's Recommended Action column for the rep to act on.
       const pm = p.pitch_metadata as {
         pitch_hooks?: unknown;
         recommended_action?: string | null;
@@ -520,14 +529,17 @@ export async function runZedcorOrchestrator(): Promise<RunSummary> {
         cross_pollination?: string | null;
         warm_intro_path?: string | null;
       } | null;
-      if (pm && Array.isArray(pm.pitch_hooks) && pm.pitch_hooks.length > 0 && res.notionPageId) {
+      const hooks = Array.isArray(pm?.pitch_hooks) ? (pm!.pitch_hooks as string[]) : [];
+      const hasAction = typeof pm?.recommended_action === 'string'
+        && (pm!.recommended_action as string).trim().length > 0;
+      if (pm && res.notionPageId && (hooks.length > 0 || hasAction)) {
         try {
           await updateProjectPitchOnNotion({
             pageId: res.notionPageId,
             pitch: {
               cross_pollination: pm.cross_pollination ?? null,
               warm_intro_path: pm.warm_intro_path ?? null,
-              pitch_hooks: pm.pitch_hooks as string[],
+              pitch_hooks: hooks,
               recommended_action: pm.recommended_action ?? null,
               action_by_date: pm.action_by_date ?? null,
             },
@@ -1125,7 +1137,46 @@ function backfillNeedsWork(p: ProjectRow): boolean {
       || typeof pm.recommended_action !== 'string'
       || !pm.recommended_action.trim()) return true;
   }
+  // Z17.2 — DB-enriched but Notion-bare-or-stale. Without this, Z17.1's
+  // post-merge production triggers find backlog=0 (DB is already enriched)
+  // and never push the 161+31 Notion stragglers from my pre-merge local
+  // diagnostic, which ran SKIP_NOTION=true. The Lead Feed shows blank or
+  // pre-Z17-bare pages instead of the enriched DB state. Backfill must
+  // treat "Notion out of sync with DB" as work.
+  if (isReadyForNotion(p) && notionNeedsSync(p)) return true;
   return false;
+}
+
+// Z17.2 — true when the row is DB-enriched but Notion has either never
+// been written or was written before the latest enrichment timestamp.
+function notionNeedsSync(p: ProjectRow): boolean {
+  const refs = p.external_refs as { notion_page_url?: unknown; notion_written_at?: unknown } | null;
+  // No Notion page at all → must create.
+  if (!refs || !refs.notion_page_url || typeof refs.notion_page_url !== 'string') return true;
+  const writtenAtRaw = refs.notion_written_at;
+  // Page exists but we never recorded a write timestamp → write it now
+  // (the existing page may be a pre-Z17 bare shell; orchestrator's
+  // writeProjectToNotion dedupes on Project ID, so this is safe and the
+  // subsequent enrichment/pitch updates will refresh the page).
+  if (!writtenAtRaw || typeof writtenAtRaw !== 'string') return true;
+  const written = new Date(writtenAtRaw).getTime();
+  if (!Number.isFinite(written)) return true;
+  // Compare against any enrichment timestamp we have on the row.
+  const pm = p.pitch_metadata as { generated_at?: unknown } | null;
+  const gm = p.gc_metadata as { fetched_at?: unknown } | null;
+  const stamps: number[] = [];
+  if (typeof pm?.generated_at === 'string') {
+    const t = new Date(pm.generated_at as string).getTime();
+    if (Number.isFinite(t)) stamps.push(t);
+  }
+  if (typeof gm?.fetched_at === 'string') {
+    const t = new Date(gm.fetched_at as string).getTime();
+    if (Number.isFinite(t)) stamps.push(t);
+  }
+  if (stamps.length === 0) return false; // no enrichment timestamps to compare against
+  const newestEnrichment = Math.max(...stamps);
+  // Add a small slack so a few-millisecond race doesn't trigger a re-sync.
+  return newestEnrichment > written + 1000;
 }
 
 // Z17.1 — Deterministic tracking action for pre-window construction rows.
@@ -1139,6 +1190,10 @@ function buildPreWindowTrackingAction(input: {
   response_deadline: string | null;
   posted_date: string | null;
   source_authority: string | null;
+  // Z17.2 — source slug used to look up the agency procurement contact.
+  // Optional so the function stays usable in tests / synthetic callers
+  // that don't know the source; degrades to no "Contact:" line.
+  source?: string | null;
 }): { recommended_action: string; action_by_date: string | null; kind: string } {
   const stage = (input.project_stage ?? 'unknown').toLowerCase();
   const titleSnippet = input.title.length > 80
@@ -1158,13 +1213,18 @@ function buildPreWindowTrackingAction(input: {
   }
   const byClause = actionByDate ? ` Touch base by ${actionByDate}.` : '';
 
+  // Z17.2 — free agency-contact snippet. Empty string when we don't have
+  // a fallback for this source; concatenates cleanly either way.
+  const contactSnippet = agencyContactSnippet(input.source);
+  const contactClause = contactSnippet ? ` Contact: ${contactSnippet}.` : '';
+
   if (stage === 'solicitation' || stage === 'owner_bid' || stage === 'rfp') {
     const verb = input.response_deadline
       ? `Owner bids are open through ${input.response_deadline.slice(0, 10)}.`
       : 'Owner bids are open.';
     return {
       recommended_action:
-        `Watch list. ${verb} Identify the GC the moment the contract is awarded — then re-pitch as a sub-bid. Reference: "${titleSnippet}".${byClause}`,
+        `Watch list. ${verb}${contactClause} Identify the GC the moment the contract is awarded — then re-pitch as a sub-bid. Reference: "${titleSnippet}".${byClause}`,
       action_by_date: actionByDate,
       kind: 'watch_pre_award',
     };
@@ -1172,7 +1232,7 @@ function buildPreWindowTrackingAction(input: {
   if (stage === 'unknown' || stage === '' || !stage) {
     return {
       recommended_action:
-        `Stage unclear. Skim the source page for award status; flag for re-poll if it moves to GC-selected. Reference: "${titleSnippet}".${byClause}`,
+        `Stage unclear. Skim the source page for award status; flag for re-poll if it moves to GC-selected.${contactClause} Reference: "${titleSnippet}".${byClause}`,
       action_by_date: actionByDate,
       kind: 'watch_unclear',
     };
@@ -1181,7 +1241,7 @@ function buildPreWindowTrackingAction(input: {
   // (e.g. cancelled, subs_selected). Conservative: monitor, no outreach.
   return {
     recommended_action:
-      `Monitor. Current stage: ${stage}. Re-evaluate if stage changes. Reference: "${titleSnippet}".${byClause}`,
+      `Monitor. Current stage: ${stage}. Re-evaluate if stage changes.${contactClause} Reference: "${titleSnippet}".${byClause}`,
     action_by_date: actionByDate,
     kind: 'monitor',
   };
@@ -1391,6 +1451,9 @@ export async function runZedcorZ17Backfill(runId: number): Promise<BackfillSumma
             response_deadline: p.response_deadline,
             posted_date: p.posted_date,
             source_authority: p.source_authority,
+            // Z17.2 — pass source slug so the helper can look up the
+            // agency procurement contact and embed it in the action text.
+            source: p.source,
           });
           const trackingMetadata = {
             ...existingPitchMeta,
@@ -1457,14 +1520,23 @@ export async function runZedcorZ17Backfill(runId: number): Promise<BackfillSumma
         cross_pollination?: string | null;
         warm_intro_path?: string | null;
       } | null;
-      if (pm && Array.isArray(pm.pitch_hooks) && pm.pitch_hooks.length > 0 && res.notionPageId) {
+      // Z17.2 — push pitch_metadata to Notion whenever EITHER hooks OR a
+      // recommended_action exist. Pre-Z17.2 the gate required hooks, so
+      // pre-window rows (which intentionally have no hooks but DO have a
+      // deterministic tracking action) never had their Recommended Action
+      // column populated. updateProjectPitchOnNotion tolerates empty
+      // pitch_hooks (just skips those property writes).
+      const hooks = Array.isArray(pm?.pitch_hooks) ? (pm!.pitch_hooks as string[]) : [];
+      const hasAction = typeof pm?.recommended_action === 'string'
+        && (pm!.recommended_action as string).trim().length > 0;
+      if (pm && res.notionPageId && (hooks.length > 0 || hasAction)) {
         try {
           await updateProjectPitchOnNotion({
             pageId: res.notionPageId,
             pitch: {
               cross_pollination: pm.cross_pollination ?? null,
               warm_intro_path: pm.warm_intro_path ?? null,
-              pitch_hooks: pm.pitch_hooks as string[],
+              pitch_hooks: hooks,
               recommended_action: pm.recommended_action ?? null,
               action_by_date: pm.action_by_date ?? null,
             },
