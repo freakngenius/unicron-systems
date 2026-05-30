@@ -168,7 +168,7 @@ function SignalsPanel({
       <SectionHeader
         eyebrow="Signals"
         title="What the ranker weighed"
-        subtitle="Each signal with its architecture weight and the real evidence that fired it. No fabricated point contributions."
+        subtitle="Each signal with its architecture weight and the real stored evidence that fired it."
       />
       <div data-signals-panel style={{ display: 'flex', flexDirection: 'column', gap: space.sm }}>
         {signals.map((s) => (
