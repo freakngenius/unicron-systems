@@ -52,11 +52,22 @@ export const FLOOR_STUB_LOADERS = {
   'company-detail': () => Promise.resolve({ default: CompanyDetailStub }),
   'outreach-composer': () => Promise.resolve({ default: OutreachComposerStub }),
   'hubspot-sync': () => Promise.resolve({ default: HubspotSyncStub }),
-  'pipeline-kanban': () => Promise.resolve({ default: PipelineKanbanStub }),
+  // Stream D replaces this stub with the real pipeline-kanban module.
+  // Async server component cast through the standard ModuleComponentProps surface.
+  'pipeline-kanban': () =>
+    import('./modules/pipeline-kanban/PipelineKanbanModule').then((m) => ({
+      default: m.default as unknown as React.ComponentType<ModuleComponentProps>,
+    })),
   'filter-rail': () => Promise.resolve({ default: FilterRailStub }),
   'warm-intro-panel': () => Promise.resolve({ default: WarmIntroPanelStub }),
   'kpi-strip': () => Promise.resolve({ default: KpiStripStub }),
   'analytics-charts': () => Promise.resolve({ default: AnalyticsChartsStub }),
-  'daily-digest': () => Promise.resolve({ default: DailyDigestStub }),
+  // Stream D replaces the daily-digest stub with a non-visual module that
+  // declares the catalog metadata; the actual delivery runs through the
+  // /api/cron/internal-digest route (see lib/catalog/modules/daily-digest).
+  'daily-digest': () =>
+    import('./modules/daily-digest/DailyDigestModule').then((m) => ({
+      default: m.default as unknown as React.ComponentType<ModuleComponentProps>,
+    })),
   'geo-map': () => Promise.resolve({ default: GeoMapStub }),
 } as const satisfies Record<ModuleId, () => Promise<{ default: React.ComponentType<ModuleComponentProps> }>>;

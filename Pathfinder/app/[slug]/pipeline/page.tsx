@@ -15,11 +15,14 @@
 // continues to serve the existing deal_activities kanban. This file
 // is a new sibling under [slug].
 
+import type * as React from 'react';
 import Link from 'next/link';
 import { supabaseAdmin } from '@/lib/supabase';
 import type { Organization, Project } from '@/lib/types';
 import { resolveArchitecture } from '@/lib/config/resolveArchitecture';
 import { projectFunderLead } from '@/lib/agents/funder/leadView';
+import { makeSupabaseGateContext, resolveSlot } from '@/lib/catalog';
+import type { ModuleComponentProps } from '@/lib/catalog/types';
 
 type Props = { params: Promise<{ slug: string }> };
 
@@ -48,6 +51,95 @@ export default async function OrgPipelinePage({ params }: Props) {
   const architecture = resolveArchitecture((org?.architecture ?? null) as Record<string, unknown> | null);
   const vocab = architecture.vocabulary ?? {};
   const leadsPlural = (vocab.leads as string | undefined) ?? 'leads';
+
+  // Stream D wiring: when the org's modules block claims pipeline.board
+  // (Internal #4 does; Funder #3 does not), let the catalog renderer take
+  // over and short-circuit the Funder-only rendering below. Orgs with no
+  // modules block fall through and render byte-identical to today.
+  if (org?.id) {
+    const supabaseAny = supabaseAdmin() as unknown as {
+      from: (t: string) => {
+        select: (cols: string, opts?: { count?: 'exact'; head?: boolean }) => {
+          eq: (col: string, value: string) => Promise<{ count: number | null }> & {
+            not?: (col: string, op: string, value: unknown) => Promise<{ count: number | null }>;
+            limit?: (n: number) => Promise<{ data: unknown[] | null }>;
+          };
+        };
+      };
+    };
+    const gateContext = makeSupabaseGateContext((t) => supabaseAny.from(t));
+    const slot = await resolveSlot('pipeline.board', {
+      org: { id: org.id, slug, name: org.name },
+      architecture,
+      gateContext,
+    });
+    if (slot.mode === 'active' && slot.module) {
+      const loader = slot.module.component as () => Promise<{
+        default: React.ComponentType<ModuleComponentProps>;
+      }>;
+      const { default: ModuleComponent } = await loader();
+      const headerLeads = (vocab.leads as string | undefined) ?? 'companies';
+      return (
+        <div
+          data-pipeline-page-source="catalog"
+          style={{
+            minHeight: '100vh',
+            background: '#0a0a0a',
+            color: '#fff',
+            fontFamily: 'var(--font-inter, sans-serif)',
+            padding: '2rem',
+          }}
+        >
+          <header style={{ marginBottom: '1.5rem', borderBottom: '1px solid #222', paddingBottom: '1rem' }}>
+            <p
+              style={{
+                color: '#666',
+                fontSize: '0.75rem',
+                textTransform: 'uppercase',
+                letterSpacing: '0.05em',
+                marginBottom: '0.25rem',
+              }}
+            >
+              Pathfinder / {slug} / Pipeline
+            </p>
+            <h1 style={{ fontSize: '1.5rem', fontWeight: 700, margin: 0 }}>Pipeline</h1>
+          </header>
+          <nav
+            data-internal-nav
+            style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginBottom: '1.5rem' }}
+          >
+            {[
+              { href: `/${slug}`, label: 'Dashboard' },
+              { href: `/${slug}/leads`, label: titleCase(headerLeads) },
+              { href: `/${slug}/pipeline`, label: 'Pipeline' },
+            ].map(({ href, label }) => (
+              <Link
+                key={href}
+                href={href}
+                style={{
+                  padding: '0.5rem 1rem',
+                  background: href === `/${slug}/pipeline` ? '#1a1a1a' : '#111',
+                  border: `1px solid ${href === `/${slug}/pipeline` ? '#444' : '#333'}`,
+                  borderRadius: 4,
+                  color: href === `/${slug}/pipeline` ? '#fff' : '#aaa',
+                  fontSize: '0.875rem',
+                  textDecoration: 'none',
+                }}
+              >
+                {label}
+              </Link>
+            ))}
+          </nav>
+          <ModuleComponent
+            org={{ id: org.id, slug, name: org.name }}
+            architecture={architecture as unknown}
+            config={slot.config}
+            affordances={slot.affordances}
+          />
+        </div>
+      );
+    }
+  }
 
   const stages = (architecture.pipeline?.stages ?? ['sourced', 'reviewing', 'contacted', 'in-diligence', 'funded', 'passed']) as string[];
   const stageLabels = (architecture.pipeline?.stage_labels ?? {}) as Record<string, string>;

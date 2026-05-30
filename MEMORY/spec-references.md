@@ -2089,3 +2089,66 @@ Stream A is plumbing only. The catalog renderer is not yet wired into `app/[slug
 **Implements:** PLAN PART 3. `jsonb_set` adds top-level `modules` key into `pathfinder.organizations.architecture` WHERE `slug='internal'`. WHERE clause is the physical guarantee Zedcor / Realberry / Funder are untouched. Verification script: `scripts/verify-orgs-byte-unchanged.ts`.
 **Last verified against spec:** 2026-05-30 (statically reviewed; applied to live DB after PR merge).
 **Drift:** none.
+
+---
+
+## Stream D, Pipeline and Delivery (Internal rework)
+
+**State:** branch `stream-d-pipeline-delivery` off post-Stream-A main at `3c2c927`. Plan: `Pathfinder/docs/PLAN-stream-d-pipeline-delivery.md`. Replaces the two Stream A floor stubs `pipeline-kanban` (slot `pipeline.board`) and `daily-digest` (slot `delivery.digest`) with real implementations for Internal (#4). Zedcor and Funder unaffected.
+
+### Pipeline kanban module
+
+#### Pathfinder/lib/catalog/modules/pipeline-kanban/internalStageMap.ts (new)
+**Implements:** SPEC §STREAM D Internal stage list. 1:1 mapping between Internal pipeline stage ids (`new-outreach-ready`, `contacted`, `in-conversation`, `demo-scheduled`, `proposal`, `won`, `lost`) and the existing `DealPipelineStage` enum so the module can reuse `/api/deals/[id]/stage` without any backend or schema change.
+**Last verified against spec:** 2026-05-30.
+**Drift:** none.
+
+#### Pathfinder/lib/catalog/modules/pipeline-kanban/PipelineKanbanModule.tsx (new)
+**Implements:** SPEC §STREAM D Module 1. Server entry. Hydrates `deals` joined to `projects` filtered by `org.id`, buckets by `DEAL_TO_INTERNAL`, hands the pre-grouped shape to the client island. Reads `architecture.pipeline.stages` and `architecture.pipeline.stage_labels`.
+**Last verified against spec:** 2026-05-30.
+**Drift:** none.
+
+#### Pathfinder/lib/catalog/modules/pipeline-kanban/PipelineKanbanIsland.tsx (new)
+**Implements:** SPEC §STREAM D Module 1 drag-and-drop semantics. `'use client'` island. HTML5 native drag (matches Zedcor `components/pipeline/PipelineKanban.tsx`). On drop: optimistic update, POST `/pathfinder/api/deals/[id]/stage` with `to_stage = INTERNAL_TO_DEAL[stage]`, revert on non-2xx. Card click navigates via `orgPaths.leadDetail(slug, projectId)` so the org slug survives URL encoding of project ids. Uses Stream A design primitives (`Card`, `ScoreBadge`, `EmptyState`, tokens) so cards match the ranked-feed visual language.
+**Last verified against spec:** 2026-05-30.
+**Drift:** none.
+
+### Daily digest module
+
+#### Pathfinder/lib/catalog/modules/daily-digest/runner.ts (new)
+**Implements:** SPEC §STREAM D Module 2. Pure-ish runner `runInternalDailyDigest`. Hard gates: returns `{ skipped: 'no_verified_companies' }` when zero verified projects in the window; returns `{ skipped: 'no_slack_integration' }` when `INTERNAL_SLACK_WEBHOOK_URL` is unset; in both cases does NOT post to Slack and does NOT seed deals. Reuses `composeInternalDigest` and the existing Slack POST path; new-verified loader seeds at `INTERNAL_TO_DEAL['new-outreach-ready']` (NEW) only for projects without an existing deal.
+**Last verified against spec:** 2026-05-30.
+**Drift:** none.
+
+#### Pathfinder/lib/catalog/modules/daily-digest/DailyDigestModule.tsx (new)
+**Implements:** SPEC §STREAM D Module 2 catalog binding. Non-visual component bound by `FLOOR_STUB_LOADERS['daily-digest']`. Fallback strategy `hidden` per Stream A registry; this module exists so the catalog has a real lazy import instead of the marker stub. Delivery runs via `app/api/cron/internal-digest/route.ts`.
+**Last verified against spec:** 2026-05-30.
+**Drift:** none.
+
+### Catalog binding update
+
+#### Pathfinder/lib/catalog/floor-stubs.tsx (modified — additive)
+**Implements:** Stream D wiring of `FLOOR_STUB_LOADERS['pipeline-kanban']` and `FLOOR_STUB_LOADERS['daily-digest']` to lazy imports of the two new module entries. Every other slot continues to point at the Stream A stub (Stream B/C will replace theirs).
+**Last verified against spec:** 2026-05-30.
+**Drift:** none.
+
+### Surface wiring
+
+#### Pathfinder/app/[slug]/pipeline/page.tsx (modified — additive)
+**Implements:** SPEC §STREAM D pipeline route discovery: when the org's `architecture.modules` claims slot `pipeline.board` (Internal #4 does, Funder #3 does not), the page short-circuits to the catalog renderer and mounts the resolved module. Orgs without a modules block fall through and render byte-identical to today (Funder behavior unchanged).
+**Last verified against spec:** 2026-05-30.
+**Drift:** none.
+
+### Cron route refactor
+
+#### Pathfinder/app/api/cron/internal-digest/route.ts (modified)
+**Implements:** delegation to `runInternalDailyDigest` for the daily-digest module. Auth + query-string parsing unchanged. Response shape: `slack_result` now carries `{ skipped: 'no_slack_integration' | 'no_verified_companies' | 'dry_run' } | { ok, error? }` (added the two hard-gate skip reasons; pre-existing `no_webhook` rename to `no_slack_integration` is the only response-shape delta).
+**Last verified against spec:** 2026-05-30.
+**Drift:** none.
+
+### Cron schedule
+
+#### Pathfinder/vercel.json (modified — additive)
+**Implements:** SPEC §STREAM D digest cron registration. Appended `{ path: '/api/cron/internal-digest', schedule: '0 14 * * 1,2,3,4,5' }` (Mon–Fri 14:00 UTC, weekday morning US Pacific). Numeric day-of-week per CLAUDE.md and per SPEC ("If a cron schedule is touched, use a numeric day-of-week"). Existing `functions` block untouched.
+**Last verified against spec:** 2026-05-30.
+**Drift:** none.

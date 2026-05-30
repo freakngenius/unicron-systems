@@ -1,5 +1,10 @@
 {
-  "crons": [],
+  "crons": [
+    {
+      "path": "/api/cron/internal-digest",
+      "schedule": "0 14 * * 1,2,3,4,5"
+    }
+  ],
   "functions": {
     "app/api/cron/zedcor-orchestrator/route.ts": {
       "memory": 3009,
