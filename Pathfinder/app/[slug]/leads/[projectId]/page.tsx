@@ -30,6 +30,7 @@ import { projectToCompanyLeadView } from '@/lib/agents/internal/companyLeadView'
 import { LeadDetailShell } from '@/components/lead/LeadDetailShell';
 import { FunderDetailContents } from '@/components/lead/FunderDetailContents';
 import { CompanyDetailContents } from '@/components/lead/CompanyDetailContents';
+import { CatalogDetailRenderer } from '@/components/catalog/CatalogDetailRenderer';
 
 type Props = { params: Promise<{ slug: string; projectId: string }> };
 
@@ -71,6 +72,30 @@ export default async function OrgLeadDetailPage({ params }: Props) {
 
   if (leadUnitName === 'company') {
     const lead = projectToCompanyLeadView(row);
+    // Stream C: when the org has a modules block, mount the catalog
+    // renderer instead of the legacy CompanyDetailContents. Orgs without
+    // a modules block (Zedcor, Realberry, Funder) keep the existing
+    // CompanyDetailContents path so their surfaces stay byte-identical.
+    if (architecture.modules) {
+      return (
+        <LeadDetailShell
+          slug={slug}
+          title={lead.company_name}
+          score={lead.score}
+          verified={lead.verified}
+          leadsPlural={leadsPlural}
+          leadSingular={leadSingular}
+          chips={[lead.service_category, lead.sales_motion, lead.hq_location, lead.source]}
+        >
+          <CatalogDetailRenderer
+            org={{ id: org.id, slug: org.slug, name: org.name ?? 'Org' }}
+            architecture={architecture}
+            lead={lead}
+            project={row}
+          />
+        </LeadDetailShell>
+      );
+    }
     return (
       <LeadDetailShell
         slug={slug}

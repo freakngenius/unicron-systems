@@ -2250,3 +2250,30 @@ Stream A is plumbing only. The catalog renderer is not yet wired into `app/[slug
 **Implements:** SPEC-Internal-Parallel-Build.md §Stream B route integration branch. Single early return inserted after the org load: if `shouldUseInternalDashboard(rawArch)`, render `<InternalDashboard>`; else fall through to the existing layout verbatim. Existing rendering block unchanged byte-for-byte.
 **Last verified against spec:** 2026-05-30 (regression confirmed via `git stash` retest of pre-existing test failures; 0 new regressions in scope).
 **Drift:** none.
+
+---
+
+## Stream C, Detail surface (Internal rework)
+
+**State:** PR open against `main` from branch `feat/stream-c-detail` (2026-05-30). Operator-authorized self-merge per SPEC-Internal-Parallel-Build.md AUTHORITY block. Plan: `Pathfinder/docs/PLAN-stream-c-detail.md`. Rebased onto post-B / post-D main before merge so the shared `lib/catalog/floor-stubs.tsx` and `MEMORY/spec-references.md` entries union with Streams B and D rather than replace them.
+
+Replaces the four detail-surface floor stubs (`company-detail`, `outreach-composer`, `hubspot-sync`, `warm-intro-panel`) with real components; wires the catalog renderer into `app/[slug]/leads/[projectId]/page.tsx` only for orgs whose architecture carries a `modules` block (Internal today). Orgs without a modules block (Zedcor, Realberry, Funder) stay on the existing `<CompanyDetailContents>` path so their surfaces are byte-identical.
+
+### New lib/ files
+
+#### Pathfinder/lib/catalog/internalSignals.ts (new)
+**Implements:** SPEC-Internal-Parallel-Build.md SCORE-COMPONENTS NOTE (the resolved-do-not-re-ask block). Pure function `extractInternalSignals(lead, raw_payload)` returns six `InternalSignal` entries in weight-descending order. Each entry carries the architecture weight and a real evidence string drawn from observable fields (`CompanyLeadView` + `raw_payload.internal_geo` + qualifier hints). NEVER emits a fabricated numeric contribution; evidence is the empty string when no observable signal fires. The ranker's total score is shown by `CompanyDetail` directly via the header `ScoreBadge`, not reconstructed.
+**Last verified against spec:** 2026-05-30.
+**Drift:** none.
+
+### Modified lib/ files
+
+#### Pathfinder/lib/catalog/registry.ts (modified — additive removal)
+**Implements:** SPEC SCORE-COMPONENTS NOTE: `score_components` is removed from `company-detail`'s `dependencies`. Inline comment cites the SPEC block. All other registry entries and the slot-collision resolution for `hubspot-sync` (slotMode='action-affordance') are unchanged. Stream A's `validateOrgModules` + renderer behavior remains identical for the other ten modules.
+**Last verified against spec:** 2026-05-30.
+**Drift:** none.
+
+#### Pathfinder/lib/catalog/floor-stubs.tsx (modified — Stream C swap)
+**Implements:** Stream C swap point. The four detail-surface loader thunks now point at the real components under `components/catalog/modules/`: `company-detail` → `CompanyDetail`, `outreach-composer` → `OutreachComposer`, `hubspot-sync` → `HubspotSync`, `warm-intro-panel` → `WarmIntroPanel`. After the post-B / post-D rebase the file is the union of all three stream swaps: ranked-feed / filter-rail / kpi-strip / analytics-charts via Stream B (`lib/catalog/modules/<id>/<Component>.tsx`), pipeline-kanban / daily-digest via Stream D (`lib/catalog/modules/<id>/<Component>.tsx`), and the four Stream C entries above. Only `geo-map` remains Stream A's invisible marker (no org enables it). The real Stream C components consume per-page data via the `CompanyDetailContext` provider mounted by `CatalogDetailRenderer`; the file header comment notes that calling the Stream C loaders outside that provider throws with a clear message.
+**Last verified against spec:** 2026-05-30.
+**Drift:** none.

@@ -1,13 +1,19 @@
-// lib/catalog/floor-stubs.tsx, Stream A Foundation.
+// lib/catalog/floor-stubs.tsx, Stream A Foundation + B/C/D wiring.
 //
-// Lazy stubs for the eleven registered modules. Stream A is plumbing-only,
-// so every stub renders an invisible marker rather than UI. Surface streams
-// B/C/D replace these with real components when they wire the renderer into
-// /[slug]/page.tsx and /[slug]/leads/[projectId]/page.tsx.
+// Lazy stubs for the eleven registered modules. Stream A shipped invisible
+// markers for all eleven. Streams B / C / D each replaced the loaders for
+// the modules they own with real-component imports:
+//   - Stream B: ranked-feed, filter-rail, kpi-strip, analytics-charts
+//     (lib/catalog/modules/<id>/<Component>.tsx).
+//   - Stream C: company-detail, outreach-composer, hubspot-sync,
+//     warm-intro-panel (components/catalog/modules/<Component>.tsx).
+//   - Stream D: pipeline-kanban, daily-digest (lib/catalog/modules/<id>/<Component>.tsx).
+//   - Stream A unchanged: geo-map (no org enables it).
 //
 // The renderer hands props to whichever component the registry points at.
-// These stubs keep the runtime contract honest without changing any visible
-// surface.
+// Stream C's detail-surface components consume per-page data via the
+// CompanyDetailContext provider mounted by CatalogDetailRenderer; calling
+// the real loaders outside that provider will throw with a clear message.
 
 import * as React from 'react';
 import type { ModuleComponentProps, ModuleId } from './types';
@@ -48,48 +54,41 @@ export const GeoMapStub = makeStub('geo-map');
  * with real `() => import('./real-component')` thunks.
  */
 export const FLOOR_STUB_LOADERS = {
-  // Stream B Module 1: replaced floor stub with the real ranked-feed
-  // component. The renderer awaits the dynamic import at module activation
-  // time, matching the loader shape the other stubs preserve.
+  // Stream B Module 1: ranked-feed (dashboard.hero).
   'ranked-feed': () =>
     import('./modules/ranked-feed/RankedFeed').then((m) => ({
       default: m.default as unknown as React.ComponentType<ModuleComponentProps>,
     })),
-  'company-detail': () => Promise.resolve({ default: CompanyDetailStub }),
-  'outreach-composer': () => Promise.resolve({ default: OutreachComposerStub }),
-  'hubspot-sync': () => Promise.resolve({ default: HubspotSyncStub }),
-  // Stream D replaces this stub with the real pipeline-kanban module.
-  // Async server component cast through the standard ModuleComponentProps surface.
+  // Stream C wired. Imports the real detail.body module.
+  'company-detail': () => import('@/components/catalog/modules/CompanyDetail'),
+  // Stream C wired. Imports the real detail.outreach module.
+  'outreach-composer': () => import('@/components/catalog/modules/OutreachComposer'),
+  // Stream C wired. Imports the real detail.outreach action-affordance.
+  'hubspot-sync': () => import('@/components/catalog/modules/HubspotSync'),
+  // Stream D: pipeline-kanban (pipeline.board).
   'pipeline-kanban': () =>
     import('./modules/pipeline-kanban/PipelineKanbanModule').then((m) => ({
       default: m.default as unknown as React.ComponentType<ModuleComponentProps>,
     })),
-  // Stream B Module 2: replaced floor stub with the real filter-rail
-  // component. Soft-gates per spec (drops a filter whose backing schema
-  // field is absent for the org).
+  // Stream B Module 2: filter-rail (dashboard.filters), soft-gates per spec.
   'filter-rail': () =>
     import('./modules/filter-rail/FilterRail').then((m) => ({
       default: m.default as unknown as React.ComponentType<ModuleComponentProps>,
     })),
-  'warm-intro-panel': () => Promise.resolve({ default: WarmIntroPanelStub }),
-  // Stream B Module 3: replaced floor stub with the real kpi-strip
-  // component. Null-valued metrics are DROPPED so the strip never renders
-  // a misleading zero (eliminates the "Active outbound motion 0%" red
-  // flag the dispatch prompt calls out).
+  // Stream C wired. Imports the real detail.relationships module.
+  'warm-intro-panel': () => import('@/components/catalog/modules/WarmIntroPanel'),
+  // Stream B Module 3: kpi-strip (dashboard.kpi), drops null-valued metrics.
   'kpi-strip': () =>
     import('./modules/kpi-strip/KpiStrip').then((m) => ({
       default: m.default as unknown as React.ComponentType<ModuleComponentProps>,
     })),
-  // Stream B Module 4: replaced floor stub with the real analytics-charts
-  // component. Soft-gated per chart: empty series renders the designed
-  // EmptyState, never a broken chart.
+  // Stream B Module 4: analytics-charts (dashboard.charts), EmptyState on empty series.
   'analytics-charts': () =>
     import('./modules/analytics-charts/AnalyticsCharts').then((m) => ({
       default: m.default as unknown as React.ComponentType<ModuleComponentProps>,
     })),
-  // Stream D replaces the daily-digest stub with a non-visual module that
-  // declares the catalog metadata; the actual delivery runs through the
-  // /api/cron/internal-digest route (see lib/catalog/modules/daily-digest).
+  // Stream D: daily-digest (delivery.digest), non-visual catalog metadata
+  // for the existing /api/cron/internal-digest route.
   'daily-digest': () =>
     import('./modules/daily-digest/DailyDigestModule').then((m) => ({
       default: m.default as unknown as React.ComponentType<ModuleComponentProps>,
