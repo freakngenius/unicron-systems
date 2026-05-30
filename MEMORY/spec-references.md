@@ -2485,3 +2485,45 @@ Defect: the live Internal dashboard rendered four dead text inputs (`Pathfinder/
 **Implements:** Stream G app→Notion propagation path. `MoveDealStageInput` gains optional `notionSyncSource?: 'app' | 'notion'`. After a successful non-noop stage update, when `notionSyncSource !== 'notion'` and `NOTION_DB_INTERNAL_PIPELINE` is set, `moveDealStage()` dynamically imports `lib/notion/internal-pipeline` and calls `updateNotionStage(dealId, toStage)`. Failures and "no mapping for deal" cases log via console.warn and do NOT throw — the deal move is still authoritative. The dynamic import keeps the Notion client out of code paths that never sync (Zedcor, Realberry, Funder, or server-only callers without `NOTION_API_KEY`). All existing semantics (idempotent noop on same-stage, activity row write, error shape) are unchanged.
 **Last verified against spec:** 2026-05-30.
 **Drift:** none.
+
+---
+
+## Stream H, Lead Chat Agent — data tool pass (Internal rework V2)
+
+**State:** PR pending on `feat/stream-h-data-tool`. Spec: dispatched prompt 2026-05-30 ("data tool, two-tool agent"). Plan: `Pathfinder/docs/PLAN-stream-h-data-tool.md`. Operator-authorized self-merge per the SPEC SHARED AUTHORITY block; never Verified. Builds on v1 (commit `a18529d`) without breaking the existing UX.
+
+Replaces v1's Sonar-only system-prompt approach with a two-tool agent loop driven by Claude (claude-sonnet-4-5). PRIMARY tool: `pathfinder_leads` (structured Supabase queries scoped to Internal). SECONDARY tool: `perplexity_research` (the existing Sonar wrapper, called only when external context is needed). Additive: the existing `/api/chat` surface, Zedcor / Realberry / Funder rendering, and the v1 `pathfinder.lead_chat_messages` table are untouched.
+
+### New lib/ files
+
+#### Pathfinder/lib/chat/internal-lead-tool.ts (new)
+**Implements:** SPEC dispatched-prompt §"Pathfinder data tool (PRIMARY)" + LIVE-VERIFICATION grounding rule. `runLeadTool({ op, ... }, ctx)` runs scoped Supabase queries against `pathfinder.projects` and joins `pathfinder.deals` for pipeline_stage. Every query filters on `organization_id` server-side; cross-org leakage is structurally impossible from this surface. Ops: `list`, `get`, `search`, `aggregate`. Projection routes through `projectToCompanyLeadView` so the tool returns the same display labels the UI renders ("Federal awardee", not raw `federal-awardee` slug). `aggregate(group_by='pipeline_stage')` returns the seven Internal stages (mapped from `DealPipelineStage` via `internalStageMap`) with zero counts preserved so the agent can answer "zero in Won" honestly. `leadToolJsonSchema()` returns the Anthropic-shape tool input_schema kept colocated with the runtime types.
+**Last verified against spec:** 2026-05-30 (5/5 unit tests via mocked supabase).
+**Drift:** none.
+
+#### Pathfinder/lib/chat/internal-chat-agent.ts (new)
+**Implements:** SPEC dispatched-prompt §"agent has TWO tools" + §"orchestrator" + LIVE-VERIFICATION sources rule. `runInternalChatAgent(args)` registers `pathfinder_leads` and `perplexity_research` with Anthropic's native tool_use, streams text deltas back via the supplied `emit` callback, and emits `tool_start` / `tool_done` SSE events around each tool call (plus `researching` when the active tool is Sonar). Loop guard at `MAX_TOOL_ROUNDS = 4`. Reuses `lib/chat/sonar.completeSonar` for the research tool (not a sibling re-implementation). Sources from Sonar are deduplicated and emitted as a `sources` SSE event. Stubbable client (`setAnthropicForTesting`) mirrors the lib/llm/run.ts hook pattern.
+**Last verified against spec:** 2026-05-30 (source-grep guardrails in `lead-chat-route.test.ts` + live two-tool verification on internal.unicron.systems, evidence in PR body).
+**Drift:** none.
+
+### Modified lib/ files
+
+#### Pathfinder/lib/chat/lead-chat-types.ts (modified, additive)
+**Implements:** Extends `LeadChatSseEvent` with `tool_start` and `tool_done` events keyed by `LeadChatToolName = 'pathfinder_leads' | 'perplexity_sonar'`. The existing `meta`, `delta`, `sources`, `researching`, `done`, `error` events are unchanged.
+**Last verified against spec:** 2026-05-30.
+**Drift:** none.
+
+### Modified API route
+
+#### Pathfinder/app/api/internal/chat/route.ts (modified, replacement)
+**Implements:** v2 dispatched prompt. POST swaps `streamSonar(...)` for `runInternalChatAgent(...)`. The route imports the agent (not Sonar directly); the agent imports Sonar internally as a tool. Tool turns are persisted as `role='tool'` rows with `tool_name` and `payload`; assistant rows still carry `model_used` and `latency_ms`. Hard refusal of `org_slug !== 'internal'` (403) and basic-auth gate (401) are preserved. Source-grep guardrail in `__tests__/internal-chat/lead-chat-route.test.ts` asserts the route does not import `@/lib/chat/sonar` directly anymore.
+**Last verified against spec:** 2026-05-30 (9/9 source-grep tests).
+**Drift:** none.
+
+### Modified surface
+
+#### Pathfinder/components/internal/lead-chat/LeadChatPanel.tsx (modified, additive)
+**Implements:** dispatched prompt §"visible Researching state" extended for the second tool. New view-state field `lookingUpLeads` driven by `tool_start { name: 'pathfinder_leads' }` and cleared by either `tool_done` for the same tool or the first `delta`. The existing `researching` chip stays exactly as v1 (only fires when Sonar is the active tool).
+**Last verified against spec:** 2026-05-30 (panel chip render test).
+**Drift:** none.
+

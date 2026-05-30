@@ -7,7 +7,7 @@
 
 import * as React from 'react';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, cleanup, fireEvent, act } from '@testing-library/react';
+import { render, screen, cleanup, fireEvent, act, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 
 // jsdom 27 in this repo does not always attach localStorage. Polyfill it
@@ -150,5 +150,113 @@ describe('LeadChatPanel empty state and inputs', () => {
     );
     const send = screen.getByTestId('lead-chat-send') as HTMLButtonElement;
     expect(send.disabled).toBe(true);
+  });
+});
+
+describe('LeadChatPanel SSE chips', () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+  });
+
+  function sseStream(events: string[]): ReadableStream<Uint8Array> {
+    const encoder = new TextEncoder();
+    return new ReadableStream({
+      start(controller) {
+        for (const e of events) {
+          controller.enqueue(encoder.encode(`data: ${e}\n\n`));
+        }
+        controller.close();
+      },
+    });
+  }
+
+  function stubFetchSequence(streamResponse: Response) {
+    const initial = new Response(JSON.stringify({ thread_id: 't-test', messages: [] }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+    let calls = 0;
+    global.fetch = vi.fn(async () => {
+      calls += 1;
+      return calls === 1 ? initial : streamResponse;
+    }) as unknown as typeof fetch;
+  }
+
+  it('renders the "Looking up leads" chip on a pathfinder_leads tool_start, clears it on delta', async () => {
+    const stream = sseStream([
+      JSON.stringify({ type: 'meta', threadId: 't-test', scopeLabel: 'All Internal companies' }),
+      JSON.stringify({ type: 'tool_start', name: 'pathfinder_leads' }),
+    ]);
+    const streamResponse = new Response(stream, {
+      status: 200,
+      headers: { 'content-type': 'text/event-stream' },
+    });
+    stubFetchSequence(streamResponse);
+
+    render(
+      <LeadChatPanel
+        open
+        onClose={() => {}}
+        onMinimize={() => {}}
+        orgSlug="internal"
+        orgId="org-id-internal"
+        companyId={null}
+        companyName={null}
+        scopeLabel="All Internal companies"
+      />,
+    );
+
+    // Type, send.
+    const textarea = screen.getByTestId('lead-chat-input') as HTMLTextAreaElement;
+    await act(async () => {
+      fireEvent.change(textarea, { target: { value: 'How many federal awardees?' } });
+    });
+    const send = screen.getByTestId('lead-chat-send');
+    await act(async () => {
+      fireEvent.click(send);
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('lead-chat-looking-up')).toBeInTheDocument();
+    });
+  });
+
+  it('renders the "Researching with Perplexity" chip on a perplexity_sonar tool_start', async () => {
+    const stream = sseStream([
+      JSON.stringify({ type: 'meta', threadId: 't-test', scopeLabel: 'Manson' }),
+      JSON.stringify({ type: 'tool_start', name: 'perplexity_sonar' }),
+      JSON.stringify({ type: 'researching', provider: 'perplexity-sonar' }),
+    ]);
+    const streamResponse = new Response(stream, {
+      status: 200,
+      headers: { 'content-type': 'text/event-stream' },
+    });
+    stubFetchSequence(streamResponse);
+
+    render(
+      <LeadChatPanel
+        open
+        onClose={() => {}}
+        onMinimize={() => {}}
+        orgSlug="internal"
+        orgId="org-id-internal"
+        companyId="sam:MANSON"
+        companyName="Manson Construction Co"
+        scopeLabel="Manson Construction Co"
+      />,
+    );
+
+    const textarea = screen.getByTestId('lead-chat-input') as HTMLTextAreaElement;
+    await act(async () => {
+      fireEvent.change(textarea, { target: { value: 'Recent news on Manson?' } });
+    });
+    const send = screen.getByTestId('lead-chat-send');
+    await act(async () => {
+      fireEvent.click(send);
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('lead-chat-researching')).toBeInTheDocument();
+    });
   });
 });

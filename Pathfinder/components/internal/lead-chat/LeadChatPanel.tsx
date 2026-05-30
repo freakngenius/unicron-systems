@@ -52,6 +52,9 @@ interface ViewMessage {
   content: string;
   sources: ChatSourceCitation[] | null;
   researching: boolean;
+  // Stream H v2: active data-tool chip ("Looking up leads"). Cleared when
+  // the model emits its first text delta or when tool_done fires.
+  lookingUpLeads: boolean;
   error: boolean;
 }
 
@@ -90,6 +93,7 @@ function rowToViewMessage(row: LeadChatMessageRow): ViewMessage {
     content: row.content,
     sources: (row.sources as ChatSourceCitation[] | null) ?? null,
     researching: false,
+    lookingUpLeads: false,
     error: row.kind === 'error',
   };
 }
@@ -164,7 +168,7 @@ export function LeadChatPanel(props: LeadChatPanelProps): React.ReactElement {
       const userId = -Date.now();
       setMessages((prev) => [
         ...prev,
-        { id: userId, role: 'user', content: text, sources: null, researching: false, error: false },
+        { id: userId, role: 'user', content: text, sources: null, researching: false, lookingUpLeads: false, error: false },
       ]);
 
       const assistantId = -Date.now() - 1;
@@ -176,6 +180,7 @@ export function LeadChatPanel(props: LeadChatPanelProps): React.ReactElement {
           content: '',
           sources: null,
           researching: false,
+          lookingUpLeads: false,
           error: false,
         },
       ]);
@@ -234,9 +239,21 @@ export function LeadChatPanel(props: LeadChatPanelProps): React.ReactElement {
             }
             if (evt.type === 'researching') {
               updateAssistant({ researching: true });
+            } else if (evt.type === 'tool_start') {
+              if (evt.name === 'pathfinder_leads') {
+                updateAssistant({ lookingUpLeads: true });
+              } else if (evt.name === 'perplexity_sonar') {
+                updateAssistant({ researching: true });
+              }
+            } else if (evt.type === 'tool_done') {
+              if (evt.name === 'pathfinder_leads') {
+                updateAssistant({ lookingUpLeads: false });
+              } else if (evt.name === 'perplexity_sonar') {
+                updateAssistant({ researching: false });
+              }
             } else if (evt.type === 'delta') {
               acc += evt.text;
-              updateAssistant({ content: acc, researching: false });
+              updateAssistant({ content: acc, researching: false, lookingUpLeads: false });
             } else if (evt.type === 'sources') {
               updateAssistant({ sources: evt.items });
             } else if (evt.type === 'error') {
@@ -485,6 +502,25 @@ function Bubble({ message }: { message: ViewMessage }): React.ReactElement {
           whiteSpace: 'pre-wrap',
         }}
       >
+        {message.lookingUpLeads && (
+          <div
+            data-testid="lead-chat-looking-up"
+            style={{
+              display: 'inline-block',
+              marginRight: 6,
+              marginBottom: 6,
+              padding: '2px 8px',
+              fontSize: 10,
+              color: PF.inkSub,
+              background: 'rgba(163,230,53,0.14)',
+              border: `1px solid ${PF.warm}`,
+              borderRadius: 999,
+              letterSpacing: '0.02em',
+            }}
+          >
+            Looking up leads
+          </div>
+        )}
         {message.researching && (
           <div
             data-testid="lead-chat-researching"
@@ -503,7 +539,7 @@ function Bubble({ message }: { message: ViewMessage }): React.ReactElement {
             Researching with Perplexity
           </div>
         )}
-        {message.content || (message.researching ? '' : isAssistant ? '...' : '')}
+        {message.content || (message.researching || message.lookingUpLeads ? '' : isAssistant ? '...' : '')}
       </div>
       {message.sources && message.sources.length > 0 && (
         <div
