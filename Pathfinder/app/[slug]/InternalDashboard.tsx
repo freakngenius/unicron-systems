@@ -121,10 +121,16 @@ export async function InternalDashboard({ org, architecture, filters }: Internal
       </nav>
 
       {/* Slim secondary KPI strip at the top */}
-      {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
       <KpiStrip
         config={kpiConfig}
-        deps={{ orgId: org.id, admin: admin as any, architecture: { sources, lead_unit: { schema: schema as any } } }}
+        deps={{
+          orgId: org.id,
+          admin: admin as unknown as Parameters<typeof KpiStrip>[0]['deps']['admin'],
+          architecture: {
+            sources,
+            lead_unit: { schema: schema as unknown as Record<string, { type?: string; enum_values?: readonly string[]; display_label?: string }> },
+          },
+        }}
       />
 
       {/* Hero: filter rail + ranked feed */}
