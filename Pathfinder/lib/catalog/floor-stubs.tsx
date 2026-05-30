@@ -80,7 +80,13 @@ export const FLOOR_STUB_LOADERS = {
     import('./modules/kpi-strip/KpiStrip').then((m) => ({
       default: m.default as unknown as React.ComponentType<ModuleComponentProps>,
     })),
-  'analytics-charts': () => Promise.resolve({ default: AnalyticsChartsStub }),
+  // Stream B Module 4: replaced floor stub with the real analytics-charts
+  // component. Soft-gated per chart: empty series renders the designed
+  // EmptyState, never a broken chart.
+  'analytics-charts': () =>
+    import('./modules/analytics-charts/AnalyticsCharts').then((m) => ({
+      default: m.default as unknown as React.ComponentType<ModuleComponentProps>,
+    })),
   // Stream D replaces the daily-digest stub with a non-visual module that
   // declares the catalog metadata; the actual delivery runs through the
   // /api/cron/internal-digest route (see lib/catalog/modules/daily-digest).
