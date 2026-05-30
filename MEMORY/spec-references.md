@@ -389,7 +389,6 @@ Stream P1 total cost-to-date: **$0.12** of $8 cap. All cost on Haiku coord-extra
 
 #### Pathfinder/package.json (modified)
 **Drift note:** Added `jszip` (3.10.x) for Teams `.zip` packaging and `js-yaml` (4.1.x, +`@types/js-yaml`) for Slack manifest YAML serialization. Both are small, widely-used libs (combined transitive footprint ~50KB minified) — Vercel function bundle stays well under the 50MB Lambda limit per dispatch halt criteria.
-<<<<<<< HEAD
 
 ---
 
@@ -457,7 +456,7 @@ Stream P1 total cost-to-date: **$0.12** of $8 cap. All cost on Haiku coord-extra
 
 #### Pathfinder/app/api/connectors/instances/[connectorId]/hubspot/sync/route.ts
 **Implements:** Operator-gated endpoint. POST kicks off `runBulkSync` synchronously (`maxDuration=300`); GET returns the `hubspot_sync_state` row. Cross-checks `connector.customer_org_id === resolveOrgId(req)` before any work. Rejects when connector is not HubSpot or status != 'connected'.
-=======
+
 ---
 
 ## Stream C-2A — Microsoft Teams OAuth + Bot Framework + Adaptive Cards
@@ -521,18 +520,19 @@ Stream P1 total cost-to-date: **$0.12** of $8 cap. All cost on Haiku coord-extra
 - `message` with `conversationType=personal` → DM handler (chat-bridge)
 - `message` channel/group → @-mention handler (parses command, replies with cards)
 - `invoke` / `messageBack` → Adaptive Card Action.Submit handler (writes `lead_feedback` for thumb actions, dismisses, queues outreach)
->>>>>>> 263eec4 (feat(connectors): C-2A Microsoft Teams OAuth + Bot Framework + Adaptive Cards)
 
-### Tests
+### Tests (C-3A HubSpot)
 
 | File | Tests | Covers |
-<<<<<<< HEAD
 |---|---|---|
 | `tests/connectors/hubspot-oauth.test.ts` | 13 | buildAuthorizeUrl host/scope/redirect/state; exchangeCode body shape, error mapping, expires_in; refreshToken grant_type; introspection failure tolerance |
 | `tests/connectors/hubspot-bulk-sync.test.ts` | 10 | previewSync read-only behavior; pagination via `after`; ON CONFLICT upsert correctness on re-run; sync_state running flags + final counts; maxObjects truncation; 429 retry; error path writes last_error |
 
 23 new tests; full suite remains 782/782 green; lint clean; build clean.
-=======
+
+### Tests (C-2A Teams)
+
+| File | Tests | Covers |
 |------|-------|--------|
 | tests/connectors/teams-commands.test.ts | 18 | parser verbs, mention stripping, thumb synonyms |
 | tests/connectors/teams-adaptive-cards.test.ts | 10 | card shape, action ids, truncation, attachment wrap, 28KB guard |
@@ -540,7 +540,6 @@ Stream P1 total cost-to-date: **$0.12** of $8 cap. All cost on Haiku coord-extra
 | tests/connectors/teams-signature.test.ts | 11 | RS256 happy path, every JWT failure mode, prod escape-hatch hard-off |
 
 Total new: 50 tests. All green; full Pathfinder suite remains 809 passing.
->>>>>>> 263eec4 (feat(connectors): C-2A Microsoft Teams OAuth + Bot Framework + Adaptive Cards)
 
 ---
 
@@ -2090,7 +2089,70 @@ Stream A is plumbing only. The catalog renderer is not yet wired into `app/[slug
 **Last verified against spec:** 2026-05-30 (statically reviewed; applied to live DB after PR merge).
 **Drift:** none.
 
-### Sprint Z17 — Manual trigger runs full pipeline (no cron dependency)
+---
+
+## Stream D, Pipeline and Delivery (Internal rework)
+
+**State:** branch `stream-d-pipeline-delivery` off post-Stream-A main at `3c2c927`. Plan: `Pathfinder/docs/PLAN-stream-d-pipeline-delivery.md`. Replaces the two Stream A floor stubs `pipeline-kanban` (slot `pipeline.board`) and `daily-digest` (slot `delivery.digest`) with real implementations for Internal (#4). Zedcor and Funder unaffected.
+
+### Pipeline kanban module
+
+#### Pathfinder/lib/catalog/modules/pipeline-kanban/internalStageMap.ts (new)
+**Implements:** SPEC §STREAM D Internal stage list. 1:1 mapping between Internal pipeline stage ids (`new-outreach-ready`, `contacted`, `in-conversation`, `demo-scheduled`, `proposal`, `won`, `lost`) and the existing `DealPipelineStage` enum so the module can reuse `/api/deals/[id]/stage` without any backend or schema change.
+**Last verified against spec:** 2026-05-30.
+**Drift:** none.
+
+#### Pathfinder/lib/catalog/modules/pipeline-kanban/PipelineKanbanModule.tsx (new)
+**Implements:** SPEC §STREAM D Module 1. Server entry. Hydrates `deals` joined to `projects` filtered by `org.id`, buckets by `DEAL_TO_INTERNAL`, hands the pre-grouped shape to the client island. Reads `architecture.pipeline.stages` and `architecture.pipeline.stage_labels`.
+**Last verified against spec:** 2026-05-30.
+**Drift:** none.
+
+#### Pathfinder/lib/catalog/modules/pipeline-kanban/PipelineKanbanIsland.tsx (new)
+**Implements:** SPEC §STREAM D Module 1 drag-and-drop semantics. `'use client'` island. HTML5 native drag (matches Zedcor `components/pipeline/PipelineKanban.tsx`). On drop: optimistic update, POST `/pathfinder/api/deals/[id]/stage` with `to_stage = INTERNAL_TO_DEAL[stage]`, revert on non-2xx. Card click navigates via `orgPaths.leadDetail(slug, projectId)` so the org slug survives URL encoding of project ids. Uses Stream A design primitives (`Card`, `ScoreBadge`, `EmptyState`, tokens) so cards match the ranked-feed visual language.
+**Last verified against spec:** 2026-05-30.
+**Drift:** none.
+
+### Daily digest module
+
+#### Pathfinder/lib/catalog/modules/daily-digest/runner.ts (new)
+**Implements:** SPEC §STREAM D Module 2. Pure-ish runner `runInternalDailyDigest`. Hard gates: returns `{ skipped: 'no_verified_companies' }` when zero verified projects in the window; returns `{ skipped: 'no_slack_integration' }` when `INTERNAL_SLACK_WEBHOOK_URL` is unset; in both cases does NOT post to Slack and does NOT seed deals. Reuses `composeInternalDigest` and the existing Slack POST path; new-verified loader seeds at `INTERNAL_TO_DEAL['new-outreach-ready']` (NEW) only for projects without an existing deal.
+**Last verified against spec:** 2026-05-30.
+**Drift:** none.
+
+#### Pathfinder/lib/catalog/modules/daily-digest/DailyDigestModule.tsx (new)
+**Implements:** SPEC §STREAM D Module 2 catalog binding. Non-visual component bound by `FLOOR_STUB_LOADERS['daily-digest']`. Fallback strategy `hidden` per Stream A registry; this module exists so the catalog has a real lazy import instead of the marker stub. Delivery runs via `app/api/cron/internal-digest/route.ts`.
+**Last verified against spec:** 2026-05-30.
+**Drift:** none.
+
+### Catalog binding update
+
+#### Pathfinder/lib/catalog/floor-stubs.tsx (modified — additive)
+**Implements:** Stream D wiring of `FLOOR_STUB_LOADERS['pipeline-kanban']` and `FLOOR_STUB_LOADERS['daily-digest']` to lazy imports of the two new module entries. Every other slot continues to point at the Stream A stub (Stream B/C will replace theirs).
+**Last verified against spec:** 2026-05-30.
+**Drift:** none.
+
+### Surface wiring
+
+#### Pathfinder/app/[slug]/pipeline/page.tsx (modified — additive)
+**Implements:** SPEC §STREAM D pipeline route discovery: when the org's `architecture.modules` claims slot `pipeline.board` (Internal #4 does, Funder #3 does not), the page short-circuits to the catalog renderer and mounts the resolved module. Orgs without a modules block fall through and render byte-identical to today (Funder behavior unchanged).
+**Last verified against spec:** 2026-05-30.
+**Drift:** none.
+
+### Cron route refactor
+
+#### Pathfinder/app/api/cron/internal-digest/route.ts (modified)
+**Implements:** delegation to `runInternalDailyDigest` for the daily-digest module. Auth + query-string parsing unchanged. Response shape: `slack_result` now carries `{ skipped: 'no_slack_integration' | 'no_verified_companies' | 'dry_run' } | { ok, error? }` (added the two hard-gate skip reasons; pre-existing `no_webhook` rename to `no_slack_integration` is the only response-shape delta).
+**Last verified against spec:** 2026-05-30.
+**Drift:** none.
+
+### Cron schedule
+
+#### Pathfinder/vercel.json (modified — additive)
+**Implements:** SPEC §STREAM D digest cron registration. Appended `{ path: '/api/cron/internal-digest', schedule: '0 14 * * 1,2,3,4,5' }` (Mon–Fri 14:00 UTC, weekday morning US Pacific). Numeric day-of-week per CLAUDE.md and per SPEC ("If a cron schedule is touched, use a numeric day-of-week"). Existing `functions` block untouched.
+
+---
+
+## Sprint Z17 — Manual trigger runs full pipeline (no cron dependency)
 
 **State:** PR #508 on `z17-manual-full-pipeline`. Spec: `Company Docs/Specs/SPEC-zedcor-Z17.md`. Restores end-to-end completion to the manual `runZedcorOrchestrator()` path so a single trigger of Run Zedcor produces fully-enriched Notion Lead Feed rows with Vercel crons disabled. Closes the silent-write bug in `updateProjectScore` that had been dropping every manually-ingested row's score on the floor.
 
