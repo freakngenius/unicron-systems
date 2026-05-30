@@ -2166,7 +2166,6 @@ Stream A is plumbing only. The catalog renderer is not yet wired into `app/[slug
 **Last verified against spec:** 2026-05-30.
 **Drift:** none.
 
-<<<<<<< HEAD
 ---
 
 ## Stream B , Internal Dashboard surface
