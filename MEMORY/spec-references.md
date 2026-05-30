@@ -2287,3 +2287,46 @@ Replaces the four detail-surface floor stubs (`company-detail`, `outreach-compos
 **Implements:** SPEC-zedcor-Z17.1.md §"The fix" + §"Acceptance criteria". `enrichment_attempted` / `enrichment_succeeded` / `enrichment_failed` in `RunSummary` now sum Wave 2.5 (this-run inserts) + Wave 5 (backlog) so a single trigger's enrichment work is readable off the canonical field; per-source breakdown stays (`scored`, `gc_resolved`, `hooks_generated`, `backfill_*`). `DEFAULT_BACKFILL_CAP_PER_RUN` raised 30 → 200 so one trigger clears the typical ~190-row construction backlog instead of needing 6+ triggers. `runZedcorZ17Backfill()` restructured into Phase A (score, deterministic) + Phase B (GC extract, parallel batches of `GC_BACKFILL_CONCURRENCY=8`) + Phase C (pitch + Notion, sequential). HTTP-bound GC work collapses from N×2s sequential to ⌈N/8⌉×2s parallel; pitch stays sequential because Sonnet's per-key rate limit makes naive parallelism a wash. Pre-window construction rows (solicitation / owner_bid / rfp / unknown / fallback) that are not pitch-eligible now receive a deterministic tracking action via `buildPreWindowTrackingAction()` written to `pitch_metadata.recommended_action` (with `pitch_hooks: []` and a `tracking_action_kind` tag), so spec §"ZED-58 sanity" — score + phase + tracking action with no hooks and no GC required — is satisfied on the first trigger. `backfillNeedsWork()` counts "missing tracking action" as work, so the deterministic step runs once per row and then idempotently skips.
 **Last verified against spec:** 2026-05-30. Live verification runs 6722 (enrichment_attempted=144, backfill_scored=144, hooks_generated=19, notion_writes=44) + 6723 (enrichment_attempted=0, idempotency) against `pathfinder.projects`; aggregates moved construction_with_score 46→190 (100%) and construction_with_hooks 35→45.
 **Drift:** none.
+
+---
+
+## Stream E, Cards and Companies (Internal rework V2)
+
+**State:** Open against `main` from branch `stream-e-cards-companies` (2026-05-30). Operator-authorized self-merge per `Pathfinder/docs/SPEC-Internal-Rework-V2.md` SHARED AUTHORITY block (commit `8a74833`, landed on main mid-session and pulled in via rebase before the second push). Plan: `Pathfinder/docs/PLAN-stream-e-cards-companies.md`. SPEC-Internal-Parallel-Build.md SHARED governed the first commit (V2 was absent at session start, V1 SHARED is verbatim-equivalent on every non-negotiable); after rebase the V2 Stream E section drove the refactor that extracted the shared `CompanyLeadCard` and added the one-line "why" + "one card" unification.
+
+Defect: Internal `/[slug]/leads` projected rows through `projectFunderLead`, so its `lead_card_layout.primary_fields` (`company_name`, `service_category`, `footprint`, `sales_motion`) had no matching keys on the projection. The cards rendered raw uppercase labels (CSS `text-transform: uppercase`) with em-dash placeholders; only `score` resolved because both projections set it. Fix is additive and Internal-scoped: the page branches on `architecture.lead_unit.name === 'company'`, projects via `projectToCompanyLeadView`, sorts via `sortCompanies`, and renders through the new shared `CompanyLeadCard` (the same component the Stream B `RankedFeed` now delegates to). Funder, Realberry, Zedcor stay byte-identical: the `LeadCard` markup is unchanged when no schema is passed (which they never do); the SQL ordering and projection on those paths are untouched.
+
+### New lib/ files
+
+#### Pathfinder/lib/agents/internal/sortCompanies.ts (new)
+**Implements:** SPEC-Internal-Rework-V2.md Stream E sort-controls requirement. Pure helpers `parseSortKey(input)` and `sortCompanies(rows, key)` over the `CompanyLeadView` projection. Keys: `score` (score desc, nulls last; verified true sorts before verified false as a tiebreaker so the prior verified-first floor ordering is preserved), `name` (company_name asc, locale-aware case-insensitive), `category` (service_category display string asc), `recent` (posted_date desc nulls last). `score` is the default. The Companies route URL carries `?sort=`.
+**Last verified against spec:** 2026-05-30.
+**Drift:** none.
+
+### New component files
+
+#### Pathfinder/components/catalog/cards/CompanyLeadCard.tsx (new)
+**Implements:** SPEC-Internal-Rework-V2.md Stream E "one fixed card" requirement. Shared Internal lead card used by the Companies list (`app/[slug]/leads/page.tsx`), the Dashboard ranked feed (`lib/catalog/modules/ranked-feed/RankedFeed.tsx`), and the Pipeline kanban (Stream G). Renders the company name (h3), score badge top-right, score eyebrow line, a three-cell FieldGrid (service category, operating footprint, sales motion) plus HQ when present, and the one-line "why" clamped from `view.rationale`. Labels resolve via `displayLabel(schema, key)` (the Stream B chokepoint). Null fields render as `-`, never an em-dash. Two modes: `link` (default, wraps in `next/link` to `buildOrgPath(slug, 'leads', view.id)`) and `bare` (no link wrapper, for the Pipeline kanban so it can attach drag handlers). `testIdPrefix` defaults to `company-lead-card` and is overridden to `ranked-feed` by Stream B so its existing tests stay stable.
+**Last verified against spec:** 2026-05-30.
+**Drift:** none.
+
+#### Pathfinder/components/internal/CompaniesSortControl.tsx (new)
+**Implements:** SPEC-Internal-Rework-V2.md Stream E sort-controls requirement (Companies route: score desc default, name, category, recently added). Server-rendered `next/link` rail; preserves the four Stream B filter params (`service_category`, `sales_motion`, `federal_registration`, `source`) when flipping `?sort=`. Targets `/[slug]/leads?...` directly so the redirect at `/[slug]/companies` (Stream A Phase 0 alias) does not drop the query string.
+**Last verified against spec:** 2026-05-30.
+**Drift:** none.
+
+### Modified component / route files
+
+#### Pathfinder/components/LeadCard.tsx (modified, additive)
+**Implements:** SPEC SHARED quality bar "always render the schema display_label, never the field key" as defense in depth for any future caller that still routes through this floor card. Adds two optional props: `schema?: LeadUnitSchema` and `placeholder?: string`. When `schema` is provided: labels resolve via `displayLabel(schema, field)`, the CSS uppercase transform is dropped from the label, and the placeholder defaults to `-`. When `schema` is absent (Funder + every other current caller): the rendered markup is byte-identical to today (raw key label, CSS uppercase, em-dash placeholder; no change to `fieldDisplay` behavior). Internal's Companies route now uses `CompanyLeadCard` instead of `LeadCard`, but the schema-aware path stays in `LeadCard` so any later module that still mounts the floor card on a schema-driven org renders correctly.
+**Last verified against spec:** 2026-05-30.
+**Drift:** none.
+
+#### Pathfinder/app/[slug]/leads/page.tsx (modified, additive Internal branch)
+**Implements:** SPEC-Internal-Rework-V2.md Stream E. New branch on `architecture.lead_unit?.name === 'company'`: rows are loaded without an SQL `order` clause, projected through `projectToCompanyLeadView`, then sorted in JS via `sortCompanies(view, parseSortKey(?sort))` so the visible "Category" sort follows the humanized display string. Renders `CompaniesSortControl` plus a grid of `CompanyLeadCard`. The Funder branch keeps the original SQL ordering and `projectFunderLead` mapping verbatim; its `LeadCardList`/`LeadCard` markup is byte-identical.
+**Last verified against spec:** 2026-05-30.
+**Drift:** none.
+
+#### Pathfinder/lib/catalog/modules/ranked-feed/RankedFeed.tsx (modified, "one card" delegation)
+**Implements:** SPEC-Internal-Rework-V2.md Stream E "one fixed card". The inner card component was extracted to `Pathfinder/components/catalog/cards/CompanyLeadCard.tsx`. `RankedFeed` is now a thin projector + iterator that delegates each row to `CompanyLeadCard` with `testIdPrefix="ranked-feed"` so every Stream B selector (`ranked-feed-card-*`, `ranked-feed-link-*`, `ranked-feed-why-*`, `ranked-feed-score-*`, `ranked-feed-rank-eyebrow-*`) keeps its identity. The visual contract is unchanged.
+**Last verified against spec:** 2026-05-30.
