@@ -73,6 +73,21 @@ describe('SearchProgress', () => {
     PHASE_KEYS.forEach((key, i) => {
       expect(rows[i].getAttribute('data-testid')).toBe(`search-progress-phase-${key}`);
     });
+
+    // The identity header is suppressed by default to avoid duplicating the
+    // page header in SearchDetailView (SPEC-Fix-Search-Header-Dup).
+    expect(screen.queryByTestId('search-progress-name')).not.toBeInTheDocument();
+  });
+
+  it('renders the optional identity header when showHeader is true', async () => {
+    const fetcher = vi.fn().mockResolvedValue(makePayload());
+    render(<SearchProgress searchId="ss_test_1" fetcher={fetcher} showHeader />);
+
+    await waitFor(() =>
+      expect(screen.getByTestId('search-progress-name')).toHaveTextContent(
+        'Mid-market construction security ops',
+      ),
+    );
   });
 
   it('renders running and pending phase statuses correctly', async () => {
