@@ -25,6 +25,7 @@ import {
   checkReadyToViewCron,
   funderEnrichAdjacency,
   internalEnrichGeoAdjacency,
+  searchOrchestrator,
 } from '@/lib/inngest/functions';
 
 export const { GET, POST, PUT } = serve({
@@ -67,6 +68,12 @@ export const { GET, POST, PUT } = serve({
     // via slug filter inside the handler. Adjacency is inert until
     // UNICRON_INTERNAL_ADJACENCY_SEED_PATH is set.
     internalEnrichGeoAdjacency,
+    // ICP Saved Search S1 — pathfinder/search.run.requested subscriber.
+    // Walks the six-phase orchestration plan (interpret -> geo -> sources
+    // -> wire -> scrape -> score), writing progress to
+    // pathfinder.search_runs after each phase. Imports the planner/runner
+    // from @/lib/agents/search (Stream S2 seam; stub at S1, real at S2).
+    searchOrchestrator,
   ],
 });
 

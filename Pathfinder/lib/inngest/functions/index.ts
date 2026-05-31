@@ -46,3 +46,8 @@ export { funderEnrichAdjacency } from './funder-enrich-adjacency';
 // ranker cycle picks the project up. Internal-only via slug filter
 // inside the handler.
 export { internalEnrichGeoAdjacency } from './internal-enrich-geo-adjacency';
+// ICP Saved Search S1 — subscribes pathfinder/search.run.requested and
+// walks the six-phase orchestration plan, writing progress to
+// pathfinder.search_runs after each phase. Imports the planner/runner
+// from @/lib/agents/search (Stream S2 seam — stub at S1, real at S2).
+export { searchOrchestrator } from './search-orchestrator';

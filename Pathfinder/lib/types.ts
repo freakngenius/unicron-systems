@@ -850,6 +850,97 @@ export interface Organization {
   updated_at: string;
 }
 
+// ── ICP Saved Search (Stream S1) ──────────────────────────────────────────
+// SPEC: docs/SPEC-ICP-Search.md. Shared contract across S1-S4. S1 owns the
+// table-backed Row types; S2 owns the function bodies in lib/agents/search.
+
+export type SavedSearchStatus =
+  | 'draft'
+  | 'planning'
+  | 'running'
+  | 'complete'
+  | 'failed';
+
+export type SearchPhaseKey =
+  | 'interpret'
+  | 'geo'
+  | 'sources'
+  | 'wire'
+  | 'scrape'
+  | 'score';
+
+export type SearchPhaseStatus = 'pending' | 'running' | 'done' | 'failed';
+
+export interface SearchPhaseEntry {
+  key: SearchPhaseKey;
+  label: string;
+  status: SearchPhaseStatus;
+  detail?: string | null;
+}
+
+export interface SearchRunProgress {
+  phases: SearchPhaseEntry[];
+}
+
+export interface SearchRunStats {
+  sources_found: number;
+  companies_ingested: number;
+  scored: number;
+  verified: number;
+}
+
+export interface SavedSearchSourceTier1 {
+  source_id: string;
+  params?: Record<string, unknown>;
+}
+
+export interface SavedSearchSourceTier2 {
+  source_id: string;
+  template: string;
+  needs?: Record<string, unknown>;
+}
+
+export interface SavedSearchSourceTier3 {
+  candidate: string;
+  url: string;
+  discovered_by: 'perplexity';
+  auto_attempt: true;
+  status?: 'pending' | 'attempted' | 'failed' | 'wired';
+  detail?: string | null;
+}
+
+export interface SavedSearchSourcePlan {
+  tier1: SavedSearchSourceTier1[];
+  tier2: SavedSearchSourceTier2[];
+  tier3: SavedSearchSourceTier3[];
+}
+
+export interface SavedSearch {
+  id: string;
+  organization_id: string;
+  name: string;
+  icp_text: string;
+  region: string;
+  radius_mi: number;
+  status: SavedSearchStatus;
+  architecture: Record<string, unknown>;
+  source_plan: SavedSearchSourcePlan;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SearchRun {
+  id: string;
+  saved_search_id: string;
+  status: SavedSearchStatus | 'pending';
+  phase: SearchPhaseKey | null;
+  progress: SearchRunProgress;
+  stats: SearchRunStats;
+  started_at: string | null;
+  finished_at: string | null;
+  created_at: string;
+}
+
 // Database type bag for the typed Supabase client.
 export interface PathfinderDatabase {
   pathfinder: {
@@ -1037,6 +1128,35 @@ export interface PathfinderDatabase {
         Row: OperatorAllowlistEntry;
         Insert: Omit<OperatorAllowlistEntry, 'created_at'> & { created_at?: string };
         Update: Partial<OperatorAllowlistEntry>;
+        Relationships: [];
+      };
+      // ICP Saved Search S1 (migration 20260530_icp_search_foundation).
+      saved_searches: {
+        Row: SavedSearch;
+        Insert: Omit<SavedSearch, 'id' | 'created_at' | 'updated_at' | 'status' | 'architecture' | 'source_plan'> & {
+          id?: string;
+          created_at?: string;
+          updated_at?: string;
+          status?: SavedSearchStatus;
+          architecture?: Record<string, unknown>;
+          source_plan?: SavedSearchSourcePlan;
+        };
+        Update: Partial<SavedSearch>;
+        Relationships: [];
+      };
+      search_runs: {
+        Row: SearchRun;
+        Insert: Omit<SearchRun, 'id' | 'created_at' | 'status' | 'progress' | 'stats' | 'phase' | 'started_at' | 'finished_at'> & {
+          id?: string;
+          created_at?: string;
+          status?: SearchRun['status'];
+          phase?: SearchPhaseKey | null;
+          progress?: SearchRunProgress;
+          stats?: SearchRunStats;
+          started_at?: string | null;
+          finished_at?: string | null;
+        };
+        Update: Partial<SearchRun>;
         Relationships: [];
       };
     };

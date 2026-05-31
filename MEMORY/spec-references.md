@@ -2618,3 +2618,60 @@ Three defects:
 **Implements:** SPEC-ICP-Search.md §SEAMS · "UI-to-API is HTTP" + §Stream slices S3. Typed HTTP client for the four `/api/searches` routes. `createSearch`, `listSearches`, `getSearch`, `getSearchLeads` each accept an `AbortSignal`, an optional `baseUrl` (for server-side callers), and an optional `fetchImpl` so tests mock fetch in isolation. `SearchApiError` exposes `status` for the form's error surface. Reads `cache: 'no-store'` on GETs so the Internal dashboard reflects newly-started searches without a hard refresh.
 **Last verified against spec:** 2026-05-30 (3 unit-test files, 11 tests pass).
 **Drift:** none.
+
+---
+
+## ICP Saved Search Stream S1 (data + API + orchestration)
+
+**State:** branch `feat/icp-search-s1`, rebased onto post-S2/S3 main. Plan: `Pathfinder/docs/PLAN-icp-search-s1.md`. SPEC: `Pathfinder/docs/SPEC-ICP-Search.md`. Operator-authorized self-merge on green per the S1 goal. Internal-scoped via `slug='internal'`; additive migration; Zedcor / Realberry / Funder byte-unchanged (verify-orgs-byte-unchanged.ts green).
+
+### Migrations
+
+#### Pathfinder/supabase/migrations/20260530_icp_search_foundation.sql
+**Implements:** SPEC-ICP-Search.md "Shared contract" TABLES section. Creates `pathfinder.saved_searches` (id, organization_id fk, name, icp_text, region, radius_mi, status check-constrained, architecture jsonb, source_plan jsonb, timestamps) and `pathfinder.search_runs` (id, saved_search_id fk, status, phase, progress jsonb, stats jsonb, started_at, finished_at). Adds nullable `pathfinder.projects.saved_search_id` with a partial index. Zero UPDATE on existing rows.
+**Last verified against spec:** 2026-05-30.
+**Live state:** applied 2026-05-30 to prod ref `anfihcusvekpovcchpoh`. Confirmed via `SELECT to_regclass('pathfinder.saved_searches') = pathfinder.saved_searches` and `information_schema.columns` where `projects.saved_search_id` is `uuid` and nullable.
+**Drift:** none.
+
+### Library (Stream S1 owned)
+
+#### Pathfinder/lib/inngest/functions/search-orchestrator.ts (new)
+**Implements:** SPEC-ICP-Search.md "ORCHESTRATION" section, S1 slice. Subscribes `pathfinder/search.run.requested`. Calls S2's `runSearchPlan` (interpret + geo + sources) then `runIngestForSearch` (wire + scrape + score) from `@/lib/agents/search`, persisting each emitted phase event into `search_runs.progress` via the `onPhase` callback. Final stats land on `search_runs.stats`. On any seam failure: `search_runs.status='failed'` + `saved_searches.status='failed'` + `finished_at=now()`.
+**Last verified against spec:** 2026-05-30.
+**Drift:** none.
+
+#### Pathfinder/lib/inngest/events.ts (modified, additive)
+**Implements:** SPEC-ICP-Search.md S1 contract. Adds `pathfinder/search.run.requested` event with `{ search_run_id, saved_search_id }` data.
+**Last verified against spec:** 2026-05-30.
+**Drift:** none.
+
+#### Pathfinder/lib/inngest/functions/index.ts + Pathfinder/app/api/inngest/route.ts (modified, additive)
+**Implements:** wiring `searchOrchestrator` into the `inngest/next` serve handler.
+**Last verified against spec:** 2026-05-30.
+**Drift:** none.
+
+#### Pathfinder/lib/types.ts (modified, additive)
+**Implements:** SPEC-ICP-Search.md contract types. Adds `SavedSearch`, `SearchRun`, `SearchRunProgress`, `SearchRunStats`, `SavedSearchSourcePlan` (+ tier1/2/3 variants), `SavedSearchStatus`, `SearchPhaseKey`, `SearchPhaseStatus`, `SearchPhaseEntry`. Adds `saved_searches` and `search_runs` to the `PathfinderDatabase` table bag.
+**Last verified against spec:** 2026-05-30.
+**Drift:** none.
+
+### API routes
+
+#### Pathfinder/app/api/searches/route.ts (new)
+**Implements:** SPEC-ICP-Search.md API: `POST /api/searches` creates saved_search + search_run, emits `pathfinder/search.run.requested`, returns 201 `{ id }`. `GET /api/searches` lists Internal saved_searches newest first. Internal-scoped via `slug='internal'` lookup (404 if missing). Uses S2's `initialProgress` / `initialStats` from `@/lib/agents/search`.
+**Last verified against spec:** 2026-05-30.
+**Drift:** none.
+
+#### Pathfinder/app/api/searches/[id]/route.ts (new)
+**Implements:** SPEC-ICP-Search.md API: `GET /api/searches/:id` returns `{ saved_search, latest_run: { status, phase, progress, stats } }`. 404 when not owned by Internal.
+**Last verified against spec:** 2026-05-30.
+**Drift:** none.
+
+#### Pathfinder/app/api/searches/[id]/leads/route.ts (new)
+**Implements:** SPEC-ICP-Search.md API: `GET /api/searches/:id/leads` returns `Project[]` where `saved_search_id=:id`, ordered score desc nulls last then ingested_at desc. 404 when not owned by Internal.
+**Last verified against spec:** 2026-05-30.
+**Drift:** none.
+
+### Tests
+
+`__tests__/inngest/search-orchestrator.test.ts` verifies phase order, final stats propagation, and fail-fast on seam throw with S2's `runSearchPlan` / `runIngestForSearch` mocked. `__tests__/api/searches-route.test.ts` covers POST happy-path, 400 on missing fields, 404 on missing Internal org.
