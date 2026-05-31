@@ -78,7 +78,12 @@ export const { GET, POST, PUT } = serve({
 });
 
 export const dynamic = 'force-dynamic';
-// Tuning sessions cap at 30 min per spec §9, but Inngest steps run
-// independently — the serve() route only handles dispatch, not the
-// session itself. 60s is enough for Inngest function discovery + step ack.
-export const maxDuration = 60;
+// Each Inngest step.run executes in its own POST to /api/inngest, so this
+// value is the per-step ceiling, not the per-function ceiling. The prior
+// 60s cap left the ICP Search orchestrator's interpret phase stuck
+// whenever the Architect decomposition loop ran past 60s: Vercel killed
+// the invocation before the function continuation could mark the run
+// failed, so search_runs sat at status='running' forever. 300s matches
+// the Vercel Pro maxDuration ceiling and gives the Architect headroom
+// inside a single step boundary. See docs/SPEC-Fix-Search-Orchestrator-Stall.md.
+export const maxDuration = 300;

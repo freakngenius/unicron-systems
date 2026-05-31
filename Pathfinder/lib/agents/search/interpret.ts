@@ -33,11 +33,51 @@ export interface InterpretDeps {
   runLlm?: (req: LLMRequest) => Promise<LLMResponse>;
   // Used to namespace the Architect's vertical_id; defaults to a random UUID.
   newId?: () => string;
+  // Overall ceiling for interpretIcp (Architect + NAICS classifier). Defaults
+  // to PF_SEARCH_INTERPRET_TIMEOUT_MS (150s) so the call cannot outlive the
+  // /api/inngest serverless invocation. The Architect agent loop's own
+  // SESSION_TIMEOUT_MS.decomposition (180s) sits ABOVE this on purpose:
+  // when the loop hangs (network, model overload), Promise.race surfaces
+  // a real error to the orchestrator instead of waiting for Vercel to kill
+  // the process — that path leaves the run stuck at status='running'.
+  timeoutMs?: number;
 }
 
 const MIN_ICP_LENGTH = 10;
 const NAICS_MODEL = process.env.PF_SEARCH_INTERPRET_MODEL ?? 'claude-sonnet-4-6';
 const NAICS_MAX_TOKENS = 600;
+const NAICS_TIMEOUT_MS = Number.parseInt(
+  process.env.PF_SEARCH_NAICS_TIMEOUT_MS ?? '60000',
+  10,
+);
+const DEFAULT_INTERPRET_TIMEOUT_MS = Number.parseInt(
+  process.env.PF_SEARCH_INTERPRET_TIMEOUT_MS ?? '150000',
+  10,
+);
+
+class InterpretTimeoutError extends Error {
+  constructor(stage: string, ms: number) {
+    super(`interpretIcp timed out after ${ms}ms during ${stage}`);
+    this.name = 'InterpretTimeoutError';
+  }
+}
+
+function withTimeout<T>(p: Promise<T>, ms: number, stage: string): Promise<T> {
+  if (!Number.isFinite(ms) || ms <= 0) return p;
+  return new Promise<T>((resolve, reject) => {
+    const handle = setTimeout(() => reject(new InterpretTimeoutError(stage, ms)), ms);
+    p.then(
+      (v) => {
+        clearTimeout(handle);
+        resolve(v);
+      },
+      (e) => {
+        clearTimeout(handle);
+        reject(e);
+      },
+    );
+  });
+}
 
 const NAICS_SYSTEM_PROMPT = `You are a precise NAICS / PSC classifier for a B2B lead-search platform. Given a buyer profile, return a tight JSON object with the most relevant NAICS codes, PSC codes (if any apply), and search keywords. Prefer 4-6 digit NAICS. Include 3-6 keywords that would surface the buyer in news/RSS feeds and procurement-portal full-text search. Be honest about scope — if a code is only loosely relevant, drop it.
 
@@ -173,14 +213,18 @@ async function deriveNaicsAndKeywords(args: {
   ].join('\n');
   let res: LLMResponse;
   try {
-    res = await args.runLlm({
-      model: NAICS_MODEL,
-      systemPrompt: NAICS_SYSTEM_PROMPT,
-      messages: [{ role: 'user', content: userPrompt }],
-      maxTokens: NAICS_MAX_TOKENS,
-      surface: 'architect',
-      agentName: 'icp-search-naics',
-    });
+    res = await withTimeout(
+      args.runLlm({
+        model: NAICS_MODEL,
+        systemPrompt: NAICS_SYSTEM_PROMPT,
+        messages: [{ role: 'user', content: userPrompt }],
+        maxTokens: NAICS_MAX_TOKENS,
+        surface: 'architect',
+        agentName: 'icp-search-naics',
+      }),
+      NAICS_TIMEOUT_MS,
+      'naics-classifier',
+    );
   } catch (err) {
     // Honest degrade: keep the architecture but mark the gap.
     return {
@@ -228,15 +272,25 @@ export async function interpretIcp(
   const runDecomposition = deps.runDecomposition ?? runDecompositionLive;
   const llm = deps.runLlm ?? runLlm;
   const newId = deps.newId ?? (() => `icp-search-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`);
+  const overallTimeoutMs = deps.timeoutMs ?? DEFAULT_INTERPRET_TIMEOUT_MS;
+  const startedAt = Date.now();
+  const remaining = (): number => {
+    const left = overallTimeoutMs - (Date.now() - startedAt);
+    return left > 0 ? left : 1;
+  };
 
   const verticalId = newId();
-  const decomp = await runDecomposition({
-    input: {
-      buyer_pain_prompt: trimmed,
-      vertical_id: verticalId,
-      trigger: 'manual',
-    },
-  });
+  const decomp = await withTimeout(
+    runDecomposition({
+      input: {
+        buyer_pain_prompt: trimmed,
+        vertical_id: verticalId,
+        trigger: 'manual',
+      },
+    }),
+    remaining(),
+    'architect-decomposition',
+  );
 
   const proposal = decomp.architecture;
   const business_summary = proposal.business_summary ?? {
@@ -246,13 +300,17 @@ export async function interpretIcp(
     what_they_get: '',
   };
 
-  const naics = await deriveNaicsAndKeywords({
-    icp_text: trimmed,
-    buyer: business_summary.lead_type || proposal.buyer,
-    business_area: business_summary.business_area || proposal.buying_signal,
-    problem_solved: business_summary.problem_solved || '',
-    runLlm: llm,
-  });
+  const naics = await withTimeout(
+    deriveNaicsAndKeywords({
+      icp_text: trimmed,
+      buyer: business_summary.lead_type || proposal.buyer,
+      business_area: business_summary.business_area || proposal.buying_signal,
+      problem_solved: business_summary.problem_solved || '',
+      runLlm: llm,
+    }),
+    remaining(),
+    'naics-derivation',
+  );
 
   const architecture: SearchArchitecture = {
     vertical: verticalId,

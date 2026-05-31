@@ -2675,3 +2675,43 @@ Three defects:
 ### Tests
 
 `__tests__/inngest/search-orchestrator.test.ts` verifies phase order, final stats propagation, and fail-fast on seam throw with S2's `runSearchPlan` / `runIngestForSearch` mocked. `__tests__/api/searches-route.test.ts` covers POST happy-path, 400 on missing fields, 404 on missing Internal org.
+
+
+---
+
+## ICP Search Orchestrator stall fix (2026-05-31)
+
+**State:** branch `fix-icp-search-orchestrator-stall`, off origin/main at `5304608`. SPEC: `Pathfinder/docs/SPEC-Fix-Search-Orchestrator-Stall.md`. Plan: `Pathfinder/docs/PLAN-fix-icp-search-orchestrator-stall.md`. Operator-authorized self-merge on green per the SPEC. Internal-only; additive; Zedcor / Realberry / Funder byte-unchanged (verify-orgs-byte-unchanged.ts green).
+
+### Bug
+
+Every Internal saved-search run sat at `phase='interpret' status='running' finished_at=null` for hours (4 rows confirmed 2026-05-31 via Supabase ref `anfihcusvekpovcchpoh`). Run was invoked (started_at + saved_search.status='running' set by `mark-running` step) but the Architect decomposition agent loop outran `/api/inngest`'s 60s Vercel `maxDuration`. The single `step.run('run-search-plan')` boundary bundled interpret + geo + sources; when Vercel killed the invocation Inngest's retry semantics never bubbled a JS throw into the function continuation's catch, so `mark-failed` never ran. `saved_searches.architecture` stuck at the `{}` column default confirmed `interpretIcp` never returned.
+
+### Pathfinder/lib/inngest/functions/search-orchestrator.ts (modified)
+**Implements:** SPEC-Fix-Search-Orchestrator-Stall.md "Fix" section. Each of the six phases (`interpret`, `geo`, `sources`, `wire`, `scrape`, `score`) now runs inside its own `step.run('phase-<key>', ...)` boundary. Each step writes running on entry, persists the phase's result, and writes done on success. On throw inside the step it writes `status='failed'` + `finished_at` + the error string into `progress.phases[key].detail` and re-throws as `NonRetriableError` so Inngest stops retrying. The outer try/catch remains as a belt-and-suspenders for steps outside the phase loop (e.g., `load-saved-search`).
+**Last verified against spec:** 2026-05-31.
+**Drift:** none.
+
+### Pathfinder/lib/agents/search/run.ts (modified, additive)
+**Implements:** SPEC-Fix-Search-Orchestrator-Stall.md "Fix" — adds `loadSavedSearchRow`, `doPhaseInterpret`, `doPhaseGeo`, `doPhaseSources`, `doPhaseWire`, `doPhaseScrape`, `doPhaseScore` per-phase exports that compose the same logic `runSearchPlan` / `runIngestForSearch` already use internally. Existing exports retained so `__tests__/agents/search/run.test.ts` still passes. `emitPhase` now `console.error`s on write failure instead of silently swallowing — prior silence hid the stall.
+**Last verified against spec:** 2026-05-31.
+**Drift:** none.
+
+### Pathfinder/lib/agents/search/interpret.ts (modified, additive)
+**Implements:** SPEC-Fix-Search-Orchestrator-Stall.md "Fix" — adds a `Promise.race`-based timeout around the Architect `runDecomposition` call and the NAICS classifier LLM call. `PF_SEARCH_INTERPRET_TIMEOUT_MS` (default 150_000) caps the overall interpret call; `PF_SEARCH_NAICS_TIMEOUT_MS` (default 60_000) caps the NAICS classifier. `InterpretTimeoutError` surfaces a clean error string that the orchestrator persists into `progress.phases[interpret].detail`.
+**Last verified against spec:** 2026-05-31.
+**Drift:** none.
+
+### Pathfinder/app/api/inngest/route.ts (modified)
+**Implements:** SPEC-Fix-Search-Orchestrator-Stall.md "Fix" — raises `maxDuration` from 60 to 300 to match the Vercel Pro per-invocation ceiling. Each Inngest `step.run` runs as a separate POST to this route, so this value is the per-step ceiling. Architect's `SESSION_TIMEOUT_MS.decomposition` is 180_000; the per-step ceiling now sits above that with margin.
+**Last verified against spec:** 2026-05-31.
+**Drift:** none.
+
+### Pathfinder/__tests__/inngest/search-orchestrator.test.ts (rewritten)
+**Implements:** SPEC-Fix-Search-Orchestrator-Stall.md verification — mocks the per-phase exports (`doPhaseInterpret` etc.) and asserts the orchestrator runs each phase in its own `step.run('phase-<key>')`, that the happy path lands `status='complete'` with cumulative stats, and that a throw inside the interpret phase persists `status='failed'` + `finished_at` + the error in `progress.phases[interpret].detail` and stops the chain before subsequent phases run.
+**Last verified against spec:** 2026-05-31.
+**Drift:** none.
+
+### Prod data clean-up (Supabase ref `anfihcusvekpovcchpoh`)
+
+Four stuck `pathfinder.search_runs` rows (status='running', phase='interpret', finished_at IS NULL, started_at older than 15 minutes, Internal org only) marked `status='failed'` + `finished_at=now()` + `progress.phases[interpret]={status:'failed',detail:'marked-failed: orchestrator stall pre-fix ...'}`. Idempotent SQL; confirmed via follow-up SELECT.
