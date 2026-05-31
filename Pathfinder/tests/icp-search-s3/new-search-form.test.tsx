@@ -81,7 +81,7 @@ describe('NewSearchForm', () => {
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
     const [url, init] = fetchMock.mock.calls[0];
-    expect(url).toBe('/api/searches');
+    expect(url).toBe('/pathfinder/api/searches');
     expect((init as RequestInit)?.method).toBe('POST');
     const body = JSON.parse((init as RequestInit)?.body as string);
     expect(body).toEqual({
