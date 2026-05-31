@@ -90,9 +90,14 @@ async function emitPhase(
   if (!onPhase) return;
   try {
     await onPhase({ key, status, detail });
-  } catch {
+  } catch (err) {
     // Phase persistence is best-effort from S2's perspective; never let a
-    // logging failure abort the run.
+    // logging failure abort the run. Surface the failure to Vercel runtime
+    // logs so we can spot persistent write failures (prior stall left the
+    // run silently stuck because we swallowed the error here).
+    const msg = err instanceof Error ? err.message : String(err);
+    // eslint-disable-next-line no-console
+    console.error(`[search.emitPhase] write failed key=${key} status=${status}: ${msg}`);
   }
 }
 
@@ -375,6 +380,170 @@ export async function runIngestForSearch(
   );
 
   return { stats, wired };
+}
+
+// ----- Phase helpers (per-phase exports for orchestrator step.run) --------
+//
+// These exist so lib/inngest/functions/search-orchestrator.ts can drive
+// each phase inside its own Inngest step.run boundary — required for
+// failure to surface as run.status='failed' rather than eternal 'running'
+// (incident 2026-05-31: every Internal saved-search run stuck at interpret
+// because interpret+geo+sources were bundled in a single step.run).
+//
+// They wrap the same logic runIngestForSearch already uses internally so
+// existing tests keep passing; the orchestrator just composes them under
+// separate step boundaries.
+
+export interface LoadSavedSearchDeps {
+  supabase?: AnySupabase;
+}
+
+export async function loadSavedSearchRow(
+  saved_search_id: string,
+  deps: LoadSavedSearchDeps = {},
+): Promise<SavedSearchRow> {
+  const supabase = deps.supabase ?? supabaseAdmin();
+  return loadSavedSearch(supabase, saved_search_id);
+}
+
+export interface InterpretPhaseDeps extends InterpretDeps, BaseRunDeps {}
+
+export async function doPhaseInterpret(
+  saved: SavedSearchRow,
+  deps: InterpretPhaseDeps = {},
+): Promise<{ architecture: SearchArchitecture; detail: string }> {
+  const supabase = deps.supabase ?? supabaseAdmin();
+  const now = deps.now ?? (() => new Date());
+  const result = await interpretIcp(saved.icp_text, {
+    runDecomposition: deps.runDecomposition,
+    runLlm: deps.runLlm,
+    newId: deps.newId,
+    timeoutMs: deps.timeoutMs,
+  });
+  await persistArchitecture(supabase, saved.id, result.architecture, now);
+  const detail = `vertical=${result.architecture.vertical} · naics=${result.architecture.naics_codes.join(',') || 'n/a'}`;
+  return { architecture: result.architecture, detail };
+}
+
+export interface GeoPhaseDeps extends GeoDeps, BaseRunDeps {}
+
+export async function doPhaseGeo(
+  saved: SavedSearchRow,
+  deps: GeoPhaseDeps = {},
+): Promise<{ geo: GeoExpansion; detail: string }> {
+  const geo = await resolveGeoRadius(saved.region, saved.radius_mi, {
+    geocodeLocation: deps.geocodeLocation,
+  });
+  const detail = `center=${geo.center.lat.toFixed(2)},${geo.center.lon.toFixed(2)} · states=${geo.states.length}`;
+  return { geo, detail };
+}
+
+export interface SourcesPhaseDeps extends PlanDeps, BaseRunDeps {}
+
+export async function doPhaseSources(
+  saved: SavedSearchRow,
+  architecture: SearchArchitecture,
+  geo: GeoExpansion,
+  deps: SourcesPhaseDeps = {},
+): Promise<{ source_plan: SourcePlan; sources_found: number; detail: string }> {
+  const supabase = deps.supabase ?? supabaseAdmin();
+  const now = deps.now ?? (() => new Date());
+  const source_plan = await planSources(
+    { architecture, geo },
+    { completeSonar: deps.completeSonar, now: deps.now },
+  );
+  await persistSourcePlan(supabase, saved.id, source_plan, now);
+  const sources_found = source_plan.tier1.length + source_plan.tier2.length + source_plan.tier3.length;
+  const detail = `tier1=${source_plan.tier1.length} tier2=${source_plan.tier2.length} tier3=${source_plan.tier3.length}`;
+  return { source_plan, sources_found, detail };
+}
+
+export interface WirePhaseDeps {
+  runSourceOnboarder?: (args: { inputs: SourceOnboarderInput }) => Promise<SourceOnboarderResult>;
+}
+
+export async function doPhaseWire(
+  source_plan: SourcePlan,
+  deps: WirePhaseDeps = {},
+): Promise<{ wired: WireOutcome[]; detail: string }> {
+  const onboard = deps.runSourceOnboarder ?? runSourceOnboarderLive;
+  const wired: WireOutcome[] = [];
+
+  for (const t1 of source_plan.tier1) {
+    wired.push({
+      tier: 'tier1',
+      ref: t1.source_id,
+      outcome: 'live',
+      reason: `tier1 kind=${t1.kind} auto-wired`,
+    });
+  }
+  for (const t2 of source_plan.tier2) {
+    if (!t2.candidate_url) {
+      wired.push({
+        tier: 'tier2',
+        ref: t2.source_id,
+        outcome: 'skipped',
+        reason: 'tier2 template has no candidate_url; needs human-assist fill',
+      });
+      continue;
+    }
+    const outcome = await safeOnboard(onboard, {
+      kind: 'url',
+      url: t2.candidate_url,
+    });
+    wired.push({ tier: 'tier2', ref: t2.source_id, ...outcome });
+  }
+  for (const t3 of source_plan.tier3) {
+    const outcome = await safeOnboard(onboard, {
+      kind: 'url',
+      url: t3.url,
+      description: t3.candidate,
+    });
+    wired.push({ tier: 'tier3', ref: t3.url, ...outcome });
+  }
+
+  const tier3Failures = wired.filter((w) => w.tier === 'tier3' && (w.outcome === 'failed' || w.outcome === 'declined')).length;
+  const detail = `tier1=${source_plan.tier1.length} tier2=${countWired(wired, 'tier2')} tier3=${countWired(wired, 'tier3')} (tier3 failures=${tier3Failures}, graceful)`;
+  return { wired, detail };
+}
+
+export interface ScrapePhaseDeps {
+  scrapeForSearch?: (args: {
+    saved_search: SavedSearchRow;
+    source_plan: SourcePlan;
+    geo: GeoExpansion | null;
+    wired: WireOutcome[];
+  }) => Promise<{ companies_ingested: number; detail?: string }>;
+}
+
+export async function doPhaseScrape(
+  saved: SavedSearchRow,
+  source_plan: SourcePlan,
+  wired: WireOutcome[],
+  deps: ScrapePhaseDeps = {},
+): Promise<{ companies_ingested: number; detail: string }> {
+  const scrape = deps.scrapeForSearch ?? defaultScrapeForSearch;
+  const sc = await scrape({ saved_search: saved, source_plan, geo: null, wired });
+  const detail = sc.detail ?? `companies_ingested=${sc.companies_ingested}`;
+  return { companies_ingested: sc.companies_ingested, detail };
+}
+
+export interface ScorePhaseDeps {
+  scoreForSearch?: (args: {
+    saved_search: SavedSearchRow;
+    companies_ingested: number;
+  }) => Promise<{ scored: number; verified: number; detail?: string }>;
+}
+
+export async function doPhaseScore(
+  saved: SavedSearchRow,
+  companies_ingested: number,
+  deps: ScorePhaseDeps = {},
+): Promise<{ scored: number; verified: number; detail: string }> {
+  const score = deps.scoreForSearch ?? defaultScoreForSearch;
+  const sr = await score({ saved_search: saved, companies_ingested });
+  const detail = sr.detail ?? `scored=${sr.scored} verified=${sr.verified}`;
+  return { scored: sr.scored, verified: sr.verified, detail };
 }
 
 // ----- Default hooks ------------------------------------------------------

@@ -2,10 +2,12 @@
 //
 // Verifies that the orchestrator:
 //   1. Marks the run running + saved_search running on entry.
-//   2. Calls S2's runSearchPlan then runIngestForSearch in order.
-//   3. Persists every onPhase event into search_runs.progress.
+//   2. Drives each phase inside its own step.run('phase-<key>') boundary.
+//   3. Persists running + done progress per phase.
 //   4. Lands status='complete' + final stats on the happy path.
-//   5. On a seam throw, flips status='failed' and stops the chain.
+//   5. On a phase throw, flips status='failed' + finished_at and stops
+//      the chain (per-phase failure surfacing is the whole point of
+//      the 2026-05-31 stall fix).
 
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 
@@ -45,17 +47,27 @@ interface SearchRunPatch {
   finished_at?: string | null;
 }
 
-const seamSpies = vi.hoisted(() => ({
-  runSearchPlan: vi.fn(),
-  runIngestForSearch: vi.fn(),
+const phaseSpies = vi.hoisted(() => ({
+  loadSavedSearchRow: vi.fn(),
+  doPhaseInterpret: vi.fn(),
+  doPhaseGeo: vi.fn(),
+  doPhaseSources: vi.fn(),
+  doPhaseWire: vi.fn(),
+  doPhaseScrape: vi.fn(),
+  doPhaseScore: vi.fn(),
 }));
 
 vi.mock('@/lib/agents/search', async () => {
   const actual = await vi.importActual<typeof import('@/lib/agents/search')>('@/lib/agents/search');
   return {
     ...actual,
-    runSearchPlan: seamSpies.runSearchPlan,
-    runIngestForSearch: seamSpies.runIngestForSearch,
+    loadSavedSearchRow: phaseSpies.loadSavedSearchRow,
+    doPhaseInterpret: phaseSpies.doPhaseInterpret,
+    doPhaseGeo: phaseSpies.doPhaseGeo,
+    doPhaseSources: phaseSpies.doPhaseSources,
+    doPhaseWire: phaseSpies.doPhaseWire,
+    doPhaseScrape: phaseSpies.doPhaseScrape,
+    doPhaseScore: phaseSpies.doPhaseScore,
   };
 });
 
@@ -99,34 +111,65 @@ function getHandler(): (args: { event: { data: { search_run_id: string; saved_se
   return wrapped.fn as (args: { event: { data: { search_run_id: string; saved_search_id: string } }; step: unknown }) => Promise<unknown>;
 }
 
-describe('searchOrchestrator', () => {
+const SAVED_FIXTURE = {
+  id: 'search-1',
+  organization_id: 'org-1',
+  name: 'fixture',
+  icp_text: 'Commercial janitorial and facilities services in the Atlanta metro.',
+  region: 'Atlanta',
+  radius_mi: 75,
+  architecture: null,
+  source_plan: null,
+};
+
+const ARCH_FIXTURE = {
+  vertical: 'vertical-1',
+  lead_schema: {},
+  scoring_signals: [],
+  naics_codes: ['561720'],
+  psc_codes: [],
+  keywords: ['janitorial'],
+  business_summary: { lead_type: '', business_area: '', problem_solved: '', what_they_get: '' },
+};
+
+const GEO_FIXTURE = {
+  region: 'Atlanta',
+  radius_mi: 75,
+  center: { lat: 33.74, lon: -84.39, label: 'Atlanta, GA' },
+  states: ['GA'],
+  counties: [],
+  metros: [],
+  bbox: { north: 0, south: 0, east: 0, west: 0 },
+};
+
+const SOURCE_PLAN_FIXTURE = {
+  tier1: [{ source_id: 't1', kind: 'sam-gov', params: {} }],
+  tier2: [],
+  tier3: [],
+  generated_at: '2026-05-31T00:00:00.000Z',
+};
+
+describe('searchOrchestrator (per-phase step.run)', () => {
   beforeEach(() => {
     supabaseState.runUpdates = [];
     supabaseState.searchUpdates = [];
-    seamSpies.runSearchPlan.mockReset();
-    seamSpies.runIngestForSearch.mockReset();
+    phaseSpies.loadSavedSearchRow.mockReset();
+    phaseSpies.doPhaseInterpret.mockReset();
+    phaseSpies.doPhaseGeo.mockReset();
+    phaseSpies.doPhaseSources.mockReset();
+    phaseSpies.doPhaseWire.mockReset();
+    phaseSpies.doPhaseScrape.mockReset();
+    phaseSpies.doPhaseScore.mockReset();
   });
 
-  it('walks plan + ingest, persists phase events, lands complete with stats', async () => {
-    seamSpies.runSearchPlan.mockImplementation(async (_id: string, { onPhase }: { onPhase: (e: { key: string; status: string; detail?: string; label?: string }) => Promise<void> }) => {
-      await onPhase({ key: 'interpret', status: 'running' });
-      await onPhase({ key: 'interpret', status: 'done', detail: 'parsed' });
-      await onPhase({ key: 'geo', status: 'running' });
-      await onPhase({ key: 'geo', status: 'done', detail: '1 state' });
-      await onPhase({ key: 'sources', status: 'running' });
-      await onPhase({ key: 'sources', status: 'done', detail: 'tier1=1' });
-      return { architecture: {}, geo: { center: { lat: 0, lon: 0 }, states: [] }, source_plan: { tier1: [], tier2: [], tier3: [] }, sources_found: 3 };
-    });
-
-    seamSpies.runIngestForSearch.mockImplementation(async (_id: string, { onPhase }: { onPhase: (e: { key: string; status: string; detail?: string; label?: string }) => Promise<void> }) => {
-      await onPhase({ key: 'wire', status: 'running' });
-      await onPhase({ key: 'wire', status: 'done', detail: 'tier1=1 tier2=0 tier3=0' });
-      await onPhase({ key: 'scrape', status: 'running' });
-      await onPhase({ key: 'scrape', status: 'done', detail: '42 ingested' });
-      await onPhase({ key: 'score', status: 'running' });
-      await onPhase({ key: 'score', status: 'done', detail: '42 scored, 17 verified' });
-      return { stats: { sources_found: 3, companies_ingested: 42, scored: 42, verified: 17 }, wired: [] };
-    });
+  it('walks all six phases each in their own step.run, lands complete with stats', async () => {
+    phaseSpies.loadSavedSearchRow.mockResolvedValue(SAVED_FIXTURE);
+    phaseSpies.doPhaseInterpret.mockResolvedValue({ architecture: ARCH_FIXTURE, detail: 'vertical=vertical-1 · naics=561720' });
+    phaseSpies.doPhaseGeo.mockResolvedValue({ geo: GEO_FIXTURE, detail: 'center=33.74,-84.39 · states=1' });
+    phaseSpies.doPhaseSources.mockResolvedValue({ source_plan: SOURCE_PLAN_FIXTURE, sources_found: 1, detail: 'tier1=1 tier2=0 tier3=0' });
+    phaseSpies.doPhaseWire.mockResolvedValue({ wired: [{ tier: 'tier1', ref: 't1', outcome: 'live' }], detail: 'tier1=1 tier2=0 tier3=0 (tier3 failures=0, graceful)' });
+    phaseSpies.doPhaseScrape.mockResolvedValue({ companies_ingested: 42, detail: '42 ingested' });
+    phaseSpies.doPhaseScore.mockResolvedValue({ scored: 42, verified: 17, detail: '42 scored, 17 verified' });
 
     const ctx = makeStepCtx();
     const out = (await getHandler()({
@@ -135,21 +178,28 @@ describe('searchOrchestrator', () => {
     })) as { status: string; stats: { sources_found: number; companies_ingested: number; scored: number; verified: number } };
 
     expect(out.status).toBe('complete');
-    expect(out.stats).toEqual({ sources_found: 3, companies_ingested: 42, scored: 42, verified: 17 });
+    expect(out.stats).toEqual({ sources_found: 1, companies_ingested: 42, scored: 42, verified: 17 });
 
-    expect(seamSpies.runSearchPlan).toHaveBeenCalledOnce();
-    expect(seamSpies.runIngestForSearch).toHaveBeenCalledOnce();
-    expect(seamSpies.runSearchPlan.mock.invocationCallOrder[0]).toBeLessThan(
-      seamSpies.runIngestForSearch.mock.invocationCallOrder[0],
-    );
+    const stepNames = ctx.calls.map((c) => c.name);
+    expect(stepNames).toEqual([
+      'mark-running',
+      'load-saved-search',
+      'phase-interpret',
+      'phase-geo',
+      'phase-sources',
+      'phase-wire',
+      'phase-scrape',
+      'phase-score',
+      'mark-complete',
+    ]);
 
-    // Final search_runs update carries status=complete + finished_at.
+    // mark-complete writes status='complete' + finished_at.
     const last = supabaseState.runUpdates.at(-1);
     expect(last?.status).toBe('complete');
     expect(last?.finished_at).toBeTruthy();
     expect(supabaseState.searchUpdates.at(-1)?.status).toBe('complete');
 
-    // Phase progress threaded through every onPhase callback.
+    // Per-phase running + done events landed for the most-visible phases.
     const runningInterpret = supabaseState.runUpdates.find((u) =>
       u.progress?.phases.some((p) => p.key === 'interpret' && p.status === 'running'),
     );
@@ -160,24 +210,37 @@ describe('searchOrchestrator', () => {
     expect(doneScore).toBeDefined();
   });
 
-  it('marks the run failed when runSearchPlan throws and does not call runIngestForSearch', async () => {
-    seamSpies.runSearchPlan.mockImplementation(async (_id: string, { onPhase }: { onPhase: (e: { key: string; status: string; detail?: string }) => Promise<void> }) => {
-      await onPhase({ key: 'geo', status: 'running' });
-      throw new Error('geo lookup down');
-    });
+  it('on interpret throw flips run failed, sets finished_at, and stops the chain', async () => {
+    phaseSpies.loadSavedSearchRow.mockResolvedValue(SAVED_FIXTURE);
+    phaseSpies.doPhaseInterpret.mockRejectedValue(new Error('architect timed out'));
 
     const ctx = makeStepCtx();
     const out = (await getHandler()({
       event: { data: { search_run_id: 'run-1', saved_search_id: 'search-1' } },
       step: ctx.step,
-    })) as { status: string; failed_phase: string; error: string };
+    })) as { status: string; error: string };
 
     expect(out.status).toBe('failed');
-    expect(out.failed_phase).toBe('geo');
-    expect(out.error).toContain('geo lookup down');
+    expect(out.error).toContain('architect timed out');
 
-    expect(seamSpies.runIngestForSearch).not.toHaveBeenCalled();
-    expect(supabaseState.runUpdates.at(-1)?.status).toBe('failed');
-    expect(supabaseState.searchUpdates.at(-1)?.status).toBe('failed');
+    // doPhaseGeo and downstream phases never invoked.
+    expect(phaseSpies.doPhaseGeo).not.toHaveBeenCalled();
+    expect(phaseSpies.doPhaseSources).not.toHaveBeenCalled();
+    expect(phaseSpies.doPhaseScore).not.toHaveBeenCalled();
+
+    // A failed run update with finished_at must land before the function returns.
+    const failedWrite = supabaseState.runUpdates.find(
+      (u) => u.status === 'failed' && u.finished_at,
+    );
+    expect(failedWrite).toBeDefined();
+    expect(supabaseState.searchUpdates.some((s) => s.status === 'failed')).toBe(true);
+
+    // The interpret phase row reflects 'failed' status with the error detail.
+    const failedInterpret = supabaseState.runUpdates.find((u) =>
+      u.progress?.phases.some((p) => p.key === 'interpret' && p.status === 'failed'),
+    );
+    expect(failedInterpret).toBeDefined();
+    const interpretPhase = failedInterpret?.progress?.phases.find((p) => p.key === 'interpret');
+    expect(interpretPhase?.detail).toContain('architect timed out');
   });
 });
