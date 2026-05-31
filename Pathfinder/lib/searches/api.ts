@@ -71,7 +71,8 @@ export async function listSearches(
     cache: 'no-store',
     signal: opts.signal,
   });
-  return readJson<SavedSearchesListResponse>(res, 'GET /api/searches');
+  const body = await readJson<unknown>(res, 'GET /api/searches');
+  return { searches: normalizeListBody(body, 'searches') as SavedSearchesListResponse['searches'] };
 }
 
 export async function getSearch(
@@ -95,5 +96,18 @@ export async function getSearchLeads(
     joinUrl(opts.baseUrl, `/api/searches/${encodeURIComponent(id)}/leads`),
     { cache: 'no-store', signal: opts.signal },
   );
-  return readJson<SearchLeadsResponse>(res, `GET /api/searches/${id}/leads`);
+  const body = await readJson<unknown>(res, `GET /api/searches/${id}/leads`);
+  return { leads: normalizeListBody(body, 'leads') as SearchLeadsResponse['leads'] };
+}
+
+// S1 returns bare arrays for the list endpoints; S3 originally typed them as
+// `{ searches: [...] }` / `{ leads: [...] }`. Both shapes are accepted so the
+// client tolerates a future server-side switch without another deploy.
+function normalizeListBody(body: unknown, wrapperKey: 'searches' | 'leads'): unknown[] {
+  if (Array.isArray(body)) return body;
+  if (body && typeof body === 'object') {
+    const wrapped = (body as Record<string, unknown>)[wrapperKey];
+    if (Array.isArray(wrapped)) return wrapped;
+  }
+  return [];
 }

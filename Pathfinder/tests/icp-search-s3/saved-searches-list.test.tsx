@@ -67,6 +67,30 @@ describe('SavedSearchesList', () => {
     expect(screen.getByTestId('saved-search-status-complete')).toHaveTextContent(/Complete/i);
   });
 
+  it("accepts a bare array response (S1's actual shape on prod) and renders rows", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify([
+          {
+            id: 'srch_bare',
+            name: 'Bare array search',
+            icp_text: 'icp',
+            region: 'Dallas, TX',
+            radius_mi: 35,
+            status: 'running',
+            created_at: '2026-05-31T00:00:00Z',
+          },
+        ]),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      ),
+    );
+    global.fetch = fetchMock as unknown as typeof fetch;
+    render(<SavedSearchesList slug="internal" />);
+    await waitFor(() => expect(screen.getByTestId('saved-searches-rows')).toBeInTheDocument());
+    expect(screen.getByTestId('saved-search-row-srch_bare')).toHaveTextContent('Bare array search');
+    expect(screen.getByTestId('saved-search-row-srch_bare')).toHaveTextContent('35 mi');
+  });
+
   it('shows the honest empty state when the API returns no searches', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ searches: [] }), {
