@@ -78,6 +78,12 @@ export interface SearchProgressProps {
   fetcher?: (searchId: string) => Promise<SearchProgressPayload>;
   /** Optional seed payload so the first paint can render without a fetch. */
   initialPayload?: SearchProgressPayload | null;
+  /**
+   * When true, render the identity header (name + icp_text + region / radius)
+   * above the timeline. Default false: most callers (e.g. SearchDetailView)
+   * already show identity in the page header and would duplicate it.
+   */
+  showHeader?: boolean;
 }
 
 const TERMINAL: ReadonlySet<RunStatus> = new Set(['complete', 'failed']);
@@ -144,6 +150,7 @@ export function SearchProgress({
   onComplete,
   fetcher = defaultFetcher,
   initialPayload = null,
+  showHeader = false,
 }: SearchProgressProps): React.ReactElement {
   const [payload, setPayload] = React.useState<SearchProgressPayload | null>(initialPayload);
   const [error, setError] = React.useState<string | null>(null);
@@ -209,42 +216,44 @@ export function SearchProgress({
         color: PF_TINTS.ink,
       }}
     >
-      <header style={{ marginBottom: 16 }}>
-        <div
-          data-testid="search-progress-name"
-          style={{
-            font: `600 14px ${PF_TINTS.sans}`,
-            color: PF_TINTS.ink,
-            marginBottom: 4,
-          }}
-        >
-          {saved?.name ?? 'New saved search'}
-        </div>
-        {saved?.icp_text && (
+      {showHeader && (
+        <header style={{ marginBottom: 16 }}>
           <div
+            data-testid="search-progress-name"
             style={{
-              font: `400 13px ${PF_TINTS.sans}`,
-              color: PF_TINTS.inkSub,
-              marginBottom: 2,
+              font: `600 14px ${PF_TINTS.sans}`,
+              color: PF_TINTS.ink,
+              marginBottom: 4,
             }}
           >
-            {saved.icp_text}
+            {saved?.name ?? 'New saved search'}
           </div>
-        )}
-        {(saved?.region || saved?.radius_mi != null) && (
-          <div
-            style={{
-              font: `400 12px ${PF_TINTS.mono}`,
-              color: PF_TINTS.inkDim,
-              letterSpacing: '0.02em',
-            }}
-          >
-            {saved?.region ?? ''}
-            {saved?.region && saved?.radius_mi != null ? ' · ' : ''}
-            {saved?.radius_mi != null ? `${saved.radius_mi} mi radius` : ''}
-          </div>
-        )}
-      </header>
+          {saved?.icp_text && (
+            <div
+              style={{
+                font: `400 13px ${PF_TINTS.sans}`,
+                color: PF_TINTS.inkSub,
+                marginBottom: 2,
+              }}
+            >
+              {saved.icp_text}
+            </div>
+          )}
+          {(saved?.region || saved?.radius_mi != null) && (
+            <div
+              style={{
+                font: `400 12px ${PF_TINTS.mono}`,
+                color: PF_TINTS.inkDim,
+                letterSpacing: '0.02em',
+              }}
+            >
+              {saved?.region ?? ''}
+              {saved?.region && saved?.radius_mi != null ? ' · ' : ''}
+              {saved?.radius_mi != null ? `${saved.radius_mi} mi radius` : ''}
+            </div>
+          )}
+        </header>
+      )}
 
       <ol
         data-testid="search-progress-phases"
