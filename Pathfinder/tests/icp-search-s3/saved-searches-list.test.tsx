@@ -56,7 +56,7 @@ describe('SavedSearchesList', () => {
     render(<SavedSearchesList slug="internal" />);
 
     await waitFor(() => expect(screen.getByTestId('saved-searches-rows')).toBeInTheDocument());
-    expect(fetchMock).toHaveBeenCalledWith('/api/searches', expect.objectContaining({ cache: 'no-store' }));
+    expect(fetchMock).toHaveBeenCalledWith('/pathfinder/api/searches', expect.objectContaining({ cache: 'no-store' }));
     expect(screen.getByTestId('saved-search-row-srch_1')).toHaveTextContent('Houston GCs');
     expect(screen.getByTestId('saved-search-row-srch_1')).toHaveTextContent('Houston, TX');
     expect(screen.getByTestId('saved-search-row-srch_1')).toHaveTextContent('50 mi');

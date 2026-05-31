@@ -22,9 +22,16 @@ export interface SearchApiOptions {
   signal?: AbortSignal;
 }
 
+// Next.js does not auto-prefix basePath onto raw fetch() URLs, so the
+// browser-side client must do it. Server callers pass an absolute baseUrl
+// (built from the request host) and bypass this prefix entirely.
+// Resolution: NEXT_PUBLIC_BASE_PATH env override → '/pathfinder' fallback
+// (must match basePath in Pathfinder/next.config.js).
+const BASE_PATH = (process.env.NEXT_PUBLIC_BASE_PATH ?? '/pathfinder').replace(/\/+$/, '');
+
 function joinUrl(baseUrl: string | undefined, path: string): string {
-  if (!baseUrl) return path;
-  return baseUrl.replace(/\/+$/, '') + path;
+  if (baseUrl) return baseUrl.replace(/\/+$/, '') + path;
+  return BASE_PATH + path;
 }
 
 async function readJson<T>(res: Response, label: string): Promise<T> {

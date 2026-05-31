@@ -79,7 +79,12 @@ describe('SearchProgress', () => {
     const fetcher = vi.fn().mockResolvedValue(makePayload());
     render(<SearchProgress searchId="ss_test_1" fetcher={fetcher} />);
 
-    expect(await screen.findByTestId('search-progress-phase-wire-status')).toHaveTextContent('RUNNING');
+    // findByTestId resolves as soon as the testid exists (default pending state),
+    // which races the fetcher resolution under loaded CI. waitFor polls until
+    // the status text actually updates.
+    await waitFor(() =>
+      expect(screen.getByTestId('search-progress-phase-wire-status')).toHaveTextContent('RUNNING'),
+    );
     expect(screen.getByTestId('search-progress-phase-scrape-status')).toHaveTextContent('PENDING');
     expect(screen.getByTestId('search-progress-phase-interpret-status')).toHaveTextContent('DONE');
   });
