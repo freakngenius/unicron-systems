@@ -12,13 +12,13 @@ import '@testing-library/jest-dom/vitest';
 
 vi.mock('@/components/search/SearchProgress', () => ({
   __esModule: true,
-  SearchProgress: ({ id }: { id: string }) => (
-    <div data-testid="mocked-search-progress" data-search-id={id}>
+  SearchProgress: ({ searchId }: { searchId: string }) => (
+    <div data-testid="mocked-search-progress" data-search-id={searchId}>
       mocked-progress
     </div>
   ),
-  default: ({ id }: { id: string }) => (
-    <div data-testid="mocked-search-progress" data-search-id={id}>
+  default: ({ searchId }: { searchId: string }) => (
+    <div data-testid="mocked-search-progress" data-search-id={searchId}>
       mocked-progress
     </div>
   ),

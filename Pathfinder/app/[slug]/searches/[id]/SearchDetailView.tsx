@@ -123,7 +123,17 @@ export function SearchDetailView({ slug, id }: SearchDetailViewProps): React.Rea
         ) : null}
       </header>
 
-      <SearchProgress id={id} initial={detail} />
+      <SearchProgress
+        searchId={id}
+        initialPayload={
+          detail
+            ? {
+                saved_search: detail.saved_search,
+                latest_run: detail.latest_run ?? null,
+              }
+            : null
+        }
+      />
 
       {error ? (
         <p
