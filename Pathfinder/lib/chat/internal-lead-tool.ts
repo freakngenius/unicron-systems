@@ -373,6 +373,16 @@ export function leadToolJsonSchema(): Record<string, unknown> {
   };
 }
 
+// SPEC-Chat-Fixes.md defect 3: pull every CompanyLeadView a single tool
+// call surfaced. The agent loop collects these across rounds (dedup by
+// view.id) and emits them as a `referenced_leads` SSE event so the
+// panel can render them as inline lead cards under the assistant prose.
+export function extractReferencedLeads(r: LeadToolResult): CompanyLeadView[] {
+  if (r.op === 'list' || r.op === 'search') return r.rows;
+  if (r.op === 'get') return r.view ? [r.view] : [];
+  return [];
+}
+
 // Compact, LLM-friendly stringification of a tool result. The model gets
 // the structured JSON via tool_result content, but a human-readable summary
 // helps it ground the narrative without re-quoting the whole blob. Used

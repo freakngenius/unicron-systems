@@ -106,6 +106,7 @@ export default async function OrgLeadDetailPage({ params }: Props) {
               companyId={lead.id}
               companyName={lead.company_name}
               scopeLabel={lead.company_name}
+              schema={(architecture.lead_unit?.schema ?? undefined) as import('@/lib/catalog/modules/ranked-feed/labels').LeadUnitSchema}
             />
           ) : null}
         </LeadDetailShell>

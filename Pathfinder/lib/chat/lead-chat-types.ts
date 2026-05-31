@@ -8,6 +8,7 @@
 // Plan: Pathfinder/docs/PLAN-stream-h.md.
 
 import type { ChatSourceCitation } from '@/lib/types';
+import type { CompanyLeadView } from '@/lib/agents/internal/companyLeadView';
 
 export interface LeadChatScope {
   orgSlug: string;
@@ -50,6 +51,11 @@ export type LeadChatSseEvent =
   | { type: 'researching'; provider: 'perplexity-sonar' }
   | { type: 'delta'; text: string }
   | { type: 'sources'; items: ChatSourceCitation[] }
+  // SPEC-Chat-Fixes.md defect 3: when the assistant's answer references
+  // specific leads (returned by the pathfinder_leads tool), the agent
+  // emits the projected CompanyLeadView rows so the panel can render
+  // them as inline clickable lead cards under the prose.
+  | { type: 'referenced_leads'; items: CompanyLeadView[] }
   | { type: 'done'; latencyMs: number }
   | { type: 'error'; message: string };
 

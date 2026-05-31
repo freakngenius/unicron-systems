@@ -23,6 +23,7 @@ import {
   SonarRequestError,
 } from '@/lib/chat/sonar';
 import {
+  extractReferencedLeads,
   leadToolJsonSchema,
   runLeadTool,
   summarizeToolResult,
@@ -31,6 +32,7 @@ import {
   type LeadToolResult,
 } from '@/lib/chat/internal-lead-tool';
 import type { LeadChatSseEvent } from '@/lib/chat/lead-chat-types';
+import type { CompanyLeadView } from '@/lib/agents/internal/companyLeadView';
 
 export const ORCHESTRATOR_MODEL = process.env.PF_INTERNAL_CHAT_MODEL ?? 'claude-sonnet-4-5';
 const MAX_TOOL_ROUNDS = 4;
@@ -95,6 +97,11 @@ export interface RunAgentResult {
   text: string;
   sources: ChatSourceCitation[];
   toolCalls: Array<{ name: string; input: unknown; resultSummary: string }>;
+  // SPEC-Chat-Fixes.md defect 3: leads the agent surfaced via the
+  // pathfinder_leads tool, deduplicated by view.id. The route persists
+  // these on the assistant message payload; the panel renders them as
+  // inline CompanyLeadCards under the prose.
+  referencedLeads: CompanyLeadView[];
   modelUsed: string;
   latencyMs: number;
   stopped: 'end_turn' | 'loop_guard' | 'error';
@@ -110,10 +117,16 @@ function systemPrompt(args: Pick<RunAgentArgs, 'orgName' | 'scopeLabel' | 'focal
     '- perplexity_research: SECONDARY. Live web research via Perplexity Sonar. Use only for facts the dataset cannot answer (recent news, leadership changes, hiring signals). Always cite the returned sources.',
     '',
     'Rules',
+    '- ALWAYS-AVAILABLE DATASET. You always have full access to the Internal lead dataset via pathfinder_leads. Never reply that you lack context about "which list" or ask the user which list. The full Internal lead set is the implicit subject of every question, and the scope_label below tells you which slice of it is currently in view.',
+    '- Resolve vague references. When the user says "which one", "these", "them", "this list", or "the top ones", treat the in-view list as the subject. If no narrower view applies, the subject is the full Internal set. Call pathfinder_leads to inspect it before answering.',
+    '- "Which one to focus on" and similar prioritization asks. Call pathfinder_leads op=list order=score_desc with limit 5 to 10, read the rows, and recommend three to five specific companies by name with a one-line "why" each (federal awardee, active sales motion, top score, strong adjacency). Then offer one or two refinement follow-ups (by category, federal registration, stage). Do not ask which list.',
+    '- Clarifying questions are a last resort. Only ask one when the request is genuinely unresolvable from the data, and never with the phrase "I don\'t have enough context". When in doubt, query pathfinder_leads first and answer with what you find.',
     '- Ground every claim in real values from the tool results. Never fabricate a number, a company name, or a field.',
     '- When asked why a company scored what it did, call pathfinder_leads op=get for that company and narrate the six qualitative weighted signals it returns. The ranker does not persist per-signal point contributions; describe the evidence, not invented points.',
     '- When asked an aggregation question (how many, which, top N, group by), call pathfinder_leads with op=aggregate or op=list and ground the answer in the returned numbers.',
     '- When asked about something external (recent news, leadership, hiring), call perplexity_research. Include the source links in your final answer.',
+    '- Format the response as rich text: use Markdown headings, bullets, numbered lists, bold, and links where they help readability. The panel renders it formatted; do not write paragraphs of raw symbols.',
+    '- When you reference specific companies from a tool result, name them. The panel will render those companies as inline lead cards alongside your prose.',
     '- No em-dashes or en-dashes. Use commas, periods, or the word "to".',
     '- Plain spoken, restrained, specific. Name companies and fields you used.',
     '- If a tool returns op=error or empty results, say so plainly and offer the next step (refine the filter, search by name, try another op).',
@@ -156,6 +169,10 @@ export async function runInternalChatAgent(args: RunAgentArgs): Promise<RunAgent
 
   const sources: ChatSourceCitation[] = [];
   const toolCalls: RunAgentResult['toolCalls'] = [];
+  // SPEC-Chat-Fixes.md defect 3: track every lead view the tool returned
+  // so the panel can render the inline cards. Deduplicated by view.id;
+  // emitted once at end-of-turn so the UI shows them under the prose.
+  const referencedLeads = new Map<string, CompanyLeadView>();
   let finalText = '';
   let stopReason: RunAgentResult['stopped'] = 'end_turn';
   let lastErrorMessage: string | undefined;
@@ -240,6 +257,12 @@ export async function runInternalChatAgent(args: RunAgentArgs): Promise<RunAgent
         }
         const summary = summarizeToolResult(result);
         toolCalls.push({ name: use.name, input: use.input, resultSummary: summary });
+        // Collect any CompanyLeadView rows for the referenced-leads card
+        // strip. Dedup by view.id so two tool calls that overlap do not
+        // double-render.
+        for (const v of extractReferencedLeads(result)) {
+          if (!referencedLeads.has(v.id)) referencedLeads.set(v.id, v);
+        }
         args.emit({ type: 'tool_done', name: 'pathfinder_leads', ok: result.op !== 'error' });
         toolResults.push({
           type: 'tool_result',
@@ -332,10 +355,16 @@ export async function runInternalChatAgent(args: RunAgentArgs): Promise<RunAgent
     }
   }
 
+  const refs = Array.from(referencedLeads.values());
+  if (refs.length > 0) {
+    args.emit({ type: 'referenced_leads', items: refs });
+  }
+
   return {
     text: finalText.trim(),
     sources,
     toolCalls,
+    referencedLeads: refs,
     modelUsed: ORCHESTRATOR_MODEL,
     latencyMs: Date.now() - startedAt,
     stopped: stopReason,

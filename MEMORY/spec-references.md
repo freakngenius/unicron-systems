@@ -2527,3 +2527,31 @@ Replaces v1's Sonar-only system-prompt approach with a two-tool agent loop drive
 **Last verified against spec:** 2026-05-30 (panel chip render test).
 **Drift:** none.
 
+
+---
+
+## Lead chat agent fixes (Internal)
+
+**State:** branch `lead-chat-fixes` off post Stream H v2 + chat-launcher-restyle main at `23b8f1f`. Plan: `Pathfinder/docs/PLAN-lead-chat-fixes.md`. Operator-authorized self-merge on green per `Pathfinder/docs/SPEC-Chat-Fixes.md`. Internal-only; the existing Pathfinder chat at `app/api/chat` is untouched.
+
+Three defects:
+1. Agent replied "I don't have enough context" to "which one to focus on" instead of recommending top leads.
+2. Assistant prose showed literal markdown (`**`, `-`).
+3. List / search / get results dumped as text rather than as inline lead cards.
+
+### Modified lib/ files
+
+#### Pathfinder/lib/chat/internal-chat-agent.ts (modified, additive)
+**Implements:** SPEC-Chat-Fixes.md defects 1 and 3. The system prompt gains four rules at the top of the Rules block: ALWAYS-AVAILABLE DATASET (never reply "I don't have enough context", never ask which list), vague-reference resolution (in-view list or full Internal set), "which one to focus on" handling (call pathfinder_leads op=list order=score_desc limit 5 to 10 and recommend three to five specific companies by name with a one-line why each), and a clarifying-question last-resort rule. Two formatting rules also added: render rich text via Markdown, and surface lead names so the panel can render the cards. The agent now tracks every CompanyLeadView returned by pathfinder_leads tool calls, deduplicates by view.id, and emits a `referenced_leads` SSE event before `done`. `RunAgentResult` exposes `referencedLeads` so the route can persist them on the assistant row payload.
+**Last verified against spec:** 2026-05-30.
+**Drift:** none.
+
+#### Pathfinder/lib/chat/internal-lead-tool.ts (modified, additive)
+**Implements:** SPEC-Chat-Fixes.md defect 3 helper. New `extractReferencedLeads(LeadToolResult)` returns the `CompanyLeadView[]` rows from `list` / `search` / `get` results (and `[]` for `aggregate` / `error`). The agent loop calls it on every successful `pathfinder_leads` round.
+**Last verified against spec:** 2026-05-30.
+**Drift:** none.
+
+#### Pathfinder/lib/chat/lead-chat-types.ts (modified, additive)
+**Implements:** SPEC-Chat-Fixes.md defect 3 wire format. `LeadChatSseEvent` gains a `{ type: 'referenced_leads'; items: CompanyLeadView[] }` variant. The panel listens for it and stores the views on the assistant `ViewMessage`; the route persists them on `payload.referenced_leads` so the cards rehydrate on reload.
+**Last verified against spec:** 2026-05-30.
+**Drift:** none.

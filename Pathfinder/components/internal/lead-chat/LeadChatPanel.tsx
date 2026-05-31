@@ -12,6 +12,10 @@
 
 import * as React from 'react';
 import { ChatContextIndicator } from '@/components/chat/ChatContextIndicator';
+import { MarkdownRenderer } from '@/components/chat/markdown';
+import { CompanyLeadCard } from '@/components/catalog/cards/CompanyLeadCard';
+import type { LeadUnitSchema } from '@/lib/catalog/modules/ranked-feed/labels';
+import type { CompanyLeadView } from '@/lib/agents/internal/companyLeadView';
 import type {
   LeadChatMessageRow,
   LeadChatPostBody,
@@ -44,6 +48,9 @@ export interface LeadChatPanelProps {
   companyName: string | null;
   filteredCompanyIds?: string[];
   scopeLabel: string;
+  // SPEC-Chat-Fixes.md defect 3: required by the shared CompanyLeadCard
+  // so referenced-lead tiles render with the org's display labels.
+  schema: LeadUnitSchema;
 }
 
 interface ViewMessage {
@@ -51,12 +58,21 @@ interface ViewMessage {
   role: 'user' | 'assistant' | 'system';
   content: string;
   sources: ChatSourceCitation[] | null;
+  // SPEC-Chat-Fixes.md defect 3: agent-emitted lead views rendered as
+  // inline CompanyLeadCard tiles under the prose. Null on user turns and
+  // on assistant turns that did not reference any specific leads.
+  referencedLeads: CompanyLeadView[] | null;
   researching: boolean;
   // Stream H v2: active data-tool chip ("Looking up leads"). Cleared when
   // the model emits its first text delta or when tool_done fires.
   lookingUpLeads: boolean;
   error: boolean;
 }
+
+// Cap the rendered card strip so a runaway list query does not push the
+// chat off-screen. Eight is plenty for "show me the top scored" / "which
+// have federal awards" / "draft outreach to these" flows.
+const MAX_REFERENCED_LEAD_CARDS = 8;
 
 function readOperatorEmail(): string | null {
   if (typeof window === 'undefined') return null;
@@ -83,6 +99,13 @@ function getOrCreateThreadId(orgSlug: string, companyId: string | null): string 
   return fresh;
 }
 
+function readReferencedLeadsFromPayload(payload: Record<string, unknown> | null | undefined): CompanyLeadView[] | null {
+  if (!payload) return null;
+  const raw = payload.referenced_leads;
+  if (!Array.isArray(raw)) return null;
+  return raw as CompanyLeadView[];
+}
+
 function rowToViewMessage(row: LeadChatMessageRow): ViewMessage {
   return {
     id: row.id,
@@ -92,6 +115,7 @@ function rowToViewMessage(row: LeadChatMessageRow): ViewMessage {
         : 'assistant',
     content: row.content,
     sources: (row.sources as ChatSourceCitation[] | null) ?? null,
+    referencedLeads: readReferencedLeadsFromPayload(row.payload),
     researching: false,
     lookingUpLeads: false,
     error: row.kind === 'error',
@@ -108,6 +132,7 @@ export function LeadChatPanel(props: LeadChatPanelProps): React.ReactElement {
     companyName,
     filteredCompanyIds,
     scopeLabel,
+    schema,
   } = props;
 
   const threadId = React.useMemo(
@@ -168,7 +193,7 @@ export function LeadChatPanel(props: LeadChatPanelProps): React.ReactElement {
       const userId = -Date.now();
       setMessages((prev) => [
         ...prev,
-        { id: userId, role: 'user', content: text, sources: null, researching: false, lookingUpLeads: false, error: false },
+        { id: userId, role: 'user', content: text, sources: null, referencedLeads: null, researching: false, lookingUpLeads: false, error: false },
       ]);
 
       const assistantId = -Date.now() - 1;
@@ -179,6 +204,7 @@ export function LeadChatPanel(props: LeadChatPanelProps): React.ReactElement {
           role: 'assistant',
           content: '',
           sources: null,
+          referencedLeads: null,
           researching: false,
           lookingUpLeads: false,
           error: false,
@@ -256,6 +282,8 @@ export function LeadChatPanel(props: LeadChatPanelProps): React.ReactElement {
               updateAssistant({ content: acc, researching: false, lookingUpLeads: false });
             } else if (evt.type === 'sources') {
               updateAssistant({ sources: evt.items });
+            } else if (evt.type === 'referenced_leads') {
+              updateAssistant({ referencedLeads: evt.items });
             } else if (evt.type === 'error') {
               updateAssistant({ content: evt.message, error: true });
             }
@@ -337,7 +365,7 @@ export function LeadChatPanel(props: LeadChatPanelProps): React.ReactElement {
           <EmptyState companyName={companyName} />
         )}
         {messages.map((m) => (
-          <Bubble key={m.id} message={m} />
+          <Bubble key={m.id} message={m} orgSlug={orgSlug} schema={schema} streaming={streaming && m.role === 'assistant'} />
         ))}
       </div>
 
@@ -461,7 +489,17 @@ function EmptyState({ companyName }: { companyName: string | null }): React.Reac
   );
 }
 
-function Bubble({ message }: { message: ViewMessage }): React.ReactElement {
+function Bubble({
+  message,
+  orgSlug,
+  schema,
+  streaming,
+}: {
+  message: ViewMessage;
+  orgSlug: string;
+  schema: LeadUnitSchema;
+  streaming: boolean;
+}): React.ReactElement {
   const isUser = message.role === 'user';
   const isAssistant = message.role === 'assistant';
   const [copied, setCopied] = React.useState(false);
@@ -477,6 +515,9 @@ function Bubble({ message }: { message: ViewMessage }): React.ReactElement {
     }
   }, [message.content]);
 
+  const referenced = message.referencedLeads ?? [];
+  const hasContent = message.content.trim().length > 0;
+
   return (
     <div style={{ marginBottom: 12 }}>
       <div
@@ -491,6 +532,7 @@ function Bubble({ message }: { message: ViewMessage }): React.ReactElement {
         {isUser ? 'You' : 'Agent'}
       </div>
       <div
+        data-testid={isAssistant ? 'lead-chat-message-assistant' : undefined}
         style={{
           background: isUser ? PF.bg : '#ffffff',
           border: `1px solid ${message.error ? '#dc2626' : PF.ruleSoft}`,
@@ -499,7 +541,11 @@ function Bubble({ message }: { message: ViewMessage }): React.ReactElement {
           color: PF.ink,
           font: '400 13px var(--font-inter), system-ui, sans-serif',
           lineHeight: 1.55,
-          whiteSpace: 'pre-wrap',
+          // SPEC-Chat-Fixes.md defect 2: user turns keep pre-wrap (the
+          // original message is literal). Assistant turns are rendered
+          // through MarkdownRenderer, which produces real block elements,
+          // so pre-wrap would just add extra whitespace.
+          whiteSpace: isAssistant ? 'normal' : 'pre-wrap',
         }}
       >
         {message.lookingUpLeads && (
@@ -539,8 +585,48 @@ function Bubble({ message }: { message: ViewMessage }): React.ReactElement {
             Researching with Perplexity
           </div>
         )}
-        {message.content || (message.researching || message.lookingUpLeads ? '' : isAssistant ? '...' : '')}
+        {isAssistant ? (
+          hasContent ? (
+            <MarkdownRenderer
+              content={message.content}
+              streaming={streaming}
+              sources={message.sources ?? undefined}
+            />
+          ) : message.researching || message.lookingUpLeads ? null : (
+            '...'
+          )
+        ) : (
+          message.content
+        )}
       </div>
+      {isAssistant && referenced.length > 0 && (
+        <div
+          data-testid="lead-chat-referenced-leads"
+          style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 8 }}
+        >
+          {referenced.slice(0, MAX_REFERENCED_LEAD_CARDS).map((view) => (
+            <CompanyLeadCard
+              key={view.id}
+              view={view}
+              slug={orgSlug}
+              schema={schema}
+              mode="link"
+              testIdPrefix="lead-chat-card"
+            />
+          ))}
+          {referenced.length > MAX_REFERENCED_LEAD_CARDS && (
+            <div
+              style={{
+                font: '400 11px var(--font-inter), system-ui, sans-serif',
+                color: PF.inkDim,
+                paddingLeft: 4,
+              }}
+            >
+              and {referenced.length - MAX_REFERENCED_LEAD_CARDS} more
+            </div>
+          )}
+        </div>
+      )}
       {message.sources && message.sources.length > 0 && (
         <div
           style={{
