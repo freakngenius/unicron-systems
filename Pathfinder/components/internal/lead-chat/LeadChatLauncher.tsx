@@ -15,6 +15,7 @@
 
 import * as React from 'react';
 import { LeadChatPanel } from './LeadChatPanel';
+import type { LeadUnitSchema } from '@/lib/catalog/modules/ranked-feed/labels';
 
 const C = {
   surface: '#ffffff',
@@ -32,6 +33,11 @@ export interface LeadChatLauncherProps {
   companyName?: string | null;
   filteredCompanyIds?: string[];
   scopeLabel: string;
+  // SPEC-Chat-Fixes.md defect 3: the panel renders referenced leads as
+  // shared CompanyLeadCard tiles, which need the org's lead_unit schema
+  // to resolve display labels. The two server mount sites already have
+  // it from architecture.lead_unit.schema.
+  schema: LeadUnitSchema;
 }
 
 export function LeadChatLauncher(props: LeadChatLauncherProps): React.ReactElement {
@@ -88,6 +94,7 @@ export function LeadChatLauncher(props: LeadChatLauncherProps): React.ReactEleme
         companyName={props.companyName ?? null}
         filteredCompanyIds={props.filteredCompanyIds}
         scopeLabel={props.scopeLabel}
+        schema={props.schema}
       />
     </>
   );

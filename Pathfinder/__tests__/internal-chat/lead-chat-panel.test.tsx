@@ -61,6 +61,7 @@ describe('LeadChatLauncher', () => {
         orgSlug="internal"
         orgId="org-id-internal"
         scopeLabel="All Internal companies"
+        schema={undefined}
       />,
     );
     const btn = screen.getByTestId('lead-chat-launcher');
@@ -80,6 +81,7 @@ describe('LeadChatLauncher', () => {
         companyId="sam:THALLE"
         companyName="Thalle Construction Company"
         scopeLabel="Thalle Construction Company"
+        schema={undefined}
       />,
     );
     const btn = screen.getByTestId('lead-chat-launcher');
@@ -110,6 +112,7 @@ describe('LeadChatPanel empty state and inputs', () => {
         companyId="sam:THALLE"
         companyName="Thalle Construction Company"
         scopeLabel="Thalle Construction Company"
+        schema={undefined}
       />,
     );
     expect(
@@ -128,6 +131,7 @@ describe('LeadChatPanel empty state and inputs', () => {
         companyId={null}
         companyName={null}
         scopeLabel="All Internal companies"
+        schema={undefined}
       />,
     );
     expect(
@@ -146,6 +150,7 @@ describe('LeadChatPanel empty state and inputs', () => {
         companyId={null}
         companyName={null}
         scopeLabel="All Internal companies"
+        schema={undefined}
       />,
     );
     const send = screen.getByTestId('lead-chat-send') as HTMLButtonElement;
@@ -203,6 +208,7 @@ describe('LeadChatPanel SSE chips', () => {
         companyId={null}
         companyName={null}
         scopeLabel="All Internal companies"
+        schema={undefined}
       />,
     );
 
@@ -243,6 +249,7 @@ describe('LeadChatPanel SSE chips', () => {
         companyId="sam:MANSON"
         companyName="Manson Construction Co"
         scopeLabel="Manson Construction Co"
+        schema={undefined}
       />,
     );
 
@@ -257,6 +264,87 @@ describe('LeadChatPanel SSE chips', () => {
 
     await waitFor(() => {
       expect(screen.getByTestId('lead-chat-researching')).toBeInTheDocument();
+    });
+  });
+
+  it('renders MarkdownRenderer for assistant prose (no raw ** or - syntax) and CompanyLeadCards for referenced_leads', async () => {
+    // SPEC-Chat-Fixes.md defect 2 + 3 coverage. The stream emits a small
+    // markdown delta and a referenced_leads event; the panel must render
+    // the prose as formatted HTML (no literal asterisks) and a clickable
+    // CompanyLeadCard for each lead.
+    const stream = sseStream([
+      JSON.stringify({ type: 'meta', threadId: 't-test', scopeLabel: 'All Internal companies' }),
+      JSON.stringify({ type: 'delta', text: '**Top three** to focus on:\n\n- A\n- B' }),
+      JSON.stringify({
+        type: 'referenced_leads',
+        items: [
+          {
+            id: 'sam:THALLE',
+            company_name: 'Thalle Construction Company',
+            score: 87,
+            verified: true,
+            service_category: 'general-contractor',
+            footprint: null,
+            sales_motion: null,
+            hq_location: null,
+            federal_registration: null,
+            associations: [],
+            employee_count: null,
+            source: null,
+            posted_date: null,
+            warm_intro: null,
+            first_step: null,
+            rationale: 'High federal awards.',
+          },
+        ],
+      }),
+      JSON.stringify({ type: 'done', latencyMs: 1 }),
+    ]);
+    const streamResponse = new Response(stream, {
+      status: 200,
+      headers: { 'content-type': 'text/event-stream' },
+    });
+    stubFetchSequence(streamResponse);
+
+    render(
+      <LeadChatPanel
+        open
+        onClose={() => {}}
+        onMinimize={() => {}}
+        orgSlug="internal"
+        orgId="org-id-internal"
+        companyId={null}
+        companyName={null}
+        scopeLabel="All Internal companies"
+        schema={undefined}
+      />,
+    );
+
+    const textarea = screen.getByTestId('lead-chat-input') as HTMLTextAreaElement;
+    await act(async () => {
+      fireEvent.change(textarea, { target: { value: 'Which one to focus on?' } });
+    });
+    const send = screen.getByTestId('lead-chat-send');
+    await act(async () => {
+      fireEvent.click(send);
+    });
+
+    await waitFor(() => {
+      const bubble = screen.getByTestId('lead-chat-message-assistant');
+      // Bold rendered as <strong>, not literal asterisks.
+      expect(bubble.querySelector('strong')?.textContent).toBe('Top three');
+      // Bullet list rendered as <ul><li>, not literal dashes.
+      expect(bubble.querySelector('ul li')?.textContent).toBe('A');
+      expect(bubble.textContent ?? '').not.toMatch(/\*\*/);
+    });
+
+    await waitFor(() => {
+      const strip = screen.getByTestId('lead-chat-referenced-leads');
+      expect(strip).toBeInTheDocument();
+      // The CompanyLeadCard wraps in a Next link to /internal/leads/<id>.
+      expect(
+        strip.querySelector('a[href="/internal/leads/sam%3ATHALLE"]'),
+      ).not.toBeNull();
     });
   });
 });

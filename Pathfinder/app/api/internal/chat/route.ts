@@ -218,6 +218,11 @@ export async function POST(req: NextRequest): Promise<Response> {
             classified_as: 'agent',
             tool_call_names: result.toolCalls.map((c) => c.name),
             stopped: result.stopped,
+            // SPEC-Chat-Fixes.md defect 3: persist the projected
+            // CompanyLeadView rows so the panel re-renders the inline
+            // lead cards on rehydrate (GET /api/internal/chat).
+            referenced_leads:
+              result.referencedLeads.length > 0 ? result.referencedLeads : null,
           },
           sources: result.sources.length > 0 ? result.sources : null,
           modelUsed: result.modelUsed,

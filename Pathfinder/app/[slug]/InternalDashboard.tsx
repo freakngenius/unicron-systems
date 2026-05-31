@@ -162,6 +162,7 @@ export async function InternalDashboard({
         orgSlug={org.slug}
         orgId={org.id}
         scopeLabel={`All ${displayName} companies`}
+        schema={schema}
       />
     </div>
   );
