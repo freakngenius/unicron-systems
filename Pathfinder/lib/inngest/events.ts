@@ -266,4 +266,20 @@ export type PathfinderEvents = {
       qualified_at: string;
     };
   };
+
+  /**
+   * ICP Saved Search S1: operator (or API) requested a new search run.
+   * Subscribed by `searchOrchestrator` (lib/inngest/functions/search-orchestrator.ts)
+   * which walks the six-phase plan (interpret -> geo -> sources -> wire ->
+   * scrape -> score) and writes progress to pathfinder.search_runs after
+   * each phase. The orchestrator imports the planner/runner from
+   * `@/lib/agents/search` (Stream S2 seam, currently a stub).
+   */
+  'pathfinder/search.run.requested': {
+    name: 'pathfinder/search.run.requested';
+    data: {
+      search_run_id: string;
+      saved_search_id: string;
+    };
+  };
 };
