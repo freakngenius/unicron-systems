@@ -599,7 +599,9 @@ export function AtriumLayout({ activeTab, onTabChange, children, onOpenSettings 
   const RAIL = '#1D2D4F';
   const RAIL_HOVER = '#243861';
   const TOPBAR = '#1D2D4F';
-  const RAIL_TEXT = '#7C87A0';
+  // Bumped from #7C87A0 → #9098B0 so inactive rail labels clear WCAG AA 4.5:1
+  // against the dark navy rail (#1D2D4F). Old value computed ≈3.9:1.
+  const RAIL_TEXT = '#9098B0';
   const RAIL_TEXT_ACTIVE = '#FFFFFF';
 
   return (
