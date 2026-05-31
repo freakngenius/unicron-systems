@@ -2555,3 +2555,47 @@ Three defects:
 **Implements:** SPEC-Chat-Fixes.md defect 3 wire format. `LeadChatSseEvent` gains a `{ type: 'referenced_leads'; items: CompanyLeadView[] }` variant. The panel listens for it and stores the views on the assistant `ViewMessage`; the route persists them on `payload.referenced_leads` so the cards rehydrate on reload.
 **Last verified against spec:** 2026-05-30.
 **Drift:** none.
+
+
+---
+
+## ICP Saved Search S2 (Interpret + Geo + Plan + Run)
+
+**State:** PR #524, branch `feat/icp-search-s2` off `origin/main` rebased on top of #522 (S4). Spec: `Pathfinder/docs/SPEC-ICP-Search.md` § Stream slices, S2. Plan: `Pathfinder/docs/PLAN-icp-search-s2.md`. Operator-pre-authorized self-merge on green per dispatch prompt. Internal-only and strictly additive — no edits to existing files in `lib/`, `services/`, or `app/`.
+
+### New lib/ files
+
+#### Pathfinder/lib/agents/search/types.ts
+**Implements:** SPEC-ICP-Search.md § "Shared contract" — the seam types consumed by S1 / S3 / S4. Defines `PhaseKey` (`interpret | geo | sources | wire | scrape | score`), `SearchProgress`, `SearchStats`, `SearchArchitecture`, `GeoExpansion`, `SourcePlan`, `SavedSearchRow`, and the `OnPhase` callback. No runtime code; pure types.
+**Last verified against spec:** 2026-05-30.
+**Drift:** none.
+
+#### Pathfinder/lib/agents/search/interpret.ts
+**Implements:** SPEC-ICP-Search.md § Stream slices S2 — `interpretIcp(icp_text)`. Calls `runDecomposition` from `services/architect/sessions/decomposition.ts` for vertical + lead schema + scoring signals, then a Sonnet 4.6 follow-up classifier (via `lib/llm/run`) for NAICS / PSC / keywords used by Tier 1 filters. Lead schema defaults to a generic shared shape so the front-page card renders consistently; per-vertical fields are deferred to downstream consumers. Scoring signals = layer-3 + layer-4 agents from the Architect proposal, plus three baseline signals (`geo_proximity`, `signal_recency`, `naics_fit`) so thin profiles still have something to lean on.
+**Last verified against spec:** 2026-05-30.
+**Drift:** **minor, justified.** NAICS regex requires 4-6 digits (drops sector-only 2-3 digit codes because SAM.gov / USAspending APIs reject them). Documented inline.
+
+#### Pathfinder/lib/agents/search/geo.ts
+**Implements:** SPEC-ICP-Search.md § Stream slices S2 — `resolveGeoRadius(region, radius_mi)`. Geocodes via `lib/zedcor/google-geocoder`, expands via `lib/geo/radius`. Falls back to state-centroid parsing when Google misses. Returns `states[]` deterministically; `counties[]` and `metros[]` come back empty until we ship a CBSA / county dataset — states alone satisfy SAM.gov + USAspending place-of-performance filters.
+**Last verified against spec:** 2026-05-30.
+**Drift:** **minor, documented in plan §"Open questions".** `counties` and `metros` deliberately empty for the first cut; the spec wording "states/counties/metros" reads as a superset.
+
+#### Pathfinder/lib/agents/search/plan.ts
+**Implements:** SPEC-ICP-Search.md § Stream slices S2 — `planSources({architecture, geo})`. Tier 1 deterministic (sam_gov_entity, usaspending_recipients per NAICS; news_rss per keyword + region). Tier 2 state-keyed in-module licensing-board catalog (small + honest gaps; no fabricated URLs). Tier 3 Perplexity Sonar discovery via `lib/chat/sonar → completeSonar` with `auto_attempt: true`. Lenient JSON parsing — Sonar errors or malformed JSON degrade to `tier3: []` and never throw.
+**Last verified against spec:** 2026-05-30.
+**Drift:** none.
+
+#### Pathfinder/lib/agents/search/run.ts
+**Implements:** SPEC-ICP-Search.md § Stream slices S2 — `runSearchPlan` (interpret → geo → sources, persists `architecture` + `source_plan` onto `saved_searches`) and `runIngestForSearch` (wire → scrape → score, walks the tiers). Emits phase events through an injected `onPhase` callback so S1 can persist into `search_runs.progress`. Tier 3 wire failures are recorded as `outcome: 'failed'` with a reason; the run still completes on Tier 1/2 per spec § "Honest constraints".
+**Last verified against spec:** 2026-05-30.
+**Drift:** **minor, additive, documented in plan §"Open questions".** Default `scrapeForSearch` and `scoreForSearch` hooks return zero counts with a documented detail string until S1's `projects.saved_search_id` migration applies. S1's job is expected to override them with the real per-search ingest persistence; tests inject real stubs.
+
+#### Pathfinder/lib/agents/search/index.ts
+**Implements:** Public barrel for the `@/lib/agents/search` module — re-exports the four runners + the type seam.
+**Last verified against spec:** 2026-05-30.
+**Drift:** none.
+
+#### Pathfinder/lib/geo/radius.ts
+**Implements:** SPEC-ICP-Search.md § Stream slices S2 — `statesWithinRadius`, `bboxFromCenterAndRadius`, `rankStatesByDistance`. Pure functions; no DB / fetch. Uses `lib/scoring → haversineMiles` and `lib/zedcor/state-centroids` so the radius helpers stay deterministic.
+**Last verified against spec:** 2026-05-30.
+**Drift:** none.
