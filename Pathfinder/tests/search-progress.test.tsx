@@ -118,7 +118,13 @@ describe('SearchProgress', () => {
 
     render(<SearchProgress searchId="ss_test_1" fetcher={fetcher} />);
 
-    expect(await screen.findByTestId('stat-sources-found')).toHaveTextContent('4');
+    // Same race shape as the phase-status test: the stat tile renders
+    // initially with '—', then re-renders to '4' after the fetcher resolves.
+    // findByTestId would resolve on the first paint; waitFor polls until
+    // the value updates.
+    await waitFor(() =>
+      expect(screen.getByTestId('stat-sources-found')).toHaveTextContent('4'),
+    );
     expect(screen.getByTestId('stat-companies-ingested')).toHaveTextContent('1,234');
     expect(screen.getByTestId('stat-scored')).toHaveTextContent('—');
     expect(screen.getByTestId('stat-verified')).toHaveTextContent('—');
