@@ -2599,3 +2599,22 @@ Three defects:
 **Implements:** SPEC-ICP-Search.md § Stream slices S2 — `statesWithinRadius`, `bboxFromCenterAndRadius`, `rankStatesByDistance`. Pure functions; no DB / fetch. Uses `lib/scoring → haversineMiles` and `lib/zedcor/state-centroids` so the radius helpers stay deterministic.
 **Last verified against spec:** 2026-05-30.
 **Drift:** none.
+
+
+---
+
+## ICP Saved Search Stream S3 (Internal front-page UI)
+
+**State:** branch `feat/icp-search-s3-front`, rebased onto post-S2 main. Plan: `Pathfinder/docs/PLAN-icp-search-s3-front.md`. Operator-authorized self-merge on green per `Pathfinder/docs/SPEC-ICP-Search.md`. Internal-only, additive. Zedcor / Realberry / Funder byte-identical.
+
+### New lib/ files
+
+#### Pathfinder/lib/searches/types.ts (new)
+**Implements:** SPEC-ICP-Search.md §Shared contract · API. Narrow TypeScript shapes for the four `/api/searches` routes (`POST /api/searches`, `GET /api/searches`, `GET /api/searches/:id`, `GET /api/searches/:id/leads`). Carries `SearchPhaseKey`, `SearchPhaseStatus`, `SearchProgress`, `SearchStats`, `SearchStatus`, `SavedSearchSummary`, `SavedSearchDetail`, `SearchRun`, `SavedSearchDetailResponse`, `SavedSearchesListResponse`, `CreateSearchInput`, `CreateSearchResponse`, `SearchLead`, `SearchLeadsResponse`. Intentionally loose on `SearchLead` (forwarded to the existing `projectToCompanyLeadView` projection in the detail page).
+**Last verified against spec:** 2026-05-30.
+**Drift:** none.
+
+#### Pathfinder/lib/searches/api.ts (new)
+**Implements:** SPEC-ICP-Search.md §SEAMS · "UI-to-API is HTTP" + §Stream slices S3. Typed HTTP client for the four `/api/searches` routes. `createSearch`, `listSearches`, `getSearch`, `getSearchLeads` each accept an `AbortSignal`, an optional `baseUrl` (for server-side callers), and an optional `fetchImpl` so tests mock fetch in isolation. `SearchApiError` exposes `status` for the form's error surface. Reads `cache: 'no-store'` on GETs so the Internal dashboard reflects newly-started searches without a hard refresh.
+**Last verified against spec:** 2026-05-30 (3 unit-test files, 11 tests pass).
+**Drift:** none.
