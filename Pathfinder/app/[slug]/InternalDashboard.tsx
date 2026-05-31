@@ -27,6 +27,11 @@ import { RankedFeed } from '@/lib/catalog/modules/ranked-feed/RankedFeed';
 import { SmartSearch } from '@/lib/catalog/modules/smart-search/SmartSearch';
 import { MetricsView } from '@/lib/catalog/modules/metrics-view/MetricsView';
 import { AnalyticsChartsView } from '@/lib/catalog/modules/analytics-charts/AnalyticsCharts';
+// ICP Search S3: front-page New Search + saved hunts panels. Additive
+// only; mounted on the Feed tab alongside the existing ranked-feed hero.
+// S1 owns the API; the components call it over HTTP from the browser.
+import { NewSearchForm } from '@/components/search/NewSearchForm';
+import { SavedSearchesList } from '@/components/search/SavedSearchesList';
 // Stream H: Internal Lead Chat Agent. Persistent floating launcher; mounts
 // on every Internal dashboard render regardless of which tab the rep is on.
 import { LeadChatLauncher } from '@/components/internal/lead-chat';
@@ -228,6 +233,19 @@ async function FeedSection({
   const rankedRows = await fetchRankedCompanies(org.id, { admin, limit: FEED_LIMIT, filters });
   return (
     <>
+      {/* ICP Search S3: front-page New Search + saved hunts. Two columns
+          when there is room, stacked on narrow viewports. */}
+      <div
+        data-testid="icp-search-panels"
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+          gap: space.lg,
+        }}
+      >
+        <NewSearchForm slug={org.slug} />
+        <SavedSearchesList slug={org.slug} />
+      </div>
       <SmartSearch schema={schema} sources={sources} initialFilters={filters} />
       <RankedFeed rows={rankedRows} slug={org.slug} schema={schema} />
     </>

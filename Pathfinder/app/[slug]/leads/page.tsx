@@ -63,6 +63,9 @@ export default async function OrgLeadsPage({ params, searchParams }: Props) {
 
   const isInternalShape = architecture.lead_unit?.name === 'company';
   const sortKey: SortKey = isInternalShape ? parseSortKey(pickFirst(sp.sort)) : 'score';
+  // ICP Search S3: when arrived from a saved-search detail page, scope the
+  // listing to that search. Internal-only; Funder branch is untouched.
+  const savedSearchId = isInternalShape ? pickFirst(sp.saved_search_id) : undefined;
 
   // Pull all org-scoped projects. Internal sorts in JS after projection so
   // the visible "Category" label (display string) drives ordering; Funder
@@ -76,12 +79,23 @@ export default async function OrgLeadsPage({ params, searchParams }: Props) {
     const projectsClient = supabaseAdmin() as unknown as { from: (t: string) => any };
 
     if (isInternalShape) {
-      const { data: rows, count } = (await projectsClient
+      let q: any = projectsClient
         .from('projects')
         .select('*', { count: 'exact' })
-        .eq('organization_id', org.id)
-        .limit(500)) as { data: Project[] | null; count: number | null };
-      if (Array.isArray(rows)) {
+        .eq('organization_id', org.id);
+      if (savedSearchId) {
+        // Additive narrowing: only return leads tied to this saved search.
+        // The saved_search_id column is added by the S1 migration; if the
+        // migration has not yet landed in this environment, Supabase
+        // returns an error which the catch below tolerates (empty list).
+        q = q.eq('saved_search_id', savedSearchId);
+      }
+      const { data: rows, count, error } = (await q.limit(500)) as {
+        data: Project[] | null;
+        count: number | null;
+        error: { message?: string } | null;
+      };
+      if (Array.isArray(rows) && !error) {
         internalLeads = sortCompanies(rows.map(r => projectToCompanyLeadView(r)), sortKey);
       }
       total = count ?? internalLeads.length;
