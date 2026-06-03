@@ -81,6 +81,14 @@ export function AtriumApp() {
   // (not push) so back-button history doesn't get a no-op entry.
   useEffect(() => {
     if (typeof window === 'undefined') return;
+    // Bail out when the URL carries a Supabase auth-callback artifact (implicit
+    // flow tokens in the hash, or PKCE/error params in the query). replaceRoute
+    // would call history.replaceState with a bare pathname and strip the
+    // fragment before supabase-js detectSessionInUrl (async) can parse it.
+    const authArtifact = /access_token|refresh_token|[?&]code=|[?&]error=/.test(
+      window.location.hash + window.location.search,
+    );
+    if (authArtifact) return;
     if (window.location.pathname === '/' || window.location.pathname === '') {
       replaceRoute(route);
     }
