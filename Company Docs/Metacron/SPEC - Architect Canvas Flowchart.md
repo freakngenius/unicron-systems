@@ -58,3 +58,19 @@ Left pane: a static dotted circle with a dot in the middle, labeled "ARCHITECT �
 - Layout orientations other than top-down.
 
 End.
+
+---
+
+## UI Layout v2 (Kyle 2026-05-14, after first ship)
+
+The flowchart ships and works. Layout refinements:
+
+1. **Swap the panes.** LEFT pane = 1/3 width, holds the "ARCHITECT · THINKING" text output ("WHAT THE CUSTOMER GETS", lead type, business area, problem we solve, what they get, decomposition stream). RIGHT pane = 2/3 width, holds the canvas flowchart.
+
+2. **Both panes fixed full-height.** Each pane is attached to its side of the window, runs top-to-bottom 100% — starts directly under the nav bar, extends to the bottom of the viewport. No floating cards with margins around them. The left text pane scrolls internally if content overflows; the right canvas is the infinite-canvas viewport.
+
+3. **Node spacing fix.** Nodes currently overlap, especially side-by-side ones in the same layer. Add clear padding/gap between every node — both horizontal (side-by-side nodes in a layer) and vertical (between layers). No node should touch or overlap another. Increase the auto-layout's node separation values.
+
+4. **"Architect thinking..." disappears on completion.** The "ARCHITECT · THINKING ..." label is a loading state. Once the Architect has produced its results (decomposition complete, flowchart rendered), the label is removed — it should not persist under a finished flowchart.
+
+These refinements supersede any conflicting layout detail above. Net: left third = text, right two-thirds = canvas, both full-height edge-attached, nodes properly spaced, no lingering "thinking" label after completion.
